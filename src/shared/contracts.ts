@@ -390,6 +390,8 @@ export const PlayerIntentSchema = z.object({
   attack: z.boolean(),
   dash: z.boolean(),
   ability: z.enum(['q', 'e']).nullable(),
+  /** Held every tick, unlike attack/dash/ability presses. */
+  interact: z.boolean().optional(),
 });
 export type PlayerIntent = z.infer<typeof PlayerIntentSchema>;
 
@@ -411,10 +413,29 @@ export const PlayerStateSchema = z.object({
   dashCooldownMs: z.number().nonnegative(),
   attackCooldownMs: z.number().nonnegative(),
   invulnerableMs: z.number().nonnegative(),
+  resources: z.number().int().nonnegative().optional(),
+  abilityEUnlocked: z.boolean().optional(),
+  abilityQCooldownMs: z.number().nonnegative().optional(),
+  abilityECooldownMs: z.number().nonnegative().optional(),
+  shieldMs: z.number().nonnegative().optional(),
+  shroudMs: z.number().nonnegative().optional(),
+  rallyMs: z.number().nonnegative().optional(),
+  reviveProgress: z.number().min(0).max(1).optional(),
 });
 export type PlayerState = z.infer<typeof PlayerStateSchema>;
 
 export const EnemyActionStateSchema = z.enum(['idle', 'chasing', 'attacking', 'hit', 'dead']);
+
+export const EnemyTelegraphSchema = z.object({
+  kind: z.enum(['melee', 'beam', 'charge', 'burst']),
+  x: z.number(),
+  y: z.number(),
+  facing: z.number(),
+  range: z.number().positive(),
+  arcRad: z.number().positive(),
+  remainingMs: z.number().nonnegative(),
+});
+export type EnemyTelegraph = z.infer<typeof EnemyTelegraphSchema>;
 
 export const EnemyStateSchema = z.object({
   id: IdString,
@@ -425,6 +446,10 @@ export const EnemyStateSchema = z.object({
   hp: z.number(),
   maxHp: z.number().positive(),
   state: EnemyActionStateSchema,
+  telegraph: EnemyTelegraphSchema.nullable().optional(),
+  slowMs: z.number().nonnegative().optional(),
+  stunMs: z.number().nonnegative().optional(),
+  markMs: z.number().nonnegative().optional(),
 });
 export type EnemyState = z.infer<typeof EnemyStateSchema>;
 
@@ -449,6 +474,7 @@ export const GameSnapshotSchema = z.object({
   players: z.array(PlayerStateSchema),
   enemies: z.array(EnemyStateSchema),
   anchor: AnchorStateSchema.nullable(),
+  roomCleared: z.boolean().optional(),
 });
 export type GameSnapshot = z.infer<typeof GameSnapshotSchema>;
 
@@ -495,6 +521,25 @@ export const GameEventSchema = z.discriminatedUnion('type', [
   z.object({ ...eventBase, type: z.literal('enemy_defeated'), enemyId: IdString, byPlayerId: IdString }),
   z.object({ ...eventBase, type: z.literal('player_damaged'), playerId: IdString, amount: z.number(), remainingHp: z.number(), sourceEnemyId: IdString.nullable() }),
   z.object({ ...eventBase, type: z.literal('player_downed'), playerId: IdString }),
+  z.object({ ...eventBase, type: z.literal('player_revived'), playerId: IdString, byPlayerId: IdString, hp: z.number().positive() }),
+  z.object({ ...eventBase, type: z.literal('player_healed'), playerId: IdString, byPlayerId: IdString, amount: z.number().positive(), remainingHp: z.number().positive() }),
+  z.object({
+    ...eventBase, type: z.literal('ability_used'), playerId: IdString, abilityId: AbilityIdSchema,
+    x: z.number(), y: z.number(), facing: z.number(), hitEnemyIds: z.array(IdString),
+  }),
+  z.object({
+    ...eventBase, type: z.literal('ability_unlocked'), playerId: IdString, abilityId: AbilityIdSchema,
+    cost: z.number().int().nonnegative(), remainingResources: z.number().int().nonnegative(),
+  }),
+  z.object({
+    ...eventBase, type: z.literal('room_cleared'), worldId: IdString, roomIndex: z.number().int().min(0),
+    roomId: IdString, playerIds: z.array(IdString), reward: z.number().int().nonnegative(),
+  }),
+  z.object({ ...eventBase, type: z.literal('enemy_telegraphed'), enemyId: IdString, telegraph: EnemyTelegraphSchema }),
+  z.object({
+    ...eventBase, type: z.literal('enemy_attacked'), enemyId: IdString,
+    x: z.number(), y: z.number(), facing: z.number(), hitPlayerIds: z.array(IdString),
+  }),
   z.object({ ...eventBase, type: z.literal('exit_reached'), playerId: IdString, roomIndex: z.number().int().min(0), toRoomIndex: z.number().int().min(0) }),
   z.object({ ...eventBase, type: z.literal('anchor_planted'), worldId: IdString, roomIndex: z.number().int().min(0), playerIds: z.array(IdString) }),
   z.object({

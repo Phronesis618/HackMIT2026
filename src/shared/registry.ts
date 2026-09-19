@@ -14,10 +14,10 @@ export const CLASS_IDS = ['bastion', 'shade', 'beacon', 'weaver'] as const;
 export type ClassId = (typeof CLASS_IDS)[number];
 
 export const CLASS_INFO: Record<ClassId, { name: string; role: string; status: ImplementationStatus }> = {
-  bastion: { name: 'Bastion', role: 'Frontline guard. Wide sweeps, holds ground.', status: 'partial' },
-  shade: { name: 'Shade', role: 'Fast skirmisher. Short blinks, precise strikes.', status: 'planned' },
-  beacon: { name: 'Beacon', role: 'Ranged support. Marks targets, rallies allies.', status: 'planned' },
-  weaver: { name: 'Weaver', role: 'Control. Tethers, slows, reshapes space.', status: 'planned' },
+  bastion: { name: 'Bastion', role: 'Frontline guard. Wide sweeps, holds ground.', status: 'implemented' },
+  shade: { name: 'Shade', role: 'Fast skirmisher. Short blinks, precise strikes.', status: 'implemented' },
+  beacon: { name: 'Beacon', role: 'Ranged support. Marks targets, rallies allies.', status: 'implemented' },
+  weaver: { name: 'Weaver', role: 'Control. Tethers, slows, reshapes space.', status: 'implemented' },
 };
 
 /** Ability IDs. `attack` and `dash` are engine-level; Q/E abilities are per class. */
@@ -37,23 +37,25 @@ export type AbilityId = (typeof ABILITY_IDS)[number];
 
 export type ImplementationStatus = 'implemented' | 'partial' | 'planned';
 
-/**
- * What the simulation actually does today. Keep this truthful — UI shows it.
- *  - dash: movement burst + cooldown + `player_dashed` event (implemented).
- *  - attack: attack state + `player_attacked` event, NO hit resolution yet (partial;
- *    Agent A's first slice adds damage).
- */
+/** Simulation implementation status, consumed by the class and ability UI. */
 export const ABILITY_STATUS: Record<AbilityId, ImplementationStatus> = {
-  attack: 'partial',
+  attack: 'implemented',
   dash: 'implemented',
-  'bastion.q.bulwark': 'planned',
-  'bastion.e.shockwave': 'planned',
-  'shade.q.blink_strike': 'planned',
-  'shade.e.shroud': 'planned',
-  'beacon.q.flare': 'planned',
-  'beacon.e.rally': 'planned',
-  'weaver.q.tether': 'planned',
-  'weaver.e.rewind': 'planned',
+  'bastion.q.bulwark': 'implemented',
+  'bastion.e.shockwave': 'implemented',
+  'shade.q.blink_strike': 'implemented',
+  'shade.e.shroud': 'implemented',
+  'beacon.q.flare': 'implemented',
+  'beacon.e.rally': 'implemented',
+  'weaver.q.tether': 'implemented',
+  'weaver.e.rewind': 'implemented',
+};
+
+export const CLASS_ABILITIES: Record<ClassId, { q: AbilityId; e: AbilityId }> = {
+  bastion: { q: 'bastion.q.bulwark', e: 'bastion.e.shockwave' },
+  shade: { q: 'shade.q.blink_strike', e: 'shade.e.shroud' },
+  beacon: { q: 'beacon.q.flare', e: 'beacon.e.rally' },
+  weaver: { q: 'weaver.q.tether', e: 'weaver.e.rewind' },
 };
 
 /** Enemy archetypes. `guardian` is the room-3 Anchor encounter. */
@@ -61,10 +63,10 @@ export const ENEMY_IDS = ['husk', 'sentinel', 'lurker', 'guardian'] as const;
 export type EnemyId = (typeof ENEMY_IDS)[number];
 
 export const ENEMY_INFO: Record<EnemyId, { name: string; maxHp: number; radius: number; status: ImplementationStatus }> = {
-  husk: { name: 'Husk', maxHp: 30, radius: 14, status: 'partial' }, // spawns + renders; no AI yet
-  sentinel: { name: 'Sentinel', maxHp: 60, radius: 16, status: 'planned' },
-  lurker: { name: 'Lurker', maxHp: 24, radius: 12, status: 'planned' },
-  guardian: { name: 'Guardian', maxHp: 240, radius: 28, status: 'planned' },
+  husk: { name: 'Husk', maxHp: 30, radius: 14, status: 'implemented' },
+  sentinel: { name: 'Sentinel', maxHp: 60, radius: 16, status: 'implemented' },
+  lurker: { name: 'Lurker', maxHp: 24, radius: 12, status: 'implemented' },
+  guardian: { name: 'Guardian', maxHp: 240, radius: 28, status: 'implemented' },
 };
 
 /**
