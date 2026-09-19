@@ -1,0 +1,191 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { RoomScene } from '../../src/client/render/RoomScene';
+import { WorldFixtureSchema, type GameSnapshot } from '../../src/shared/contracts';
+import { ATTACK_ARC_RAD, ATTACK_RANGE, DEPTH } from '../../src/shared/conventions';
+import { sampleEvents, sampleSnapshot } from '../../src/shared/samples';
+import fixtureData from '../../fixtures/worlds/vantage-spire.json';
+
+const stage = vi.hoisted(() => {
+  class Display {
+    x = 0;
+    y = 0;
+    depth = 0;
+    text = '';
+    visible = true;
+    children: Display[] = [];
+    add = vi.fn((children: Display | Display[]) => {
+      this.children.push(...(Array.isArray(children) ? children : [children]));
+      return this;
+    });
+    destroy = vi.fn((recursive = false) => {
+      if (recursive) this.children.forEach((child) => child.destroy(true));
+    });
+    setPosition = vi.fn((x: number, y: number) => { this.x = x; this.y = y; return this; });
+    setDepth = vi.fn((depth: number) => { this.depth = depth; return this; });
+    setText = vi.fn((text: string) => { this.text = text; return this; });
+    setVisible = vi.fn((visible: boolean) => { this.visible = visible; return this; });
+    setOrigin = vi.fn(() => this);
+    setAlpha = vi.fn(() => this);
+    setRotation = vi.fn(() => this);
+    setScale = vi.fn(() => this);
+    fillStyle = vi.fn(() => this);
+    lineStyle = vi.fn(() => this);
+    fillRect = vi.fn(() => this);
+    strokeRect = vi.fn(() => this);
+    fillCircle = vi.fn(() => this);
+    fillEllipse = vi.fn(() => this);
+    strokeCircle = vi.fn(() => this);
+    strokeTriangle = vi.fn(() => this);
+    lineBetween = vi.fn(() => this);
+    beginPath = vi.fn(() => this);
+    arc = vi.fn(() => this);
+    strokePath = vi.fn(() => this);
+    clear = vi.fn(() => this);
+  }
+  const nodes: Display[] = [];
+  const node = () => { const item = new Display(); nodes.push(item); return item; };
+  const camera = {
+    width: 960, height: 600,
+    setZoom: vi.fn(), centerOn: vi.fn(), fadeIn: vi.fn(), flash: vi.fn(), shake: vi.fn(),
+  };
+  const tweens = {
+    add: vi.fn((config: { targets: Display; onComplete: () => void }) => config),
+    killAll: vi.fn(),
+  };
+  return { nodes, node, camera, tweens };
+});
+
+vi.mock('phaser', () => ({
+  default: {
+    Scene: class {
+      add = {
+        graphics: stage.node, layer: stage.node, container: stage.node,
+        text: (x: number, y: number, text: string) => stage.node().setPosition(x, y).setText(text),
+      };
+      cameras = { main: stage.camera };
+      tweens = stage.tweens;
+      time = { now: 0 };
+    },
+  },
+}));
+vi.mock('../../src/client/render/drawing', () => ({
+  drawMotif: vi.fn(), drawProp: vi.fn(), drawSanctuary: vi.fn(), drawSkyline: vi.fn(), drawVignette: vi.fn(),
+}));
+vi.mock('../../src/client/render/characters', () => ({ drawOperative: vi.fn(), drawHostile: vi.fn() }));
+
+const fixture = WorldFixtureSchema.parse(fixtureData);
+const firstRoom = fixture.rooms[0]!;
+const localId = sampleSnapshot.players[0]!.id;
+const effects = () => stage.nodes.filter((n) => n.depth === DEPTH.effects);
+
+function setup() {
+  const scene = new RoomScene();
+  scene.buildRoom(firstRoom, fixture.art, { headquarters: false });
+  scene.renderSnapshot(sampleSnapshot, localId);
+  return scene;
+}
+
+describe('room presentation against authoritative contracts', () => {
+  beforeEach(() => {
+    stage.nodes.length = 0;
+    vi.clearAllMocks();
+  });
+
+  it('places dash and attack effects at event positions, deduplicates delivery and releases completed effects', () => {
+    const scene = setup();
+    const dash = sampleEvents.find((e) => e.type === 'player_dashed')!;
+    const attack = sampleEvents.find((e) => e.type === 'player_attacked')!;
+    scene.playEvents([dash, attack, dash, attack]);
+    expect(effects()).toHaveLength(2);
+    expect(effects()[0]!.setPosition).toHaveBeenCalledWith(dash.x, dash.y);
+    expect(effects()[1]!.arc).toHaveBeenCalledWith(
+      0, 0, ATTACK_RANGE, attack.facing - ATTACK_ARC_RAD / 2, attack.facing + ATTACK_ARC_RAD / 2, false,
+    );
+    expect(stage.tweens.add).toHaveBeenCalledTimes(2);
+    for (const [config] of stage.tweens.add.mock.calls) {
+      config.onComplete();
+      expect(config.targets.destroy).toHaveBeenCalledOnce();
+    }
+  });
+
+  it('retains the last enemy location when the death snapshot removes it before events arrive', () => {
+    const scene = setup();
+    scene.renderSnapshot({ ...sampleSnapshot, enemies: [] }, localId);
+    scene.playEvents(sampleEvents.filter((e) => e.type === 'enemy_damaged' || e.type === 'enemy_defeated'));
+    expect(effects()).toHaveLength(2);
+    for (const effect of effects()) {
+      expect(effect.setPosition).toHaveBeenCalledWith(sampleSnapshot.enemies[0]!.x, sampleSnapshot.enemies[0]!.y);
+    }
+  });
+
+  it('shakes only for local damage and plays down feedback once at the actual player position', () => {
+    const scene = setup();
+    const hit = sampleEvents.find((e) => e.type === 'player_damaged')!;
+    const remote = sampleSnapshot.players[1]!;
+    scene.playEvents([{ ...hit, id: 'test-remote-hit', playerId: remote.id }]);
+    expect(stage.camera.shake).not.toHaveBeenCalled();
+    scene.playEvents([hit, hit, { id: 'test-down', tick: 700, timeMs: 0, type: 'player_downed', playerId: localId }]);
+    expect(stage.camera.shake).toHaveBeenCalledOnce();
+    expect(effects()).toHaveLength(3);
+    expect(effects()[2]!.setPosition).toHaveBeenCalledWith(sampleSnapshot.players[0]!.x, sampleSnapshot.players[0]!.y);
+  });
+
+  it('clears room effects, remembered enemy locations and event IDs on room changes', () => {
+    const scene = setup();
+    const attack = sampleEvents.find((e) => e.type === 'player_attacked')!;
+    scene.playEvents([attack]);
+    const previousEffect = effects()[0]!;
+    scene.buildRoom(fixture.rooms[1]!, fixture.art, { headquarters: false });
+    expect(stage.tweens.killAll).toHaveBeenCalledTimes(2);
+    expect(previousEffect.destroy).toHaveBeenCalled();
+    scene.playEvents(sampleEvents.filter((e) => e.type === 'enemy_damaged' || e.type === 'enemy_defeated'));
+    expect(effects()).toHaveLength(1);
+    scene.playEvents([attack]);
+    expect(effects()).toHaveLength(2);
+  });
+
+  it('ignores snapshots and room-entry reveals for another room', () => {
+    const scene = setup();
+    const before = stage.nodes.length;
+    scene.renderSnapshot({ ...sampleSnapshot, roomId: 'test-stale-room', players: [] }, localId);
+    expect(stage.nodes).toHaveLength(before);
+    expect(scene.getLatestSnapshot()).toBe(sampleSnapshot);
+    const entry = sampleEvents.find((e) => e.type === 'room_entered')!;
+    scene.playEvents([{ ...entry, id: 'test-stale-entry', roomId: 'test-stale-room' }]);
+    expect(stage.camera.flash).not.toHaveBeenCalled();
+    scene.playEvents([entry]);
+    expect(stage.camera.flash).toHaveBeenCalledOnce();
+  });
+
+  it('shows only authoritative Anchor progress, clears missing anchors and rejects other-world completion effects', () => {
+    const scene = new RoomScene();
+    const room = fixture.rooms[2]!;
+    scene.buildRoom(room, fixture.art, { headquarters: false });
+    const snapshot: GameSnapshot = {
+      ...sampleSnapshot, roomId: room.id, roomIndex: room.index, enemies: [],
+      anchor: { x: 600, y: 240, state: 'planting', progress: 0.5 },
+    };
+    scene.renderSnapshot(snapshot, localId);
+    const label = stage.nodes.find((n) => n.text === 'PLANTING · 50%')!;
+    expect(label).toBeDefined();
+    expect(stage.nodes.some((n) => n.arc.mock.calls.length > 0 && n.depth === DEPTH.entities)).toBe(true);
+    const ring = stage.nodes.find((n) => n.depth === DEPTH.entities && n.arc.mock.calls.length > 0)!;
+    expect(ring.arc).toHaveBeenCalledWith(600, 240, 28, -Math.PI / 2, Math.PI / 2, false);
+    scene.playEvents([{
+      id: 'test-foreign-anchor', tick: 900, timeMs: 0, type: 'anchor_planted',
+      worldId: 'test-other-world', roomIndex: 2, playerIds: [localId],
+    }]);
+    expect(effects()).toHaveLength(0);
+    scene.renderSnapshot({ ...snapshot, anchor: { ...snapshot.anchor!, state: 'planted', progress: 1 } }, localId);
+    expect(label.text).toBe('ANCHOR PLANTED');
+    scene.playEvents([{
+      id: 'test-anchor', tick: 901, timeMs: 0, type: 'anchor_planted',
+      worldId: sampleSnapshot.worldId!, roomIndex: 2, playerIds: [localId],
+    }]);
+    expect(effects()).toHaveLength(1);
+    scene.renderSnapshot({ ...snapshot, anchor: { ...snapshot.anchor!, state: 'dormant', progress: 0 } }, localId);
+    expect(label.text).toBe('ANCHOR DORMANT');
+    scene.renderSnapshot({ ...snapshot, anchor: null }, localId);
+    expect(label.visible).toBe(false);
+  });
+});

@@ -433,6 +433,33 @@ body {
 }
 
 /* ---- HUD ---- */
+.panel--danger {
+  border-color: var(--color-danger);
+}
+.combat-status {
+  border-left: 2px solid var(--color-danger);
+  padding: 8px 10px;
+  color: var(--color-mist100);
+  background: rgba(255, 92, 122, 0.1);
+}
+.panel--debrief {
+  border-top: 2px solid var(--color-warmLamp);
+}
+.debrief__outcome {
+  font-size: 15px;
+}
+.debrief__keepsake {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.debrief__thumb {
+  width: 100%;
+  border-radius: var(--radius-sm);
+}
+.debrief__keepsake .panel__subtitle {
+  margin-top: 0;
+}
 .meter {
   margin: var(--space-sm) 0;
 }
@@ -455,6 +482,9 @@ body {
   height: 100%;
   background: linear-gradient(90deg, var(--color-success), var(--color-neonCyan));
   transition: width var(--motion-baseMs);
+}
+.meter--danger .meter__fill {
+  background: var(--color-danger);
 }
 .abilities {
   display: grid;

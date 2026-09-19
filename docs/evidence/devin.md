@@ -10,10 +10,19 @@ Agent C records only work and verification performed in this session.
 | 2026-09-19 | `e55d139` | Contribution/class/progress UI, explicit receipt provenance, physical card styling, responsive layout, clear confirmation and debrief return UI. | Full check: 50 tests, typecheck/build passed. | No new dependencies. |
 | 2026-09-19 | `ebcd2bc` | First-defeat milestone, world-scoped deduplication, replay-safe persisted memories, schema limits and storage failure tests. | Full check: 59 tests across 6 files, typecheck/build passed. | Persistent testing agent recorded the real fixture loop and inspected brief attack/dash frames. |
 | 2026-09-19 | `618d12b` | Merged main, reconciling the independently implemented identical readiness callback. Preserved A's thumbnail timing and receipt grammar changes. | Full check: 59 tests across 6 files, typecheck/build and whitespace checks passed. | Browser evidence is for `ebcd2bc`; this integration change was shell-verified. |
+| 2026-09-19 | `4c77c23` — `devin/1789858056-combat-presentation` | Added down/critical HUD, current-world event-derived debrief, snapshot-driven Anchor progress, downed effect and room/world isolation. Added headless scene and React-rendering regressions. | Full check: 72 tests across 8 files, typecheck/build and whitespace checks passed. | Focused browser regression passed on this revision. Combat and completion remain unit-tested only; core does not emit those events. |
 
 ## Browser evidence
 
-Current evidence is attached to [PR #5](https://github.com/Phronesis618/HackMIT2026/pull/5)
+Latest evidence is attached to [PR #8](https://github.com/Phronesis618/HackMIT2026/pull/8).
+At `4c77c23`, the testing agent verified the actual fixture contribution/receipt, physical
+portal, movement/dash/attack, all three rooms with expected entities, dormant Anchor with
+unfilled progress, safe HQ return and genuine receipt/arrival persistence. Final-room preview
+and 800px responsive Anchor/HUD/return passed; no fresh console errors. No synthetic events
+or UI state were injected. Downed/low-integrity feedback, planting/completion, debrief selection
+and adversarial stale-event rejection remain unit-tested only.
+
+Earlier evidence is attached to [PR #5](https://github.com/Phronesis618/HackMIT2026/pull/5)
 and [the Devin session](https://app.devin.ai/sessions/2a8aba99e9694c0eb10f7e625aed10ae).
 The recording covers normal HQ setup, named contribution, explicit offline fixture receipt,
 physical portal entry, movement/facing, attack/dash effects, three rooms, return, actual receipt
