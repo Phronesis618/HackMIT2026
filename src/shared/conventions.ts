@@ -43,6 +43,13 @@ export const ATTACK_DURATION_MS = 220;
 export const ATTACK_COOLDOWN_MS = 360;
 export const ATTACK_RANGE = 46; // reach from player centre
 export const ATTACK_ARC_RAD = Math.PI * 0.7; // total arc width
+export const ROOM_CLEAR_REWARD = 3;
+export const ABILITY_UNLOCK_COST = 3;
+export const REVIVE_RANGE = 56;
+export const REVIVE_DURATION_MS = 2000;
+export const REVIVE_HP = 40;
+export const ANCHOR_RANGE = 64;
+export const ANCHOR_HOLD_MS = 3000;
 
 /**
  * DRAW ORDER (Phaser depth). Entities are y-sorted inside their band:
@@ -64,9 +71,10 @@ export const DEPTH = {
  * INPUT (client-side, documented here so the HUD and tutorial text agree)
  *  Move: WASD or arrow keys     Aim: mouse position (world coords)
  *  Attack: J or left mouse       Dash: Shift or Space
- *  Q ability: Q                  E ability: E (unlockable)
+ *  Q ability: Q                  E ability: E (unlockable)    Interact: hold F
  *  Intent is sampled once per simulation tick; buttons are edge-triggered
  *  (true for the tick in which they were pressed) so holding does not spam.
+ *  Interact is held and must be sent each tick while reviving or planting.
  */
 export const INPUT_BINDINGS = {
   moveUp: ['KeyW', 'ArrowUp'],
@@ -77,6 +85,7 @@ export const INPUT_BINDINGS = {
   dash: ['ShiftLeft', 'ShiftRight', 'Space'],
   abilityQ: ['KeyQ'],
   abilityE: ['KeyE'],
+  interact: ['KeyF'],
 } as const;
 
 export function tileToWorld(col: number, row: number): { x: number; y: number } {
