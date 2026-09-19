@@ -201,7 +201,7 @@ export class GameController {
     for (const memory of created) {
       audio.play('memory_saved');
       if (memory.kind === 'arrival_keepsake') {
-        // Real arrival, real frame: capture after the room has drawn once.
+        // Real arrival, real frame: capture after the room reveal (fade/flash) has finished.
         setTimeout(() => {
           renderer
             .captureThumbnail()
@@ -209,7 +209,7 @@ export class GameController {
               if (dataUrl) chronicle.attachThumbnail(memory.id, dataUrl);
             })
             .catch(() => {});
-        }, 350);
+        }, 900);
       }
     }
   }

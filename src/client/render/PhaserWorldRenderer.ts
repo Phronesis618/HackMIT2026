@@ -15,16 +15,15 @@ export class PhaserWorldRenderer implements WorldRenderer {
 
   mount(container: HTMLElement): Promise<void> {
     if (this.game) return Promise.resolve();
-    const scene = new RoomScene();
-    this.scene = scene;
     return new Promise((resolve) => {
-      scene.events.once(Phaser.Scenes.Events.CREATE, () => {
+      const scene = new RoomScene(() => {
         if (this.pendingRoom) {
           scene.buildRoom(this.pendingRoom.room, this.pendingRoom.art, { headquarters: this.pendingRoom.headquarters });
           this.pendingRoom = null;
         }
         resolve();
       });
+      this.scene = scene;
       this.game = new Phaser.Game({
         type: Phaser.AUTO,
         parent: container,

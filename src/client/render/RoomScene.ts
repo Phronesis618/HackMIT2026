@@ -36,13 +36,17 @@ export class RoomScene extends Phaser.Scene {
   private anchorView: Phaser.GameObjects.Graphics | null = null;
   private latestSnapshot: GameSnapshot | null = null;
   private localPlayerId = '';
+  private readonly onReady: () => void;
 
-  constructor() {
+  /** `onReady` fires from create(); Phaser injects `events`/`sys` only after boot, so a callback is used. */
+  constructor(onReady: () => void = () => {}) {
     super(RoomScene.KEY);
+    this.onReady = onReady;
   }
 
   create(): void {
     this.cameras.main.setBackgroundColor(tokens.color.ink900);
+    this.onReady();
   }
 
   // ---- room ------------------------------------------------------------------
