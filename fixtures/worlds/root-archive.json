@@ -1,0 +1,343 @@
+{
+  "fixtureId": "root-archive",
+  "fixtureNote": "Authored offline theme compiled with a fixed seed. Not generated from player contributions.",
+  "recipe": {
+    "title": "Root Archive",
+    "tagline": "A living archive grows through the remains of a silent machine.",
+    "themeSummary": "Bioluminescent roots consume broken terminals. Warm lanterns mark a dry path through branching pillars to the ancient archive core.",
+    "motifIds": [
+      "roots",
+      "ruined_machinery",
+      "lanterns"
+    ],
+    "palette": {
+      "background": "#081210",
+      "floor": "#13241e",
+      "floorAlt": "#1a3028",
+      "wall": "#294137",
+      "wallEdge": "#779f72",
+      "accent": "#c7e58c",
+      "accentSoft": "#83ae6c",
+      "glow": "#dbf3a4",
+      "hazard": "#ff9668",
+      "text": "#e2efdf"
+    },
+    "rooms": [
+      {
+        "name": "Root Vestibule",
+        "description": "Lanterns light the roots threading through abandoned records.",
+        "motifIds": [
+          "roots",
+          "lanterns"
+        ],
+        "propIds": [
+          "root_mass",
+          "root_mass",
+          "lantern",
+          "terminal"
+        ],
+        "enemyIds": [
+          "lurker",
+          "husk"
+        ],
+        "hazards": false
+      },
+      {
+        "name": "Buried Index",
+        "description": "Broken machines have become planters for a luminous forest.",
+        "motifIds": [
+          "ruined_machinery",
+          "roots"
+        ],
+        "propIds": [
+          "terminal",
+          "root_mass",
+          "crate",
+          "lantern"
+        ],
+        "enemyIds": [
+          "lurker",
+          "lurker",
+          "husk"
+        ],
+        "hazards": false
+      },
+      {
+        "name": "Seed Vault",
+        "description": "The Guardian defends the archive seed beside the Anchor site.",
+        "motifIds": [
+          "roots",
+          "lanterns"
+        ],
+        "propIds": [
+          "anchor_pedestal",
+          "root_mass",
+          "lantern",
+          "terminal"
+        ],
+        "enemyIds": [
+          "guardian",
+          "lurker"
+        ],
+        "hazards": false
+      }
+    ],
+    "contributionMappings": []
+  },
+  "art": {
+    "paletteFamily": "ink-neon",
+    "palette": {
+      "background": "#081210",
+      "floor": "#13241e",
+      "floorAlt": "#1a3028",
+      "wall": "#294137",
+      "wallEdge": "#779f72",
+      "accent": "#c7e58c",
+      "accentSoft": "#83ae6c",
+      "glow": "#dbf3a4",
+      "hazard": "#ff9668",
+      "text": "#e2efdf"
+    },
+    "motifIds": [
+      "roots",
+      "ruined_machinery",
+      "lanterns"
+    ],
+    "skyline": "roots",
+    "fog": 0.37,
+    "glowIntensity": 0.84
+  },
+  "rooms": [
+    {
+      "id": "generated-room-3h7gyz-0",
+      "index": 0,
+      "name": "Root Vestibule",
+      "description": "Lanterns light the roots threading through abandoned records.",
+      "width": 25,
+      "height": 12,
+      "tiles": [
+        "#########################",
+        "#.......................#",
+        "#..#.................#..#",
+        "#..#.................#..#",
+        "#.......................#",
+        "#.......................#",
+        "#P......................X",
+        "#.......................#",
+        "#..#.................#..#",
+        "#..#.................#..#",
+        "#.......................#",
+        "#########################"
+      ],
+      "props": [
+        {
+          "id": "room-0-prop-0",
+          "propId": "root_mass",
+          "x": 2,
+          "y": 4
+        },
+        {
+          "id": "room-0-prop-1",
+          "propId": "root_mass",
+          "x": 20,
+          "y": 4
+        },
+        {
+          "id": "room-0-prop-2",
+          "propId": "lantern",
+          "x": 2,
+          "y": 10
+        },
+        {
+          "id": "room-0-prop-3",
+          "propId": "terminal",
+          "x": 2,
+          "y": 1
+        }
+      ],
+      "encounters": [
+        {
+          "id": "room-0-encounter-0",
+          "enemyId": "lurker",
+          "x": 20,
+          "y": 3,
+          "count": 1
+        },
+        {
+          "id": "room-0-encounter-1",
+          "enemyId": "husk",
+          "x": 20,
+          "y": 2,
+          "count": 1
+        }
+      ],
+      "exits": [
+        {
+          "x": 24,
+          "y": 6,
+          "toRoomIndex": 1,
+          "direction": "east"
+        }
+      ],
+      "isFinal": false,
+      "attributions": []
+    },
+    {
+      "id": "generated-room-1idks1o-1",
+      "index": 1,
+      "name": "Buried Index",
+      "description": "Broken machines have become planters for a luminous forest.",
+      "width": 24,
+      "height": 16,
+      "tiles": [
+        "########################",
+        "#......................#",
+        "#..##..................#",
+        "#..#...................#",
+        "#......................#",
+        "#......................#",
+        "#......................#",
+        "#......................#",
+        "#P.....................X",
+        "#......................#",
+        "#......................#",
+        "#......................#",
+        "#...................#..#",
+        "#..................##..#",
+        "#......................#",
+        "########################"
+      ],
+      "props": [
+        {
+          "id": "room-1-prop-0",
+          "propId": "terminal",
+          "x": 16,
+          "y": 6
+        },
+        {
+          "id": "room-1-prop-1",
+          "propId": "root_mass",
+          "x": 2,
+          "y": 10
+        },
+        {
+          "id": "room-1-prop-2",
+          "propId": "crate",
+          "x": 20,
+          "y": 3
+        },
+        {
+          "id": "room-1-prop-3",
+          "propId": "lantern",
+          "x": 2,
+          "y": 11
+        }
+      ],
+      "encounters": [
+        {
+          "id": "room-1-encounter-0",
+          "enemyId": "lurker",
+          "x": 20,
+          "y": 2,
+          "count": 1
+        },
+        {
+          "id": "room-1-encounter-1",
+          "enemyId": "lurker",
+          "x": 2,
+          "y": 12,
+          "count": 1
+        },
+        {
+          "id": "room-1-encounter-2",
+          "enemyId": "husk",
+          "x": 20,
+          "y": 1,
+          "count": 1
+        }
+      ],
+      "exits": [
+        {
+          "x": 23,
+          "y": 8,
+          "toRoomIndex": 2,
+          "direction": "east"
+        }
+      ],
+      "isFinal": false,
+      "attributions": []
+    },
+    {
+      "id": "generated-room-11i4o0v-2",
+      "index": 2,
+      "name": "Seed Vault",
+      "description": "The Guardian defends the archive seed beside the Anchor site.",
+      "width": 27,
+      "height": 16,
+      "tiles": [
+        "###########################",
+        "#.........................#",
+        "#..#...................#..#",
+        "#..#...................#..#",
+        "#.........................#",
+        "#.........................#",
+        "#.........................#",
+        "#.........................#",
+        "#P......................A.#",
+        "#.........................#",
+        "#.........................#",
+        "#.........................#",
+        "#..#...................#..#",
+        "#..#...................#..#",
+        "#.........................#",
+        "###########################"
+      ],
+      "props": [
+        {
+          "id": "room-2-prop-0",
+          "propId": "anchor_pedestal",
+          "x": 24,
+          "y": 8
+        },
+        {
+          "id": "room-2-prop-1",
+          "propId": "root_mass",
+          "x": 10,
+          "y": 2
+        },
+        {
+          "id": "room-2-prop-2",
+          "propId": "lantern",
+          "x": 10,
+          "y": 3
+        },
+        {
+          "id": "room-2-prop-3",
+          "propId": "terminal",
+          "x": 10,
+          "y": 1
+        }
+      ],
+      "encounters": [
+        {
+          "id": "room-2-encounter-0",
+          "enemyId": "guardian",
+          "x": 5,
+          "y": 11,
+          "count": 1
+        },
+        {
+          "id": "room-2-encounter-1",
+          "enemyId": "lurker",
+          "x": 5,
+          "y": 13,
+          "count": 1
+        }
+      ],
+      "exits": [],
+      "isFinal": true,
+      "attributions": []
+    }
+  ],
+  "plannedRoomCount": 3
+}
