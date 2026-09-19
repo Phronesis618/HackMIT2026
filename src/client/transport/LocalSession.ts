@@ -192,6 +192,14 @@ export class LocalSession implements GameSession {
     return this.contributions;
   }
 
+  unlockAbility(): void {
+    if (this.disposed) return;
+    const events = this.sim.unlockAbility(this.localPlayerId);
+    this.snapshot = this.sim.getSnapshot();
+    if (events.length) this.emitEvents(events);
+    for (const listener of this.snapshotListeners) listener(this.snapshot);
+  }
+
   async requestWorld(): Promise<PreparedWorld> {
     if (this.disposed) throw new Error('Session has been disposed.');
     this.activeGeneration?.abort();
@@ -295,8 +303,9 @@ export class LocalSession implements GameSession {
 
   returnToHeadquarters(): void {
     if (this.disposed || this.sim.getPhase() === 'headquarters') return;
-    this.sim.returnToHeadquarters();
+    const events = this.sim.returnToHeadquarters();
     this.snapshot = this.sim.getSnapshot();
+    if (events.length) this.emitEvents(events);
     this.notifyPhase();
     for (const l of this.snapshotListeners) l(this.snapshot);
   }

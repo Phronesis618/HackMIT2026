@@ -52,6 +52,7 @@ export interface GameSession {
   getPhase(): GamePhase;
   getConnectionStatus(): ConnectionStatus;
   getIsHost?(): boolean;
+  unlockAbility?(): void;
   getWorld(): PreparedWorld | null;
   getGenerationStatus(): GenerationStatus;
   getSnapshot(): GameSnapshot | null;

@@ -515,6 +515,8 @@ export const GameEventSchema = z.discriminatedUnion('type', [
     x: z.number(),
     y: z.number(),
     facing: z.number(),
+    range: z.number().positive().optional(),
+    arcRad: z.number().positive().optional(),
     hitEnemyIds: z.array(IdString),
   }),
   z.object({ ...eventBase, type: z.literal('enemy_damaged'), enemyId: IdString, byPlayerId: IdString, amount: z.number(), remainingHp: z.number() }),

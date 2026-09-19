@@ -253,7 +253,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     s.shroudMs = 0;
     p.attackRemainingMs = ATTACK_DURATION_MS;
     s.attackCooldownMs = spec.cooldown * (s.rallyMs > 0 ? 0.75 : 1);
-    events.push(emit({ type: 'player_attacked', playerId: s.id, x: s.x, y: s.y, facing: s.facing, hitEnemyIds: targets.map((e) => e.state.id) }));
+    events.push(emit({ type: 'player_attacked', playerId: s.id, x: s.x, y: s.y, facing: s.facing,
+      range: spec.range, arcRad: spec.arc, hitEnemyIds: targets.map((e) => e.state.id) }));
     for (const e of targets) {
       damageEnemy(e, p, spec.damage + bonus, events);
       if (s.classId === 'weaver') e.state.slowMs = Math.max(e.state.slowMs ?? 0, 1000);

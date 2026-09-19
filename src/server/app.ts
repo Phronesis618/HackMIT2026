@@ -165,7 +165,7 @@ export function createRelayServer(config: ServerConfig, deps: { log?: (m: string
     });
   }
 
-  const realtime = attachRealtime(httpServer, { log: (m) => log(`realtime: ${m}`) });
+  const realtime = attachRealtime(httpServer, { generation, log: (m) => log(`realtime: ${m}`) });
 
   return {
     httpServer,

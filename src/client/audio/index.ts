@@ -101,7 +101,12 @@ export function cueForEvent(event: GameEvent): AudioCueId | null {
     case 'player_dashed':
       return 'dash';
     case 'player_attacked':
+    case 'ability_used':
       return 'attack';
+    case 'ability_unlocked':
+    case 'player_revived':
+    case 'room_cleared':
+      return 'ui_confirm';
     case 'enemy_damaged':
     case 'player_damaged':
       return 'hit';

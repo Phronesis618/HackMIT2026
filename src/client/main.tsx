@@ -13,6 +13,7 @@ import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
 import { PlayerIdentitySchema, type PlayerIdentity } from '../shared/contracts';
 import { randomId } from '../shared/ids';
+import type { GameSession } from '../shared/session';
 import { createBrowserAudio } from './audio';
 import { createBrowserChronicle } from './chronicle';
 import { GameController, IDENTITY_STORAGE_KEY, parsePreviewFlags } from './game/GameController';
@@ -21,6 +22,7 @@ import { PhaserWorldRenderer } from './render/PhaserWorldRenderer';
 import { applyTokens } from './styles/applyTokens';
 import './styles/app.css';
 import { LocalSession } from './transport/LocalSession';
+import { RemoteSession } from './transport/RemoteSession';
 import { fixtureWorldProvider, serverWorldProvider } from './transport/worldProviders';
 import { App } from './ui/App';
 
@@ -58,18 +60,23 @@ async function fetchLiveAvailability(): Promise<boolean | null> {
 
 async function boot(): Promise<void> {
   applyTokens();
-  const flags = parsePreviewFlags(window.location.search);
+  const coOp = new URLSearchParams(window.location.search).get('mode') === 'coop';
+  const flags = parsePreviewFlags(coOp ? '' : window.location.search);
   const availability = flags.fixtureWorld ? false : await fetchLiveAvailability();
-  if (availability === null) flags.fixtureWorld = true;
+  if (availability === null && !coOp) flags.fixtureWorld = true;
   const identity = loadIdentity();
-  const session = new LocalSession({ identity, worldProvider: flags.fixtureWorld ? fixtureWorldProvider : serverWorldProvider });
+  const session: GameSession = coOp
+    ? new RemoteSession({ identity })
+    : new LocalSession({ identity, worldProvider: flags.fixtureWorld ? fixtureWorldProvider : serverWorldProvider });
   const renderer = new PhaserWorldRenderer();
   const chronicle = createBrowserChronicle(window.localStorage);
   const audio = createBrowserAudio();
   const liveGenerationAvailable = availability === true;
   const store = createUiStore(GameController.initialModel(session, flags, chronicle, liveGenerationAvailable));
   store.set({ audioMuted: audio.isMuted() });
-  if (availability === null) store.set({ notice: { kind: 'info', text: 'No generation server is reachable. Solo play uses a clearly labelled offline fixture.' } });
+  if (availability === null) store.set({ notice: { kind: 'info', text: coOp
+    ? 'No co-op server is reachable. Start the RELAY server or switch to Solo for offline play.'
+    : 'No generation server is reachable. Solo play uses a clearly labelled offline fixture.' } });
   const controller = new GameController({ session, renderer, chronicle, audio, store, flags, liveGenerationAvailable });
   window.addEventListener('pagehide', (event) => {
     if (!event.persisted) controller.dispose();

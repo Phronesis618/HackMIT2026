@@ -160,6 +160,13 @@ export class GameController {
           dashCooldownMs: Math.round(me.dashCooldownMs),
           attackReady: me.attackCooldownMs <= 0,
           enemiesRemaining: snapshot.enemies.filter((e) => e.state !== 'dead').length,
+          resources: me.resources ?? 0,
+          abilityEUnlocked: me.abilityEUnlocked ?? false,
+          abilityQCooldownMs: Math.ceil((me.abilityQCooldownMs ?? 0) / 100) * 100,
+          abilityECooldownMs: Math.ceil((me.abilityECooldownMs ?? 0) / 100) * 100,
+          reviveProgress: me.reviveProgress ?? 0,
+          roomCleared: snapshot.roomCleared ?? false,
+          anchor: snapshot.anchor,
         };
         if (
           !prev ||
@@ -168,6 +175,15 @@ export class GameController {
           prev.dashReady !== hud.dashReady ||
           prev.attackReady !== hud.attackReady ||
           prev.enemiesRemaining !== hud.enemiesRemaining ||
+          prev.maxHp !== hud.maxHp ||
+          prev.resources !== hud.resources ||
+          prev.abilityEUnlocked !== hud.abilityEUnlocked ||
+          prev.abilityQCooldownMs !== hud.abilityQCooldownMs ||
+          prev.abilityECooldownMs !== hud.abilityECooldownMs ||
+          prev.reviveProgress !== hud.reviveProgress ||
+          prev.roomCleared !== hud.roomCleared ||
+          prev.anchor?.state !== hud.anchor?.state ||
+          prev.anchor?.progress !== hud.anchor?.progress ||
           Math.abs(prev.dashCooldownMs - hud.dashCooldownMs) > 40
         ) {
           store.set({ hud });
@@ -201,14 +217,6 @@ export class GameController {
     for (const e of events) {
       const cue = cueForEvent(e);
       if (cue) audio.play(cue);
-      if (e.type === 'room_entered') {
-        const world = session.getWorld();
-        const room = world?.rooms[e.roomIndex];
-        if (world && room) {
-          renderer.showRoom(room, world.art);
-          store.set({ phase: 'expedition', room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal } });
-        }
-      }
       if (e.type === 'contribution_submitted') store.set({ contributions: session.getContributions() });
     }
 
@@ -319,6 +327,7 @@ export class GameController {
         audio.setMuted(!audio.isMuted());
         store.set({ audioMuted: audio.isMuted() });
       },
+      unlockAbility: () => session.unlockAbility?.(),
     };
   }
 }

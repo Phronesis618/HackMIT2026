@@ -24,6 +24,7 @@ export class RoomScene extends Phaser.Scene {
   private isHeadquarters = false;
   private roomLayer: Phaser.GameObjects.Layer | null = null;
   private portalGlow: Phaser.GameObjects.Graphics | null = null;
+  private telegraphs: Phaser.GameObjects.Graphics | null = null;
   private portalPulse = 0;
   private players = new Map<string, EntityView>();
   private enemies = new Map<string, EntityView>();
@@ -149,6 +150,8 @@ export class RoomScene extends Phaser.Scene {
     // Portal / exits glow (animated in update()).
     this.portalGlow = this.add.graphics().setDepth(DEPTH.floorDecal + 3);
     layer.add(this.portalGlow);
+    this.telegraphs = this.add.graphics().setDepth(DEPTH.floorDecal + 4);
+    layer.add(this.telegraphs);
 
     const fog = this.add.graphics().setDepth(DEPTH.fog);
     drawVignette(fog, roomW, roomH, art.fog, p);
@@ -199,6 +202,7 @@ export class RoomScene extends Phaser.Scene {
     }
 
     const seenEnemies = new Set<string>();
+    this.telegraphs?.clear();
     for (const enemy of snapshot.enemies) {
       this.enemyPositions.set(enemy.id, { x: enemy.x, y: enemy.y });
       seenEnemies.add(enemy.id);
@@ -208,6 +212,18 @@ export class RoomScene extends Phaser.Scene {
         this.enemies.set(enemy.id, view);
       }
       this.updateEnemyView(view, enemy);
+      const warning = enemy.telegraph;
+      const g = this.telegraphs;
+      if (warning && g) {
+        const color = hexToInt(tokens.canvas.telegraph);
+        g.fillStyle(color, 0.16).lineStyle(2, color, 0.9);
+        if (warning.kind === 'burst') {
+          g.fillCircle(warning.x, warning.y, warning.range).strokeCircle(warning.x, warning.y, warning.range);
+        } else {
+          g.beginPath().slice(warning.x, warning.y, warning.range,
+            warning.facing - warning.arcRad / 2, warning.facing + warning.arcRad / 2, false).fillPath().strokePath();
+        }
+      }
     }
     for (const [id, view] of this.enemies) {
       if (!seenEnemies.has(id)) {
@@ -269,7 +285,7 @@ export class RoomScene extends Phaser.Scene {
   private updatePlayerView(view: EntityView, player: PlayerState): void {
     view.container.setPosition(player.x, player.y);
     view.container.setDepth(DEPTH.entities + player.y / 10000);
-    view.container.setAlpha(player.state === 'down' ? 0.45 : player.invulnerableMs > 0 ? 0.7 : 1);
+    view.container.setAlpha(player.state === 'down' ? 0.45 : (player.shroudMs ?? 0) > 0 ? 0.5 : player.invulnerableMs > 0 ? 0.7 : 1);
     const appearance = `${player.classId}:${player.state}`;
     if (view.lastState !== appearance) {
       view.lastState = appearance;
@@ -283,6 +299,13 @@ export class RoomScene extends Phaser.Scene {
     view.facing.lineStyle(1, hexToInt(tokens.canvas.localPlayerAccent), view.isLocal ? 0.6 : 0);
     view.facing.beginPath().arc(0, 0, PLAYER_RADIUS + 12, -0.3, 0.3).strokePath();
     view.facing.setRotation(player.facing);
+    if ((player.shieldMs ?? 0) > 0) view.facing.lineStyle(3, hexToInt(tokens.canvas.localPlayerAccent), 0.9).strokeCircle(0, 0, PLAYER_RADIUS + 7);
+    if ((player.rallyMs ?? 0) > 0) view.facing.lineStyle(2, hexToInt(tokens.color.success), 0.9).strokeCircle(0, 0, PLAYER_RADIUS + 11);
+    if (player.state === 'down' && (player.reviveProgress ?? 0) > 0) {
+      view.facing.lineStyle(3, hexToInt(tokens.color.success), 1).beginPath()
+        .arc(0, 0, PLAYER_RADIUS + 10, -Math.PI / 2 - player.facing,
+          -Math.PI / 2 - player.facing + player.reviveProgress! * Math.PI * 2, false).strokePath();
+    }
     if (view.label.text !== player.displayName) view.label.setText(player.displayName);
     this.drawHpBar(view.hpBar, player.hp, player.maxHp, PLAYER_RADIUS, hexToInt(tokens.color.success));
   }
@@ -304,6 +327,8 @@ export class RoomScene extends Phaser.Scene {
       view.facing.beginPath().arc(0, 0, radius + 16, -0.6, 0.6).strokePath();
     }
     view.facing.setRotation(enemy.facing);
+    if ((enemy.markMs ?? 0) > 0) view.facing.lineStyle(2, hexToInt(tokens.color.warmLamp), 0.9).strokeCircle(0, 0, radius + 5);
+    if ((enemy.stunMs ?? 0) > 0) view.facing.lineStyle(2, hexToInt(tokens.color.mist100), 0.9).strokeCircle(0, 0, radius + 9);
     if (enemy.hp < enemy.maxHp) this.drawHpBar(view.hpBar, enemy.hp, enemy.maxHp, radius, hexToInt(tokens.canvas.enemyAccent));
     else view.hpBar.clear();
   }
@@ -363,10 +388,13 @@ export class RoomScene extends Phaser.Scene {
         }
         case 'player_attacked': {
           const g = this.effect(event.x, event.y);
+          const range = event.range ?? ATTACK_RANGE;
+          const arc = event.arcRad ?? ATTACK_ARC_RAD;
           g.lineStyle(3, hexToInt(tokens.canvas.telegraph), 0.9);
           g.beginPath();
-          g.arc(0, 0, ATTACK_RANGE, event.facing - ATTACK_ARC_RAD / 2, event.facing + ATTACK_ARC_RAD / 2, false);
+          g.arc(0, 0, range, event.facing - arc / 2, event.facing + arc / 2, false);
           g.strokePath();
+          if (arc < 0.3) g.lineBetween(0, 0, Math.cos(event.facing) * range, Math.sin(event.facing) * range);
           this.tweens.add({ targets: g, alpha: 0, scale: 1.1, duration: tokens.motion.fastMs * 1.5, onComplete: () => g.destroy() });
           break;
         }
@@ -391,6 +419,16 @@ export class RoomScene extends Phaser.Scene {
         case 'player_downed': {
           const target = this.players.get(event.playerId)?.container;
           if (target) this.burst(target.x, target.y, hexToInt(tokens.color.danger), PLAYER_RADIUS + 8);
+          break;
+        }
+        case 'ability_used': {
+          this.burst(event.x, event.y, hexToInt(this.art.palette.accent), PLAYER_RADIUS + 14);
+          break;
+        }
+        case 'player_healed':
+        case 'player_revived': {
+          const target = this.players.get(event.playerId)?.container;
+          if (target) this.burst(target.x, target.y, hexToInt(tokens.color.success), PLAYER_RADIUS + 10);
           break;
         }
         case 'anchor_planted': {
@@ -434,11 +472,12 @@ export class RoomScene extends Phaser.Scene {
           g.strokePath();
         }
       } else {
-        g.fillStyle(accent, 0.1 + 0.15 * pulse).fillRect(exit.x * TILE_SIZE, exit.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        const open = this.latestSnapshot?.roomCleared === true;
+        g.fillStyle(accent, open ? 0.1 + 0.15 * pulse : 0.04).fillRect(exit.x * TILE_SIZE, exit.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
         const angle = { east: 0, south: Math.PI / 2, west: Math.PI, north: -Math.PI / 2 }[exit.direction];
         const dx = Math.cos(angle);
         const dy = Math.sin(angle);
-        g.lineStyle(2, accent, 0.95);
+        g.lineStyle(2, accent, open ? 0.95 : 0.25);
         g.lineBetween(c.x - dx * 8 - dy * 7, c.y - dy * 8 + dx * 7, c.x + dx * 7, c.y + dy * 7);
         g.lineBetween(c.x - dx * 8 + dy * 7, c.y - dy * 8 - dx * 7, c.x + dx * 7, c.y + dy * 7);
       }

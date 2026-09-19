@@ -81,6 +81,7 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
         attack: attackPressed,
         dash: dashPressed,
         ability: abilityPressed,
+        interact: INPUT_BINDINGS.interact.some((code) => down.has(code)),
       };
       attackPressed = false;
       dashPressed = false;
