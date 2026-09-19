@@ -11,11 +11,12 @@ import { RoomScene } from './RoomScene';
 export class PhaserWorldRenderer implements WorldRenderer {
   private game: Phaser.Game | null = null;
   private scene: RoomScene | null = null;
+  private mounting: Promise<void> | null = null;
   private pendingRoom: { room: RoomSpec; art: ArtRecipe; headquarters: boolean } | null = null;
 
   mount(container: HTMLElement): Promise<void> {
-    if (this.game) return Promise.resolve();
-    return new Promise((resolve) => {
+    if (this.mounting) return this.mounting;
+    this.mounting = new Promise((resolve) => {
       const scene = new RoomScene(() => {
         if (this.pendingRoom) {
           scene.buildRoom(this.pendingRoom.room, this.pendingRoom.art, { headquarters: this.pendingRoom.headquarters });
@@ -36,6 +37,7 @@ export class PhaserWorldRenderer implements WorldRenderer {
         banner: false,
       });
     });
+    return this.mounting;
   }
 
   showHeadquarters(room: RoomSpec, art: ArtRecipe): void {
@@ -102,5 +104,7 @@ export class PhaserWorldRenderer implements WorldRenderer {
     this.game?.destroy(true);
     this.game = null;
     this.scene = null;
+    this.mounting = null;
+    this.pendingRoom = null;
   }
 }

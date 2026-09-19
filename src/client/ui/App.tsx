@@ -44,10 +44,19 @@ export function App({ store, actions, onStageReady }: AppProps) {
       <main className="layout">
         <section className="stage-wrap">
           <div className="stage" ref={stageRef} tabIndex={0} aria-label="RELAY game canvas" />
+          <div className="stage-caption" aria-hidden="true">
+            <span>{model.phase === 'expedition' ? model.room?.name : 'RELAY / SANCTUARY'}</span>
+            <span>WASD move · Shift dash · J attack</span>
+          </div>
         </section>
         <aside className="side">
           {(model.phase === 'headquarters' || model.phase === 'preparing') && <HeadquartersPanel model={model} actions={actions} />}
           {model.phase === 'expedition' && <Hud model={model} actions={actions} />}
+          {model.phase === 'debrief' && <div className="panel">
+            <h2 className="panel__title">Expedition ended</h2>
+            <p className="muted">Your recorded experiences are on the memory wall.</p>
+            <button type="button" className="btn btn--primary" onClick={actions.returnToHeadquarters}>Return to headquarters</button>
+          </div>}
           {model.world && <WorldPanel world={model.world} />}
         </aside>
       </main>
