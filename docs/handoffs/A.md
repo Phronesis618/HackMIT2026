@@ -8,10 +8,15 @@
   memories as duplicates of a previous expedition. Provenance stays explicitly fixture.
 - **Verified:** regressions failed before the fix for both same-session and reload paths.
   Real LocalSession events and Chronicle persistence now pass; full check **174 tests /
-  15 files**, typecheck/build/whitespace passed.
+  15 files**, typecheck/build/whitespace passed. A focused browser smoke at `b9790a9`
+  used the production bundle without API routes: three physical portal entries with a
+  reload before the third retained three receipts, three arrivals and three abort summaries.
 - **Mocked:** the integration test injects in-memory storage; session events are real.
-- **Unverified:** live OpenAI verification remains deferred by user choice. The existing
-  public site needs the corrected bundle published; hosted browser verification is pending.
+- **Published:** the corrected bundle is live at https://client-gzffunxf.devinapps.com/;
+  deployed HTML references the new JavaScript bundle and both return HTTP 200.
+- **Unverified:** live OpenAI verification remains deferred by user choice. Hosted browser,
+  public co-op, and full victory were outside the focused replay check. Optional console
+  inspection was unavailable at the CDP tooling layer; visible UI and DOM supplied evidence.
 
 ## Current integration — Devin across all roles
 
