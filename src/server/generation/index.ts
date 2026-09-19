@@ -24,8 +24,8 @@ export interface GenerationServiceInfo {
 }
 
 export interface GenerationService {
-  prepareWorld(request: GenerationRequest, onStatus?: (status: GenerationStatus) => void): Promise<PreparedWorld>;
-  prepareWorldStream(request: GenerationRequest, onStatus?: (status: GenerationStatus) => void): AsyncGenerator<PreparedWorld>;
+  prepareWorld(request: GenerationRequest, onStatus?: (status: GenerationStatus) => void, signal?: AbortSignal): Promise<PreparedWorld>;
+  prepareWorldStream(request: GenerationRequest, onStatus?: (status: GenerationStatus) => void, signal?: AbortSignal): AsyncGenerator<PreparedWorld>;
   info(): GenerationServiceInfo;
 }
 
@@ -67,8 +67,10 @@ export function createGenerationService(options: GenerationServiceOptions): Gene
     })
     : {
       ...fixtureService,
-      async *prepareWorldStream(request: GenerationRequest, onStatus?: (status: GenerationStatus) => void) {
-        yield await fixtureService.prepareWorld(request, onStatus);
+      async *prepareWorldStream(request: GenerationRequest, onStatus?: (status: GenerationStatus) => void, signal?: AbortSignal) {
+        const world = await fixtureService.prepareWorld(request, onStatus, signal);
+        signal?.throwIfAborted();
+        yield world;
       },
     };
 

@@ -113,6 +113,34 @@ describe('live generation', () => {
     expect((await pending).provenance.source).toBe('live_fallback_fixture');
   });
 
+  it.each(['request', 'body'] as const)('cancels a stalled provider %s without fallback or retry', async (stage) => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn<typeof fetch>();
+    if (stage === 'request') fetchMock.mockImplementation(() => new Promise(() => {}));
+    else fetchMock.mockResolvedValue(new Response(new ReadableStream()));
+    const controller = new AbortController();
+    const statuses: GenerationStatus[] = [];
+    const pending = service(fetchMock).prepareWorld(request, (status) => statuses.push(status), controller.signal);
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    await Promise.resolve();
+    controller.abort();
+    await rejected;
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+    expect(statuses.some((status) => status.phase === 'fallback' || status.phase === 'ready')).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('stops compilation between committed rooms after cancellation', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response());
+    const controller = new AbortController();
+    const stream = service(fetchMock).prepareWorldStream(request, undefined, controller.signal);
+    expect((await stream.next()).value?.rooms).toHaveLength(1);
+    controller.abort();
+    await expect(stream.next()).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it.each([
     { status: 'incomplete', output: [] },
     { status: 'completed', output: [{ type: 'message', content: [{ type: 'refusal', refusal: 'No' }] }] },

@@ -7,6 +7,8 @@
  */
 import {
   IDLE_GENERATION_STATUS,
+  GenerationRequestSchema,
+  GenerationStatusSchema,
   type Contribution,
   type GameEvent,
   type GameEventInput,
@@ -21,7 +23,7 @@ import { TICK_MS } from '../../shared/conventions';
 import { randomId } from '../../shared/ids';
 import type { ConnectionStatus, GameSession, LocalIntent, Unsubscribe } from '../../shared/session';
 import { createSimulation, type Simulation } from '../../sim';
-import type { WorldProvider } from './worldProviders';
+import { parseWorldPrefix, type WorldProvider, type WorldStreamOptions } from './worldProviders';
 
 export interface LocalSessionOptions {
   identity: PlayerIdentity;
@@ -54,6 +56,9 @@ export class LocalSession implements GameSession {
   private timer: ReturnType<typeof setInterval> | null = null;
   private accumulator = 0;
   private lastTime = 0;
+  private disposed = false;
+  private activeGeneration: AbortController | null = null;
+  private lastPhase: GamePhase = 'headquarters';
 
   private snapshotListeners = new Set<(s: GameSnapshot) => void>();
   private eventListeners = new Set<(e: GameEvent[]) => void>();
@@ -77,7 +82,8 @@ export class LocalSession implements GameSession {
   // ---- lifecycle -------------------------------------------------------------
 
   async start(): Promise<void> {
-    if (this.timer) return;
+    if (this.disposed) throw new Error('Session has been disposed.');
+    if (this.timer !== null) return;
     this.connection = 'connected';
     this.lastTime = this.scheduler.now();
     this.snapshot = this.sim.getSnapshot();
@@ -85,18 +91,23 @@ export class LocalSession implements GameSession {
   }
 
   dispose(): void {
-    if (this.timer) this.scheduler.clearInterval(this.timer);
+    this.disposed = true;
+    this.activeGeneration?.abort();
+    this.activeGeneration = null;
+    if (this.timer !== null) this.scheduler.clearInterval(this.timer);
     this.timer = null;
     this.connection = 'offline';
   }
 
   /** Advance simulation time manually (tests) — same code path as the interval. */
   advance(ms: number): void {
+    if (this.disposed) return;
     this.accumulator += ms;
     this.drain();
   }
 
   private pump(): void {
+    if (this.disposed) return;
     const now = this.scheduler.now();
     this.accumulator += now - this.lastTime;
     this.lastTime = now;
@@ -126,6 +137,7 @@ export class LocalSession implements GameSession {
     const all = followUps.length ? [...events, ...followUps] : events;
     if (all.length) this.emitEvents(all);
     for (const l of this.snapshotListeners) l(this.snapshot);
+    this.notifyPhase();
   }
 
   private handleSimEvents(events: GameEvent[]): GameEvent[] {
@@ -181,45 +193,91 @@ export class LocalSession implements GameSession {
   }
 
   async requestWorld(): Promise<PreparedWorld> {
+    if (this.disposed) throw new Error('Session has been disposed.');
+    this.activeGeneration?.abort();
+    const controller = new AbortController();
+    this.activeGeneration = controller;
     const requestId = randomId('req');
     const startedAt = Date.now();
+    const request = GenerationRequestSchema.parse({
+      requestId,
+      sessionId: this.sessionId,
+      contributions: this.contributions,
+      plannedRoomCount: 3,
+    });
+    const current = () => !this.disposed && this.activeGeneration === controller && !controller.signal.aborted;
     this.setGeneration({ phase: 'queued', message: 'Requesting a world…', requestId, startedAt, elapsedMs: 0 });
-    try {
-      const world = await this.provider.prepareWorld({
-        requestId,
-        sessionId: this.sessionId,
-        contributions: this.contributions,
-        plannedRoomCount: 3,
-      });
-      this.world = world;
-      this.sim.setWorld(world);
-      this.setGeneration({
-        phase: world.provenance.source === 'live' ? 'ready' : 'fallback',
-        message: `${world.provenance.label}: “${world.recipe.title}” ready.`,
-        requestId,
-        startedAt,
-        elapsedMs: Date.now() - startedAt,
-      });
-      for (const l of this.worldListeners) l(world);
-      this.emitEvents([
-        this.metaEvent({
-          type: 'world_prepared',
-          worldId: world.worldId,
-          worldTitle: world.recipe.title,
-          source: world.provenance.source,
-          playerIds: this.sim.getPlayerIds(),
-        }),
-      ]);
-      return world;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.setGeneration({ phase: 'failed', message, requestId, startedAt, elapsedMs: Date.now() - startedAt });
-      throw err;
-    }
+    return new Promise<PreparedWorld>((resolve, reject) => {
+      const aborted = () => reject(new DOMException('World request cancelled.', 'AbortError'));
+      if (controller.signal.aborted) {
+        aborted();
+        return;
+      }
+      controller.signal.addEventListener('abort', aborted, { once: true });
+      const options: WorldStreamOptions = {
+        signal: controller.signal,
+        onStatus: (rawStatus) => {
+          if (!current()) return;
+          const status = GenerationStatusSchema.parse(rawStatus);
+          if (status.requestId !== requestId) throw new Error('Mismatched generation status.');
+          this.setGeneration(status);
+          if (status.phase === 'failed') throw new Error(status.message);
+        },
+      };
+      const provider = this.provider;
+      const consume = async () => {
+        let previous: PreparedWorld | undefined;
+        try {
+          const worlds = provider.prepareWorldStream
+            ? provider.prepareWorldStream(request, options)
+            : (async function* () { yield await provider.prepareWorld(request, options); })();
+          for await (const rawWorld of worlds) {
+            if (!current()) return;
+            const world = parseWorldPrefix(rawWorld, request, previous);
+            const first = !previous;
+            previous = structuredClone(world);
+            this.world = world;
+            this.sim.setWorld(world);
+            this.setGeneration({
+              phase: world.provenance.source === 'live' ? 'ready' : 'fallback',
+              message: `${world.provenance.label}: ${world.rooms.length}/${world.plannedRoomCount} rooms ready.`,
+              requestId, startedAt, elapsedMs: Date.now() - startedAt,
+            });
+            if (!current()) return;
+            for (const l of this.worldListeners) l(world);
+            if (!current()) return;
+            if (first) {
+              this.emitEvents([
+                this.metaEvent({
+                  type: 'world_prepared', worldId: world.worldId, worldTitle: world.recipe.title,
+                  source: world.provenance.source, playerIds: this.sim.getPlayerIds(),
+                }),
+              ]);
+              resolve(world);
+            }
+          }
+          if (current() && (!previous || previous.rooms.length < previous.plannedRoomCount)) {
+            throw new Error('World stream ended before all rooms were committed.');
+          }
+        } catch (error) {
+          if (current()) {
+            const detail = error instanceof Error ? error.message : 'World generation failed.';
+            const message = previous ? `Committed rooms remain playable. ${detail}` : detail;
+            this.setGeneration({ phase: 'failed', message: message.slice(0, 200), requestId, startedAt, elapsedMs: Date.now() - startedAt });
+            reject(error);
+          }
+        } finally {
+          controller.signal.removeEventListener('abort', aborted);
+          if (this.activeGeneration === controller) this.activeGeneration = null;
+          controller.abort();
+        }
+      };
+      void consume();
+    });
   }
 
   enterPortal(): void {
-    if (!this.world || this.sim.getPhase() !== 'headquarters') return;
+    if (this.disposed || !this.world || this.sim.getPhase() !== 'headquarters') return;
     const events = this.enterRoom(0);
     this.snapshot = this.sim.getSnapshot();
     if (events.length) this.emitEvents(events);
@@ -228,7 +286,7 @@ export class LocalSession implements GameSession {
 
   /** Preview helper: jump straight to a committed room index (used by ?room=N). */
   enterRoomIndex(index: number): void {
-    if (!this.world || index >= this.world.rooms.length) return;
+    if (this.disposed || !this.world || !Number.isInteger(index) || index < 0 || index >= this.world.rooms.length) return;
     const events = this.enterRoom(index);
     this.snapshot = this.sim.getSnapshot();
     if (events.length) this.emitEvents(events);
@@ -236,18 +294,24 @@ export class LocalSession implements GameSession {
   }
 
   returnToHeadquarters(): void {
-    if (this.sim.getPhase() === 'headquarters') return;
+    if (this.disposed || this.sim.getPhase() === 'headquarters') return;
     this.sim.returnToHeadquarters();
     this.snapshot = this.sim.getSnapshot();
-    for (const l of this.phaseListeners) l('headquarters');
+    this.notifyPhase();
     for (const l of this.snapshotListeners) l(this.snapshot);
   }
 
   private enterRoom(index: number): GameEvent[] {
-    const wasPhase = this.sim.getPhase();
     const events = this.sim.enterRoom(index);
-    if (wasPhase !== 'expedition') for (const l of this.phaseListeners) l('expedition');
+    this.notifyPhase();
     return events;
+  }
+
+  private notifyPhase(): void {
+    const phase = this.sim.getPhase();
+    if (phase === this.lastPhase) return;
+    this.lastPhase = phase;
+    for (const listener of this.phaseListeners) listener(phase);
   }
 
   // ---- live state ------------------------------------------------------------

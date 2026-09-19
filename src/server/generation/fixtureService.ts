@@ -97,7 +97,8 @@ export function createFixtureGenerationService(options: FixtureServiceOptions) {
   const extraNotes = options.extraNotes ?? [];
 
   return {
-    async prepareWorld(rawRequest: GenerationRequest, onStatus?: (s: GenerationStatus) => void): Promise<PreparedWorld> {
+    async prepareWorld(rawRequest: GenerationRequest, onStatus?: (s: GenerationStatus) => void, signal?: AbortSignal): Promise<PreparedWorld> {
+      signal?.throwIfAborted();
       const startedAt = Date.now();
       const request = GenerationRequestSchema.parse(rawRequest);
       const status = (phase: GenerationStatus['phase'], message: string): void =>

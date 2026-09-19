@@ -32,7 +32,7 @@ export class GenerationFailure extends Error {
 }
 
 export interface RecipeProvider {
-  generate(request: GenerationRequest, repair?: string): Promise<{ recipe: WorldRecipe; usage?: ProviderUsage }>;
+  generate(request: GenerationRequest, repair?: string, signal?: AbortSignal): Promise<{ recipe: WorldRecipe; usage?: ProviderUsage }>;
 }
 
 export function createOpenAIProvider(options: {
@@ -49,8 +49,17 @@ export function createOpenAIProvider(options: {
   const timeoutMs = Math.min(25_000, Math.max(1, options.timeoutMs ?? 25_000));
 
   return {
-    async generate(request, repair) {
+    async generate(request, repair, signal) {
+      signal?.throwIfAborted();
       const controller = new AbortController();
+      let onAbort = () => {};
+      const cancelled = new Promise<never>((_, reject) => {
+        onAbort = () => {
+          controller.abort();
+          reject(signal?.reason ?? new DOMException('Generation cancelled.', 'AbortError'));
+        };
+        signal?.addEventListener('abort', onAbort, { once: true });
+      });
       let timer: ReturnType<typeof setTimeout> | undefined;
       const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
@@ -59,7 +68,7 @@ export function createOpenAIProvider(options: {
         }, timeoutMs);
       });
       try {
-        return await Promise.race([timeout, (async () => {
+        return await Promise.race([timeout, cancelled, (async () => {
           const response = await fetchResponse('https://api.openai.com/v1/responses', {
             method: 'POST',
             signal: controller.signal,
@@ -77,11 +86,13 @@ export function createOpenAIProvider(options: {
               text: { format: { type: 'json_schema', name: 'world_recipe', strict: true, schema } },
             }),
           });
+          controller.signal.throwIfAborted();
           if (!response.ok) {
             await response.body?.cancel();
             throw new GenerationFailure(`Provider HTTP ${response.status}.`);
           }
           const envelope = responseSchema.safeParse(await response.json());
+          controller.signal.throwIfAborted();
           if (!envelope.success) throw new GenerationFailure('Provider response was incomplete or invalid.');
           const usage = envelope.data.usage;
           const measured = usage ? {
@@ -108,10 +119,12 @@ export function createOpenAIProvider(options: {
           return { recipe: parsed.data, ...(measured ? { usage: measured } : {}) };
         })()]);
       } catch (error) {
+        signal?.throwIfAborted();
         if (error instanceof GenerationFailure) throw error;
         throw new GenerationFailure('Provider request or response could not be read.');
       } finally {
         clearTimeout(timer);
+        signal?.removeEventListener('abort', onAbort);
       }
     },
   };

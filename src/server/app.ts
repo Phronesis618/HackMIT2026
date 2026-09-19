@@ -10,9 +10,11 @@
  * CLI entry. Generation internals live behind src/server/generation (Agent B).
  */
 import fs from 'node:fs';
+import { once } from 'node:events';
 import http from 'node:http';
 import path from 'node:path';
-import { formatIssues, GenerationRequestSchema } from '../shared/contracts';
+import { setImmediate } from 'node:timers/promises';
+import { formatIssues, GenerationRequestSchema, GenerationStatusSchema, PreparedWorldSchema } from '../shared/contracts';
 import { describeForClient, type ServerConfig } from './config';
 import { createGenerationService, type GenerationService } from './generation';
 import { attachRealtime, type RealtimeHandle } from './network/realtime';
@@ -85,9 +87,66 @@ export function createRelayServer(config: ServerConfig, deps: { log?: (m: string
         return;
       }
       const started = Date.now();
-      const world = await generation.prepareWorld(parsed.data, (s) => log(`world ${parsed.data.requestId}: ${s.phase} — ${s.message}`));
-      log(`world ${parsed.data.requestId}: ${world.provenance.source} "${world.recipe.title}" in ${Date.now() - started}ms`);
-      sendJson(res, 200, world);
+      const controller = new AbortController();
+      const disconnect = () => controller.abort();
+      res.once('close', disconnect);
+      req.once('aborted', disconnect);
+      const streaming = (req.headers.accept ?? '').split(',').some((item) => {
+        const [mediaType, ...parameters] = item.trim().split(';');
+        return mediaType?.trim().toLowerCase() === 'application/x-ndjson'
+          && !parameters.some((parameter) => /^q\s*=\s*0(?:\.0*)?$/i.test(parameter.trim()));
+      });
+      try {
+        if (res.destroyed || req.aborted) return;
+        if (!streaming) {
+          const world = PreparedWorldSchema.parse(await generation.prepareWorld(parsed.data, (s) =>
+            log(`world ${parsed.data.requestId}: ${s.phase} — ${s.message}`), controller.signal));
+          if (controller.signal.aborted) return;
+          log(`world ${parsed.data.requestId}: ${world.provenance.source} "${world.recipe.title}" in ${Date.now() - started}ms`);
+          sendJson(res, 200, world);
+          return;
+        }
+        res.writeHead(200, {
+          'Content-Type': 'application/x-ndjson; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'X-Accel-Buffering': 'no',
+        });
+        res.flushHeaders();
+        let committedRooms = 0;
+        const stream = generation.prepareWorldStream(parsed.data, (rawStatus) => {
+          controller.signal.throwIfAborted();
+          const status = GenerationStatusSchema.parse(rawStatus);
+          if (status.requestId !== parsed.data.requestId) throw new Error('Mismatched generation status.');
+          res.write(`${JSON.stringify({ type: 'status', status })}\n`);
+        }, controller.signal);
+        try {
+          for await (const rawWorld of stream) {
+            controller.signal.throwIfAborted();
+            const world = PreparedWorldSchema.parse(rawWorld);
+            const writable = res.write(`${JSON.stringify({ type: 'world', world })}\n`);
+            committedRooms = world.rooms.length;
+            if (!writable) await once(res, 'drain', { signal: controller.signal });
+            await setImmediate(undefined, { signal: controller.signal });
+          }
+          if (committedRooms !== parsed.data.plannedRoomCount) throw new Error('Generation produced an incomplete world.');
+        } catch {
+          if (!controller.signal.aborted && !res.destroyed) {
+            res.write(`${JSON.stringify({
+              type: 'error',
+              message: committedRooms
+                ? 'Later-room generation failed; committed rooms remain playable.'
+                : 'World generation failed. Please try again.',
+            })}\n`);
+          }
+        }
+        if (!res.destroyed) res.end();
+      } catch (error) {
+        if (!controller.signal.aborted) throw error;
+      } finally {
+        controller.abort();
+        res.off('close', disconnect);
+        req.off('aborted', disconnect);
+      }
       return;
     }
 
