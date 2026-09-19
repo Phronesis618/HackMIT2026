@@ -10,6 +10,7 @@ Agent C records only work and verification performed in this session.
 | 2026-09-19 | `e55d139` | Contribution/class/progress UI, explicit receipt provenance, physical card styling, responsive layout, clear confirmation and debrief return UI. | Full check: 50 tests, typecheck/build passed. | No new dependencies. |
 | 2026-09-19 | `ebcd2bc` | First-defeat milestone, world-scoped deduplication, replay-safe persisted memories, schema limits and storage failure tests. | Full check: 59 tests across 6 files, typecheck/build passed. | Persistent testing agent recorded the real fixture loop and inspected brief attack/dash frames. |
 | 2026-09-19 | `618d12b` | Merged main, reconciling the independently implemented identical readiness callback. Preserved A's thumbnail timing and receipt grammar changes. | Full check: 59 tests across 6 files, typecheck/build and whitespace checks passed. | Browser evidence is for `ebcd2bc`; this integration change was shell-verified. |
+| 2026-09-19 | `devin/1789858056-combat-presentation` | Added down/critical HUD, current-world event-derived debrief, snapshot-driven Anchor progress, downed effect and room/world isolation. Added headless scene and React-rendering regressions. | Full check: 72 tests across 8 files, typecheck/build and whitespace checks passed. | Fresh browser regression pending. Combat and completion remain unit-tested only; core does not emit those events. |
 
 ## Browser evidence
 

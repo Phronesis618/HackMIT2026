@@ -1,10 +1,29 @@
-# Handoff — Agent C (Devin, `feat/presentation`)
+# Handoff — Agent C (Devin)
 
 _Updated by Agent C only. Start prompt: `prompts/START_C_PRESENTATION.md`._
 
 ## Branch / latest commit
+- Follow-up: `devin/1789858056-combat-presentation`, based on main `3dee974`.
+- Prior slice (merged):
 - `feat/presentation` at `618d12b` (main synchronized); PR #5:
   https://github.com/Phronesis618/HackMIT2026/pull/5
+
+## Combat-presentation follow-up
+- **Implemented:** low-integrity/downed HUD, bounded health meter and unavailable controls
+  while down. Debrief shows only the current world's persisted event-derived summary,
+  arrival and milestones; missing/cleared records do not imply victory.
+- **Implemented:** Anchor state label and progress ring read `GameSnapshot.anchor`;
+  `player_downed` has event-driven feedback. Old-room snapshots/reveals and other-world
+  Anchor completion effects are ignored.
+- **Mocked:** headless Phaser display adapter in unit tests. No synthetic events are sent
+  into the running game. Audio remains silent.
+- **Verified:** `npm run check`: 8 files / 72 tests passed; typecheck/build and
+  `git diff --check` passed. Added UI and renderer regressions for outcome honesty,
+  downed readiness, effect deduplication/cleanup, dead-enemy positions, local hit feedback,
+  room isolation and authoritative Anchor progress.
+- **Unverified:** fresh browser regression pending. Core still lacks damage, enemy AI,
+  downing, Anchor planting and run completion, so those paths are unit-tested only.
+  No shared-interface/dependency changes; no live-generation or multiplayer claim.
 
 ## What works
 - **Implemented:** original procedural sanctuary architecture, warm lighting, archive frames,

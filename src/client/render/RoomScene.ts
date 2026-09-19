@@ -28,6 +28,7 @@ export class RoomScene extends Phaser.Scene {
   private players = new Map<string, EntityView>();
   private enemies = new Map<string, EntityView>();
   private anchorView: Phaser.GameObjects.Graphics | null = null;
+  private anchorLabel: Phaser.GameObjects.Text | null = null;
   private latestSnapshot: GameSnapshot | null = null;
   private localPlayerId = '';
   private enemyPositions = new Map<string, { x: number; y: number }>();
@@ -60,6 +61,7 @@ export class RoomScene extends Phaser.Scene {
     this.portalGlow = null;
     this.anchorView?.destroy();
     this.anchorView = null;
+    this.anchorLabel = null;
 
     const layer = this.add.layer();
     this.roomLayer = layer;
@@ -175,9 +177,9 @@ export class RoomScene extends Phaser.Scene {
   // ---- entities ---------------------------------------------------------------
 
   renderSnapshot(snapshot: GameSnapshot, localPlayerId: string): void {
+    if (!this.art || snapshot.roomId !== this.room?.id) return;
     this.latestSnapshot = snapshot;
     this.localPlayerId = localPlayerId;
-    if (!this.art) return;
 
     const seenPlayers = new Set<string>();
     for (const player of snapshot.players) {
@@ -216,7 +218,10 @@ export class RoomScene extends Phaser.Scene {
 
     if (snapshot.anchor && !this.anchorView) {
       this.anchorView = this.add.graphics().setDepth(DEPTH.entities);
-      this.roomLayer?.add(this.anchorView);
+      this.anchorLabel = this.add.text(0, 0, '', {
+        fontFamily: tokens.font.mono, fontSize: '12px', color: this.art.palette.text,
+      }).setOrigin(0.5).setDepth(DEPTH.overlay);
+      this.roomLayer?.add([this.anchorView, this.anchorLabel]);
     }
     if (snapshot.anchor && this.anchorView) {
       const a = snapshot.anchor;
@@ -225,8 +230,18 @@ export class RoomScene extends Phaser.Scene {
       this.anchorView.fillStyle(accent, 0.15).fillCircle(a.x, a.y, 20 + Math.sin(this.time.now / 300) * 3);
       this.anchorView.fillStyle(accent, a.state === 'planted' ? 1 : 0.6).fillCircle(a.x, a.y, 6);
       this.anchorView.lineStyle(2, accent, 0.8).strokeTriangle(a.x, a.y - 17, a.x - 10, a.y + 7, a.x + 10, a.y + 7);
+      this.anchorView.lineStyle(3, accent, 0.2).strokeCircle(a.x, a.y, 28);
+      const progress = a.state === 'planted' ? 1 : a.state === 'planting' ? a.progress : 0;
+      if (progress > 0) {
+        this.anchorView.lineStyle(3, accent, 1).beginPath()
+          .arc(a.x, a.y, 28, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2, false).strokePath();
+      }
+      this.anchorLabel?.setPosition(a.x, a.y - 42).setVisible(true).setText(
+        a.state === 'planted' ? 'ANCHOR PLANTED' : a.state === 'planting' ? `PLANTING · ${Math.floor(a.progress * 100)}%` : 'ANCHOR DORMANT',
+      );
     } else if (!snapshot.anchor) {
       this.anchorView?.clear();
+      this.anchorLabel?.setVisible(false);
     }
   }
 
@@ -373,13 +388,20 @@ export class RoomScene extends Phaser.Scene {
           if (target) this.burst(target.x, target.y, hexToInt(tokens.canvas.enemyAccent), 16);
           break;
         }
+        case 'player_downed': {
+          const target = this.players.get(event.playerId)?.container;
+          if (target) this.burst(target.x, target.y, hexToInt(tokens.color.danger), PLAYER_RADIUS + 8);
+          break;
+        }
         case 'anchor_planted': {
           const anchor = this.latestSnapshot?.anchor;
-          if (anchor) this.burst(anchor.x, anchor.y, hexToInt(this.art.palette.accent), 28);
+          if (anchor && event.worldId === this.latestSnapshot?.worldId && event.roomIndex === this.latestSnapshot.roomIndex) {
+            this.burst(anchor.x, anchor.y, hexToInt(this.art.palette.accent), 28);
+          }
           break;
         }
         case 'room_entered': {
-          this.cameras.main.flash(200, 124, 245, 255, false);
+          if (event.roomId === this.room?.id) this.cameras.main.flash(200, 124, 245, 255, false);
           break;
         }
         default:
