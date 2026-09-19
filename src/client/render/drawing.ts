@@ -6,7 +6,7 @@ import { hexToInt } from '../../shared/tokens';
 
 export type G = Phaser.GameObjects.Graphics;
 
-export function drawSanctuary(g: G, roomW: number, roomH: number, palette: Palette): void {
+export function drawSanctuary(g: G, roomW: number, roomH: number, palette: Palette, portal?: { x: number; y: number }): void {
   const edge = hexToInt(palette.wallEdge);
   const warm = hexToInt(palette.accentSoft);
   const cyan = hexToInt(palette.accent);
@@ -30,7 +30,7 @@ export function drawSanctuary(g: G, roomW: number, roomH: number, palette: Palet
   for (let i = 0; i < 5; i++) {
     g.lineStyle(1, edge, 0.8).strokeRect(wallX + 10 + i * 30, 11, 22, 12);
   }
-  const portal = { x: cx + TILE_SIZE / 2, y: roomH - TILE_SIZE * 1.5 };
+  if (!portal) return;
   g.lineStyle(3, edge, 0.9).strokeEllipse(portal.x, portal.y, 94, 48);
   g.lineStyle(1, cyan, 0.35).strokeEllipse(portal.x, portal.y, 112, 60);
   for (const side of [-1, 1]) {
