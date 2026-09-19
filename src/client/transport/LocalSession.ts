@@ -15,17 +15,22 @@ import {
   type GenerationStatus,
   type PlayerIdentity,
   type PlayerIntent,
+  type PlayerProfile,
   type PreparedWorld,
 } from '../../shared/contracts';
 import { TICK_MS } from '../../shared/conventions';
 import { randomId } from '../../shared/ids';
-import type { ConnectionStatus, GameSession, LocalIntent, Unsubscribe } from '../../shared/session';
+import { ABILITY_INFO, type AbilityId } from '../../shared/registry';
+import type { ConnectionStatus, GameSession, LocalIntent, ProfileStore, PurchaseResult, Unsubscribe } from '../../shared/session';
 import { createSimulation, type Simulation } from '../../sim';
+import { createMemoryProfileStore } from '../game/profile';
 import type { WorldProvider } from './worldProviders';
 
 export interface LocalSessionOptions {
   identity: PlayerIdentity;
   worldProvider: WorldProvider;
+  /** Device-local progression. Defaults to an in-memory store (tests). */
+  profile?: ProfileStore;
   /** Injected for tests; defaults to setInterval/performance.now. */
   scheduler?: { setInterval: typeof setInterval; clearInterval: typeof clearInterval; now: () => number };
 }
@@ -39,6 +44,7 @@ export class LocalSession implements GameSession {
   private identity: PlayerIdentity;
   private readonly sim: Simulation;
   private readonly provider: WorldProvider;
+  private readonly profileStore: ProfileStore;
   private readonly scheduler: NonNullable<LocalSessionOptions['scheduler']>;
   private readonly sessionId = randomId('session');
 
@@ -60,18 +66,20 @@ export class LocalSession implements GameSession {
   private worldListeners = new Set<(w: PreparedWorld) => void>();
   private generationListeners = new Set<(g: GenerationStatus) => void>();
   private phaseListeners = new Set<(p: GamePhase) => void>();
+  private profileListeners = new Set<(p: PlayerProfile) => void>();
 
   constructor(options: LocalSessionOptions) {
     this.identity = options.identity;
     this.localPlayerId = options.identity.id;
     this.provider = options.worldProvider;
+    this.profileStore = options.profile ?? createMemoryProfileStore(options.identity.id);
     this.scheduler = options.scheduler ?? {
       setInterval: globalThis.setInterval.bind(globalThis),
       clearInterval: globalThis.clearInterval.bind(globalThis),
       now: () => performance.now(),
     };
     this.sim = createSimulation();
-    this.sim.addPlayer(this.identity);
+    this.sim.addPlayer(this.identity, this.profileStore.get().unlockedAbilityIds);
   }
 
   // ---- lifecycle -------------------------------------------------------------
@@ -117,7 +125,7 @@ export class LocalSession implements GameSession {
     if (this.pendingIntent) {
       const intent: PlayerIntent = { ...this.pendingIntent, playerId: this.localPlayerId, seq: this.intentSeq++ };
       this.sim.applyIntent(intent);
-      // buttons are edge-triggered; movement/aim persist until the next setIntent
+      // buttons are edge-triggered; movement/aim/interact persist until the next setIntent
       this.pendingIntent = { ...this.pendingIntent, attack: false, dash: false, ability: null };
     }
     const events = this.sim.step();
@@ -126,11 +134,21 @@ export class LocalSession implements GameSession {
     const all = followUps.length ? [...events, ...followUps] : events;
     if (all.length) this.emitEvents(all);
     for (const l of this.snapshotListeners) l(this.snapshot);
+
+    // Ended runs return to HQ automatically once the countdown expires (retry from the portal).
+    const run = this.sim.getRun();
+    if (this.sim.getPhase() === 'expedition' && (run.status === 'anchored' || run.status === 'collapsed') && run.returnCountdownMs <= 0) {
+      this.returnToHeadquarters();
+    }
   }
 
   private handleSimEvents(events: GameEvent[]): GameEvent[] {
     const extra: GameEvent[] = [];
     for (const event of events) {
+      if (event.type === 'run_ended') {
+        this.bankRunShards();
+        continue;
+      }
       if (event.type !== 'exit_reached') continue;
       if (this.sim.getPhase() === 'headquarters') {
         if (this.world) extra.push(...this.enterRoom(0));
@@ -141,6 +159,51 @@ export class LocalSession implements GameSession {
       }
     }
     return extra;
+  }
+
+  /** Shards earned in the run that just ended become permanent profile shards (once per run). */
+  private bankRunShards(): void {
+    const me = this.sim.getSnapshot().players.find((p) => p.id === this.localPlayerId);
+    const earned = Math.round(me?.shards ?? 0);
+    const profile = this.profileStore.get();
+    this.saveProfile({ ...profile, shards: profile.shards + earned, runsPlayed: profile.runsPlayed + 1, updatedAt: Date.now() });
+  }
+
+  // ---- progression -------------------------------------------------------------
+
+  getProfile(): PlayerProfile {
+    return this.profileStore.get();
+  }
+
+  purchaseUnlock(abilityId: AbilityId): PurchaseResult {
+    const info = ABILITY_INFO[abilityId];
+    if (!info) return { ok: false, reason: 'Unknown ability.' };
+    if (info.cost <= 0) return { ok: false, reason: `${info.name} is already available.` };
+    if (info.classId && info.classId !== this.identity.classId) return { ok: false, reason: `${info.name} belongs to ${info.classId}.` };
+    const profile = this.profileStore.get();
+    if (profile.unlockedAbilityIds.includes(abilityId)) return { ok: false, reason: `${info.name} is already unlocked.` };
+    if (profile.shards < info.cost) return { ok: false, reason: `Need ${info.cost} shards (you have ${profile.shards}).` };
+    const next: PlayerProfile = {
+      ...profile,
+      shards: profile.shards - info.cost,
+      unlockedAbilityIds: [...profile.unlockedAbilityIds, abilityId],
+      updatedAt: Date.now(),
+    };
+    this.saveProfile(next);
+    this.sim.setPlayerUnlocks(this.localPlayerId, next.unlockedAbilityIds);
+    this.snapshot = this.sim.getSnapshot();
+    this.emitEvents([this.metaEvent({ type: 'ability_unlocked', playerId: this.localPlayerId, abilityId, cost: info.cost })]);
+    return { ok: true, profile: next };
+  }
+
+  onProfile(listener: (profile: PlayerProfile) => void): Unsubscribe {
+    this.profileListeners.add(listener);
+    return () => this.profileListeners.delete(listener);
+  }
+
+  private saveProfile(profile: PlayerProfile): void {
+    this.profileStore.save(profile);
+    for (const l of this.profileListeners) l(this.profileStore.get());
   }
 
   // ---- identity --------------------------------------------------------------
@@ -157,6 +220,8 @@ export class LocalSession implements GameSession {
   setClass(classId: PlayerIdentity['classId']): void {
     this.identity = { ...this.identity, classId };
     this.sim.updatePlayerIdentity(this.identity);
+    this.sim.setPlayerUnlocks(this.localPlayerId, this.profileStore.get().unlockedAbilityIds);
+    this.snapshot = this.sim.getSnapshot();
   }
 
   // ---- headquarters actions --------------------------------------------------
@@ -237,8 +302,10 @@ export class LocalSession implements GameSession {
 
   returnToHeadquarters(): void {
     if (this.sim.getPhase() === 'headquarters') return;
-    this.sim.returnToHeadquarters();
+    const events = this.sim.returnToHeadquarters();
+    this.handleSimEvents(events); // banks shards for an aborted run
     this.snapshot = this.sim.getSnapshot();
+    if (events.length) this.emitEvents(events);
     for (const l of this.phaseListeners) l('headquarters');
     for (const l of this.snapshotListeners) l(this.snapshot);
   }
@@ -272,10 +339,18 @@ export class LocalSession implements GameSession {
     const prev = this.pendingIntent;
     this.pendingIntent = {
       ...intent,
+      // buttons: OR until consumed; held flags (interact) and axes: latest wins
       attack: intent.attack || (prev?.attack ?? false),
       dash: intent.dash || (prev?.dash ?? false),
       ability: intent.ability ?? prev?.ability ?? null,
     };
+  }
+
+  /** Clear all held input (blur, focus loss, scene transition). */
+  clearIntent(): void {
+    this.pendingIntent = this.pendingIntent
+      ? { ...this.pendingIntent, moveX: 0, moveY: 0, attack: false, dash: false, ability: null, interact: false }
+      : null;
   }
 
   // ---- subscriptions ---------------------------------------------------------

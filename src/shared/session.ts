@@ -15,10 +15,24 @@ import type {
   GenerationStatus,
   PlayerIdentity,
   PlayerIntent,
+  PlayerProfile,
   PreparedWorld,
 } from './contracts';
+import type { AbilityId } from './registry';
 
 export type Unsubscribe = () => void;
+
+/** Result of an unlock purchase. Validated by the authority (local session or LAN host). */
+export type PurchaseResult = { ok: true; profile: PlayerProfile } | { ok: false; reason: string };
+
+/**
+ * Device-local progression store. The foundation adapter lives in src/client/game/profile.ts;
+ * Agent C may replace it with the Chronicle persistence adapter later. Never cross-device.
+ */
+export interface ProfileStore {
+  get(): PlayerProfile;
+  save(profile: PlayerProfile): void;
+}
 
 /** Intent without identity/sequence — the session stamps those. */
 export type LocalIntent = Omit<PlayerIntent, 'playerId' | 'seq'>;
@@ -47,6 +61,12 @@ export interface GameSession {
   /** Moves everyone into room 0 of the prepared world. No-op without a world. */
   enterPortal(): void;
   returnToHeadquarters(): void;
+
+  // --- progression (device-local profile; host-validated in LAN) ---
+  getProfile(): PlayerProfile;
+  /** Spend shards on a permanent unlock. Checks availability, cost, ownership, duplicates. */
+  purchaseUnlock(abilityId: AbilityId): PurchaseResult;
+  onProfile(listener: (profile: PlayerProfile) => void): Unsubscribe;
 
   // --- live state ---
   getPhase(): GamePhase;

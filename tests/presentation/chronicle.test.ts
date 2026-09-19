@@ -87,7 +87,7 @@ describe('reduceChronicle', () => {
   it('records anchor and run summary memories', () => {
     const events: GameEvent[] = [
       { id: '5000:0', type: 'anchor_planted', tick: 5000, timeMs: 0, worldId: SAMPLE_WORLD_ID, roomIndex: 2, playerIds: ['sample-player-local'] },
-      { id: '5100:0', type: 'run_ended', tick: 5100, timeMs: 0, worldId: SAMPLE_WORLD_ID, outcome: 'anchored', playerIds: ['sample-player-local'] },
+      { id: '5100:0', type: 'run_ended', tick: 5100, timeMs: 0, worldId: SAMPLE_WORLD_ID, outcome: 'anchored', playerIds: ['sample-player-local'], shardsEarned: 90, roomsCleared: 3 },
     ];
     const { created } = reduceChronicle(createChronicleState(), events, ctx);
     expect(created.map((m) => m.kind)).toEqual(['anchor', 'run_summary']);

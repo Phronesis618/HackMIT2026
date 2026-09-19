@@ -102,7 +102,7 @@
       ],
       "encounters": [
         { "id": "r0-husks-a", "enemyId": "husk", "x": 15, "y": 4, "count": 1 },
-        { "id": "r0-husks-b", "enemyId": "husk", "x": 17, "y": 9, "count": 1 }
+        { "id": "r0-husks-b", "enemyId": "husk", "x": 18, "y": 10, "count": 1 }
       ],
       "exits": [{ "x": 23, "y": 5, "toRoomIndex": 1, "direction": "east" }],
       "isFinal": false,

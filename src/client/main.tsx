@@ -15,6 +15,7 @@ import { randomId } from '../shared/ids';
 import { createSilentAudio } from './audio';
 import { createBrowserChronicle } from './chronicle';
 import { GameController, IDENTITY_STORAGE_KEY, parsePreviewFlags } from './game/GameController';
+import { createLocalProfileStore } from './game/profile';
 import { createUiStore } from './game/uiStore';
 import { PhaserWorldRenderer } from './render/PhaserWorldRenderer';
 import { applyTokens } from './styles/applyTokens';
@@ -57,7 +58,11 @@ async function boot(): Promise<void> {
   applyTokens();
   const flags = parsePreviewFlags(window.location.search);
   const identity = loadIdentity();
-  const session = new LocalSession({ identity, worldProvider: flags.fixtureWorld ? fixtureWorldProvider : serverWorldProvider });
+  const session = new LocalSession({
+    identity,
+    worldProvider: flags.fixtureWorld ? fixtureWorldProvider : serverWorldProvider,
+    profile: createLocalProfileStore(window.localStorage, identity.id),
+  });
   const renderer = new PhaserWorldRenderer();
   const chronicle = createBrowserChronicle(window.localStorage);
   const audio = createSilentAudio();

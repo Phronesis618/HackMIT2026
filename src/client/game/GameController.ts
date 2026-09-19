@@ -8,11 +8,11 @@
  *   input (per frame)  -> session.setIntent
  *   UiActions          -> session methods (UI never touches the session directly)
  */
-import type { GameEvent, GameSnapshot, PreparedWorld } from '../../shared/contracts';
-import { ABILITY_STATUS, CLASS_INFO, CLASS_IDS, type ClassId } from '../../shared/registry';
+import type { GameEvent, GameSnapshot, PlayerProfile, PlayerState, PreparedWorld } from '../../shared/contracts';
+import { ABILITY_INFO, ABILITY_STATUS, CLASS_INFO, CLASS_IDS, type AbilityId, type ClassId } from '../../shared/registry';
 import type { WorldRenderer } from '../../shared/render';
 import type { GameSession } from '../../shared/session';
-import type { UiActions, UiModel } from '../../shared/ui';
+import type { UiAbilitySlot, UiActions, UiHud, UiModel, UiUnlockOffer } from '../../shared/ui';
 import { headquartersArt, headquartersRoom } from '../../sim';
 import type { AudioPort } from '../audio';
 import { cueForEvent } from '../audio';
@@ -73,6 +73,9 @@ export class GameController {
       world: null,
       room: null,
       hud: null,
+      profile: session.getProfile(),
+      unlockOffers: buildUnlockOffers(session.getProfile(), me.classId),
+      run: session.getSnapshot()?.run ?? { runId: null, status: 'idle', roomsCleared: 0, shardsEarned: 0, returnCountdownMs: 0 },
       memories: chronicle.getMemories(),
       classStatus: Object.fromEntries(CLASS_IDS.map((id) => [id, CLASS_INFO[id].status])) as UiModel['classStatus'],
       preview: { fixtureWorld: flags.fixtureWorld, startRoom: flags.startRoom },
@@ -98,6 +101,7 @@ export class GameController {
       session.onWorld((world) => this.handleWorld(world)),
       session.onGenerationStatus((generation) => store.set({ generation })),
       session.onPhase((phase) => this.handlePhase(phase)),
+      session.onProfile((profile) => store.set({ profile, unlockOffers: buildUnlockOffers(profile, session.getLocalPlayer().classId) })),
       chronicle.subscribe((memories) => store.set({ memories })),
     );
 
@@ -139,28 +143,15 @@ export class GameController {
       session.setIntent(this.input.sample(aim));
       renderer.renderSnapshot(snapshot, session.localPlayerId);
 
-      if (me) {
+      if (me && snapshot.phase === 'expedition') {
         const prev = store.get().hud;
-        const hud = {
-          hp: me.hp,
-          maxHp: me.maxHp,
-          state: me.state,
-          dashReady: me.dashCooldownMs <= 0,
-          dashCooldownMs: Math.round(me.dashCooldownMs),
-          attackReady: me.attackCooldownMs <= 0,
-          enemiesRemaining: snapshot.enemies.filter((e) => e.state !== 'dead').length,
-        };
-        if (
-          !prev ||
-          prev.hp !== hud.hp ||
-          prev.state !== hud.state ||
-          prev.dashReady !== hud.dashReady ||
-          prev.attackReady !== hud.attackReady ||
-          prev.enemiesRemaining !== hud.enemiesRemaining ||
-          Math.abs(prev.dashCooldownMs - hud.dashCooldownMs) > 40
-        ) {
-          store.set({ hud });
-        }
+        const hud = buildHud(me, snapshot);
+        // Throttle React updates: only push when something the HUD shows actually changed.
+        if (!prev || hudChanged(prev, hud)) store.set({ hud });
+      }
+      const prevRun = store.get().run;
+      if (prevRun.status !== snapshot.run.status || prevRun.roomsCleared !== snapshot.run.roomsCleared || prevRun.shardsEarned !== snapshot.run.shardsEarned) {
+        store.set({ run: snapshot.run });
       }
       const players = snapshot.players.map((p) => ({ id: p.id, displayName: p.displayName, classId: p.classId, isLocal: p.id === session.localPlayerId }));
       const prevPlayers = store.get().players;
@@ -188,6 +179,15 @@ export class GameController {
         }
       }
       if (e.type === 'contribution_submitted') store.set({ contributions: session.getContributions() });
+      if (e.type === 'run_ended') {
+        const text =
+          e.outcome === 'anchored'
+            ? `Anchor planted — the world holds. ${e.shardsEarned} shards banked. Returning to headquarters…`
+            : e.outcome === 'collapsed'
+              ? `All operatives down. ${e.shardsEarned} shards banked. Returning to headquarters — step back through the portal to retry.`
+              : `Expedition aborted. ${e.shardsEarned} shards banked.`;
+        this.notice('info', text);
+      }
     }
 
     const world = session.getWorld();
@@ -258,10 +258,20 @@ export class GameController {
       selectClass: (classId: ClassId) => {
         session.setClass(classId);
         const me = session.getLocalPlayer();
-        store.set({ localPlayer: { ...me, isLocal: true } });
+        store.set({ localPlayer: { ...me, isLocal: true }, unlockOffers: buildUnlockOffers(session.getProfile(), classId) });
         persistIdentity(me);
         if (CLASS_INFO[classId].status === 'planned') {
-          this.notice('info', `${CLASS_INFO[classId].name} is selected but its abilities are not implemented yet (attack: ${ABILITY_STATUS.attack}, dash: ${ABILITY_STATUS.dash}).`);
+          this.notice('info', `${CLASS_INFO[classId].name} is selected, but only its basic attack and dash work yet — Q/E abilities are planned.`);
+        }
+      },
+      purchaseUnlock: (abilityId: AbilityId) => {
+        const result = session.purchaseUnlock(abilityId);
+        if (result.ok) {
+          audio.play('ui_confirm');
+          store.set({ profile: result.profile, unlockOffers: buildUnlockOffers(result.profile, session.getLocalPlayer().classId), notice: null });
+          this.notice('info', `${ABILITY_INFO[abilityId].name} unlocked. Press E in the field to use it.`);
+        } else {
+          this.notice('error', result.reason);
         }
       },
       submitContribution: (text) => {
@@ -295,6 +305,81 @@ export class GameController {
       dismissNotice: () => store.set({ notice: null }),
     };
   }
+}
+
+// ---- HUD / offers derivation ----------------------------------------------------------
+
+const SLOT_KEYS: Record<'q' | 'e', string> = { q: 'Q', e: 'E' };
+
+function abilitySlot(me: PlayerState, slot: 'q' | 'e'): UiAbilitySlot {
+  const info = Object.values(ABILITY_INFO).find((a) => a.slot === slot && a.classId === me.classId) ?? null;
+  if (!info) return { slot, abilityId: null, name: '—', key: SLOT_KEYS[slot], status: 'planned', cooldownMs: 0, cooldownTotalMs: 0 };
+  const cooldownMs = slot === 'q' ? me.qCooldownMs : me.eCooldownMs;
+  let status: UiAbilitySlot['status'];
+  if (ABILITY_STATUS[info.id] === 'planned') status = 'planned';
+  else if (!me.unlockedAbilityIds.includes(info.id)) status = 'locked';
+  else status = cooldownMs > 0 ? 'cooldown' : 'ready';
+  return { slot, abilityId: info.id, name: info.name, key: SLOT_KEYS[slot], status, cooldownMs: Math.round(cooldownMs), cooldownTotalMs: info.cooldownMs };
+}
+
+function buildHud(me: PlayerState, snapshot: GameSnapshot): UiHud {
+  return {
+    hp: me.hp,
+    maxHp: me.maxHp,
+    state: me.state,
+    dashReady: me.dashCooldownMs <= 0,
+    dashCooldownMs: Math.round(me.dashCooldownMs),
+    attackReady: me.attackCooldownMs <= 0,
+    enemiesRemaining: snapshot.roomStatus?.enemiesRemaining ?? 0,
+    abilities: [abilitySlot(me, 'q'), abilitySlot(me, 'e')],
+    shieldMs: Math.round(me.shieldMs),
+    shardsThisRun: me.shards,
+    objective: snapshot.roomStatus?.objective ?? '',
+    roomCleared: snapshot.roomStatus?.cleared ?? false,
+    exitsLocked: snapshot.roomStatus?.exitsLocked ?? false,
+    interactProgress: me.interactProgress,
+    isDown: me.state === 'down',
+  };
+}
+
+function hudChanged(a: UiHud, b: UiHud): boolean {
+  if (
+    a.hp !== b.hp ||
+    a.state !== b.state ||
+    a.dashReady !== b.dashReady ||
+    a.attackReady !== b.attackReady ||
+    a.enemiesRemaining !== b.enemiesRemaining ||
+    a.objective !== b.objective ||
+    a.roomCleared !== b.roomCleared ||
+    a.exitsLocked !== b.exitsLocked ||
+    a.shardsThisRun !== b.shardsThisRun ||
+    a.isDown !== b.isDown ||
+    Math.abs(a.dashCooldownMs - b.dashCooldownMs) > 60 ||
+    Math.abs(a.shieldMs - b.shieldMs) > 60 ||
+    Math.abs(a.interactProgress - b.interactProgress) > 0.03
+  ) {
+    return true;
+  }
+  return a.abilities.some((s, i) => {
+    const t = b.abilities[i]!;
+    return s.status !== t.status || Math.abs(s.cooldownMs - t.cooldownMs) > 100;
+  });
+}
+
+export function buildUnlockOffers(profile: PlayerProfile, classId: ClassId): UiUnlockOffer[] {
+  return Object.values(ABILITY_INFO)
+    .filter((a) => a.cost > 0 && ABILITY_STATUS[a.id] !== 'planned')
+    .map((a) => ({
+      abilityId: a.id,
+      name: a.name,
+      description: a.description,
+      slot: a.slot,
+      classId: a.classId,
+      cost: a.cost,
+      owned: profile.unlockedAbilityIds.includes(a.id),
+      affordable: profile.shards >= a.cost,
+      applicable: a.classId === null || a.classId === classId,
+    }));
 }
 
 // ---- identity persistence (device-local) --------------------------------------------

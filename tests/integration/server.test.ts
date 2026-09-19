@@ -128,25 +128,30 @@ describe('LocalSession against the real server', () => {
 
     session.enterPortal();
     expect(session.getPhase()).toBe('expedition');
-    expect(session.getSnapshot()?.roomIndex).toBe(0);
+    const snap = session.getSnapshot()!;
+    expect(snap.roomIndex).toBe(0);
+    expect(snap.run.status).toBe('active');
+    expect(snap.enemies.length).toBeGreaterThan(0);
+    // Exits stay locked until the room objective is met.
+    expect(snap.roomStatus?.exitsLocked).toBe(true);
+    expect(snap.roomStatus?.objective).toMatch(/hostile/);
 
-    // Walk east to the exit of room 0 (row 5, col 23) by feeding intents and advancing time.
-    const exit = world.rooms[0]!.exits[0]!;
-    for (let i = 0; i < 2000 && session.getSnapshot()?.roomIndex === 0; i++) {
-      const me = session.getSnapshot()!.players[0]!;
-      const tx = exit.x * 32 + 16;
-      const ty = exit.y * 32 + 16;
-      const dx = tx - me.x;
-      const dy = ty - me.y;
-      const len = Math.hypot(dx, dy) || 1;
-      session.setIntent({ moveX: dx / len, moveY: dy / len, aimX: tx, aimY: ty, attack: false, dash: false, ability: null });
+    // A few ticks of play: the loop runs and the snapshot stays contract-valid.
+    for (let i = 0; i < 90; i++) {
+      session.setIntent({ moveX: 1, moveY: 0, aimX: 0, aimY: 0, attack: false, dash: false, ability: null, interact: false });
       session.advance(1000 / 60);
     }
-    expect(session.getSnapshot()?.roomIndex).toBe(1);
-    expect(events).toEqual(expect.arrayContaining(['contribution_submitted', 'world_prepared', 'room_entered', 'exit_reached']));
+    const after = session.getSnapshot()!;
+    expect(after.players[0]!.x).toBeGreaterThan(snap.players[0]!.x);
+    expect(after.enemies.every((e) => ['idle', 'chasing', 'attacking', 'recovering'].includes(e.state))).toBe(true);
 
+    // Leaving mid-run aborts it, banks shards and records the run end.
+    const shardsBefore = session.getProfile().shards;
     session.returnToHeadquarters();
     expect(session.getPhase()).toBe('headquarters');
+    expect(events).toEqual(expect.arrayContaining(['contribution_submitted', 'world_prepared', 'room_entered', 'run_ended']));
+    expect(session.getProfile().runsPlayed).toBe(1);
+    expect(session.getProfile().shards).toBeGreaterThanOrEqual(shardsBefore);
     session.dispose();
   });
 });

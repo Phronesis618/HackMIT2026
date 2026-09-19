@@ -20,6 +20,7 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
   let attackPressed = false;
   let dashPressed = false;
   let abilityPressed: 'q' | 'e' | null = null;
+  let mouseDown = false;
   let pointer: { x: number; y: number } | null = null;
 
   const matches = (code: string, list: readonly string[]) => list.includes(code);
@@ -39,7 +40,16 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
   const onKeyUp = (e: KeyboardEvent): void => {
     down.delete(e.code);
   };
-  const onBlur = (): void => down.clear();
+  const onBlur = (): void => {
+    down.clear();
+    mouseDown = false;
+    attackPressed = false;
+    dashPressed = false;
+    abilityPressed = null;
+  };
+  const onVisibility = (): void => {
+    if (document.visibilityState !== 'visible') onBlur();
+  };
   const onPointerMove = (e: PointerEvent): void => {
     const rect = stage.getBoundingClientRect();
     pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -47,14 +57,22 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
   const onPointerDown = (e: PointerEvent): void => {
     if (e.button === 0) {
       attackPressed = true;
+      mouseDown = true;
       onPointerMove(e);
+      // Clicking the canvas takes focus away from text fields so WASD works immediately.
+      if (isTextTarget(document.activeElement)) (document.activeElement as HTMLElement).blur();
     }
+  };
+  const onPointerUp = (e: PointerEvent): void => {
+    if (e.button === 0) mouseDown = false;
   };
   const onContextMenu = (e: Event): void => e.preventDefault();
 
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
   window.addEventListener('blur', onBlur);
+  document.addEventListener('visibilitychange', onVisibility);
+  window.addEventListener('pointerup', onPointerUp);
   stage.addEventListener('pointermove', onPointerMove);
   stage.addEventListener('pointerdown', onPointerDown);
   stage.addEventListener('contextmenu', onContextMenu);
@@ -69,9 +87,11 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
         moveY: axis(INPUT_BINDINGS.moveUp, INPUT_BINDINGS.moveDown),
         aimX: aim.x,
         aimY: aim.y,
-        attack: attackPressed,
+        // Holding attack auto-repeats at the simulation's cadence (the sim enforces cooldown).
+        attack: attackPressed || INPUT_BINDINGS.attack.some((c) => down.has(c)) || mouseDown,
         dash: dashPressed,
         ability: abilityPressed,
+        interact: INPUT_BINDINGS.interact.some((c) => down.has(c)),
       };
       attackPressed = false;
       dashPressed = false;
@@ -83,6 +103,8 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pointerup', onPointerUp);
       stage.removeEventListener('pointermove', onPointerMove);
       stage.removeEventListener('pointerdown', onPointerDown);
       stage.removeEventListener('contextmenu', onContextMenu);

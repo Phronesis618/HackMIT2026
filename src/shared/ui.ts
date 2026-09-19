@@ -5,10 +5,7 @@
  *
  * Owner: Agent A (keys/shape). Agent C proposes additions via integration request.
  */
-import type {
-  ClassId,
-  ImplementationStatus,
-} from './registry';
+import type { AbilityId, AbilitySlot, ClassId, ImplementationStatus } from './registry';
 import type {
   Contribution,
   CreationReceipt,
@@ -16,6 +13,8 @@ import type {
   GenerationStatus,
   MemoryRecord,
   PlayerActionState,
+  PlayerProfile,
+  RunState,
 } from './contracts';
 import type { ConnectionStatus, SessionMode } from './session';
 
@@ -46,6 +45,17 @@ export interface UiRoomSummary {
   isFinal: boolean;
 }
 
+export interface UiAbilitySlot {
+  slot: AbilitySlot;
+  abilityId: AbilityId | null; // null = this class has no ability in this slot yet
+  name: string;
+  key: string; // display key, e.g. "Q"
+  /** 'ready' | 'cooldown' | 'locked' (needs unlock) | 'planned' (not implemented) */
+  status: 'ready' | 'cooldown' | 'locked' | 'planned';
+  cooldownMs: number;
+  cooldownTotalMs: number;
+}
+
 export interface UiHud {
   hp: number;
   maxHp: number;
@@ -54,6 +64,30 @@ export interface UiHud {
   dashCooldownMs: number;
   attackReady: boolean;
   enemiesRemaining: number;
+  /** Q / E as the HUD should show them (truthful about locked/planned). */
+  abilities: UiAbilitySlot[];
+  shieldMs: number;
+  shardsThisRun: number;
+  /** Objective line derived by the simulation (e.g. "Clear 2 hostiles to unlock the exit"). */
+  objective: string;
+  roomCleared: boolean;
+  exitsLocked: boolean;
+  /** 0..1 while holding F on the Anchor / a downed ally. */
+  interactProgress: number;
+  isDown: boolean;
+}
+
+export interface UiUnlockOffer {
+  abilityId: AbilityId;
+  name: string;
+  description: string;
+  slot: AbilitySlot;
+  classId: ClassId | null;
+  cost: number;
+  owned: boolean;
+  affordable: boolean;
+  /** false when the ability belongs to another class than the local player's. */
+  applicable: boolean;
 }
 
 export interface UiModel {
@@ -68,6 +102,10 @@ export interface UiModel {
   world: UiWorldSummary | null;
   room: UiRoomSummary | null;
   hud: UiHud | null;
+  /** Device-local progression + what the HQ can sell right now. */
+  profile: PlayerProfile;
+  unlockOffers: UiUnlockOffer[];
+  run: RunState;
   memories: MemoryRecord[];
   /** Truthful implementation status, for the class picker and HUD hints. */
   classStatus: Record<ClassId, ImplementationStatus>;
@@ -84,6 +122,8 @@ export interface UiActions {
   requestWorld(): void;
   enterPortal(): void;
   returnToHeadquarters(): void;
+  /** Spend shards on a permanent unlock (validated by the session/host). */
+  purchaseUnlock(abilityId: AbilityId): void;
   clearMemories(): void;
   dismissNotice(): void;
 }

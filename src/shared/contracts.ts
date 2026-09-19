@@ -260,11 +260,20 @@ export const RoomSpecSchema = z
       ctx.addIssue({ code: 'custom', message: `non-final room needs at least one exit` });
     }
     const inBounds = (x: number, y: number) => x < room.width && y < room.height;
+    const walkable = (x: number, y: number) => {
+      const ch = room.tiles[y]?.[x];
+      return ch !== undefined && ch !== '#' && ch !== ' ';
+    };
     for (const p of room.props) {
       if (!inBounds(p.x, p.y)) ctx.addIssue({ code: 'custom', message: `prop ${p.id} out of bounds` });
+      else if (!walkable(p.x, p.y)) ctx.addIssue({ code: 'custom', message: `prop ${p.id} is placed on a wall/void tile` });
+      else if (room.tiles[p.y]?.[p.x] === 'P' || room.tiles[p.y]?.[p.x] === 'X') {
+        ctx.addIssue({ code: 'custom', message: `prop ${p.id} covers the spawn or an exit` });
+      }
     }
     for (const e of room.encounters) {
       if (!inBounds(e.x, e.y)) ctx.addIssue({ code: 'custom', message: `encounter ${e.id} out of bounds` });
+      else if (!walkable(e.x, e.y)) ctx.addIssue({ code: 'custom', message: `encounter ${e.id} is placed on a wall/void tile` });
     }
   });
 export type RoomSpec = z.infer<typeof RoomSpecSchema>;
@@ -390,6 +399,8 @@ export const PlayerIntentSchema = z.object({
   attack: z.boolean(),
   dash: z.boolean(),
   ability: z.enum(['q', 'e']).nullable(),
+  /** Held: interact (plant the Anchor, revive a teammate). */
+  interact: z.boolean(),
 });
 export type PlayerIntent = z.infer<typeof PlayerIntentSchema>;
 
@@ -411,10 +422,25 @@ export const PlayerStateSchema = z.object({
   dashCooldownMs: z.number().nonnegative(),
   attackCooldownMs: z.number().nonnegative(),
   invulnerableMs: z.number().nonnegative(),
+  /** Q / E cooldowns remaining. */
+  qCooldownMs: z.number().nonnegative(),
+  eCooldownMs: z.number().nonnegative(),
+  /** Abilities this player may use this run (Q is always present; E only when unlocked). */
+  unlockedAbilityIds: z.array(AbilityIdSchema),
+  /** Bastion Bulwark: remaining shield time and its facing. 0 = no shield. */
+  shieldMs: z.number().nonnegative(),
+  shieldFacing: z.number(),
+  /** Shards earned this run (rewards). */
+  shards: z.number().nonnegative(),
+  /** Progress 0..1 while holding interact on the Anchor / a downed ally. */
+  interactProgress: z.number().min(0).max(1),
+  /** Downed players are revived when this reaches 1 (co-op) — solo: run ends. */
+  reviveProgress: z.number().min(0).max(1),
 });
 export type PlayerState = z.infer<typeof PlayerStateSchema>;
 
-export const EnemyActionStateSchema = z.enum(['idle', 'chasing', 'attacking', 'hit', 'dead']);
+export const EnemyActionStateSchema = z.enum(['idle', 'chasing', 'attacking', 'recovering', 'stunned', 'hit', 'dead']);
+export type EnemyActionState = z.infer<typeof EnemyActionStateSchema>;
 
 export const EnemyStateSchema = z.object({
   id: IdString,
@@ -425,8 +451,32 @@ export const EnemyStateSchema = z.object({
   hp: z.number(),
   maxHp: z.number().positive(),
   state: EnemyActionStateSchema,
+  /** Milliseconds spent in the current state (renderer: telegraph progress = stateMs / windup). */
+  stateMs: z.number().nonnegative(),
+  /** Telegraph length for the current attack, so the renderer can show a fill. 0 when not attacking. */
+  windupMs: z.number().nonnegative(),
 });
 export type EnemyState = z.infer<typeof EnemyStateSchema>;
+
+export const RoomStatusSchema = z.object({
+  cleared: z.boolean(),
+  enemiesRemaining: z.number().int().nonnegative(),
+  exitsLocked: z.boolean(),
+  /** Objective text for the HUD, derived by the simulation. */
+  objective: z.string().max(120),
+});
+export type RoomStatus = z.infer<typeof RoomStatusSchema>;
+
+export const RunStatusSchema = z.enum(['idle', 'active', 'anchored', 'collapsed', 'aborted']);
+export const RunStateSchema = z.object({
+  runId: IdString.nullable(),
+  status: RunStatusSchema,
+  roomsCleared: z.number().int().nonnegative(),
+  shardsEarned: z.number().nonnegative(),
+  /** Ticks until automatic return to HQ after a run ends (0 = none). */
+  returnCountdownMs: z.number().nonnegative(),
+});
+export type RunState = z.infer<typeof RunStateSchema>;
 
 export const AnchorStateSchema = z.object({
   x: z.number(),
@@ -449,6 +499,8 @@ export const GameSnapshotSchema = z.object({
   players: z.array(PlayerStateSchema),
   enemies: z.array(EnemyStateSchema),
   anchor: AnchorStateSchema.nullable(),
+  roomStatus: RoomStatusSchema.nullable(),
+  run: RunStateSchema,
 });
 export type GameSnapshot = z.infer<typeof GameSnapshotSchema>;
 
@@ -495,7 +547,30 @@ export const GameEventSchema = z.discriminatedUnion('type', [
   z.object({ ...eventBase, type: z.literal('enemy_defeated'), enemyId: IdString, byPlayerId: IdString }),
   z.object({ ...eventBase, type: z.literal('player_damaged'), playerId: IdString, amount: z.number(), remainingHp: z.number(), sourceEnemyId: IdString.nullable() }),
   z.object({ ...eventBase, type: z.literal('player_downed'), playerId: IdString }),
+  z.object({ ...eventBase, type: z.literal('player_revived'), playerId: IdString, byPlayerId: IdString }),
   z.object({ ...eventBase, type: z.literal('exit_reached'), playerId: IdString, roomIndex: z.number().int().min(0), toRoomIndex: z.number().int().min(0) }),
+  z.object({
+    ...eventBase,
+    type: z.literal('room_cleared'),
+    worldId: IdString,
+    roomIndex: z.number().int().min(0),
+    roomName: z.string().max(80),
+    rewardShards: z.number().nonnegative(),
+    playerIds: z.array(IdString),
+  }),
+  z.object({
+    ...eventBase,
+    type: z.literal('ability_used'),
+    playerId: IdString,
+    abilityId: AbilityIdSchema,
+    x: z.number(),
+    y: z.number(),
+    facing: z.number(),
+    /** Enemies affected (tether pulls, echo targets, ...). */
+    targetEnemyIds: z.array(IdString),
+  }),
+  z.object({ ...eventBase, type: z.literal('attack_blocked'), playerId: IdString, enemyId: IdString }),
+  z.object({ ...eventBase, type: z.literal('ability_unlocked'), playerId: IdString, abilityId: AbilityIdSchema, cost: z.number().nonnegative() }),
   z.object({ ...eventBase, type: z.literal('anchor_planted'), worldId: IdString, roomIndex: z.number().int().min(0), playerIds: z.array(IdString) }),
   z.object({
     ...eventBase,
@@ -503,6 +578,8 @@ export const GameEventSchema = z.discriminatedUnion('type', [
     worldId: IdString,
     outcome: z.enum(['anchored', 'collapsed', 'aborted']),
     playerIds: z.array(IdString),
+    shardsEarned: z.number().nonnegative(),
+    roomsCleared: z.number().int().nonnegative(),
   }),
 ]);
 export type GameEvent = z.infer<typeof GameEventSchema>;
@@ -538,6 +615,22 @@ export const MemoryRecordSchema = z.object({
 });
 export type MemoryRecord = z.infer<typeof MemoryRecordSchema>;
 export const MemoryRecordListSchema = z.array(MemoryRecordSchema);
+
+// ---------------------------------------------------------------------------
+// Player profile (device-local progression: shards + permanent unlocks)
+// ---------------------------------------------------------------------------
+
+export const PlayerProfileSchema = z.object({
+  version: z.literal(1),
+  playerId: IdString,
+  shards: z.number().int().nonnegative(),
+  unlockedAbilityIds: z.array(AbilityIdSchema),
+  /** Set once when the starting shards were granted, so reloads never re-grant. */
+  startingGrantApplied: z.boolean(),
+  runsPlayed: z.number().int().nonnegative(),
+  updatedAt: Timestamp,
+});
+export type PlayerProfile = z.infer<typeof PlayerProfileSchema>;
 
 // ---------------------------------------------------------------------------
 // Helpers

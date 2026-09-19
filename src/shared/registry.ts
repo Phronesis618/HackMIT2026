@@ -14,7 +14,7 @@ export const CLASS_IDS = ['bastion', 'shade', 'beacon', 'weaver'] as const;
 export type ClassId = (typeof CLASS_IDS)[number];
 
 export const CLASS_INFO: Record<ClassId, { name: string; role: string; status: ImplementationStatus }> = {
-  bastion: { name: 'Bastion', role: 'Frontline guard. Wide sweeps, holds ground.', status: 'partial' },
+  bastion: { name: 'Bastion', role: 'Frontline guard. Wide sweeps, holds ground.', status: 'implemented' },
   shade: { name: 'Shade', role: 'Fast skirmisher. Short blinks, precise strikes.', status: 'planned' },
   beacon: { name: 'Beacon', role: 'Ranged support. Marks targets, rallies allies.', status: 'planned' },
   weaver: { name: 'Weaver', role: 'Control. Tethers, slows, reshapes space.', status: 'planned' },
@@ -39,15 +39,16 @@ export type ImplementationStatus = 'implemented' | 'partial' | 'planned';
 
 /**
  * What the simulation actually does today. Keep this truthful — UI shows it.
- *  - dash: movement burst + cooldown + `player_dashed` event (implemented).
- *  - attack: attack state + `player_attacked` event, NO hit resolution yet (partial;
- *    Agent A's first slice adds damage).
+ *  - attack: windup -> arc hit resolution -> damage/defeat events (implemented).
+ *  - dash: movement burst + cooldown + i-frames (implemented).
+ *  - bastion Q/E: directional shield / cone tether (implemented; E must be unlocked).
+ *  - other classes: planned (Slice 4).
  */
 export const ABILITY_STATUS: Record<AbilityId, ImplementationStatus> = {
-  attack: 'partial',
+  attack: 'implemented',
   dash: 'implemented',
-  'bastion.q.bulwark': 'planned',
-  'bastion.e.shockwave': 'planned',
+  'bastion.q.bulwark': 'implemented',
+  'bastion.e.shockwave': 'implemented',
   'shade.q.blink_strike': 'planned',
   'shade.e.shroud': 'planned',
   'beacon.q.flare': 'planned',
@@ -56,15 +57,75 @@ export const ABILITY_STATUS: Record<AbilityId, ImplementationStatus> = {
   'weaver.e.rewind': 'planned',
 };
 
+export type AbilitySlot = 'attack' | 'dash' | 'q' | 'e';
+
+export interface AbilityInfo {
+  id: AbilityId;
+  name: string;
+  slot: AbilitySlot;
+  classId: ClassId | null; // null = every class
+  /** Shards needed to unlock. 0 = available from the start. */
+  cost: number;
+  cooldownMs: number;
+  description: string;
+}
+
+/** Authored ability registry: what the simulation implements, what the HQ shop can sell. */
+export const ABILITY_INFO: Record<AbilityId, AbilityInfo> = {
+  attack: { id: 'attack', name: 'Basic attack', slot: 'attack', classId: null, cost: 0, cooldownMs: 360, description: 'Class weapon strike.' },
+  dash: { id: 'dash', name: 'Dash', slot: 'dash', classId: null, cost: 0, cooldownMs: 800, description: 'Short burst with a brief invulnerability window.' },
+  'bastion.q.bulwark': {
+    id: 'bastion.q.bulwark',
+    name: 'Bulwark',
+    slot: 'q',
+    classId: 'bastion',
+    cost: 0,
+    cooldownMs: 5000,
+    description: 'Raise a directional shield for 1.4 s. Blocks enemy strikes coming from the front.',
+  },
+  'bastion.e.shockwave': {
+    id: 'bastion.e.shockwave',
+    name: 'Magnetic Tether',
+    slot: 'e',
+    classId: 'bastion',
+    cost: 100,
+    cooldownMs: 8000,
+    description: 'Pull every enemy in a frontal cone into your reach and stagger them.',
+  },
+  'shade.q.blink_strike': { id: 'shade.q.blink_strike', name: 'Phase Step', slot: 'q', classId: 'shade', cost: 0, cooldownMs: 4000, description: 'Blink toward the aim point, leaving a decoy.' },
+  'shade.e.shroud': { id: 'shade.e.shroud', name: 'Echo', slot: 'e', classId: 'shade', cost: 100, cooldownMs: 7000, description: 'Your next basic attack is repeated once from a nearby offset.' },
+  'beacon.q.flare': { id: 'beacon.q.flare', name: 'Repair Field', slot: 'q', classId: 'beacon', cost: 0, cooldownMs: 6000, description: 'A field that repairs you and allies inside it.' },
+  'beacon.e.rally': { id: 'beacon.e.rally', name: 'Lifeline', slot: 'e', classId: 'beacon', cost: 100, cooldownMs: 9000, description: 'Protect and repair a nearby ally (self-support in solo).' },
+  'weaver.q.tether': { id: 'weaver.q.tether', name: 'Rift Mine', slot: 'q', classId: 'weaver', cost: 0, cooldownMs: 5000, description: 'Place a delayed mine at the aim point.' },
+  'weaver.e.rewind': { id: 'weaver.e.rewind', name: 'Singularity', slot: 'e', classId: 'weaver', cost: 100, cooldownMs: 9000, description: 'Pull enemies toward a point, then detonate.' },
+};
+
+/** Shards granted once per new profile so the first HQ unlock is reachable in the demo. */
+export const STARTING_SHARDS = 100;
+
 /** Enemy archetypes. `guardian` is the room-3 Anchor encounter. */
 export const ENEMY_IDS = ['husk', 'sentinel', 'lurker', 'guardian'] as const;
 export type EnemyId = (typeof ENEMY_IDS)[number];
 
-export const ENEMY_INFO: Record<EnemyId, { name: string; maxHp: number; radius: number; status: ImplementationStatus }> = {
-  husk: { name: 'Husk', maxHp: 30, radius: 14, status: 'partial' }, // spawns + renders; no AI yet
-  sentinel: { name: 'Sentinel', maxHp: 60, radius: 16, status: 'planned' },
-  lurker: { name: 'Lurker', maxHp: 24, radius: 12, status: 'planned' },
-  guardian: { name: 'Guardian', maxHp: 240, radius: 28, status: 'planned' },
+export interface EnemyInfo {
+  name: string;
+  maxHp: number;
+  radius: number;
+  speed: number; // world units / s
+  aggroRange: number;
+  attackRange: number; // extra reach beyond radius sum
+  windupMs: number;
+  recoverMs: number;
+  damage: number;
+  shards: number; // reward on defeat
+  status: ImplementationStatus;
+}
+
+export const ENEMY_INFO: Record<EnemyId, EnemyInfo> = {
+  husk: { name: 'Husk', maxHp: 30, radius: 14, speed: 95, aggroRange: 260, attackRange: 18, windupMs: 420, recoverMs: 520, damage: 10, shards: 8, status: 'implemented' },
+  sentinel: { name: 'Sentinel', maxHp: 70, radius: 16, speed: 70, aggroRange: 300, attackRange: 26, windupMs: 620, recoverMs: 700, damage: 18, shards: 20, status: 'implemented' },
+  lurker: { name: 'Lurker', maxHp: 24, radius: 12, speed: 140, aggroRange: 220, attackRange: 14, windupMs: 260, recoverMs: 420, damage: 8, shards: 10, status: 'implemented' },
+  guardian: { name: 'Guardian', maxHp: 240, radius: 28, speed: 60, aggroRange: 400, attackRange: 40, windupMs: 800, recoverMs: 900, damage: 24, shards: 60, status: 'partial' }, // same melee brain, big stats; patterns later
 };
 
 /**

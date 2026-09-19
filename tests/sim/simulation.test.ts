@@ -9,7 +9,7 @@ import { headquartersRoom } from '../../src/sim/headquarters';
 const localPlayer = { id: 'test-player-1', displayName: 'Tester', classId: 'bastion' as const };
 
 function intent(partial: Partial<PlayerIntent> = {}): PlayerIntent {
-  return { playerId: localPlayer.id, seq: 0, moveX: 0, moveY: 0, aimX: 0, aimY: 0, attack: false, dash: false, ability: null, ...partial };
+  return { playerId: localPlayer.id, seq: 0, moveX: 0, moveY: 0, aimX: 0, aimY: 0, attack: false, dash: false, ability: null, interact: false, ...partial };
 }
 
 function loadFixtureWorld(): PreparedWorld {

@@ -41,8 +41,27 @@ export const DASH_COOLDOWN_MS = 800;
 export const DASH_INVULNERABLE_MS = 150;
 export const ATTACK_DURATION_MS = 220;
 export const ATTACK_COOLDOWN_MS = 360;
+export const ATTACK_WINDUP_MS = 70; // anticipation before the hit is resolved
 export const ATTACK_RANGE = 46; // reach from player centre
 export const ATTACK_ARC_RAD = Math.PI * 0.7; // total arc width
+export const ATTACK_DAMAGE = 12; // Bastion arc-blade
+export const PLAYER_HIT_INVULNERABLE_MS = 500;
+
+// Bastion abilities
+export const SHIELD_DURATION_MS = 1400;
+export const SHIELD_ARC_RAD = Math.PI * 0.9; // strikes from within this frontal arc are blocked
+export const TETHER_RANGE = 210;
+export const TETHER_ARC_RAD = Math.PI * 0.6;
+export const TETHER_PULL_DISTANCE = 48; // enemies land this far in front of the player
+export const TETHER_STUN_MS = 700;
+
+// Objectives
+export const ANCHOR_PLANT_MS = 1600; // hold interact on the 'A' tile
+export const ANCHOR_PLANT_RANGE = 40;
+export const REVIVE_MS = 1800; // hold interact next to a downed ally
+export const REVIVE_RANGE = 48;
+export const RUN_END_RETURN_MS = 3200; // automatic return to HQ after a run ends
+export const ENEMY_CORPSE_MS = 700; // dead enemies linger for the defeat effect, then vanish
 
 /**
  * DRAW ORDER (Phaser depth). Entities are y-sorted inside their band:
@@ -63,10 +82,12 @@ export const DEPTH = {
 /**
  * INPUT (client-side, documented here so the HUD and tutorial text agree)
  *  Move: WASD or arrow keys     Aim: mouse position (world coords)
- *  Attack: J or left mouse       Dash: Shift or Space
- *  Q ability: Q                  E ability: E (unlockable)
+ *  Attack: J or left mouse (hold = auto-repeat at the simulation cadence)
+ *  Dash: Shift or Space          Q ability: Q      E ability: E (unlockable)
+ *  Interact / revive: F (held)   Menu: Escape
  *  Intent is sampled once per simulation tick; buttons are edge-triggered
  *  (true for the tick in which they were pressed) so holding does not spam.
+ *  `interact` is a held flag. The simulation, not the browser, enforces cadence.
  */
 export const INPUT_BINDINGS = {
   moveUp: ['KeyW', 'ArrowUp'],
@@ -77,6 +98,8 @@ export const INPUT_BINDINGS = {
   dash: ['ShiftLeft', 'ShiftRight', 'Space'],
   abilityQ: ['KeyQ'],
   abilityE: ['KeyE'],
+  interact: ['KeyF'],
+  menu: ['Escape'],
 } as const;
 
 export function tileToWorld(col: number, row: number): { x: number; y: number } {

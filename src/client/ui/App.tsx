@@ -5,6 +5,7 @@ import { HeadquartersPanel } from './HeadquartersPanel';
 import { Hud } from './Hud';
 import { MemoryWall } from './MemoryWall';
 import { ProvenanceBadge } from './ProvenanceBadge';
+import { UnlockPanel } from './UnlockPanel';
 import { useUiModel } from './useUiModel';
 import { WorldPanel } from './WorldPanel';
 
@@ -48,6 +49,7 @@ export function App({ store, actions, onStageReady }: AppProps) {
         <aside className="side">
           {(model.phase === 'headquarters' || model.phase === 'preparing') && <HeadquartersPanel model={model} actions={actions} />}
           {model.phase === 'expedition' && <Hud model={model} actions={actions} />}
+          {(model.phase === 'headquarters' || model.phase === 'preparing') && <UnlockPanel model={model} actions={actions} />}
           {model.world && <WorldPanel world={model.world} />}
         </aside>
       </main>
