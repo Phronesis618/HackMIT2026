@@ -32,9 +32,12 @@ export class RoomScene extends Phaser.Scene {
   private localPlayerId = '';
   private enemyPositions = new Map<string, { x: number; y: number }>();
   private seenEffects = new Set<string>();
+  private readonly onReady: () => void;
 
-  constructor(private readonly onReady: () => void = () => {}) {
+  /** `onReady` fires from create(); Phaser injects `events`/`sys` only after boot, so a callback is used. */
+  constructor(onReady: () => void = () => {}) {
     super(RoomScene.KEY);
+    this.onReady = onReady;
   }
 
   create(): void {
