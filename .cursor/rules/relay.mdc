@@ -1,0 +1,13 @@
+---
+description: RELAY project context and ownership rules for agents working in Cursor
+alwaysApply: true
+---
+
+This is RELAY (HackMIT 2026). Before editing, read `AGENTS.md` (ownership, hard rules, git
+workflow) and the docs it points to: `docs/PRODUCT.md`, `docs/ARCHITECTURE.md`,
+`docs/ART_DIRECTION.md`, `docs/TEAM_PLAN.md`, and your handoff in `docs/handoffs/`.
+
+Key rules: only Agent A edits `src/shared/**`, `package.json`/lockfile, tsconfig/vite/vitest
+config and `.github/**`; simulation (`src/sim`) stays pure; validate all untrusted data with the
+Zod schemas in `src/shared/contracts.ts`; fixtures are always labelled as fixtures; memories
+derive only from real `GameEvent`s; keep `main` runnable (`npm run check`). Push often.

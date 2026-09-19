@@ -19,9 +19,11 @@ Everything not listed belongs to A. A is the integration/merge owner.
 
 1. **Only A edits shared contracts and root dependencies.** That means `src/shared/**`,
    `package.json`, `package-lock.json`, `tsconfig.json`, `vite.config.ts`, `vitest.config.ts`,
-   `.github/**`. Need a change? Open an *integration request*: a PR or issue titled
-   `[integration] <what>` containing the smallest patch that would unblock you and why.
-   Meanwhile, keep working against the current contract.
+   `.github/**`. Need a change? Post an *integration request*: a comment on your workstream
+   issue (or a new issue) titled `[integration] <what>` with the smallest patch that would
+   unblock you and why. A applies it on `main` quickly. Meanwhile, keep working against the
+   current contract. (Small **additive** changes you urgently need may be pushed directly if
+   `npm run check` stays green — say so in the commit message so A can review.)
 2. **Validate at boundaries, never trust generated content.** Model output is data
    (`WorldRecipe`), compiled by trusted code into `RoomSpec`/`ArtRecipe`, validated with the
    Zod schemas in `src/shared/contracts.ts`. No generated HTML/JS/SVG/URLs/expressions, ever.
@@ -36,28 +38,35 @@ Everything not listed belongs to A. A is the integration/merge owner.
 6. **No second app.** B does not start another HTTP server; C does not build another engine
    or scaffold a new frontend. No new frameworks, databases, auth, or speculative deps.
 7. **Keep `main` runnable.** `npm run check` (typecheck + tests + build) must pass before you
-   open a PR. Tests are non-interactive and make no network or paid API calls.
-8. **Small PRs, early.** Open your first PR within the first hour even if it is tiny. Push your
-   branch often — teammates are watching GitHub for updates.
+   merge into `main`. Tests are non-interactive and make no network or paid API calls.
+8. **Push early, push often — no pull requests needed.** This is a hackathon: commit small,
+   push your branch every few minutes, and merge into `main` yourself as soon as your slice
+   runs. Teammates are watching GitHub for updates.
 
-## Git workflow
+## Git workflow (hackathon mode: direct merges, no PRs)
 
 ```bash
 git clone https://github.com/Phronesis618/HackMIT2026.git relay && cd relay
 npm ci
 git checkout <your-branch>          # feat/core | feat/generation | feat/presentation
-# ... work, commit small ...
-git fetch origin && git merge origin/main   # incorporate main often; never rewrite a shared branch
-npm run check
-git push origin <your-branch>       # push frequently; open a PR to main when a slice works
+# ... work, commit small, push often ...
+git push origin <your-branch>
+
+# when a slice works, merge it into main yourself:
+git fetch origin && git merge origin/main      # take everyone else's work first; fix conflicts in YOUR files
+npm run check                                  # must be green
+git checkout main && git pull && git merge <your-branch> && git push origin main
+git checkout <your-branch>
 ```
 
 - Never force-push a shared branch. Never rebase `main`. Never commit `.env` or secrets.
-- PRs target `main`. Use the PR template. Screenshots for anything visual.
-- After each PR, update **your own** handoff file (`docs/handoffs/<A|B|C>.md`) — one file per
+- Merge conflicts only happen in files you both touched — ownership above makes that rare. If
+  a conflict is in another owner's file, keep THEIR version and tell them.
+- If `main` breaks, whoever notices fixes or reverts it immediately; A is the backstop.
+- After each merge, update **your own** handoff file (`docs/handoffs/<A|B|C>.md`) — one file per
   agent so nobody edits the same status doc concurrently.
 - B and C record what their tool actually did in `docs/evidence/codex.md` / `devin.md`
-  (real commits, PRs, tests). Do not invent sponsor evidence.
+  (real commits, tests). Do not invent sponsor evidence.
 
 ## Where things are
 

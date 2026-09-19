@@ -72,9 +72,11 @@ or anyone else's handoff/evidence file.
 
 If you need a schema field, a new registry ID, an env var or a dependency (for example an
 OpenAI SDK — note the foundation has **no** OpenAI dependency; use `fetch` against the
-Responses/Chat Completions HTTP API unless A approves adding a package): open an issue or PR
-titled `[integration] <what>` with the **smallest** patch and the reason, then keep working
-with the current contract. Agent A merges shared changes.
+Responses/Chat Completions HTTP API unless A approves adding a package): comment on your
+workstream issue (#2) with `[integration] <what>`, the **smallest** patch and the reason, then
+keep working with the current contract. Agent A applies shared changes on `main`. A small,
+purely additive schema/registry change you urgently need may be pushed directly if
+`npm run check` stays green — flag it in the commit message.
 
 ## 5. The interface you implement (real exported names)
 
@@ -167,14 +169,17 @@ and whose receipt attributes real contributions; without a key, startup and requ
 exactly like the foundation; with a stubbed failing provider, the result is
 `live_fallback_fixture` with the reason in `notes`; `npm run check` is green.
 
-## 8. Submitting
+## 8. Shipping (hackathon mode — no pull requests)
 
-- Commit small and often; push `feat/generation` to origin frequently so teammates see progress.
-- Open a PR to `main` as soon as deliverable 1–4 work (even partially, clearly labelled). Use
-  the PR template; state **implemented / mocked / unverified** explicitly.
-- Update `docs/handoffs/B.md` after every PR: branch + latest commit, what works, what remains,
-  exact `npm test` output summary, integration requests, how A should integrate.
-- Record real Codex contributions (commits, PRs, tests run) in `docs/evidence/codex.md`.
+- Commit small and often; **push `feat/generation` to origin every few minutes** so teammates
+  see progress.
+- As soon as deliverables 1–4 work (even partially, clearly labelled), merge into `main`
+  yourself: `git fetch origin && git merge origin/main && npm run check && git checkout main
+  && git pull && git merge feat/generation && git push origin main`. Keep `main` green.
+- Update `docs/handoffs/B.md` after every merge: branch + latest commit, what works, what
+  remains, exact `npm test` summary, integration requests, how A should integrate. State
+  **implemented / mocked / unverified** explicitly.
+- Record real Codex contributions (commits, tests run) in `docs/evidence/codex.md`.
 
 ## 9. Working style
 

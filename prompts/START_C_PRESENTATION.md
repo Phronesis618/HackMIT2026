@@ -85,9 +85,11 @@ are yours), `src/sim/**`, `src/server/**`, `src/client/main.tsx`, `src/client/ga
 `vite.config.ts`, `vitest.config.ts`, `.github/**`, or anyone else's handoff/evidence file.
 
 Need a new `UiModel` field, `UiActions` method, `WorldRenderer` method, `GameEvent` variant,
-registry ID, token key, or a dependency (e.g. `jsdom` for DOM tests)? Open an issue or PR
-titled `[integration] <what>` with the **smallest** patch and why, then keep working. Agent A
-merges shared changes.
+registry ID, token key, or a dependency (e.g. `jsdom` for DOM tests)? Comment on your
+workstream issue (#3) with `[integration] <what>`, the **smallest** patch and why, then keep
+working. Agent A applies shared changes on `main`. A small, purely additive change you
+urgently need may be pushed directly if `npm run check` stays green — flag it in the commit
+message.
 
 ## 5. The interfaces you implement (real exported names)
 
@@ -175,13 +177,16 @@ distinctly; dash/attack/hit effects fire from events only; the receipt and memor
 exactly what happened (fixture labelled as fixture); memories persist across reload on the
 same device; `npm run check` is green; screenshots attached to the PR.
 
-## 9. Submitting
+## 9. Shipping (hackathon mode — no pull requests)
 
-- Commit small; push `feat/presentation` frequently so teammates see updates on GitHub.
-- Open PR #1 early (visual baseline), then one PR per deliverable. Use the PR template, attach
-  screenshots, and state **implemented / mocked / unverified** explicitly.
-- Update `docs/handoffs/C.md` after every PR (branch + latest commit, what works, what remains,
-  exact test results, integration requests, integration notes for A).
+- Commit small; **push `feat/presentation` every few minutes** so teammates see updates on
+  GitHub.
+- Merge into `main` yourself as soon as the HQ visual baseline runs, then after each
+  deliverable: `git fetch origin && git merge origin/main && npm run check && git checkout
+  main && git pull && git merge feat/presentation && git push origin main`. Keep `main` green.
+- Update `docs/handoffs/C.md` after every merge (branch + latest commit, what works, what
+  remains, exact test results, integration requests, notes for A). State **implemented /
+  mocked / unverified** explicitly; put screenshots under `docs/evidence/` (no secrets).
 - Record real Devin contributions in `docs/evidence/devin.md`.
 
 ## 10. Working style
