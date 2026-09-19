@@ -42,7 +42,11 @@ _Updated by Agent B only. Start prompt: `prompts/START_B_GENERATION.md`._
 - App transport still returns a complete world. First-room-first delivery to players needs
   Agent A's integration below. Recipes plan all rooms in one call; this is incremental
   compilation, not separate background model requests.
-- Browser rendering of the new themes has not been exercised in this session.
+- Browser checks passed for both new server-selected themes: HQ preparation, honest receipts,
+  three-room traversal to the Anchor areas, world replacement, and memory persistence after
+  reload. Further browser testing stopped at the user's request. Root Archive initially
+  required HQ re-entry to align with an exit; traversal subsequently worked. No blocked
+  corridor was confirmed. Live provider and combat/Anchor completion remain unverified.
 
 ## Test results
 - `npm run check` → typecheck passed; **9 files, 87 tests passed**; production build passed.

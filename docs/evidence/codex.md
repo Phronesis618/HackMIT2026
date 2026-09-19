@@ -39,5 +39,17 @@ measurements; they establish neither live model latency nor live token usage.
 No OpenAI credential was available, so no real provider request occurred. Model, real token
 totals, and live first-room latency are **not measured**. The test payload's token counts
 are fabricated test data, not evidence of API usage. A provisioned key and selected model
-are required to finish START_B deliverable 9. Browser rendering and incremental delivery
-through Agent A's app transport are also unverified.
+are required to finish START_B deliverable 9. Incremental delivery through Agent A's app
+transport remains unverified.
+
+### Browser verification
+
+The user approved browser testing, then asked to deprioritize further testing. Completed
+checks against the actual server-backed HQ flow passed for both new fixtures: three-room
+traversal to Anchor areas, honest offline/zero-call/unused-idea receipts, literal display
+of markup-shaped contributions, repeated world replacement, and memory persistence
+after reload. No inspected browser runtime errors occurred. Initial Root Archive exit
+alignment required HQ re-entry before traversal worked; no blocked corridor was confirmed.
+Live provider behavior, streaming, busy-state timing, concurrent sessions, and combat
+victories were not verified in the browser. Screenshots and recording are in the Devin
+session linked from PR #7.
