@@ -1,9 +1,4 @@
-/**
- * Placeholder drawing primitives (Agent C replaces/extends these with real art).
- * Everything here is procedural vector art in the shared ink-and-neon palette, so the
- * intended layering and silhouettes are visible before any bitmap assets exist.
- */
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
 import type { Palette } from '../../shared/contracts';
 import { TILE_SIZE } from '../../shared/conventions';
 import type { MotifId, PropId } from '../../shared/registry';
@@ -11,12 +6,96 @@ import { hexToInt } from '../../shared/tokens';
 
 export type G = Phaser.GameObjects.Graphics;
 
+export function drawSanctuary(g: G, roomW: number, roomH: number, palette: Palette): void {
+  const edge = hexToInt(palette.wallEdge);
+  const warm = hexToInt(palette.accentSoft);
+  const cyan = hexToInt(palette.accent);
+  const cx = roomW / 2;
+  g.fillStyle(0x000000, 0.3).fillEllipse(cx, roomH / 2 + 12, 264, 130);
+  g.lineStyle(1, edge, 0.4).strokeEllipse(cx, roomH / 2, 264, 126);
+  g.lineStyle(1, cyan, 0.16).strokeEllipse(cx, roomH / 2, 238, 108);
+  g.lineBetween(cx - 142, roomH / 2, cx + 142, roomH / 2);
+  for (const x of [48, roomW - 48]) {
+    g.fillStyle(warm, 0.025).fillEllipse(x, roomH / 2, 140, roomH - 70);
+    g.lineStyle(2, edge, 0.65).lineBetween(x, 76, x, roomH - 60);
+    for (let y = 84; y < roomH - 60; y += 38) {
+      g.fillStyle(warm, 0.75).fillRect(x - 2, y, 4, 14);
+      g.fillStyle(warm, 0.04).fillCircle(x, y + 7, 26);
+    }
+  }
+  // Empty frames are architecture; actual keepsakes live in the DOM memory wall.
+  const wallX = roomW - 242;
+  g.fillStyle(0x050910, 0.95).fillRoundedRect(wallX, 6, 164, 22, 3);
+  g.lineStyle(1, warm, 0.35).strokeRoundedRect(wallX, 6, 164, 22, 3);
+  for (let i = 0; i < 5; i++) {
+    g.lineStyle(1, edge, 0.8).strokeRect(wallX + 10 + i * 30, 11, 22, 12);
+  }
+  const portal = { x: cx + TILE_SIZE / 2, y: roomH - TILE_SIZE * 1.5 };
+  g.lineStyle(3, edge, 0.9).strokeEllipse(portal.x, portal.y, 94, 48);
+  g.lineStyle(1, cyan, 0.35).strokeEllipse(portal.x, portal.y, 112, 60);
+  for (const side of [-1, 1]) {
+    const x = portal.x + side * 45;
+    g.fillStyle(hexToInt(palette.wall), 1).fillRoundedRect(x - 7, portal.y - 38, 14, 46, 4);
+    g.fillStyle(cyan, 0.85).fillRect(x - 2, portal.y - 32, 3, 28);
+    g.lineStyle(1, warm, 0.5).lineBetween(cx + side * 24, roomH / 2 + 76, cx + side * 24, portal.y - 45);
+  }
+}
+
+export function drawMotif(g: G, motif: MotifId, x: number, y: number, palette: Palette): void {
+  const edge = hexToInt(palette.wallEdge);
+  const accent = hexToInt(palette.accent);
+  g.lineStyle(1, edge, 0.35);
+  switch (motif) {
+    case 'spires':
+      g.strokeTriangle(x - 12, y + 9, x, y - 13, x + 12, y + 9);
+      g.lineBetween(x, y - 13, x, y + 9);
+      break;
+    case 'arches':
+      g.beginPath().arc(x, y + 6, 12, Math.PI, 0).strokePath();
+      g.lineBetween(x - 12, y + 6, x - 12, y + 12).lineBetween(x + 12, y + 6, x + 12, y + 12);
+      break;
+    case 'cables':
+      for (let i = 0; i < 3; i++) {
+        g.lineBetween(x - 14, y - 8 + i * 4, x + 4, y - 8 + i * 4);
+        g.lineBetween(x + 4, y - 8 + i * 4, x + 12, y + i * 4);
+      }
+      break;
+    case 'crystals':
+      g.strokeTriangle(x - 10, y, x, y - 12, x + 4, y + 10);
+      g.strokeTriangle(x + 2, y, x + 11, y - 8, x + 9, y + 9);
+      break;
+    case 'roots':
+      g.lineBetween(x - 14, y + 10, x + 12, y - 10);
+      g.lineBetween(x - 6, y + 4, x - 12, y - 8);
+      g.lineBetween(x + 4, y - 4, x + 13, y + 5);
+      break;
+    case 'monoliths':
+      g.strokeRect(x - 6, y - 13, 12, 26);
+      g.lineStyle(1, accent, 0.25).lineBetween(x, y - 8, x, y + 8);
+      break;
+    case 'lanterns':
+      g.fillStyle(hexToInt(palette.accentSoft), 0.035).fillCircle(x, y, 15);
+      g.strokeCircle(x, y, 7);
+      g.lineBetween(x, y - 14, x, y - 7);
+      break;
+    case 'ruined_machinery':
+      g.strokeCircle(x, y, 11);
+      g.strokeRect(x - 4, y - 4, 8, 8);
+      for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 2;
+        g.lineBetween(x + Math.cos(a) * 7, y + Math.sin(a) * 7, x + Math.cos(a) * 15, y + Math.sin(a) * 15);
+      }
+      break;
+  }
+}
+
 export function drawProp(g: G, propId: PropId, cx: number, cy: number, palette: Palette, glow: number): void {
   const accent = hexToInt(palette.accent);
   const soft = hexToInt(palette.accentSoft);
   const wall = hexToInt(palette.wall);
   const edge = hexToInt(palette.wallEdge);
   const half = TILE_SIZE / 2;
+  g.fillStyle(0x000000, 0.28).fillEllipse(cx + 3, cy + 12, 30, 12);
   switch (propId) {
     case 'pillar':
       g.fillStyle(wall, 1).fillRect(cx - 10, cy - 22, 20, 36);
@@ -37,7 +116,8 @@ export function drawProp(g: G, propId: PropId, cx: number, cy: number, palette: 
     case 'lantern':
       g.fillStyle(soft, 0.08 + glow * 0.12).fillCircle(cx, cy, 30);
       g.fillStyle(soft, 0.18 + glow * 0.2).fillCircle(cx, cy, 16);
-      g.fillStyle(soft, 1).fillCircle(cx, cy, 5);
+      g.fillStyle(wall, 1).fillRoundedRect(cx - 6, cy - 8, 12, 16, 3);
+      g.fillStyle(soft, 1).fillRoundedRect(cx - 3, cy - 5, 6, 10, 2);
       g.lineStyle(1, edge, 0.8).lineBetween(cx, cy - 5, cx, cy - 16);
       break;
     case 'crystal_cluster':
@@ -71,9 +151,14 @@ export function drawProp(g: G, propId: PropId, cx: number, cy: number, palette: 
       g.lineStyle(1.5, accent, 0.35 + glow * 0.4).lineBetween(cx - 2, cy - 30, cx + 3, cy + 26);
       break;
     case 'anchor_pedestal':
+      g.fillStyle(wall, 1).fillEllipse(cx, cy + 5, 38, 24);
       g.lineStyle(2, accent, 0.9).strokeCircle(cx, cy, 14);
       g.lineStyle(1, accent, 0.5).strokeCircle(cx, cy, 22);
       g.fillStyle(accent, 0.12 + glow * 0.2).fillCircle(cx, cy, 22);
+      for (let i = 0; i < 4; i++) {
+        const a = Math.PI / 4 + i * Math.PI / 2;
+        g.lineBetween(cx + Math.cos(a) * 17, cy + Math.sin(a) * 17, cx + Math.cos(a) * 27, cy + Math.sin(a) * 27);
+      }
       break;
   }
 }

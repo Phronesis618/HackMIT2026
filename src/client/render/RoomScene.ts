@@ -1,16 +1,10 @@
-/**
- * RoomScene — draws a RoomSpec + ArtRecipe and the entities in each GameSnapshot.
- * Owner: Agent C (src/client/render). The foundation version is deliberately simple
- * vector art in the shared palette; keep the public methods, evolve the visuals.
- *
- * It never decides gameplay: positions, states and events all come from the snapshot.
- */
 import Phaser from 'phaser';
 import type { ArtRecipe, EnemyState, GameEvent, GameSnapshot, PlayerState, RoomSpec } from '../../shared/contracts';
 import { ATTACK_ARC_RAD, ATTACK_RANGE, DEPTH, PLAYER_RADIUS, TILE_SIZE, tileToWorld } from '../../shared/conventions';
 import { ENEMY_INFO } from '../../shared/registry';
 import { hexToInt, tokens } from '../../shared/tokens';
-import { drawProp, drawSkyline, drawVignette } from './drawing';
+import { drawProp, drawSanctuary, drawSkyline, drawVignette } from './drawing';
+import { drawHostile, drawOperative } from './characters';
 
 interface EntityView {
   container: Phaser.GameObjects.Container;
@@ -28,7 +22,7 @@ export class RoomScene extends Phaser.Scene {
   private room: RoomSpec | null = null;
   private art: ArtRecipe | null = null;
   private isHeadquarters = false;
-  private roomLayer: Phaser.GameObjects.Container | null = null;
+  private roomLayer: Phaser.GameObjects.Layer | null = null;
   private portalGlow: Phaser.GameObjects.Graphics | null = null;
   private portalPulse = 0;
   private players = new Map<string, EntityView>();
@@ -57,7 +51,7 @@ export class RoomScene extends Phaser.Scene {
     this.anchorView?.destroy();
     this.anchorView = null;
 
-    const layer = this.add.container(0, 0);
+    const layer = this.add.layer();
     this.roomLayer = layer;
     const roomW = room.width * TILE_SIZE;
     const roomH = room.height * TILE_SIZE;
@@ -96,7 +90,7 @@ export class RoomScene extends Phaser.Scene {
           }
           continue;
         }
-        floor.fillStyle((row + col) % 2 === 0 ? floorInt : floorAltInt, 1).fillRect(x, y, TILE_SIZE, TILE_SIZE);
+        floor.fillStyle((row * 3 + col) % 7 === 0 ? floorAltInt : floorInt, 1).fillRect(x, y, TILE_SIZE, TILE_SIZE);
         if (ch === '~') {
           decals.fillStyle(hazardInt, 0.22).fillRect(x, y, TILE_SIZE, TILE_SIZE);
           decals.lineStyle(1, hazardInt, 0.5);
@@ -116,6 +110,14 @@ export class RoomScene extends Phaser.Scene {
     for (let col = 0; col <= room.width; col++) decals.lineBetween(col * TILE_SIZE, 0, col * TILE_SIZE, roomH);
     for (let row = 0; row <= room.height; row++) decals.lineBetween(0, row * TILE_SIZE, roomW, row * TILE_SIZE);
     layer.add([floor, decals, walls]);
+    if (opts.headquarters) {
+      const sanctuary = this.add.graphics().setDepth(DEPTH.floorDecal + 2);
+      drawSanctuary(sanctuary, roomW, roomH, p);
+      layer.add(sanctuary);
+      layer.add(this.add.text(roomW - 160, 17, 'CHRONICLE ARCHIVE', {
+        fontFamily: tokens.font.mono, fontSize: '10px', color: tokens.color.warmLamp,
+      }).setOrigin(0.5).setDepth(DEPTH.overlay));
+    }
 
     const props = this.add.graphics().setDepth(DEPTH.propsBehind + 1);
     for (const prop of room.props) {
@@ -146,7 +148,7 @@ export class RoomScene extends Phaser.Scene {
 
     // Camera: frame the whole room.
     const cam = this.cameras.main;
-    const zoom = Phaser.Math.Clamp(Math.min(cam.width / (roomW + 96), cam.height / (roomH + 96)), 0.7, 1.6);
+    const zoom = Math.min(1.6, cam.width / (roomW + 96), cam.height / (roomH + 96));
     cam.setZoom(zoom);
     cam.centerOn(roomW / 2, roomH / 2 - 8);
     cam.fadeIn(280, 0, 0, 0);
@@ -207,6 +209,7 @@ export class RoomScene extends Phaser.Scene {
 
   private createEntityView(name: string, isLocal: boolean, radius: number, kind: 'player' | 'enemy'): EntityView {
     const container = this.add.container(0, 0).setDepth(DEPTH.entities);
+    this.roomLayer?.add(container);
     const shadow = this.add.graphics();
     shadow.fillStyle(0x000000, 0.35).fillEllipse(0, radius * 0.9, radius * 2.2, radius * 0.9);
     const body = this.add.graphics();
@@ -215,61 +218,32 @@ export class RoomScene extends Phaser.Scene {
     const label = this.add
       .text(0, -radius - 14, name, {
         fontFamily: tokens.font.body,
-        fontSize: '11px',
+        fontSize: '12px',
         color: kind === 'player' ? tokens.color.mist100 : tokens.color.mist300,
       })
       .setOrigin(0.5)
       .setAlpha(kind === 'player' ? 0.95 : 0.7);
     container.add([shadow, body, facing, hpBar, label]);
     const view: EntityView = { container, body, facing, label, hpBar, lastState: '', isLocal };
-    if (kind === 'player') this.drawPlayerBody(view, radius, 'idle');
-    else this.drawEnemyBody(view, radius, 'idle');
     return view;
-  }
-
-  private drawPlayerBody(view: EntityView, radius: number, state: PlayerState['state']): void {
-    const accent = hexToInt(view.isLocal ? tokens.canvas.localPlayerAccent : tokens.canvas.remotePlayerAccent);
-    const outline = hexToInt(tokens.canvas.playerOutline);
-    const g = view.body;
-    g.clear();
-    if (state === 'dashing') g.fillStyle(accent, 0.25).fillCircle(0, 0, radius + 10);
-    g.fillStyle(hexToInt(tokens.color.ink600), 1).fillCircle(0, 0, radius);
-    g.lineStyle(2, state === 'hit' ? hexToInt(tokens.color.danger) : outline, 1).strokeCircle(0, 0, radius);
-    g.fillStyle(accent, 1).fillCircle(0, 0, radius * 0.45);
-    if (state === 'attacking') {
-      const f = view.facing;
-      f.clear();
-      f.fillStyle(hexToInt(tokens.canvas.telegraph), 0.35);
-      f.slice(0, 0, ATTACK_RANGE, -ATTACK_ARC_RAD / 2, ATTACK_ARC_RAD / 2, false);
-      f.fillPath();
-    }
-  }
-
-  private drawEnemyBody(view: EntityView, radius: number, state: EnemyState['state']): void {
-    const danger = hexToInt(tokens.canvas.enemyAccent);
-    const g = view.body;
-    g.clear();
-    g.fillStyle(hexToInt(tokens.color.ink700), 1).fillCircle(0, 0, radius);
-    g.lineStyle(2, danger, state === 'hit' ? 1 : 0.8).strokeCircle(0, 0, radius);
-    g.fillStyle(danger, state === 'dead' ? 0.2 : 0.9);
-    g.fillTriangle(-radius * 0.4, radius * 0.3, 0, -radius * 0.5, radius * 0.4, radius * 0.3);
   }
 
   private updatePlayerView(view: EntityView, player: PlayerState): void {
     view.container.setPosition(player.x, player.y);
     view.container.setDepth(DEPTH.entities + player.y / 10000);
-    view.container.setAlpha(player.invulnerableMs > 0 ? 0.7 : 1);
-    if (view.lastState !== player.state) {
-      view.lastState = player.state;
-      this.drawPlayerBody(view, PLAYER_RADIUS, player.state);
+    view.container.setAlpha(player.state === 'down' ? 0.45 : player.invulnerableMs > 0 ? 0.7 : 1);
+    const appearance = `${player.classId}:${player.state}`;
+    if (view.lastState !== appearance) {
+      view.lastState = appearance;
+      drawOperative(view.body, player, view.isLocal);
     }
-    // facing wedge (redrawn only when not attacking; attack telegraph reuses the layer)
-    if (player.state !== 'attacking') {
-      const f = view.facing;
-      f.clear();
-      f.fillStyle(hexToInt(view.isLocal ? tokens.canvas.localPlayerAccent : tokens.canvas.remotePlayerAccent), 0.9);
-      f.fillTriangle(PLAYER_RADIUS + 2, 0, PLAYER_RADIUS - 4, -5, PLAYER_RADIUS - 4, 5);
-    }
+    const moving = player.state === 'moving';
+    view.body.setRotation(player.facing);
+    view.body.setPosition(0, Math.sin(this.time.now / (moving ? 65 : 400)) * (moving ? 1.8 : 0.6));
+    view.body.setScale(player.state === 'dashing' ? 1.2 : 1, player.state === 'dashing' ? 0.8 : 1);
+    view.facing.clear();
+    view.facing.lineStyle(1, hexToInt(tokens.canvas.localPlayerAccent), view.isLocal ? 0.6 : 0);
+    view.facing.beginPath().arc(0, 0, PLAYER_RADIUS + 12, -0.3, 0.3).strokePath();
     view.facing.setRotation(player.facing);
     if (view.label.text !== player.displayName) view.label.setText(player.displayName);
     this.drawHpBar(view.hpBar, player.hp, player.maxHp, PLAYER_RADIUS, hexToInt(tokens.color.success));
@@ -279,10 +253,13 @@ export class RoomScene extends Phaser.Scene {
     const radius = ENEMY_INFO[enemy.enemyId].radius;
     view.container.setPosition(enemy.x, enemy.y);
     view.container.setDepth(DEPTH.entities + enemy.y / 10000);
-    if (view.lastState !== enemy.state) {
-      view.lastState = enemy.state;
-      this.drawEnemyBody(view, radius, enemy.state);
+    const appearance = `${enemy.enemyId}:${enemy.state}`;
+    if (view.lastState !== appearance) {
+      view.lastState = appearance;
+      drawHostile(view.body, enemy);
     }
+    view.body.setRotation(enemy.facing);
+    view.container.setAlpha(enemy.state === 'dead' ? 0.2 : 1);
     view.facing.setRotation(enemy.facing);
     if (enemy.hp < enemy.maxHp) this.drawHpBar(view.hpBar, enemy.hp, enemy.maxHp, radius, hexToInt(tokens.canvas.enemyAccent));
     else view.hpBar.clear();

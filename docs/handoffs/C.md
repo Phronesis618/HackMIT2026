@@ -3,11 +3,14 @@
 _Updated by Agent C only. Start prompt: `prompts/START_C_PRESENTATION.md`._
 
 ## Branch / latest commit
-- `feat/presentation` @ foundation (no C commits yet).
+- `feat/presentation`; first visual baseline commit: `Build the RELAY sanctuary and expressive operative silhouettes`.
 
 ## What works
-- Foundation only: procedural placeholder renderer (`src/client/render`), basic React panels
-  (`src/client/ui`), Chronicle reducer + localStorage adapter with receipt/arrival memories.
+- **Implemented:** original procedural sanctuary architecture, warm floor lighting, empty
+  archive frames, portal docking platform, expressive class silhouettes and snapshot-driven
+  movement poses. Phaser depth ordering is shared across room art and entities.
+- **Mocked / stubbed:** audio remains silent; the existing fixture provider is labelled fixture.
+- **Unverified:** browser appearance and interaction; the next presentation slices are in progress.
 
 ## What remains
 - HQ visual baseline, expressive player, portal animation, motif/prop/enemy rendering, combat
@@ -15,7 +18,8 @@ _Updated by Agent C only. Start prompt: `prompts/START_C_PRESENTATION.md`._
   (see START prompt §7).
 
 ## Test results
-- not yet run by C. Foundation: `npm test -- tests/presentation` → 11 passed.
+- Baseline `npm run check`: 50 tests passed, typecheck and production build passed.
+- First visual baseline: `npm run typecheck` and `git diff --check` passed.
 
 ## Interface / dependency requests to A
 - none yet
