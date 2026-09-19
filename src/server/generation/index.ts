@@ -71,3 +71,4 @@ export function createGenerationService(options: GenerationServiceOptions): Gene
 
 export { createFixtureGenerationService, loadWorldFixtures } from './fixtureService';
 export { buildReceipt } from './receipt';
+export { compileWorldRecipe, type CompiledWorldRecipe, type CompileWorldRecipeOptions } from './compiler';
