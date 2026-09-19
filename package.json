@@ -1,0 +1,41 @@
+{
+  "name": "relay-hackmit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RELAY — Worlds end. Your stories don't. HackMIT 2026 entertainment-track co-op sci-fi action roguelike.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c blue,magenta \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "tsx watch src/server/index.ts",
+    "dev:client": "vite",
+    "dev:lan": "concurrently -k -n server,client -c blue,magenta \"tsx watch src/server/index.ts --host 0.0.0.0\" \"vite --host\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "vite build",
+    "start": "tsx src/server/index.ts",
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "phaser": "^3.90.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tsx": "^4.23.13",
+    "ws": "^8.21.3",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
+  }
+}

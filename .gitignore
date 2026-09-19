@@ -1,0 +1,28 @@
+# Secrets — never commit real credentials. Use .env.example for names only.
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Test / tool artifacts
+coverage/
+.vitest/
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local scratch (agents: keep temporary scripts out of the repo)
+tmp/
+.tmp/

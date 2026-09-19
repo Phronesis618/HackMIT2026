@@ -1,0 +1,190 @@
+{
+  "fixtureId": "vantage-spire",
+  "fixtureNote": "Authored offline fixture. Not generated from player contributions. Used when live generation is disabled, unavailable, or fails.",
+  "plannedRoomCount": 3,
+  "recipe": {
+    "title": "Vantage Spire",
+    "tagline": "A relay tower that forgot which world it was built for.",
+    "themeSummary": "A vertical transit spire mid-collapse: concourses strung with live cables, lantern-lit galleries, and a sealed vault where the Anchor must be planted before the structure folds into itself.",
+    "motifIds": ["cables", "spires", "lanterns"],
+    "palette": {
+      "background": "#07090f",
+      "floor": "#141c2e",
+      "floorAlt": "#182238",
+      "wall": "#1f2b47",
+      "wallEdge": "#2fa8c9",
+      "accent": "#7cf5ff",
+      "accentSoft": "#2fa8c9",
+      "glow": "#7cf5ff",
+      "hazard": "#ff5c7a",
+      "text": "#dbe4f7"
+    },
+    "rooms": [
+      {
+        "name": "Threshold Concourse",
+        "description": "The arrival platform. Lanterns still burn over abandoned crates.",
+        "motifIds": ["lanterns", "cables"],
+        "propIds": ["lantern", "crate", "terminal", "pillar", "cable_bundle"],
+        "enemyIds": ["husk"],
+        "hazards": true
+      },
+      {
+        "name": "Cable Gallery",
+        "description": "A long gallery where severed trunk cables hang and spark.",
+        "motifIds": ["cables", "spires"],
+        "propIds": ["cable_bundle", "lantern", "monolith_shard", "crystal_cluster"],
+        "enemyIds": ["husk", "sentinel"],
+        "hazards": true
+      },
+      {
+        "name": "Anchor Vault",
+        "description": "The spire's core. The Guardian waits between the operatives and the Anchor site.",
+        "motifIds": ["spires", "monoliths"],
+        "propIds": ["anchor_pedestal", "lantern", "monolith_shard", "pillar"],
+        "enemyIds": ["guardian"],
+        "hazards": true
+      }
+    ],
+    "contributionMappings": []
+  },
+  "art": {
+    "paletteFamily": "ink-neon",
+    "palette": {
+      "background": "#07090f",
+      "floor": "#141c2e",
+      "floorAlt": "#182238",
+      "wall": "#1f2b47",
+      "wallEdge": "#2fa8c9",
+      "accent": "#7cf5ff",
+      "accentSoft": "#2fa8c9",
+      "glow": "#7cf5ff",
+      "hazard": "#ff5c7a",
+      "text": "#dbe4f7"
+    },
+    "motifIds": ["cables", "spires", "lanterns"],
+    "skyline": "spires",
+    "fog": 0.35,
+    "glowIntensity": 0.6
+  },
+  "rooms": [
+    {
+      "id": "vantage-spire-room-0",
+      "index": 0,
+      "name": "Threshold Concourse",
+      "description": "The arrival platform. Lanterns still burn over abandoned crates.",
+      "width": 24,
+      "height": 14,
+      "tiles": [
+        "########################",
+        "#......................#",
+        "#.....##......##.......#",
+        "#.....##......##.......#",
+        "#......................#",
+        "#P.....................X",
+        "#......................#",
+        "#..........~~..........#",
+        "#.....##...~~...##.....#",
+        "#.....##........##.....#",
+        "#......................#",
+        "#......................#",
+        "#......................#",
+        "########################"
+      ],
+      "props": [
+        { "id": "r0-lantern-a", "propId": "lantern", "x": 3, "y": 2 },
+        { "id": "r0-lantern-b", "propId": "lantern", "x": 20, "y": 2 },
+        { "id": "r0-terminal", "propId": "terminal", "x": 12, "y": 1 },
+        { "id": "r0-crate-a", "propId": "crate", "x": 9, "y": 11 },
+        { "id": "r0-crate-b", "propId": "crate", "x": 10, "y": 11 },
+        { "id": "r0-cables", "propId": "cable_bundle", "x": 11, "y": 3 },
+        { "id": "r0-pillar-a", "propId": "pillar", "x": 3, "y": 10 },
+        { "id": "r0-pillar-b", "propId": "pillar", "x": 20, "y": 10 }
+      ],
+      "encounters": [
+        { "id": "r0-husks-a", "enemyId": "husk", "x": 15, "y": 4, "count": 1 },
+        { "id": "r0-husks-b", "enemyId": "husk", "x": 17, "y": 9, "count": 1 }
+      ],
+      "exits": [{ "x": 23, "y": 5, "toRoomIndex": 1, "direction": "east" }],
+      "isFinal": false,
+      "attributions": []
+    },
+    {
+      "id": "vantage-spire-room-1",
+      "index": 1,
+      "name": "Cable Gallery",
+      "description": "A long gallery where severed trunk cables hang and spark.",
+      "width": 26,
+      "height": 14,
+      "tiles": [
+        "##########################",
+        "#........................#",
+        "#..###............###....#",
+        "#..#................#....#",
+        "#........................#",
+        "#........~~~~............#",
+        "#P.......~~~~............X",
+        "#........~~~~............#",
+        "#........................#",
+        "#....#............#......#",
+        "#....###........###......#",
+        "#........................#",
+        "#........................#",
+        "##########################"
+      ],
+      "props": [
+        { "id": "r1-cables-a", "propId": "cable_bundle", "x": 6, "y": 2 },
+        { "id": "r1-cables-b", "propId": "cable_bundle", "x": 19, "y": 11 },
+        { "id": "r1-lantern-a", "propId": "lantern", "x": 4, "y": 4 },
+        { "id": "r1-lantern-b", "propId": "lantern", "x": 22, "y": 4 },
+        { "id": "r1-shard", "propId": "monolith_shard", "x": 12, "y": 10 },
+        { "id": "r1-crystal", "propId": "crystal_cluster", "x": 3, "y": 11 }
+      ],
+      "encounters": [
+        { "id": "r1-husks", "enemyId": "husk", "x": 14, "y": 3, "count": 2 },
+        { "id": "r1-sentinel", "enemyId": "sentinel", "x": 20, "y": 9, "count": 1 }
+      ],
+      "exits": [{ "x": 25, "y": 6, "toRoomIndex": 2, "direction": "east" }],
+      "isFinal": false,
+      "attributions": []
+    },
+    {
+      "id": "vantage-spire-room-2",
+      "index": 2,
+      "name": "Anchor Vault",
+      "description": "The spire's core. The Guardian waits between the operatives and the Anchor site.",
+      "width": 22,
+      "height": 16,
+      "tiles": [
+        "######################",
+        "#....................#",
+        "#.........A..........#",
+        "#....................#",
+        "#...##........##.....#",
+        "#...##........##.....#",
+        "#....................#",
+        "#....................#",
+        "#......~~~~~~........#",
+        "#......~~~~~~........#",
+        "#....................#",
+        "#...##........##.....#",
+        "#...##........##.....#",
+        "#....................#",
+        "#..........P.........#",
+        "######################"
+      ],
+      "props": [
+        { "id": "r2-pedestal", "propId": "anchor_pedestal", "x": 10, "y": 2 },
+        { "id": "r2-lantern-a", "propId": "lantern", "x": 2, "y": 1 },
+        { "id": "r2-lantern-b", "propId": "lantern", "x": 19, "y": 1 },
+        { "id": "r2-shard-a", "propId": "monolith_shard", "x": 2, "y": 13 },
+        { "id": "r2-shard-b", "propId": "monolith_shard", "x": 19, "y": 13 },
+        { "id": "r2-pillar-a", "propId": "pillar", "x": 5, "y": 7 },
+        { "id": "r2-pillar-b", "propId": "pillar", "x": 16, "y": 7 }
+      ],
+      "encounters": [{ "id": "r2-guardian", "enemyId": "guardian", "x": 10, "y": 6, "count": 1 }],
+      "exits": [],
+      "isFinal": true,
+      "attributions": []
+    }
+  ]
+}
