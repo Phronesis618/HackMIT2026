@@ -3,7 +3,7 @@
  * Agent A's controller calls `ingest` with authoritative events; Agent C owns the
  * reducer rules, this adapter and the memory wall UI.
  */
-import type { GameEvent, MemoryRecord } from '../../shared/contracts';
+import { MemoryRecordSchema, type GameEvent, type MemoryRecord } from '../../shared/contracts';
 import { createChronicleState, reduceChronicle, type ChronicleContext, type ChronicleState } from '../../chronicle';
 import { clearMemories, loadMemories, saveMemories, type KeyValueStorage } from './localStore';
 
@@ -35,7 +35,7 @@ export function createBrowserChronicle(storage: KeyValueStorage, now: () => numb
       return result.created;
     },
     attachThumbnail(memoryId, dataUrl) {
-      if (!dataUrl.startsWith('data:image/')) return;
+      if (!/^data:image\/(?:jpeg|png|webp);base64,/.test(dataUrl) || !MemoryRecordSchema.shape.thumbnailDataUrl.safeParse(dataUrl).success) return;
       const idx = state.memories.findIndex((m) => m.id === memoryId);
       if (idx < 0) return;
       const memories = [...state.memories];
@@ -45,7 +45,7 @@ export function createBrowserChronicle(storage: KeyValueStorage, now: () => numb
       notify();
     },
     clear() {
-      state = createChronicleState([]);
+      state = { ...state, memories: [] };
       clearMemories(storage);
       notify();
     },
