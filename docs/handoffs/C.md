@@ -1,6 +1,27 @@
 # Handoff — Agent C (Devin)
 
-_Updated by Agent C only. Start prompt: `prompts/START_C_PRESENTATION.md`._
+## Current integration — Devin across all roles
+
+- [PR #10](https://github.com/Phronesis618/HackMIT2026/pull/10), code/test revision
+  `083d1e0`, includes earlier presentation PRs #5 and #8.
+- **Implemented:** snapshot-driven telegraphs, class attack geometry, health/state,
+  Q/E cooldowns, resource purchases, revive/Anchor guidance; co-op host/guest UI,
+  connection errors and safe offline fallback; gesture-unlocked procedural audio and mute.
+  Replayed events no longer select the room displayed over authoritative snapshots.
+- **Verified:** full check **14 files / 172 tests**, typecheck/build/whitespace passed.
+  Short browser smoke used real controls: contribution → honest Crystal Tide receipt →
+  physical portal → Sentinel defeat → 3 resources → E purchase/activation; Q/dash
+  cooldowns. HQ/reload retained receipt, arrival, defeat and aborted-run memories.
+- Two isolated clients shared crew/contribution/Root Archive/room/movement; guest host-only
+  controls disabled. Truthful collapse debrief and shared HQ return worked.
+- **Mocked / unverified:** headless display adapters only in tests. No gameplay state/events
+  injected. Browser victory/Guardian/Anchor, other classes, revive/retry, reconnect, exact
+  combat-state equality and audible/mute behavior excluded from the short pass.
+- Live OpenAI and physical LAN require external verification. Public static fixture site:
+  https://client-gzffunxf.devinapps.com/ (HTTP-checked, not separately browser-tested).
+- Evidence is on PR #10 and the integration session; see [QA](../QA.md).
+
+## Historical presentation handoff
 
 ## Branch / verified revision
 - Follow-up: `devin/1789858056-combat-presentation` at `4c77c23`, based on main `3dee974`;

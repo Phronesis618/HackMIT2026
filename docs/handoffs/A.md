@@ -1,6 +1,30 @@
 # Handoff — Agent A (Fable, `feat/core`)
 
-_Updated by Agent A only. Last update: foundation published._
+## Current integration — Devin across all roles
+
+- [PR #10](https://github.com/Phronesis618/HackMIT2026/pull/10), branch
+  `devin/1789859304-complete-relay`, code/test revision `083d1e0`, combines child PRs #11–13.
+- **Implemented:** pure directional combat, four enemy behaviors and telegraphs,
+  four classes/Q/E, real purchases/rewards, down/revive, Guardian/Anchor, success/collapse/
+  abort and retry. Combat-gated exits preserve cleared rooms on revisits.
+- **Implemented:** host-authoritative four-player co-op, shared ideas/worlds/events,
+  owned inputs, host controls, reconnect recovery, host succession and bounded teardown.
+- **Implemented:** cancellable HTTP NDJSON and WebSocket prefixes, early entry and
+  immutable later rooms without simulation reset; progression HUD and procedural audio.
+- **Verified:** `npm run check`: **14 files / 172 tests**, typecheck/build passed.
+  Obsolete assertions were updated with user permission; tests now fight before traversing
+  and select players by identity. Non-root Docker build/start/health/config/static entry passed.
+- **Browser verified:** short solo contribution/receipt/portal, actual defeat/reward/unlock,
+  Q/dash/E cooldowns, four persisted memories; isolated co-op clients shared world/movement
+  and truthful collapse/HQ return. No injected gameplay state/events.
+- **Mocked / unverified:** provider calls mocked; no OpenAI key. Browser full victory,
+  other classes, revive/retry/reconnect, audio and physical LAN outside the short pass.
+- Public static fixture site: https://client-gzffunxf.devinapps.com/; HTTP-checked.
+  Live/co-op Node hosting is not configured publicly. See [QA](../QA.md) and [demo](../DEMO.md).
+- This Devin environment rejects PR merge commands despite user authorization.
+  A maintainer must perform the final merge after required checks/reviews.
+
+## Historical foundation handoff
 
 ## Branch / latest commit
 - `main` and `feat/core` @ foundation (see `git log` — tag `foundation-v0`).

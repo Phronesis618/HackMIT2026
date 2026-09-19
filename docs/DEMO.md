@@ -1,5 +1,9 @@
 # RELAY demo runbook
 
+Public solo fixture build: https://client-gzffunxf.devinapps.com/ — anyone with the URL can
+access it. This static host has no generation API or co-op server; its explicit offline
+fallback is expected. Use the Node host below for shared play and live generation.
+
 ## Start a solo or LAN host
 
 ```bash

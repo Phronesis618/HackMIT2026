@@ -20,7 +20,7 @@ npm run dev           # server on http://127.0.0.1:8787 + Vite client on http://
 ```
 
 Open http://localhost:5173. You spawn in headquarters. Move with **WASD/arrows**, dash with
-**Shift/Space**, attack with **J/click** (no damage yet). Click **Prepare world** — the server
+**Shift/Space**, attack with **J/click**, and use **Q**. Click **Prepare world** — the server
 returns the validated offline fixture, clearly labelled **OFFLINE FIXTURE** — then walk onto the
 glowing portal (or press **Enter portal**) to enter room 1 of the generated world.
 
@@ -40,11 +40,12 @@ glowing portal (or press **Enter portal**) to enter room 1 of the generated worl
 
 ```bash
 npm run build && HOST=0.0.0.0 npm start        # or: npm start -- --host 0.0.0.0
-# teammates open http://<your-lan-ip>:8787
+# teammates open http://<your-lan-ip>:8787/?mode=coop
 ```
 
-Real multiplayer (host-authoritative simulation over `/ws`) is Agent A's next slice; today the
-server accepts WebSocket connections and answers `hello`/`ping` only.
+The first connected co-op player hosts a crew of up to four. The server owns combat,
+contributions, generation and room transitions; the host prepares worlds and returns the crew
+to HQ. Solo and co-op use the same simulation. See [the demo runbook](docs/DEMO.md).
 
 ### Preview path (no backend needed)
 
@@ -83,16 +84,23 @@ Docs: [`docs/PRODUCT.md`](docs/PRODUCT.md) · [`docs/ARCHITECTURE.md`](docs/ARCH
 [`docs/ART_DIRECTION.md`](docs/ART_DIRECTION.md) · [`docs/TEAM_PLAN.md`](docs/TEAM_PLAN.md) ·
 handoffs in [`docs/handoffs/`](docs/handoffs/).
 
-## What the foundation does (and does not) do
+## Current playable loop
 
-Implemented and verified: keyboard-controlled player in a Phaser canvas, HQ room with a
-portal, fixture world request through the server (`POST /api/world`) with honest provenance,
-room rendering from `RoomSpec` + `ArtRecipe`, room transitions via exit tiles, creation
-receipt + arrival keepsake saved to the device-local memory wall, health endpoint, production
-build served by one Node process, typecheck/tests/build in CI.
+HQ contributions → honest creation receipt → portal → three combat rooms → Guardian and
+Anchor → debrief and persistent memories. All four classes have Q abilities and an E unlock
+purchased with room-clear rewards. Clear enemies before using exits; hold F to revive a
+nearby teammate or plant the cleared final room's Anchor.
 
-Not implemented yet (see `docs/TEAM_PLAN.md`): enemy AI and damage, class abilities (Q/E),
-live OpenAI generation, later-room streaming, WebSocket multiplayer, final art, audio.
+Implemented: deterministic combat and enemy telegraphs, host-authoritative co-op, immutable
+incremental room delivery, procedural rendering/audio and mute, event-derived Chronicle,
+validated live generation with bounded fallback, and non-root production container.
+
+[Public solo fixture demo](https://client-gzffunxf.devinapps.com/) — anyone with the URL can
+access it. This static deployment uses the explicitly labelled bundled fixture; live
+generation and co-op require the Node server.
+
+Verified scope and remaining external prerequisites are in [QA](docs/QA.md). Live OpenAI
+and physical LAN remain unverified; mocked provider tests do not establish live generation.
 
 ## Configuration
 

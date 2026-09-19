@@ -1,11 +1,24 @@
 # Handoff — Agent B (continued by Devin)
 
-_Updated by Agent B only. Start prompt: `prompts/START_B_GENERATION.md`._
+## Current integration — Devin across all roles
+
+- PR #10 at `083d1e0` includes the generation service and child PR #11's end-to-end
+  incremental delivery. HTTP NDJSON, LocalSession and co-op consume validated room
+  prefixes without resetting the active room; cancellation and status forwarding work.
+- Full integrated check: **14 files / 172 tests passed**, typecheck/build passed.
+- Short browser smoke verified server-selected Crystal Tide and Root Archive with explicit
+  fixture provenance and recorded-but-unused contributions.
+- Live OpenAI schema acceptance, output quality, latency and token usage remain unverified:
+  no credential is provisioned. No mock result is presented as a paid provider result.
+- The historical transport requests below are resolved by this integration. Recipes plan
+  all rooms in one call; delivery is incremental compilation, not separate model requests.
+
+## Historical generation handoff
 
 ## Branch / latest commit
 - `devin/1789857733-agent-b-generation` @ implementation commit `5c1f79c`.
 - Preserves `feat/generation` compiler commit `46666e6` and handoff commit `e902de3`.
-- Review/integration: https://github.com/Phronesis618/HackMIT2026/pull/7 (not merged).
+- Implementation PR: https://github.com/Phronesis618/HackMIT2026/pull/7.
 
 ## Implemented
 - Existing `createGenerationService`, `prepareWorld` and `info` interfaces remain compatible.
@@ -39,9 +52,7 @@ _Updated by Agent B only. Start prompt: `prompts/START_B_GENERATION.md`._
   set `OPENAI_MODEL` to an available structured-output model, and use
   `RELAY_GENERATION_MODE=live` for the measurement run. Do not interpret mock token counts
   as sponsor evidence.
-- App transport still returns a complete world. First-room-first delivery to players needs
-  Agent A's integration below. Recipes plan all rooms in one call; this is incremental
-  compilation, not separate background model requests.
+- First-room transport integration is complete in PR #10 (see current status above).
 - Browser checks passed for both new server-selected themes: HQ preparation, honest receipts,
   three-room traversal to the Anchor areas, world replacement, and memory persistence after
   reload. Further browser testing stopped at the user's request. Root Archive initially
