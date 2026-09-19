@@ -331,12 +331,12 @@ describe('RemoteSession over real sockets', () => {
     host.enterPortal();
     await vi.waitFor(() => expect(guest.getPhase()).toBe('expedition'));
     host.setIntent({ moveX: 1, moveY: 0, aimX: 1000, aimY: 80, attack: true, dash: false, ability: null });
-    await vi.waitFor(() => expect(host.getSnapshot()?.players[0]?.x).toBeGreaterThan(80));
+    await vi.waitFor(() => expect(host.getSnapshot()?.players.find((player) => player.id === host.localPlayerId)?.x).toBeGreaterThan(80));
     host.setIntent({ moveX: 0, moveY: 0, aimX: 1000, aimY: 80, attack: false, dash: false, ability: null });
-    const beforeAppend = host.getSnapshot()!.players[0]!.x;
+    const beforeAppend = host.getSnapshot()!.players.find((player) => player.id === host.localPlayerId)!.x;
     release.release();
     await vi.waitFor(() => expect(guest.getWorld()?.rooms).toHaveLength(3));
-    expect(host.getSnapshot()?.players[0]?.x).toBeGreaterThanOrEqual(beforeAppend);
+    expect(host.getSnapshot()?.players.find((player) => player.id === host.localPlayerId)?.x).toBeGreaterThanOrEqual(beforeAppend);
     expect(host.getSnapshot()?.roomId).toBe(first.rooms[0]!.id);
     expect(worlds.map((world) => world.rooms.length)).toEqual([1, 3]);
     expect(events.filter((event) => event.type === 'world_prepared')).toHaveLength(1);

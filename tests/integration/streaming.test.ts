@@ -252,6 +252,9 @@ describe('LocalSession streaming lifecycle', () => {
     expect(events.filter((event) => event.type === 'room_entered')).toHaveLength(1);
     expect(progress.map((value) => value.phase)).toEqual(expect.arrayContaining(['generating', 'validating', 'fallback']));
     local.enterRoomIndex(2);
+    expect(local.getSnapshot()?.roomIndex).toBe(0);
+    local.returnToHeadquarters();
+    local.enterRoomIndex(2);
     expect(local.getSnapshot()?.roomIndex).toBe(2);
     const committed = local.getWorld();
     local.returnToHeadquarters();
