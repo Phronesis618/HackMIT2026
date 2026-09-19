@@ -2,10 +2,10 @@
 
 _Updated by Agent C only. Start prompt: `prompts/START_C_PRESENTATION.md`._
 
-## Branch / latest commit
-- Follow-up: `devin/1789858056-combat-presentation`, based on main `3dee974`.
-- Prior slice (merged):
-- `feat/presentation` at `618d12b` (main synchronized); PR #5:
+## Branch / verified revision
+- Follow-up: `devin/1789858056-combat-presentation` at `4c77c23`, based on main `3dee974`;
+  https://github.com/Phronesis618/HackMIT2026/pull/8
+- Prior slice merged: `feat/presentation` at `618d12b`; PR #5:
   https://github.com/Phronesis618/HackMIT2026/pull/5
 
 ## Combat-presentation follow-up
@@ -21,9 +21,14 @@ _Updated by Agent C only. Start prompt: `prompts/START_C_PRESENTATION.md`._
   `git diff --check` passed. Added UI and renderer regressions for outcome honesty,
   downed readiness, effect deduplication/cleanup, dead-enemy positions, local hit feedback,
   room isolation and authoritative Anchor progress.
-- **Unverified:** fresh browser regression pending. Core still lacks damage, enemy AI,
+- **Browser verified at `4c77c23`:** actual contribution/fixture receipt → physical portal →
+  dash/attack → all three rooms → dormant Anchor → HQ return → persisted arrival/receipt.
+  Operatives/enemies survive transitions; final-room preview and 800px layout passed.
+  No fresh console errors. No synthetic gameplay events or UI state were injected.
+- **Unverified:** core still lacks damage, enemy AI,
   downing, Anchor planting and run completion, so those paths are unit-tested only.
-  No shared-interface/dependency changes; no live-generation or multiplayer claim.
+  Adversarial stale-event guards are unit-tested only. No shared-interface/dependency
+  changes; no live-generation or multiplayer claim.
 
 ## What works
 - **Implemented:** original procedural sanctuary architecture, warm lighting, archive frames,
@@ -51,12 +56,12 @@ _Updated by Agent C only. Start prompt: `prompts/START_C_PRESENTATION.md`._
 - Optional audio assets are deferred. No external visual assets or new dependencies were added.
 
 ## Test results
-- `npm run check` after merging main: **6 test files / 59 tests passed**, typecheck and build
+- `npm run check` at `4c77c23`: **8 test files / 72 tests passed**, typecheck and build
   passed. `git diff --check` passed. No standalone lint script exists.
 - Presentation regressions cover renderer boot before scene plugins, receipt/arrival/milestone
   rules, event IDs reused across worlds, reload deduplication, long titles/participants,
   provenance mismatch, quota exhaustion, oversized thumbnails and disabled storage.
-- Browser evidence is attached to PR #5 and the Devin session. No runtime errors observed.
+- Browser evidence is attached to PR #8 and the Devin session. No runtime errors observed.
 - Main's identical readiness fix, 900ms thumbnail capture delay and receipt grammar adjustment
   were retained in `618d12b`; these small integration changes passed the full shell checks.
 
@@ -65,7 +70,7 @@ _Updated by Agent C only. Start prompt: `prompts/START_C_PRESENTATION.md`._
   contract has no unlock action; C does not simulate unlock transactions.
 
 ## Integration instructions for A
-- Public renderer/UI interfaces and dependencies are unchanged. Merge PR #5 through the usual
+- Public renderer/UI interfaces and dependencies are unchanged. Merge PR #8 through the usual
   review flow. Source ownership remains within C; core changes only arrived via merging main.
 - Start with `source /home/ubuntu/.nvm/nvm.sh && npm run dev`; use `/` for the full flow and
   `/?world=fixture&autoenter=1` or `/?world=fixture&room=1` for credential-free previews.
