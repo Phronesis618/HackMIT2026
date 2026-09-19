@@ -64,6 +64,7 @@ body {
 }
 .topbar__status {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-sm);
   align-items: center;
 }

@@ -9,3 +9,7 @@ in `src/client/render/` are original procedural vector drawings authored for REL
 require no downloaded assets, external URLs or font requests. Character poses follow
 authoritative snapshots; combat effects follow game events. The archive frames in the
 canvas are empty architecture; actual event-derived keepsakes appear in the memory wall.
+
+`audio/cues.json` contains original tone sequences authored for RELAY. The browser synthesizes
+them with Web Audio after a user gesture; there are no samples, downloads or third-party
+audio licenses. Sound can be muted in the top bar; that preference is stored on the device.

@@ -9,7 +9,9 @@ import type { UiActions, UiModel } from '../../shared/ui';
 export function HeadquartersPanel({ model, actions }: { model: UiModel; actions: UiActions }) {
   const [draft, setDraft] = useState('');
   const [name, setName] = useState(model.localPlayer.displayName);
-  const busy = model.phase === 'preparing';
+  const busy = model.phase === 'preparing' || ['queued', 'generating', 'validating'].includes(model.generation.phase);
+  const connected = model.connection.status === 'connected';
+  const host = model.connection.isHost !== false;
   const gen = model.generation;
   const worldReady = model.world !== null;
   const full = model.contributions.length >= 24;
@@ -26,6 +28,14 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
       <p className="eyebrow">The sanctuary between worlds</p>
       <h2 className="panel__title">Headquarters</h2>
       <p className="muted">Bring an idea. Step through together. Keep what happened.</p>
+      {model.connection.mode === 'remote' && (
+        <div className="generation">
+          <p className="eyebrow">Shared crew · {model.players.length}/4</p>
+          <p className="muted">{model.players.map((player) => player.displayName).join(' · ')}</p>
+          <p className="hint">{host ? 'You lead this crew. Prepare a world and open the portal when everyone is ready.' : 'Contribute your idea. The host prepares the world and leads portal entry.'}</p>
+        </div>
+      )}
+      {!connected && <p className="combat-status" role="status">Server {model.connection.status}. Rejoin co-op to reconnect; solo remains available.</p>}
 
       <details className="operative">
         <summary>{model.localPlayer.displayName} · {selectedClass.name}</summary>
@@ -34,6 +44,7 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
         <input
           className="input"
           value={name}
+          disabled={busy || !connected}
           maxLength={24}
           onChange={(e) => setName(e.target.value)}
           onBlur={() => name.trim() && actions.setDisplayName(name)}
@@ -52,6 +63,7 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
               onClick={() => actions.selectClass(id)}
               title={CLASS_INFO[id].role}
               aria-pressed={model.localPlayer.classId === id}
+              disabled={busy || !connected}
             >
               {CLASS_INFO[id].name}
               <small className={`status status--${model.classStatus[id]}`}>{model.classStatus[id]}</small>
@@ -71,7 +83,7 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
           maxLength={200}
           placeholder="e.g. a flooded archive where the books still whisper"
           value={draft}
-          disabled={busy || full}
+          disabled={busy || full || !connected}
           aria-describedby="contribution-help"
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -83,7 +95,7 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
         />
         <div className="panel__row">
           <span id="contribution-help" className="hint">{full ? 'All 24 contribution slots are filled.' : `${draft.length}/200 · Enter to contribute`}</span>
-          <button type="button" className="btn" onClick={submit} disabled={!draft.trim() || busy || full}>
+          <button type="button" className="btn" onClick={submit} disabled={!draft.trim() || busy || full || !connected}>
             Contribute
           </button>
         </div>
@@ -100,10 +112,10 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
       )}
 
       <div className="actions">
-        <button type="button" className="btn btn--primary" onClick={actions.requestWorld} disabled={busy}>
+        <button type="button" className="btn btn--primary" onClick={actions.requestWorld} disabled={busy || !connected || !host}>
           {busy ? 'Preparing…' : worldReady ? 'Prepare another world' : 'Prepare world'}
         </button>
-        <button type="button" className="btn" onClick={actions.enterPortal} disabled={!worldReady || busy}>
+        <button type="button" className="btn" onClick={actions.enterPortal} disabled={!worldReady || !connected || !host}>
           Enter portal
         </button>
       </div>

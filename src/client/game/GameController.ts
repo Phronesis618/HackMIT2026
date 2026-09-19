@@ -9,7 +9,7 @@
  *   UiActions          -> session methods (UI never touches the session directly)
  */
 import type { GameEvent, GameSnapshot, PreparedWorld } from '../../shared/contracts';
-import { ABILITY_STATUS, CLASS_INFO, CLASS_IDS, type ClassId } from '../../shared/registry';
+import { CLASS_INFO, CLASS_IDS, type ClassId } from '../../shared/registry';
 import type { WorldRenderer } from '../../shared/render';
 import type { GameSession } from '../../shared/session';
 import type { UiActions, UiModel } from '../../shared/ui';
@@ -55,6 +55,7 @@ export class GameController {
   private latestSnapshot: GameSnapshot | null = null;
   private stageMounted = false;
   private disposers: Array<() => void> = [];
+  private thumbnailTimers = new Set<ReturnType<typeof setTimeout>>();
 
   constructor(private readonly deps: GameControllerDeps) {
     this.actions = this.createActions();
@@ -64,7 +65,7 @@ export class GameController {
     const me = session.getLocalPlayer();
     return {
       phase: 'headquarters',
-      connection: { mode: session.mode, status: session.getConnectionStatus() },
+      connection: { mode: session.mode, status: session.getConnectionStatus(), isHost: session.getIsHost?.() ?? session.mode === 'local' },
       localPlayer: { ...me, isLocal: true },
       players: [{ ...me, isLocal: true }],
       contributions: session.getContributions(),
@@ -91,19 +92,17 @@ export class GameController {
     this.input = createKeyboardMouseInput(stage);
 
     this.disposers.push(
-      session.onSnapshot((snapshot) => {
-        this.latestSnapshot = snapshot;
-      }),
+      session.onSnapshot((snapshot) => this.handleSnapshot(snapshot)),
       session.onEvents((events) => this.handleEvents(events)),
       session.onWorld((world) => this.handleWorld(world)),
       session.onGenerationStatus((generation) => store.set({ generation })),
       session.onPhase((phase) => this.handlePhase(phase)),
       chronicle.subscribe((memories) => store.set({ memories })),
     );
+    if (session.onError) this.disposers.push(session.onError((message) => this.notice('error', message)));
 
-    await session.start();
-    store.set({ connection: { mode: session.mode, status: session.getConnectionStatus() } });
     this.loop();
+    await session.start();
 
     if (flags.fixtureWorld && flags.autoEnter) {
       // Preview path for Agent C: skip the HQ flow, land straight in a room.
@@ -122,15 +121,27 @@ export class GameController {
     cancelAnimationFrame(this.rafHandle);
     for (const d of this.disposers) d();
     this.disposers = [];
+    for (const timer of this.thumbnailTimers) clearTimeout(timer);
+    this.thumbnailTimers.clear();
     this.input?.dispose();
     this.deps.session.dispose();
     this.deps.renderer.destroy();
+    this.deps.audio.dispose?.();
   }
 
   // ---- frame loop ----------------------------------------------------------------
 
   private loop = (): void => {
     const { session, renderer, store } = this.deps;
+    const connection = { mode: session.mode, status: session.getConnectionStatus(), isHost: session.getIsHost?.() ?? session.mode === 'local' };
+    const previous = store.get();
+    if (previous.connection.status !== connection.status || previous.connection.isHost !== connection.isHost) store.set({ connection });
+    const contributions = session.getContributions();
+    if (previous.contributions.length !== contributions.length || previous.contributions.some((c, index) => c.id !== contributions[index]?.id)) store.set({ contributions });
+    const identity = session.getLocalPlayer();
+    if (previous.localPlayer.id !== identity.id || previous.localPlayer.classId !== identity.classId || previous.localPlayer.displayName !== identity.displayName) {
+      store.set({ localPlayer: { ...identity, isLocal: true } });
+    }
     const snapshot = this.latestSnapshot;
     if (snapshot && this.input) {
       const me = snapshot.players.find((p) => p.id === session.localPlayerId);
@@ -173,6 +184,16 @@ export class GameController {
 
   // ---- session listeners ---------------------------------------------------------
 
+  private handleSnapshot(snapshot: GameSnapshot): void {
+    this.latestSnapshot = snapshot;
+    const { session, store, renderer } = this.deps;
+    const room = snapshot.roomIndex === null ? null : session.getWorld()?.rooms[snapshot.roomIndex];
+    if (room && (store.get().room?.index !== room.index || store.get().phase === 'headquarters')) {
+      renderer.showRoom(room, session.getWorld()!.art);
+      store.set({ room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal }, phase: snapshot.phase });
+    }
+  }
+
   private handleEvents(events: GameEvent[]): void {
     const { renderer, audio, chronicle, session, store } = this.deps;
     renderer.playEvents(events);
@@ -202,7 +223,9 @@ export class GameController {
       audio.play('memory_saved');
       if (memory.kind === 'arrival_keepsake') {
         // Real arrival, real frame: capture after the room reveal (fade/flash) has finished.
-        setTimeout(() => {
+        const timer = setTimeout(() => {
+          this.thumbnailTimers.delete(timer);
+          if (session.getSnapshot()?.worldId !== memory.worldId || session.getPhase() !== 'expedition') return;
           renderer
             .captureThumbnail()
             .then((dataUrl) => {
@@ -210,6 +233,7 @@ export class GameController {
             })
             .catch(() => {});
         }, 900);
+        this.thumbnailTimers.add(timer);
       }
     }
   }
@@ -260,9 +284,6 @@ export class GameController {
         const me = session.getLocalPlayer();
         store.set({ localPlayer: { ...me, isLocal: true } });
         persistIdentity(me);
-        if (CLASS_INFO[classId].status === 'planned') {
-          this.notice('info', `${CLASS_INFO[classId].name} is selected but its abilities are not implemented yet (attack: ${ABILITY_STATUS.attack}, dash: ${ABILITY_STATUS.dash}).`);
-        }
       },
       submitContribution: (text) => {
         const c = session.submitContribution(text);
@@ -293,6 +314,10 @@ export class GameController {
       returnToHeadquarters: () => session.returnToHeadquarters(),
       clearMemories: () => chronicle.clear(),
       dismissNotice: () => store.set({ notice: null }),
+      toggleAudio: () => {
+        audio.setMuted(!audio.isMuted());
+        store.set({ audioMuted: audio.isMuted() });
+      },
     };
   }
 }

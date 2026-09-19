@@ -39,7 +39,15 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
   const onKeyUp = (e: KeyboardEvent): void => {
     down.delete(e.code);
   };
-  const onBlur = (): void => down.clear();
+  const onBlur = (): void => {
+    down.clear();
+    attackPressed = false;
+    dashPressed = false;
+    abilityPressed = null;
+  };
+  const onFocus = (event: FocusEvent): void => {
+    if (isTextTarget(event.target)) onBlur();
+  };
   const onPointerMove = (e: PointerEvent): void => {
     const rect = stage.getBoundingClientRect();
     pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -55,6 +63,7 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
   window.addEventListener('blur', onBlur);
+  window.addEventListener('focusin', onFocus);
   stage.addEventListener('pointermove', onPointerMove);
   stage.addEventListener('pointerdown', onPointerDown);
   stage.addEventListener('contextmenu', onContextMenu);
@@ -83,6 +92,7 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
+      window.removeEventListener('focusin', onFocus);
       stage.removeEventListener('pointermove', onPointerMove);
       stage.removeEventListener('pointerdown', onPointerDown);
       stage.removeEventListener('contextmenu', onContextMenu);

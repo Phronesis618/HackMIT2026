@@ -1,0 +1,10 @@
+{
+  "ui_confirm": { "frequencies": [440, 660], "durationMs": 100 },
+  "portal_open": { "frequencies": [220, 330, 440, 660], "durationMs": 480 },
+  "room_enter": { "frequencies": [330, 440, 660], "durationMs": 330 },
+  "dash": { "frequencies": [740, 220], "durationMs": 90 },
+  "attack": { "frequencies": [180, 80], "durationMs": 75 },
+  "hit": { "frequencies": [110, 65], "durationMs": 85 },
+  "enemy_down": { "frequencies": [330, 165, 82], "durationMs": 180 },
+  "memory_saved": { "frequencies": [523, 659, 784], "durationMs": 260 }
+}
