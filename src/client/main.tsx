@@ -71,7 +71,9 @@ async function boot(): Promise<void> {
   store.set({ audioMuted: audio.isMuted() });
   if (availability === null) store.set({ notice: { kind: 'info', text: 'No generation server is reachable. Solo play uses a clearly labelled offline fixture.' } });
   const controller = new GameController({ session, renderer, chronicle, audio, store, flags, liveGenerationAvailable });
-  window.addEventListener('pagehide', () => controller.dispose(), { once: true });
+  window.addEventListener('pagehide', (event) => {
+    if (!event.persisted) controller.dispose();
+  });
 
   const rootEl = document.getElementById('app-root');
   if (!rootEl) throw new Error('#app-root missing from index.html');

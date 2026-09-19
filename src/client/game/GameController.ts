@@ -187,9 +187,10 @@ export class GameController {
   private handleSnapshot(snapshot: GameSnapshot): void {
     this.latestSnapshot = snapshot;
     const { session, store, renderer } = this.deps;
-    const room = snapshot.roomIndex === null ? null : session.getWorld()?.rooms[snapshot.roomIndex];
-    if (room && (store.get().room?.index !== room.index || store.get().phase === 'headquarters')) {
-      renderer.showRoom(room, session.getWorld()!.art);
+    const world = session.getWorld();
+    const room = snapshot.roomIndex === null ? null : world?.rooms[snapshot.roomIndex];
+    if (world && room && (store.get().room?.index !== room.index || store.get().phase === 'headquarters')) {
+      renderer.showRoom(room, world.art);
       store.set({ room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal }, phase: snapshot.phase });
     }
   }

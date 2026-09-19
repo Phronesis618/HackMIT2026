@@ -49,7 +49,7 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
     if (isTextTarget(event.target)) onBlur();
   };
   const onPointerMove = (e: PointerEvent): void => {
-    const rect = stage.getBoundingClientRect();
+    const rect = (stage.querySelector('canvas') ?? stage).getBoundingClientRect();
     pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
   const onPointerDown = (e: PointerEvent): void => {

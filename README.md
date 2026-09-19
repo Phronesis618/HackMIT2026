@@ -52,6 +52,23 @@ server accepts WebSocket connections and answers `hello`/`ping` only.
 - `http://localhost:5173/?world=fixture&room=1` — jump straight into room index 1
 - `http://localhost:5173/?world=fixture&autoenter=1` — enter room 0 immediately
 
+### Production container
+
+```bash
+docker build -t relay .
+docker run --rm -p 8787:8787 relay
+```
+
+The image runs as a non-root user and serves the built client, API and WebSocket endpoint
+from one Node process. `/api/health` is the healthcheck. No credential is needed for the
+labelled offline fixture mode. For live generation, pass `RELAY_GENERATION_MODE=live`,
+`OPENAI_MODEL`, and `OPENAI_API_KEY` through your hosting provider's secret configuration.
+Do not bake secrets into the image.
+
+Static hosting supports the solo fixture demo: if the generation server is unavailable, the
+client displays an explicit offline notice and uses a bundled fixture. Live generation and
+LAN co-op require the Node server.
+
 ## Team and ownership
 
 Three humans, three agents, one repo. **Read [`AGENTS.md`](AGENTS.md) first.**
