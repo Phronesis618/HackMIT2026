@@ -26,7 +26,7 @@ browser (solo)                                    Node server (one process)
 | `src/sim/`                     | A     | Pure simulation (no Phaser/React/DOM/HTTP/timers)                    |
 | `src/client/main.tsx`          | A     | Application assembly                                                 |
 | `src/client/game/`             | A     | `GameController`, input, UI store                                    |
-| `src/client/transport/`        | A     | `LocalSession`, world providers, future `RemoteSession`              |
+| `src/client/transport/`        | A     | `LocalSession`, streaming world providers, `RemoteSession`            |
 | `src/server/{index,app,config}.ts` | A | HTTP assembly, routes, server-only config                            |
 | `src/server/network/`          | A     | WebSocket realtime                                                   |
 | `src/server/generation/`       | B     | `GenerationService`: live provider, compiler, fixture fallback       |
@@ -34,7 +34,7 @@ browser (solo)                                    Node server (one process)
 | `fixtures/worlds/`             | B     | Validated `WorldFixture` JSON                                        |
 | `src/client/render/`           | C     | `PhaserWorldRenderer`, `RoomScene`, drawing                          |
 | `src/client/ui/`, `styles/`    | C     | React panels, CSS (tokens via CSS variables)                         |
-| `src/client/audio/`            | C     | `AudioPort` (silent default)                                         |
+| `src/client/audio/`            | C     | Gesture-unlocked procedural Web Audio and persistent mute            |
 | `src/chronicle/`               | C     | Pure event → memory reducer                                          |
 | `src/client/chronicle/`        | C     | localStorage adapter, thumbnails                                     |
 | `design/`                      | C     | `tokens.json` values, original assets                                |
@@ -51,8 +51,9 @@ browser (solo)                                    Node server (one process)
 - **Simulation I/O:** `PlayerIntent` in; `GameSnapshot` + `GameEvent[]` out
   (`createSimulation()` in `src/sim/simulation.ts`). Event ids are `${tick}:${n}` from the
   authority, `meta:${n}` for session-level events.
-- **Session:** `GameSession` (`src/shared/session.ts`) — `LocalSession` today, `RemoteSession`
-  later, same interface for renderer/UI/Chronicle.
+- **Session:** `GameSession` (`src/shared/session.ts`) — `LocalSession` runs in-process;
+  `RemoteSession` consumes authoritative WebSocket snapshots/events through the same
+  renderer/UI/Chronicle interface.
 - **Renderer:** `WorldRenderer` (`src/shared/render.ts`) — draws snapshots and plays events;
   never decides gameplay.
 - **UI:** `UiModel`/`UiActions` (`src/shared/ui.ts`) — UI renders the model and calls actions;

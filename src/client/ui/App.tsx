@@ -34,10 +34,16 @@ export function App({ store, actions, onStageReady }: AppProps) {
           <span className="brand__tag">Worlds end. Your stories don't.</span>
         </div>
         <div className="topbar__status">
+          <a className="btn btn--ghost" href={model.connection.mode === 'remote' ? '/' : '?mode=coop'}>
+            {model.connection.mode === 'remote' ? 'Play solo' : 'Join co-op'}
+          </a>
+          <button className="btn btn--ghost" type="button" onClick={actions.toggleAudio} aria-pressed={!model.audioMuted}>
+            Sound {model.audioMuted ? 'off' : 'on'}
+          </button>
           {model.preview.fixtureWorld && <span className="badge badge--preview">PREVIEW · client fixture</span>}
           {model.world && <ProvenanceBadge provenance={model.world.provenance} compact />}
           <span className={`badge badge--conn badge--conn-${model.connection.status}`}>
-            {model.connection.mode} · {model.connection.status}
+            {model.connection.mode === 'remote' ? `co-op · ${model.connection.isHost ? 'host' : 'crew'}` : 'solo'} · {model.connection.status}
           </span>
         </div>
       </header>
@@ -47,7 +53,7 @@ export function App({ store, actions, onStageReady }: AppProps) {
           <div className="stage" ref={stageRef} tabIndex={0} aria-label="RELAY game canvas" />
           <div className="stage-caption" aria-hidden="true">
             <span>{model.phase === 'expedition' || model.phase === 'debrief' ? model.room?.name : 'RELAY / SANCTUARY'}</span>
-            <span>WASD move · Shift dash · J attack</span>
+            <span>WASD move · Shift dash · J attack · Q / E ability · hold F interact</span>
           </div>
         </section>
         <aside className="side">

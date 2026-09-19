@@ -36,9 +36,10 @@ export function DebriefPanel({ model, actions }: { model: UiModel; actions: UiAc
           : 'No memories from this world are stored on this device.'}
       </p>
       <div className="actions">
-        <button type="button" className="btn btn--primary" onClick={actions.returnToHeadquarters}>
+        <button type="button" className="btn btn--primary" onClick={actions.returnToHeadquarters} disabled={model.connection.isHost === false}>
           Return to headquarters
         </button>
+        {model.connection.isHost === false && <p className="hint">The host returns the crew together.</p>}
       </div>
     </section>
   );

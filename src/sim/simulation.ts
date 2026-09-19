@@ -1,59 +1,47 @@
-/**
- * RELAY simulation — pure TypeScript, deterministic, engine-agnostic.
- *
- * NO Phaser, React, DOM, HTTP or timers in this folder. The same code runs inside
- * LocalSession (single-player) and inside the host's server process (LAN multiplayer).
- *
- * Implemented today (honest list):
- *  - players join/leave, spawn at 'P', per-axis sliding collision vs walls/props
- *  - movement, facing from aim, dash (burst + cooldown + invulnerability window)
- *  - attack STATE + `player_attacked` event — hit resolution/damage NOT yet (Agent A slice)
- *  - enemies spawn from RoomSpec.encounters and stand still (no AI yet)
- *  - exit detection -> `exit_reached`; anchor site exposed as dormant (planting planned)
- *  - headquarters is a room too; its exit tile is the portal
- */
 import type {
-  EnemyState,
-  GameEvent,
-  GameEventOf,
-  GameEventType,
-  GamePhase,
-  GameSnapshot,
-  PlayerIdentity,
-  PlayerIntent,
-  PlayerState,
-  PreparedWorld,
-  RoomSpec,
-  AnchorState,
+  AnchorState, EnemyState, EnemyTelegraph, GameEvent, GameEventInput, GamePhase,
+  GameSnapshot, PlayerIdentity, PlayerIntent, PlayerState, PreparedWorld, RoomSpec,
 } from '../shared/contracts';
 import {
-  ATTACK_COOLDOWN_MS,
-  ATTACK_DURATION_MS,
-  DASH_COOLDOWN_MS,
-  DASH_DURATION_MS,
-  DASH_INVULNERABLE_MS,
-  DASH_SPEED,
-  PLAYER_MAX_HP,
-  PLAYER_RADIUS,
-  PLAYER_SPEED,
-  TICK_MS,
-  TILE_SIZE,
-  tileToWorld,
-  worldToTile,
+  ABILITY_UNLOCK_COST, ANCHOR_HOLD_MS, ANCHOR_RANGE, ATTACK_DURATION_MS,
+  DASH_COOLDOWN_MS, DASH_DURATION_MS, DASH_INVULNERABLE_MS, DASH_SPEED,
+  PLAYER_MAX_HP, PLAYER_RADIUS, REVIVE_DURATION_MS, REVIVE_HP, REVIVE_RANGE,
+  ROOM_CLEAR_REWARD, TICK_MS, TILE_SIZE, tileToWorld, worldToTile,
 } from '../shared/conventions';
-import { ENEMY_INFO } from '../shared/registry';
-import { buildSolidGrid, circleHitsSolid, moveCircle, type SolidGrid } from './collision';
+import { CLASS_ABILITIES, ENEMY_INFO, type ClassId } from '../shared/registry';
+import { buildSolidGrid, moveCircle, type SolidGrid } from './collision';
+import { CLASS_COMBAT, ENEMY_COMBAT, chaseWaypoint, clearPath, decay, distance, inArc, nearestOpenPosition, type Point } from './combat';
 import { headquartersRoom } from './headquarters';
 
+type LivePlayerState = PlayerState & Required<Pick<PlayerState,
+  'resources' | 'abilityEUnlocked' | 'abilityQCooldownMs' | 'abilityECooldownMs' |
+  'shieldMs' | 'shroudMs' | 'rallyMs' | 'reviveProgress'>>;
+
 interface PlayerRuntime {
-  identity: PlayerIdentity;
-  state: PlayerState;
+  state: LivePlayerState;
   intent: PlayerIntent | null;
+  unlockedClasses: Set<ClassId>;
   dashRemainingMs: number;
-  dashDirX: number;
-  dashDirY: number;
+  dashDirection: Point;
   attackRemainingMs: number;
+  hitRemainingMs: number;
   onExit: boolean;
+  interacting: boolean;
+  damagedThisTick: boolean;
+  history: Array<Point & { hp: number }>;
+}
+
+interface EnemyRuntime {
+  state: EnemyState;
+  cooldownMs: number;
+  hitMs: number;
+  attackCount: number;
+}
+
+interface RoomProgress {
+  enemies: EnemyRuntime[];
+  anchor: AnchorState | null;
+  cleared: boolean;
 }
 
 export interface Simulation {
@@ -62,19 +50,16 @@ export interface Simulation {
   hasPlayer(playerId: string): boolean;
   updatePlayerIdentity(identity: PlayerIdentity): void;
   getPlayerIds(): string[];
-
   setWorld(world: PreparedWorld | null): void;
   getWorld(): PreparedWorld | null;
   getRoom(): RoomSpec;
   getPhase(): GamePhase;
-
-  /** Load a committed expedition room and spawn everyone at its 'P'. Emits room_entered. */
+  /** HQ permits room previews; active expeditions must clear the room before using its exits. */
   enterRoom(roomIndex: number): GameEvent[];
   returnToHeadquarters(): GameEvent[];
-
-  /** Latest intent wins; consumed on the next step(). Buttons mean "pressed this tick". */
+  unlockAbility(playerId: string): GameEvent[];
+  /** Buttons are pressed this tick; interact is held this tick. */
   applyIntent(intent: PlayerIntent): void;
-  /** Advance exactly one fixed tick (TICK_MS). Returns this tick's events in order. */
   step(): GameEvent[];
   getSnapshot(): GameSnapshot;
   getTick(): number;
@@ -86,315 +71,588 @@ export interface SimulationOptions {
 
 export function createSimulation(options: SimulationOptions = {}): Simulation {
   const hq = options.headquarters ?? headquartersRoom;
-
   let world: PreparedWorld | null = null;
-  let room: RoomSpec = hq;
+  let room = hq;
   let grid: SolidGrid = buildSolidGrid(room);
   let phase: GamePhase = 'headquarters';
   let tick = 0;
   let eventCounter = 0;
-
   const players = new Map<string, PlayerRuntime>();
-  let enemies: EnemyState[] = [];
-  let anchor: AnchorState | null = null;
+  const rooms = new Map<number, RoomProgress>();
+  let progress: RoomProgress = { enemies: [], anchor: null, cleared: false };
 
-  // ---- events ---------------------------------------------------------------
-
-  function emit<T extends GameEventType>(type: T, data: Omit<GameEventOf<T>, 'id' | 'tick' | 'timeMs' | 'type'>): GameEvent {
-    const event: unknown = {
-      id: `${tick}:${eventCounter++}`,
-      tick,
-      timeMs: tick * TICK_MS,
-      type,
-      ...data,
-    };
-    return event as GameEvent;
+  function emit(data: GameEventInput): GameEvent {
+    return { ...data, id: `${tick}:${eventCounter++}`, tick, timeMs: tick * TICK_MS };
   }
 
-  // ---- room loading ---------------------------------------------------------
+  function orderedPlayers(): PlayerRuntime[] {
+    return [...players.values()].sort((a, b) => a.state.id < b.state.id ? -1 : a.state.id > b.state.id ? 1 : 0);
+  }
 
-  function findTile(ch: string): { col: number; row: number } | null {
+  function playerIds(): string[] {
+    return orderedPlayers().map((p) => p.state.id);
+  }
+
+  function findTile(ch: string): Point | null {
     for (let row = 0; row < room.height; row++) {
       const col = room.tiles[row]?.indexOf(ch) ?? -1;
-      if (col >= 0) return { col, row };
+      if (col >= 0) return tileToWorld(col, row);
     }
     return null;
   }
 
-  function placePlayersAtSpawn(): void {
-    const spawn = findTile('P') ?? { col: 1, row: 1 };
-    const base = tileToWorld(spawn.col, spawn.row);
-    let i = 0;
-    for (const p of players.values()) {
-      // Ring offsets so co-op players do not overlap; fall back to the spawn centre.
-      const angle = (i / Math.max(1, players.size)) * Math.PI * 2;
-      const r = i === 0 ? 0 : TILE_SIZE * 0.7;
-      let x = base.x + Math.cos(angle) * r;
-      let y = base.y + Math.sin(angle) * r;
-      if (circleHitsSolid(grid, x, y, PLAYER_RADIUS)) {
-        x = base.x;
-        y = base.y;
-      }
-      p.state.x = x;
-      p.state.y = y;
-      p.state.vx = 0;
-      p.state.vy = 0;
-      p.state.state = 'idle';
-      p.dashRemainingMs = 0;
-      p.attackRemainingMs = 0;
-      p.onExit = true; // avoid re-triggering an exit if spawn overlaps one
-      i++;
-    }
+  function resetTransient(p: PlayerRuntime): void {
+    Object.assign(p.state, {
+      vx: 0, vy: 0, state: p.state.hp > 0 ? 'idle' : 'down',
+      dashCooldownMs: 0, attackCooldownMs: 0, invulnerableMs: 0,
+      abilityQCooldownMs: 0, abilityECooldownMs: 0,
+      shieldMs: 0, shroudMs: 0, rallyMs: 0, reviveProgress: 0,
+    });
+    p.intent = null;
+    p.dashRemainingMs = 0;
+    p.attackRemainingMs = 0;
+    p.hitRemainingMs = 0;
+    p.interacting = false;
+    p.damagedThisTick = false;
+    p.history = [];
+    p.onExit = false;
   }
 
-  function spawnEnemies(): void {
-    enemies = [];
-    for (const enc of room.encounters) {
-      const info = ENEMY_INFO[enc.enemyId];
-      for (let i = 0; i < enc.count; i++) {
-        const base = tileToWorld(enc.x, enc.y);
+  function placePlayers(): void {
+    const spawn = findTile('P') ?? tileToWorld(1, 1);
+    orderedPlayers().forEach((p, i) => {
+      const angle = i / Math.max(1, players.size) * Math.PI * 2;
+      const offset = i === 0 ? 0 : TILE_SIZE * 0.7;
+      const point = nearestOpenPosition(grid, {
+        x: spawn.x + Math.cos(angle) * offset, y: spawn.y + Math.sin(angle) * offset,
+      }, PLAYER_RADIUS);
+      Object.assign(p.state, point);
+      resetTransient(p);
+    });
+  }
+
+  function spawnEnemies(): EnemyRuntime[] {
+    const enemies: EnemyRuntime[] = [];
+    const encounters = [...room.encounters];
+    if (room.isFinal && !encounters.some((e) => e.enemyId === 'guardian')) {
+      const at = findTile('A') ?? findTile('P') ?? tileToWorld(1, 1);
+      const tile = worldToTile(at.x, at.y);
+      encounters.push({ id: 'anchor-guardian', enemyId: 'guardian', x: tile.col, y: tile.row, count: 1 });
+    }
+    for (const encounter of encounters) {
+      const info = ENEMY_INFO[encounter.enemyId];
+      for (let i = 0; i < encounter.count; i++) {
+        const base = tileToWorld(encounter.x, encounter.y);
         const offset = i === 0 ? 0 : (i % 2 === 0 ? 1 : -1) * Math.ceil(i / 2) * (info.radius * 2 + 6);
-        let x = base.x + offset;
-        const y = base.y;
-        if (circleHitsSolid(grid, x, y, info.radius)) x = base.x;
         enemies.push({
-          id: `${enc.id}-${i}`,
-          enemyId: enc.enemyId,
-          x,
-          y,
-          facing: Math.PI,
-          hp: info.maxHp,
-          maxHp: info.maxHp,
-          state: 'idle',
+          state: {
+            id: `${encounter.id.slice(0, 61)}-${i}`, enemyId: encounter.enemyId,
+            ...nearestOpenPosition(grid, { x: base.x + offset, y: base.y }, info.radius),
+            facing: Math.PI, hp: info.maxHp, maxHp: info.maxHp, state: 'idle',
+            telegraph: null, slowMs: 0, stunMs: 0, markMs: 0,
+          },
+          cooldownMs: 500, hitMs: 0, attackCount: 0,
         });
       }
     }
+    return enemies;
   }
 
   function loadRoom(next: RoomSpec, nextPhase: GamePhase): void {
     room = next;
-    grid = buildSolidGrid(room);
     phase = nextPhase;
-    placePlayersAtSpawn();
-    spawnEnemies();
-    const anchorTile = room.isFinal ? findTile('A') : null;
-    anchor = anchorTile ? { ...tileToWorld(anchorTile.col, anchorTile.row), state: 'dormant', progress: 0 } : null;
+    grid = buildSolidGrid(room);
+    const saved = nextPhase === 'expedition' ? rooms.get(next.index) : undefined;
+    const anchorPoint = room.isFinal ? findTile('A') : null;
+    progress = saved ?? {
+      enemies: nextPhase === 'expedition' ? spawnEnemies() : [],
+      anchor: anchorPoint ? { ...anchorPoint, state: 'dormant', progress: 0 } : null,
+      cleared: false,
+    };
+    if (nextPhase === 'expedition') rooms.set(next.index, progress);
+    placePlayers();
   }
 
-  // ---- players --------------------------------------------------------------
-
-  function makePlayerState(identity: PlayerIdentity): PlayerState {
+  function makePlayer(identity: PlayerIdentity): PlayerRuntime {
     return {
-      id: identity.id,
-      displayName: identity.displayName,
-      classId: identity.classId,
-      x: 0,
-      y: 0,
-      vx: 0,
-      vy: 0,
-      facing: 0,
-      hp: PLAYER_MAX_HP,
-      maxHp: PLAYER_MAX_HP,
-      state: 'idle',
-      dashCooldownMs: 0,
-      attackCooldownMs: 0,
-      invulnerableMs: 0,
+      state: {
+        ...identity, x: 0, y: 0, vx: 0, vy: 0, facing: 0,
+        hp: PLAYER_MAX_HP, maxHp: PLAYER_MAX_HP, state: 'idle',
+        dashCooldownMs: 0, attackCooldownMs: 0, invulnerableMs: 0,
+        resources: 0, abilityEUnlocked: false, abilityQCooldownMs: 0, abilityECooldownMs: 0,
+        shieldMs: 0, shroudMs: 0, rallyMs: 0, reviveProgress: 0,
+      },
+      intent: null, unlockedClasses: new Set(), dashRemainingMs: 0,
+      dashDirection: { x: 1, y: 0 }, attackRemainingMs: 0, hitRemainingMs: 0,
+      onExit: false, interacting: false, damagedThisTick: false, history: [],
     };
+  }
+
+  function livingEnemies(): EnemyRuntime[] {
+    return progress.enemies.filter((e) => e.state.hp > 0);
+  }
+
+  function damageEnemy(e: EnemyRuntime, p: PlayerRuntime, damage: number, events: GameEvent[]): void {
+    const s = e.state;
+    if (s.hp <= 0) return;
+    const amount = Math.min(s.hp, Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1)));
+    s.hp -= amount;
+    e.hitMs = 130;
+    s.state = s.hp === 0 ? 'dead' : s.telegraph ? 'attacking' : 'hit';
+    events.push(emit({ type: 'enemy_damaged', enemyId: s.id, byPlayerId: p.state.id, amount, remainingHp: s.hp }));
+    if (s.hp === 0) {
+      s.telegraph = null;
+      events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: p.state.id }));
+    }
+  }
+
+  function damagePlayer(p: PlayerRuntime, e: EnemyRuntime, damage: number, ranged: boolean, events: GameEvent[]): boolean {
+    const s = p.state;
+    if (s.hp <= 0 || s.invulnerableMs > 0 || (ranged && s.shieldMs > 0)) return false;
+    const amount = Math.min(s.hp, s.shieldMs > 0 ? Math.ceil(damage * 0.2) : damage);
+    s.hp -= amount;
+    s.invulnerableMs = 350;
+    s.reviveProgress = 0;
+    p.damagedThisTick = true;
+    p.hitRemainingMs = 160;
+    events.push(emit({ type: 'player_damaged', playerId: s.id, amount, remainingHp: s.hp, sourceEnemyId: e.state.id }));
+    if (s.hp === 0) {
+      s.state = 'down';
+      s.vx = s.vy = 0;
+      s.shieldMs = s.shroudMs = s.rallyMs = 0;
+      p.dashRemainingMs = p.attackRemainingMs = 0;
+      p.interacting = false;
+      events.push(emit({ type: 'player_downed', playerId: s.id }));
+    } else {
+      s.state = 'hit';
+    }
+    return true;
+  }
+
+  function heal(p: PlayerRuntime, by: PlayerRuntime, amount: number, events: GameEvent[]): void {
+    if (p.state.hp <= 0) return;
+    const restored = Math.max(0, Math.min(p.state.maxHp - p.state.hp, amount));
+    if (restored === 0) return;
+    p.state.hp += restored;
+    events.push(emit({ type: 'player_healed', playerId: p.state.id, byPlayerId: by.state.id, amount: restored, remainingHp: p.state.hp }));
+  }
+
+  function arcTargets(origin: Point, facing: number, range: number, arc: number): EnemyRuntime[] {
+    return livingEnemies().filter((e) =>
+      inArc(origin, e.state, facing, range, arc, ENEMY_INFO[e.state.enemyId].radius) &&
+      clearPath(grid, origin, e.state),
+    ).sort((a, b) => distance(origin, a.state) - distance(origin, b.state));
+  }
+
+  function basicAttack(p: PlayerRuntime, events: GameEvent[]): void {
+    const s = p.state;
+    const spec = CLASS_COMBAT[s.classId];
+    let targets = arcTargets(s, s.facing, spec.range, spec.arc);
+    if (s.classId === 'beacon' || s.classId === 'shade') targets = targets.slice(0, 1);
+    const bonus = s.shroudMs > 0 ? 18 : 0;
+    s.shroudMs = 0;
+    p.attackRemainingMs = ATTACK_DURATION_MS;
+    s.attackCooldownMs = spec.cooldown * (s.rallyMs > 0 ? 0.75 : 1);
+    events.push(emit({ type: 'player_attacked', playerId: s.id, x: s.x, y: s.y, facing: s.facing,
+      range: spec.range, arcRad: spec.arc, hitEnemyIds: targets.map((e) => e.state.id) }));
+    for (const e of targets) {
+      damageEnemy(e, p, spec.damage + bonus, events);
+      if (s.classId === 'weaver') e.state.slowMs = Math.max(e.state.slowMs ?? 0, 1000);
+    }
+  }
+
+  function useAbility(p: PlayerRuntime, slot: 'q' | 'e', intent: PlayerIntent, events: GameEvent[]): void {
+    const s = p.state;
+    if (slot === 'e' && !s.abilityEUnlocked) return;
+    if ((slot === 'q' ? s.abilityQCooldownMs : s.abilityECooldownMs) > 0) return;
+    const id = CLASS_ABILITIES[s.classId][slot];
+    const spec = CLASS_COMBAT[s.classId];
+    if (slot === 'q') s.abilityQCooldownMs = spec.qCooldown;
+    else s.abilityECooldownMs = spec.eCooldown;
+    const hits: string[] = [];
+    events.push(emit({ type: 'ability_used', playerId: s.id, abilityId: id, x: s.x, y: s.y, facing: s.facing, hitEnemyIds: hits }));
+    const strike = (e: EnemyRuntime, damage: number): void => {
+      hits.push(e.state.id);
+      damageEnemy(e, p, damage, events);
+    };
+    switch (id) {
+      case 'bastion.q.bulwark':
+        s.shieldMs = 2200;
+        break;
+      case 'bastion.e.shockwave':
+        for (const e of arcTargets(s, s.facing, 135, Math.PI * 2)) {
+          strike(e, 35);
+          if (e.state.hp <= 0) continue;
+          e.state.stunMs = 1500;
+          e.state.telegraph = null;
+          const d = distance(s, e.state) || 1;
+          const moved = moveCircle(grid, e.state.x, e.state.y, ENEMY_INFO[e.state.enemyId].radius,
+            (e.state.x - s.x) / d * 70, (e.state.y - s.y) / d * 70);
+          e.state.x = moved.x;
+          e.state.y = moved.y;
+        }
+        break;
+      case 'shade.q.blink_strike': {
+        const start = { x: s.x, y: s.y };
+        const moved = moveCircle(grid, s.x, s.y, PLAYER_RADIUS, Math.cos(s.facing) * 112, Math.sin(s.facing) * 112);
+        s.x = moved.x;
+        s.y = moved.y;
+        s.invulnerableMs = Math.max(s.invulnerableMs, 250);
+        for (const e of livingEnemies()) {
+          const dx = s.x - start.x;
+          const dy = s.y - start.y;
+          const lengthSquared = dx * dx + dy * dy;
+          const t = lengthSquared === 0 ? 0 : Math.max(0, Math.min(1, ((e.state.x - start.x) * dx + (e.state.y - start.y) * dy) / lengthSquared));
+          const closest = { x: start.x + dx * t, y: start.y + dy * t };
+          if (distance(closest, e.state) <= 24 + ENEMY_INFO[e.state.enemyId].radius && clearPath(grid, closest, e.state)) strike(e, 32);
+        }
+        break;
+      }
+      case 'shade.e.shroud':
+        s.shroudMs = 2200;
+        s.invulnerableMs = Math.max(s.invulnerableMs, 600);
+        break;
+      case 'beacon.q.flare': {
+        const aimDistance = Math.min(240, distance(s, { x: intent.aimX, y: intent.aimY }));
+        const moved = moveCircle(grid, s.x, s.y, 2, Math.cos(s.facing) * aimDistance, Math.sin(s.facing) * aimDistance);
+        for (const e of arcTargets(moved, s.facing, 70, Math.PI * 2)) {
+          strike(e, 24);
+          e.state.markMs = 4000;
+        }
+        break;
+      }
+      case 'beacon.e.rally':
+        for (const ally of orderedPlayers()) {
+          if (ally.state.hp <= 0 || distance(s, ally.state) > 200 || !clearPath(grid, s, ally.state)) continue;
+          heal(ally, p, 35, events);
+          ally.state.rallyMs = 4000;
+        }
+        break;
+      case 'weaver.q.tether': {
+        const e = arcTargets(s, s.facing, 220, Math.PI * 0.35)[0];
+        if (!e) break;
+        strike(e, 12);
+        if (e.state.hp <= 0) break;
+        e.state.slowMs = 3000;
+        e.state.telegraph = null;
+        e.cooldownMs = Math.max(e.cooldownMs, 600);
+        const d = distance(s, e.state) || 1;
+        const pull = Math.max(0, d - 55);
+        const moved = moveCircle(grid, e.state.x, e.state.y, ENEMY_INFO[e.state.enemyId].radius,
+          (s.x - e.state.x) / d * pull, (s.y - e.state.y) / d * pull);
+        e.state.x = moved.x;
+        e.state.y = moved.y;
+        break;
+      }
+      case 'weaver.e.rewind': {
+        const past = p.history[0];
+        if (past) {
+          s.x = past.x;
+          s.y = past.y;
+          heal(p, p, Math.max(0, past.hp - s.hp), events);
+        }
+        s.invulnerableMs = Math.max(s.invulnerableMs, 500);
+        break;
+      }
+    }
   }
 
   function stepPlayer(p: PlayerRuntime, events: GameEvent[]): void {
     const s = p.state;
-    const dt = TICK_MS / 1000;
-    s.dashCooldownMs = Math.max(0, s.dashCooldownMs - TICK_MS);
-    s.attackCooldownMs = Math.max(0, s.attackCooldownMs - TICK_MS);
-    s.invulnerableMs = Math.max(0, s.invulnerableMs - TICK_MS);
-
+    for (const key of ['dashCooldownMs', 'attackCooldownMs', 'invulnerableMs', 'abilityQCooldownMs', 'abilityECooldownMs', 'shieldMs', 'shroudMs', 'rallyMs'] as const) s[key] = decay(s[key]);
+    p.hitRemainingMs = decay(p.hitRemainingMs);
+    p.damagedThisTick = false;
     const intent = p.intent;
-    p.intent = null; // buttons are single-tick; movement is re-sent every frame anyway
+    p.intent = null;
+    p.interacting = intent?.interact === true && s.hp > 0;
+    if (s.hp <= 0) {
+      s.state = 'down';
+      s.vx = s.vy = 0;
+      return;
+    }
+    p.history.push({ x: s.x, y: s.y, hp: s.hp });
+    if (p.history.length > Math.round(3000 / TICK_MS)) p.history.shift();
     const moveX = intent?.moveX ?? 0;
     const moveY = intent?.moveY ?? 0;
-    const moveLen = Math.hypot(moveX, moveY);
-
-    if (intent) {
-      const dx = intent.aimX - s.x;
-      const dy = intent.aimY - s.y;
-      if (Math.abs(dx) + Math.abs(dy) > 0.001) s.facing = Math.atan2(dy, dx);
+    const length = Math.hypot(moveX, moveY);
+    if (intent && distance(s, { x: intent.aimX, y: intent.aimY }) > 0.001) s.facing = Math.atan2(intent.aimY - s.y, intent.aimX - s.x);
+    if (intent?.dash && s.dashCooldownMs === 0 && p.dashRemainingMs === 0) {
+      p.dashDirection = length > 0 ? { x: moveX / length, y: moveY / length } : { x: Math.cos(s.facing), y: Math.sin(s.facing) };
+      p.dashRemainingMs = DASH_DURATION_MS;
+      p.attackRemainingMs = 0;
+      s.dashCooldownMs = DASH_COOLDOWN_MS;
+      s.invulnerableMs = Math.max(s.invulnerableMs, DASH_INVULNERABLE_MS);
+      events.push(emit({ type: 'player_dashed', playerId: s.id, x: s.x, y: s.y, facing: s.facing }));
+    } else if (p.dashRemainingMs === 0 && intent?.ability) {
+      useAbility(p, intent.ability, intent, events);
+    } else if (p.dashRemainingMs === 0 && intent?.attack && s.attackCooldownMs === 0 && p.attackRemainingMs === 0) {
+      basicAttack(p, events);
     }
-
-    if (s.state !== 'down') {
-      if (intent?.dash && s.dashCooldownMs <= 0 && p.dashRemainingMs <= 0) {
-        if (moveLen > 0) {
-          p.dashDirX = moveX / moveLen;
-          p.dashDirY = moveY / moveLen;
-        } else {
-          p.dashDirX = Math.cos(s.facing);
-          p.dashDirY = Math.sin(s.facing);
-        }
-        p.dashRemainingMs = DASH_DURATION_MS;
-        p.attackRemainingMs = 0;
-        s.dashCooldownMs = DASH_COOLDOWN_MS;
-        s.invulnerableMs = DASH_INVULNERABLE_MS;
-        events.push(emit('player_dashed', { playerId: s.id, x: s.x, y: s.y, facing: s.facing }));
-      } else if (intent?.attack && s.attackCooldownMs <= 0 && p.attackRemainingMs <= 0 && p.dashRemainingMs <= 0) {
-        p.attackRemainingMs = ATTACK_DURATION_MS;
-        s.attackCooldownMs = ATTACK_COOLDOWN_MS;
-        // Hit resolution/damage is Agent A's first slice; the event exists so C can build the effect now.
-        events.push(emit('player_attacked', { playerId: s.id, x: s.x, y: s.y, facing: s.facing, hitEnemyIds: [] }));
-      }
-    }
-
     if (p.dashRemainingMs > 0) {
-      s.vx = p.dashDirX * DASH_SPEED;
-      s.vy = p.dashDirY * DASH_SPEED;
-      p.dashRemainingMs -= TICK_MS;
-    } else if (moveLen > 0 && s.state !== 'down') {
-      const speed = PLAYER_SPEED * (p.attackRemainingMs > 0 ? 0.35 : 1);
-      s.vx = (moveX / moveLen) * speed;
-      s.vy = (moveY / moveLen) * speed;
+      s.vx = p.dashDirection.x * DASH_SPEED;
+      s.vy = p.dashDirection.y * DASH_SPEED;
     } else {
-      s.vx = 0;
-      s.vy = 0;
+      const speed = CLASS_COMBAT[s.classId].speed * (p.attackRemainingMs > 0 ? 0.35 : 1) *
+        (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1);
+      s.vx = length > 0 ? moveX / length * speed : 0;
+      s.vy = length > 0 ? moveY / length * speed : 0;
     }
-    if (p.attackRemainingMs > 0) p.attackRemainingMs -= TICK_MS;
-
-    if (s.vx !== 0 || s.vy !== 0) {
-      const moved = moveCircle(grid, s.x, s.y, PLAYER_RADIUS, s.vx * dt, s.vy * dt);
-      s.x = moved.x;
-      s.y = moved.y;
-      if (moved.blockedX) s.vx = 0;
-      if (moved.blockedY) s.vy = 0;
-    }
-
-    if (s.state !== 'down') {
-      s.state =
-        p.dashRemainingMs > 0 ? 'dashing' : p.attackRemainingMs > 0 ? 'attacking' : s.vx !== 0 || s.vy !== 0 ? 'moving' : 'idle';
-    }
-
-    // Exit detection (edge-triggered per visit).
-    const { col, row } = worldToTile(s.x, s.y);
-    const onExitTile = room.tiles[row]?.[col] === 'X';
-    if (onExitTile && !p.onExit) {
-      const exit = room.exits.find((e) => e.x === col && e.y === row);
-      if (exit) {
-        events.push(emit('exit_reached', { playerId: s.id, roomIndex: room.index, toRoomIndex: exit.toRoomIndex }));
-      }
-    }
-    p.onExit = onExitTile;
+    const moved = moveCircle(grid, s.x, s.y, PLAYER_RADIUS, s.vx * TICK_MS / 1000, s.vy * TICK_MS / 1000);
+    s.x = moved.x;
+    s.y = moved.y;
+    if (moved.blockedX) s.vx = 0;
+    if (moved.blockedY) s.vy = 0;
+    s.state = p.dashRemainingMs > 0 ? 'dashing' : p.attackRemainingMs > 0 ? 'attacking' :
+      p.hitRemainingMs > 0 ? 'hit' : s.vx !== 0 || s.vy !== 0 ? 'moving' : 'idle';
+    p.dashRemainingMs = decay(p.dashRemainingMs);
+    p.attackRemainingMs = decay(p.attackRemainingMs);
+    if (s.state === 'dashing' || s.state === 'attacking' || intent?.ability || length > 0) p.interacting = false;
   }
 
-  // ---- public API -----------------------------------------------------------
+  function resolveEnemyAttack(e: EnemyRuntime, telegraph: EnemyTelegraph, events: GameEvent[]): void {
+    const s = e.state;
+    const spec = ENEMY_COMBAT[s.enemyId];
+    const hits: string[] = [];
+    events.push(emit({ type: 'enemy_attacked', enemyId: s.id, x: telegraph.x, y: telegraph.y, facing: telegraph.facing, hitPlayerIds: hits }));
+    for (const p of orderedPlayers()) {
+      if (!inArc(telegraph, p.state, telegraph.facing, telegraph.range, telegraph.arcRad, PLAYER_RADIUS) ||
+        !clearPath(grid, telegraph, p.state)) continue;
+      if (damagePlayer(p, e, spec.damage, telegraph.kind === 'beam', events)) hits.push(p.state.id);
+    }
+    if (telegraph.kind === 'charge') {
+      const moved = moveCircle(grid, s.x, s.y, ENEMY_INFO[s.enemyId].radius,
+        Math.cos(telegraph.facing) * telegraph.range, Math.sin(telegraph.facing) * telegraph.range);
+      s.x = moved.x;
+      s.y = moved.y;
+    }
+    s.telegraph = null;
+    e.cooldownMs = spec.cooldown;
+    e.attackCount++;
+  }
+
+  function stepEnemy(e: EnemyRuntime, events: GameEvent[]): void {
+    const s = e.state;
+    if (s.hp <= 0) return;
+    const spec = ENEMY_COMBAT[s.enemyId];
+    s.slowMs = decay(s.slowMs ?? 0);
+    s.stunMs = decay(s.stunMs ?? 0);
+    s.markMs = decay(s.markMs ?? 0);
+    e.cooldownMs = decay(e.cooldownMs);
+    e.hitMs = decay(e.hitMs);
+    if (s.stunMs > 0) {
+      s.telegraph = null;
+      s.state = 'hit';
+      return;
+    }
+    if (s.telegraph) {
+      s.state = 'attacking';
+      s.telegraph.remainingMs = decay(s.telegraph.remainingMs);
+      if (s.telegraph.remainingMs === 0) {
+        resolveEnemyAttack(e, s.telegraph, events);
+        s.state = 'idle';
+      }
+      return;
+    }
+    const target = orderedPlayers().filter((p) => p.state.hp > 0 && p.state.shroudMs === 0)
+      .sort((a, b) => distance(s, a.state) - distance(s, b.state))[0];
+    if (!target) {
+      s.state = 'idle';
+      return;
+    }
+    s.facing = Math.atan2(target.state.y - s.y, target.state.x - s.x);
+    const guardianBeam = s.enemyId === 'guardian' && e.attackCount % 2 === 1;
+    const range = guardianBeam ? 300 : spec.range;
+    const arc = guardianBeam ? 0.25 : spec.arc;
+    if (e.cooldownMs === 0 && distance(s, target.state) <= range && clearPath(grid, s, target.state)) {
+      const kind = s.enemyId === 'sentinel' || guardianBeam ? 'beam' : s.enemyId === 'lurker' ? 'charge' : s.enemyId === 'guardian' ? 'burst' : 'melee';
+      s.telegraph = { kind, x: s.x, y: s.y, facing: s.facing, range, arcRad: arc, remainingMs: spec.windup };
+      s.state = 'attacking';
+      events.push(emit({ type: 'enemy_telegraphed', enemyId: s.id, telegraph: { ...s.telegraph } }));
+      return;
+    }
+    const stopRange = s.enemyId === 'sentinel' || guardianBeam ? range * 0.7 : s.enemyId === 'guardian' ? 85 : 34;
+    if (distance(s, target.state) > stopRange || !clearPath(grid, s, target.state)) {
+      const waypoint = chaseWaypoint(grid, s, target.state, ENEMY_INFO[s.enemyId].radius);
+      const d = distance(s, waypoint);
+      const step = Math.min(d, spec.speed * (s.slowMs > 0 ? 0.35 : 1) * TICK_MS / 1000);
+      if (d > 0) {
+        const moved = moveCircle(grid, s.x, s.y, ENEMY_INFO[s.enemyId].radius,
+          (waypoint.x - s.x) / d * step, (waypoint.y - s.y) / d * step);
+        s.x = moved.x;
+        s.y = moved.y;
+      }
+      s.state = e.hitMs > 0 ? 'hit' : 'chasing';
+    } else {
+      s.state = e.hitMs > 0 ? 'hit' : 'idle';
+    }
+  }
+
+  function finishRun(outcome: 'anchored' | 'collapsed' | 'aborted', events: GameEvent[]): void {
+    if (phase !== 'expedition' || !world) return;
+    phase = 'debrief';
+    for (const p of players.values()) {
+      p.intent = null;
+      p.state.vx = p.state.vy = 0;
+    }
+    events.push(emit({ type: 'run_ended', worldId: world.worldId, outcome, playerIds: playerIds() }));
+  }
+
+  function updateObjectives(events: GameEvent[]): void {
+    if (phase !== 'expedition' || !world) return;
+    const living = orderedPlayers().filter((p) => p.state.hp > 0);
+    if (players.size > 0 && living.length === 0) {
+      finishRun('collapsed', events);
+      return;
+    }
+    const busy = new Set<string>();
+    for (const downed of orderedPlayers().filter((p) => p.state.hp === 0)) {
+      const rescuer = living.find((p) => !busy.has(p.state.id) && p.interacting && !p.damagedThisTick &&
+        distance(p.state, downed.state) <= REVIVE_RANGE && clearPath(grid, p.state, downed.state));
+      if (!rescuer) {
+        downed.state.reviveProgress = 0;
+        continue;
+      }
+      busy.add(rescuer.state.id);
+      downed.state.reviveProgress = Math.min(1, downed.state.reviveProgress + TICK_MS / REVIVE_DURATION_MS);
+      if (downed.state.reviveProgress >= 1 - 1e-7) {
+        downed.state.hp = Math.min(REVIVE_HP, downed.state.maxHp);
+        resetTransient(downed);
+        downed.state.invulnerableMs = 1000;
+        events.push(emit({ type: 'player_revived', playerId: downed.state.id, byPlayerId: rescuer.state.id, hp: downed.state.hp }));
+      }
+    }
+    if (!progress.cleared && living.length > 0 && livingEnemies().length === 0) {
+      progress.cleared = true;
+      for (const p of players.values()) p.state.resources += ROOM_CLEAR_REWARD;
+      events.push(emit({ type: 'room_cleared', worldId: world.worldId, roomIndex: room.index, roomId: room.id, playerIds: playerIds(), reward: ROOM_CLEAR_REWARD }));
+    }
+    const anchor = progress.anchor;
+    if (!anchor || anchor.state === 'planted' || !progress.cleared) return;
+    const planters = living.filter((p) => p.interacting && !p.damagedThisTick && !busy.has(p.state.id) &&
+      distance(p.state, anchor) <= ANCHOR_RANGE && clearPath(grid, p.state, anchor));
+    if (planters.length === 0) {
+      anchor.state = 'dormant';
+      anchor.progress = 0;
+      return;
+    }
+    anchor.state = 'planting';
+    anchor.progress = Math.min(1, anchor.progress + TICK_MS / ANCHOR_HOLD_MS);
+    if (anchor.progress >= 1 - 1e-7) {
+      anchor.progress = 1;
+      anchor.state = 'planted';
+      events.push(emit({ type: 'anchor_planted', worldId: world.worldId, roomIndex: room.index, playerIds: playerIds() }));
+      finishRun('anchored', events);
+    }
+  }
+
+  function updateExits(events: GameEvent[]): void {
+    if (phase === 'debrief') return;
+    const open = phase === 'headquarters' || progress.cleared;
+    for (const p of orderedPlayers()) {
+      const { col, row } = worldToTile(p.state.x, p.state.y);
+      const exit = room.exits.find((e) => e.x === col && e.y === row);
+      if (exit && open && p.state.hp > 0 && !p.onExit) {
+        events.push(emit({ type: 'exit_reached', playerId: p.state.id, roomIndex: room.index, toRoomIndex: exit.toRoomIndex }));
+      }
+      p.onExit = Boolean(exit && open && p.state.hp > 0);
+    }
+  }
 
   const sim: Simulation = {
     addPlayer(identity) {
       if (players.has(identity.id)) return;
-      const runtime: PlayerRuntime = {
-        identity,
-        state: makePlayerState(identity),
-        intent: null,
-        dashRemainingMs: 0,
-        dashDirX: 1,
-        dashDirY: 0,
-        attackRemainingMs: 0,
-        onExit: false,
-      };
-      players.set(identity.id, runtime);
-      const spawn = findTile('P') ?? { col: 1, row: 1 };
-      const base = tileToWorld(spawn.col, spawn.row);
-      runtime.state.x = base.x + (players.size - 1) * TILE_SIZE * 0.7;
-      runtime.state.y = base.y;
-      if (circleHitsSolid(grid, runtime.state.x, runtime.state.y, PLAYER_RADIUS)) {
-        runtime.state.x = base.x;
-      }
-      runtime.onExit = room.tiles[spawn.row]?.[spawn.col] === 'X';
+      const p = makePlayer(identity);
+      players.set(identity.id, p);
+      const spawn = findTile('P') ?? tileToWorld(1, 1);
+      Object.assign(p.state, nearestOpenPosition(grid, {
+        x: spawn.x + (players.size - 1) * TILE_SIZE * 0.7, y: spawn.y,
+      }, PLAYER_RADIUS));
     },
-    removePlayer(playerId) {
-      players.delete(playerId);
-    },
-    hasPlayer(playerId) {
-      return players.has(playerId);
-    },
+    removePlayer(playerId) { players.delete(playerId); },
+    hasPlayer(playerId) { return players.has(playerId); },
     updatePlayerIdentity(identity) {
       const p = players.get(identity.id);
       if (!p) return;
-      p.identity = identity;
       p.state.displayName = identity.displayName;
-      p.state.classId = identity.classId;
+      if (phase === 'headquarters') {
+        p.state.classId = identity.classId;
+        p.state.abilityEUnlocked = p.unlockedClasses.has(identity.classId);
+        resetTransient(p);
+      }
     },
-    getPlayerIds() {
-      return [...players.keys()];
-    },
-
+    getPlayerIds: playerIds,
     setWorld(next) {
+      if (phase !== 'headquarters' && world?.worldId !== next?.worldId) return;
+      if (world?.worldId !== next?.worldId) rooms.clear();
       world = next;
     },
-    getWorld() {
-      return world;
-    },
-    getRoom() {
-      return room;
-    },
-    getPhase() {
-      return phase;
-    },
-
+    getWorld() { return world; },
+    getRoom() { return room; },
+    getPhase() { return phase; },
     enterRoom(roomIndex) {
       if (!world) throw new Error('enterRoom: no world prepared');
       const next = world.rooms[roomIndex];
       if (!next) throw new Error(`enterRoom: room ${roomIndex} is not committed yet`);
+      if (phase === 'debrief') return [];
+      if (phase === 'expedition' && (
+        room.index === roomIndex || !progress.cleared || livingEnemies().length > 0 ||
+        !orderedPlayers().some((p) => p.state.hp > 0) ||
+        !room.exits.some((exit) => exit.toRoomIndex === roomIndex) ||
+        (room.isFinal && progress.anchor?.state !== 'planted')
+      )) return [];
       loadRoom(next, 'expedition');
-      return [
-        emit('room_entered', {
-          worldId: world.worldId,
-          roomIndex: next.index,
-          roomId: next.id,
-          roomName: next.name,
-          playerIds: sim.getPlayerIds(),
-        }),
-      ];
+      return [emit({ type: 'room_entered', worldId: world.worldId, roomIndex: next.index,
+        roomId: next.id, roomName: next.name, playerIds: playerIds() })];
     },
     returnToHeadquarters() {
+      const events: GameEvent[] = [];
+      finishRun('aborted', events);
+      rooms.clear();
+      for (const p of players.values()) p.state.hp = p.state.maxHp;
       loadRoom(hq, 'headquarters');
-      return [];
+      return events;
     },
-
+    unlockAbility(playerId) {
+      const p = players.get(playerId);
+      if (!p || phase === 'debrief' || p.state.hp <= 0 || p.state.abilityEUnlocked || p.state.resources < ABILITY_UNLOCK_COST) return [];
+      p.state.resources -= ABILITY_UNLOCK_COST;
+      p.state.abilityEUnlocked = true;
+      p.unlockedClasses.add(p.state.classId);
+      return [emit({ type: 'ability_unlocked', playerId, abilityId: CLASS_ABILITIES[p.state.classId].e,
+        cost: ABILITY_UNLOCK_COST, remainingResources: p.state.resources })];
+    },
     applyIntent(intent) {
       const p = players.get(intent.playerId);
-      if (!p) return;
-      const prev = p.intent;
-      // Merge so a button pressed between ticks is never lost.
-      p.intent = {
-        ...intent,
-        attack: intent.attack || (prev?.attack ?? false),
-        dash: intent.dash || (prev?.dash ?? false),
-        ability: intent.ability ?? prev?.ability ?? null,
-      };
+      if (!p || phase === 'debrief') return;
+      const previous = p.intent;
+      p.intent = { ...intent, attack: intent.attack || (previous?.attack ?? false),
+        dash: intent.dash || (previous?.dash ?? false), ability: intent.ability ?? previous?.ability ?? null };
     },
-
     step() {
       tick++;
       eventCounter = 0;
+      if (phase === 'debrief') return [];
       const events: GameEvent[] = [];
-      for (const p of players.values()) stepPlayer(p, events);
+      for (const p of orderedPlayers()) stepPlayer(p, events);
+      if (phase === 'expedition') {
+        for (const e of progress.enemies) stepEnemy(e, events);
+        updateObjectives(events);
+      }
+      updateExits(events);
       return events;
     },
-
     getSnapshot() {
       return {
-        tick,
-        timeMs: tick * TICK_MS,
-        phase,
-        worldId: phase === 'headquarters' ? null : (world?.worldId ?? null),
+        tick, timeMs: tick * TICK_MS, phase,
+        worldId: phase === 'headquarters' ? null : world?.worldId ?? null,
         roomIndex: phase === 'headquarters' ? null : room.index,
-        roomId: room.id,
-        players: [...players.values()].map((p) => ({ ...p.state })),
-        enemies: enemies.map((e) => ({ ...e })),
-        anchor: anchor ? { ...anchor } : null,
+        roomId: room.id, players: orderedPlayers().map((p) => ({ ...p.state })),
+        enemies: progress.enemies.map((e) => ({ ...e.state, telegraph: e.state.telegraph ? { ...e.state.telegraph } : null })),
+        anchor: progress.anchor ? { ...progress.anchor } : null,
+        roomCleared: phase !== 'headquarters' && progress.cleared,
       };
     },
-    getTick() {
-      return tick;
-    },
+    getTick() { return tick; },
   };
-
   return sim;
 }

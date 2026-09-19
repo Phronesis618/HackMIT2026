@@ -10,6 +10,7 @@ import type {
   ImplementationStatus,
 } from './registry';
 import type {
+  AnchorState,
   Contribution,
   CreationReceipt,
   GenerationProvenance,
@@ -54,11 +55,19 @@ export interface UiHud {
   dashCooldownMs: number;
   attackReady: boolean;
   enemiesRemaining: number;
+  resources?: number;
+  abilityEUnlocked?: boolean;
+  abilityQCooldownMs?: number;
+  abilityECooldownMs?: number;
+  reviveProgress?: number;
+  roomCleared?: boolean;
+  anchor?: AnchorState | null;
 }
 
 export interface UiModel {
   phase: UiPhase;
-  connection: { mode: SessionMode; status: ConnectionStatus };
+  connection: { mode: SessionMode; status: ConnectionStatus; isHost?: boolean };
+  audioMuted?: boolean;
   localPlayer: UiPlayer;
   players: UiPlayer[];
   contributions: Contribution[];
@@ -86,4 +95,6 @@ export interface UiActions {
   returnToHeadquarters(): void;
   clearMemories(): void;
   dismissNotice(): void;
+  toggleAudio?(): void;
+  unlockAbility?(): void;
 }

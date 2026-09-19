@@ -10,9 +10,11 @@
  */
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { z } from 'zod';
 import { PlayerIdentitySchema, type PlayerIdentity } from '../shared/contracts';
 import { randomId } from '../shared/ids';
-import { createSilentAudio } from './audio';
+import type { GameSession } from '../shared/session';
+import { createBrowserAudio } from './audio';
 import { createBrowserChronicle } from './chronicle';
 import { GameController, IDENTITY_STORAGE_KEY, parsePreviewFlags } from './game/GameController';
 import { createUiStore } from './game/uiStore';
@@ -20,6 +22,7 @@ import { PhaserWorldRenderer } from './render/PhaserWorldRenderer';
 import { applyTokens } from './styles/applyTokens';
 import './styles/app.css';
 import { LocalSession } from './transport/LocalSession';
+import { RemoteSession } from './transport/RemoteSession';
 import { fixtureWorldProvider, serverWorldProvider } from './transport/worldProviders';
 import { App } from './ui/App';
 
@@ -42,28 +45,42 @@ function loadIdentity(): PlayerIdentity {
   return fresh;
 }
 
-async function fetchLiveAvailability(): Promise<boolean> {
+const ClientConfigSchema = z.object({ liveGenerationAvailable: z.boolean() });
+
+async function fetchLiveAvailability(): Promise<boolean | null> {
   try {
-    const res = await fetch('/api/config');
-    if (!res.ok) return false;
-    const data = (await res.json()) as { liveGenerationAvailable?: boolean };
-    return data.liveGenerationAvailable === true;
+    const res = await fetch('/api/config', { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return null;
+    const parsed = ClientConfigSchema.safeParse(await res.json());
+    return parsed.success ? parsed.data.liveGenerationAvailable : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
 async function boot(): Promise<void> {
   applyTokens();
-  const flags = parsePreviewFlags(window.location.search);
+  const coOp = new URLSearchParams(window.location.search).get('mode') === 'coop';
+  const flags = parsePreviewFlags(coOp ? '' : window.location.search);
+  const availability = flags.fixtureWorld ? false : await fetchLiveAvailability();
+  if (availability === null && !coOp) flags.fixtureWorld = true;
   const identity = loadIdentity();
-  const session = new LocalSession({ identity, worldProvider: flags.fixtureWorld ? fixtureWorldProvider : serverWorldProvider });
+  const session: GameSession = coOp
+    ? new RemoteSession({ identity })
+    : new LocalSession({ identity, worldProvider: flags.fixtureWorld ? fixtureWorldProvider : serverWorldProvider });
   const renderer = new PhaserWorldRenderer();
   const chronicle = createBrowserChronicle(window.localStorage);
-  const audio = createSilentAudio();
-  const liveGenerationAvailable = flags.fixtureWorld ? false : await fetchLiveAvailability();
+  const audio = createBrowserAudio();
+  const liveGenerationAvailable = availability === true;
   const store = createUiStore(GameController.initialModel(session, flags, chronicle, liveGenerationAvailable));
+  store.set({ audioMuted: audio.isMuted() });
+  if (availability === null) store.set({ notice: { kind: 'info', text: coOp
+    ? 'No co-op server is reachable. Start the RELAY server or switch to Solo for offline play.'
+    : 'No generation server is reachable. Solo play uses a clearly labelled offline fixture.' } });
   const controller = new GameController({ session, renderer, chronicle, audio, store, flags, liveGenerationAvailable });
+  window.addEventListener('pagehide', (event) => {
+    if (!event.persisted) controller.dispose();
+  });
 
   const rootEl = document.getElementById('app-root');
   if (!rootEl) throw new Error('#app-root missing from index.html');
@@ -88,5 +105,7 @@ async function boot(): Promise<void> {
 
 boot().catch((err: unknown) => {
   console.error('[relay] boot failed', err);
-  document.body.innerHTML = `<pre style="color:#ff5c7a;padding:24px">RELAY failed to boot: ${err instanceof Error ? err.message : String(err)}</pre>`;
+  const error = document.createElement('pre');
+  error.textContent = `RELAY failed to boot: ${err instanceof Error ? err.message : String(err)}`;
+  document.body.replaceChildren(error);
 });

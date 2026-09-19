@@ -3,7 +3,7 @@
  *
  * Owner: Agent A.
  *  - LocalSession (src/client/transport/LocalSession.ts) runs the simulation in-process.
- *  - RemoteSession (future, Agent A) will speak the WebSocket protocol in protocol.ts.
+ *  - RemoteSession speaks the WebSocket protocol in protocol.ts.
  *  Renderer, UI and Chronicle only ever see this interface, so single-player and
  *  two-laptop multiplayer share every other line of client code.
  */
@@ -51,6 +51,8 @@ export interface GameSession {
   // --- live state ---
   getPhase(): GamePhase;
   getConnectionStatus(): ConnectionStatus;
+  getIsHost?(): boolean;
+  unlockAbility?(): void;
   getWorld(): PreparedWorld | null;
   getGenerationStatus(): GenerationStatus;
   getSnapshot(): GameSnapshot | null;
@@ -65,4 +67,5 @@ export interface GameSession {
   onWorld(listener: (world: PreparedWorld) => void): Unsubscribe;
   onGenerationStatus(listener: (status: GenerationStatus) => void): Unsubscribe;
   onPhase(listener: (phase: GamePhase) => void): Unsubscribe;
+  onError?(listener: (message: string) => void): Unsubscribe;
 }

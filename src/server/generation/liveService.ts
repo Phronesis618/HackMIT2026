@@ -21,7 +21,9 @@ export function createLiveGenerationService(options: {
   async function* prepareWorldStream(
     rawRequest: GenerationRequest,
     onStatus?: (status: GenerationStatus) => void,
+    signal?: AbortSignal,
   ): AsyncGenerator<PreparedWorld> {
+    signal?.throwIfAborted();
     const request = GenerationRequestSchema.parse(rawRequest);
     const startedAt = Date.now();
     const seed = request.seed ?? hashString(request.requestId);
@@ -45,9 +47,11 @@ export function createLiveGenerationService(options: {
       attempts++;
       status('generating', repair ? 'Repairing the generated recipe…' : 'Generating a world from your ideas…');
       try {
-        result = await options.provider.generate(request, repair);
+        result = await options.provider.generate(request, repair, signal);
+        signal?.throwIfAborted();
         break;
       } catch (error) {
+        signal?.throwIfAborted();
         const failure = error instanceof GenerationFailure ? error : new GenerationFailure('Live generation failed.');
         notes.push(failure.message);
         if (!failure.repairable || attempts === 2) break;
@@ -71,6 +75,7 @@ export function createLiveGenerationService(options: {
     let committedRoomCount = 1;
     try {
       for (; committedRoomCount <= request.plannedRoomCount; committedRoomCount++) {
+        signal?.throwIfAborted();
         status('validating', `Compiling and validating room ${committedRoomCount}…`);
         const compiled = compileWorldRecipe(recipe, { plannedRoomCount: request.plannedRoomCount, seed, committedRoomCount });
         const mappings = compiled.rooms.flatMap((room) => room.attributions.map((attribution) => ({
@@ -101,6 +106,7 @@ export function createLiveGenerationService(options: {
         yield world;
       }
     } catch {
+      signal?.throwIfAborted();
       if (committedRoomCount > 1) {
         status('failed', 'Later-room compilation failed; committed rooms are unchanged.');
         throw new GenerationFailure('Later-room compilation failed.');
@@ -112,9 +118,9 @@ export function createLiveGenerationService(options: {
 
   return {
     prepareWorldStream,
-    async prepareWorld(request: GenerationRequest, onStatus?: (status: GenerationStatus) => void): Promise<PreparedWorld> {
+    async prepareWorld(request: GenerationRequest, onStatus?: (status: GenerationStatus) => void, signal?: AbortSignal): Promise<PreparedWorld> {
       let world: PreparedWorld | undefined;
-      for await (const committed of prepareWorldStream(request, onStatus)) world = committed;
+      for await (const committed of prepareWorldStream(request, onStatus, signal)) world = committed;
       if (!world) throw new Error('Generation produced no world.');
       return world;
     },

@@ -14,7 +14,24 @@ Agent C records only work and verification performed in this session.
 
 ## Browser evidence
 
-Latest evidence is attached to [PR #8](https://github.com/Phronesis618/HackMIT2026/pull/8).
+### Integrated application — `083d1e0`
+
+Devin integrated the three child branches, wired combat/co-op/streaming presentation and
+audio, and corrected obsolete integration assertions with user authorization.
+`npm run check`: **172 tests / 14 files**, typecheck and build passed. Non-root production
+Docker startup served health/config/static entry successfully.
+
+The short browser recording on [PR #10](https://github.com/Phronesis618/HackMIT2026/pull/10)
+and [the integration session](https://app.devin.ai/sessions/bb5aca1c6d5646d99e58671d54b7fd85)
+shows actual Crystal Tide contribution/receipt/portal/combat, Sentinel defeat, reward,
+Q/dash/E activation, unlock purchase, and four memories surviving reload. Two isolated
+clients shared crew, contribution, Root Archive, movement, collapse debrief and HQ return.
+No synthetic state/events were injected. Guardian/Anchor victory, other classes,
+revive/retry, reconnect, audio, live generation and physical LAN were outside this short pass.
+
+### Earlier presentation-only evidence
+
+Earlier evidence is attached to [PR #8](https://github.com/Phronesis618/HackMIT2026/pull/8).
 At `4c77c23`, the testing agent verified the actual fixture contribution/receipt, physical
 portal, movement/dash/attack, all three rooms with expected entities, dormant Anchor with
 unfilled progress, safe HQ return and genuine receipt/arrival persistence. Final-room preview
