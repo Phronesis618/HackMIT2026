@@ -16,6 +16,7 @@ import {
   type GenerationStatus,
   type PreparedWorld,
 } from '../../shared/contracts';
+import { hashString } from '../../shared/ids';
 import fixtureJson from '../../../fixtures/worlds/vantage-spire.json';
 
 export interface WorldProvider {
@@ -206,7 +207,7 @@ export const fixtureWorldProvider: WorldProvider = {
     const fixture = WorldFixtureSchema.parse(fixtureJson);
     const now = Date.now();
     const world: PreparedWorld = {
-      worldId: `world-${fixture.fixtureId}-preview`,
+      worldId: `world-${fixture.fixtureId}-${hashString(request.requestId).toString(36)}`,
       createdAt: now,
       recipe: fixture.recipe,
       art: fixture.art,
@@ -219,7 +220,7 @@ export const fixtureWorldProvider: WorldProvider = {
         generatedAt: now,
         durationMs: 0,
         attempts: 0,
-        notes: [fixture.fixtureNote, 'Loaded in the browser via ?world=fixture; no server involved.'],
+        notes: [fixture.fixtureNote, 'Loaded from the bundled browser fixture; no server or model call involved.'],
       },
       receipt: {
         worldTitle: fixture.recipe.title,

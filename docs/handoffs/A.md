@@ -1,5 +1,18 @@
 # Handoff — Agent A (Fable, `feat/core`)
 
+## Offline replay follow-up
+
+- Branch: `devin/1789861332-offline-expedition-memories`, based on merged PR #10.
+- **Implemented:** browser fixtures use a request-specific world identity, matching the
+  server convention. Preparing again or reloading no longer suppresses new receipt/arrival
+  memories as duplicates of a previous expedition. Provenance stays explicitly fixture.
+- **Verified:** regressions failed before the fix for both same-session and reload paths.
+  Real LocalSession events and Chronicle persistence now pass; full check **174 tests /
+  15 files**, typecheck/build/whitespace passed.
+- **Mocked:** the integration test injects in-memory storage; session events are real.
+- **Unverified:** live OpenAI verification remains deferred by user choice. The existing
+  public site needs the corrected bundle published; hosted browser verification is pending.
+
 ## Current integration — Devin across all roles
 
 - [PR #10](https://github.com/Phronesis618/HackMIT2026/pull/10), branch
