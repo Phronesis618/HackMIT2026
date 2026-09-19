@@ -31,12 +31,13 @@ export class RoomScene extends Phaser.Scene {
   private latestSnapshot: GameSnapshot | null = null;
   private localPlayerId = '';
 
-  constructor() {
+  constructor(private readonly onReady: () => void = () => {}) {
     super(RoomScene.KEY);
   }
 
   create(): void {
     this.cameras.main.setBackgroundColor(tokens.color.ink900);
+    this.onReady();
   }
 
   // ---- room ------------------------------------------------------------------
