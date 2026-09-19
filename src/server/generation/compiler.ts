@@ -25,6 +25,7 @@ import { MOTIF_IDS, PROP_INFO, type MotifId } from '../../shared/registry';
 export interface CompileWorldRecipeOptions {
   plannedRoomCount: number;
   seed?: number;
+  committedRoomCount?: number;
 }
 
 export interface CompiledWorldRecipe {
@@ -47,10 +48,14 @@ export function compileWorldRecipe(rawRecipe: WorldRecipe, options: CompileWorld
   if (!Number.isInteger(plannedRoomCount) || plannedRoomCount < 1 || plannedRoomCount > 3) {
     throw new Error(`plannedRoomCount must be an integer from 1 to 3; received ${plannedRoomCount}`);
   }
+  const committedRoomCount = options.committedRoomCount ?? plannedRoomCount;
+  if (!Number.isInteger(committedRoomCount) || committedRoomCount < 1 || committedRoomCount > plannedRoomCount) {
+    throw new Error('committedRoomCount must be between 1 and plannedRoomCount.');
+  }
 
   const seed = options.seed ?? hashString(JSON.stringify(recipe));
   const notes: string[] = [];
-  const rooms = Array.from({ length: plannedRoomCount }, (_, index) => {
+  const rooms = Array.from({ length: committedRoomCount }, (_, index) => {
     const blueprint = recipe.rooms[index] ?? recipe.rooms[recipe.rooms.length - 1]!;
     if (index >= recipe.rooms.length) {
       notes.push(`Room ${index + 1} reused the final blueprint because the recipe supplied only ${recipe.rooms.length} room(s).`);
@@ -102,10 +107,11 @@ function compileRoom(
   const candidates = floorCandidates(grid, pathY, roomSeed);
   const mappings = recipe.contributionMappings.filter((mapping) => mapping.roomIndex === index);
   const props = placeProps(grid, blueprint, index, candidates, mappings, notes);
-  const encounters = placeEncounters(grid, blueprint, index, candidates, mappings, isFinal, notes);
-  const attributions = buildAttributions(grid, index, pathY, mappings, props, encounters);
+  const encounters = placeEncounters(grid, blueprint, index, candidates, mappings, props, isFinal, notes);
+  const attributions = buildAttributions(grid, blueprint, index, pathY, mappings, props, encounters);
+  if (attributions.length < mappings.length) notes.push(`Room ${index + 1} omitted mappings without an observable target.`);
 
-  return RoomSpecSchema.parse({
+  const room = RoomSpecSchema.parse({
     id: `generated-room-${roomSeed.toString(36)}-${index}`,
     index,
     name: blueprint.name,
@@ -119,6 +125,8 @@ function compileRoom(
     isFinal,
     attributions,
   });
+  if (!hasCriticalRoute(room)) throw new Error(`Room ${index + 1} has no safe route to its objective.`);
+  return room;
 }
 
 function createBorderedGrid(width: number, height: number): Grid {
@@ -213,7 +221,10 @@ function placeProps(
 
   desired.forEach((propId, propIndex) => {
     const footprint = PROP_INFO[propId].footprint;
-    const coord = candidates.find(({ x, y }) => footprintFits(grid, occupied, x, y, footprint.w, footprint.h));
+    const anchor = propId === 'anchor_pedestal' ? findTile(grid, 'A') : undefined;
+    const coord = anchor
+      ? (occupied.has(`${anchor.x},${anchor.y}`) ? undefined : anchor)
+      : candidates.find(({ x, y }) => footprintFits(grid, occupied, x, y, footprint.w, footprint.h));
     if (!coord) {
       notes.push(`Room ${roomIndex + 1} omitted ${propId}; no safe floor footprint remained.`);
       return;
@@ -237,6 +248,7 @@ function placeEncounters(
   roomIndex: number,
   candidates: Coord[],
   mappings: ContributionMapping[],
+  props: RoomProp[],
   isFinal: boolean,
   notes: string[],
 ): RoomEncounter[] {
@@ -246,22 +258,33 @@ function placeEncounters(
     notes.push(`Room ${roomIndex + 1} added the required Guardian encounter.`);
   }
   const encounterMappings = mappings.filter((mapping) => mapping.kind === 'encounter');
-  return enemyIds.slice(0, 4).map((enemyId, encounterIndex) => {
-    const coord = candidates[(encounterIndex * 7 + 3) % candidates.length] ?? { x: 2, y: 2 };
+  const occupied = new Set<string>();
+  for (const prop of props) {
+    const { w, h } = PROP_INFO[prop.propId].footprint;
+    markOccupied(occupied, prop.x, prop.y, w, h);
+  }
+  return enemyIds.slice(0, 4).flatMap((enemyId, encounterIndex) => {
+    const padding = enemyId === 'guardian' ? 1 : 0;
+    const size = padding * 2 + 1;
+    const coord = candidates.find(({ x, y }) =>
+      footprintFits(grid, occupied, x - padding, y - padding, size, size));
+    if (!coord) throw new Error(`Room ${roomIndex + 1} has no safe spawn for ${enemyId}.`);
+    markOccupied(occupied, coord.x - padding, coord.y - padding, size, size);
     const mapping = encounterMappings[encounterIndex];
-    return {
+    return [{
       id: `room-${roomIndex}-encounter-${encounterIndex}`,
       enemyId,
       x: coord.x,
       y: coord.y,
-      count: enemyId === 'guardian' ? 1 : 1 + ((roomIndex + encounterIndex) % 2),
+      count: 1,
       ...(mapping ? { attributionId: mapping.contributionId } : {}),
-    };
+    }];
   });
 }
 
 function buildAttributions(
   grid: Grid,
+  blueprint: RoomBlueprint,
   roomIndex: number,
   pathY: number,
   mappings: ContributionMapping[],
@@ -270,22 +293,57 @@ function buildAttributions(
 ): Attribution[] {
   const hazard = findTile(grid, '~');
   const structure = findInteriorTile(grid, '#');
-  let propIndex = 0;
-  let encounterIndex = 0;
-  return mappings.map((mapping) => {
+  const usedProps = new Set<string>();
+  const usedEncounters = new Set<string>();
+  return mappings.flatMap((mapping): Attribution[] => {
     let target: Coord | undefined;
-    if (mapping.kind === 'prop') target = props[propIndex++] ?? undefined;
-    else if (mapping.kind === 'encounter') target = encounters[encounterIndex++] ?? undefined;
-    else if (mapping.kind === 'hazard') target = hazard;
-    else if (mapping.kind === 'structure' || mapping.kind === 'motif') target = structure;
-    else if (mapping.kind === 'name') target = { x: 1, y: pathY };
-    return {
+    let feature = '';
+    if (mapping.kind === 'prop') {
+      const prop = props.find((p) => p.attributionId === mapping.contributionId && !usedProps.has(p.id));
+      if (prop) { target = prop; feature = prop.propId.replaceAll('_', ' '); usedProps.add(prop.id); }
+    } else if (mapping.kind === 'encounter') {
+      const encounter = encounters.find((e) => e.attributionId === mapping.contributionId && !usedEncounters.has(e.id));
+      if (encounter) { target = encounter; feature = `${encounter.enemyId} encounter`; usedEncounters.add(encounter.id); }
+    } else if (mapping.kind === 'hazard') {
+      target = hazard;
+      feature = 'hazard tiles';
+    } else if (mapping.kind === 'structure' || mapping.kind === 'motif') {
+      target = structure;
+      feature = `${blueprint.motifIds[0]} structures`;
+    } else if (mapping.kind === 'name') {
+      target = { x: 1, y: pathY };
+      feature = 'room name';
+    }
+    if (!target) return [];
+    return [{
       contributionId: mapping.contributionId,
       kind: mapping.kind,
-      featureDescription: mapping.featureDescription,
-      ...(target ? { target: { roomIndex, x: target.x, y: target.y } } : {}),
-    };
+      featureDescription: `${feature} in “${blueprint.name}”.`,
+      target: { roomIndex, x: target.x, y: target.y },
+    }];
   });
+}
+
+function hasCriticalRoute(room: RoomSpec): boolean {
+  const blocked = new Set<string>();
+  for (const prop of room.props) {
+    const info = PROP_INFO[prop.propId];
+    if (info.blocksMovement) markOccupied(blocked, prop.x, prop.y, info.footprint.w, info.footprint.h);
+  }
+  const grid = room.tiles.map((row) => row.split(''));
+  const start = findTile(grid, 'P')!;
+  const queue = [start];
+  const seen = new Set<string>();
+  for (let i = 0; i < queue.length; i++) {
+    const { x, y } = queue[i]!;
+    const tile = grid[y]?.[x];
+    const key = `${x},${y}`;
+    if (!tile || '# ~'.includes(tile) || blocked.has(key) || seen.has(key)) continue;
+    if (tile === (room.isFinal ? 'A' : 'X')) return true;
+    seen.add(key);
+    queue.push({ x: x + 1, y }, { x: x - 1, y }, { x, y: y + 1 }, { x, y: y - 1 });
+  }
+  return false;
 }
 
 function footprintFits(grid: Grid, occupied: Set<string>, x: number, y: number, width: number, height: number): boolean {
