@@ -4,6 +4,7 @@
  */
 import { INPUT_BINDINGS } from '../../shared/conventions';
 import type { LocalIntent } from '../../shared/session';
+import { stageOwnsInput } from './keyboardFocus';
 
 export interface InputSampler {
   /** Produce the intent for this frame. `aim` is the current pointer in world coords. */
@@ -11,9 +12,6 @@ export interface InputSampler {
   getPointer(): { x: number; y: number } | null; // canvas-relative pixels
   dispose(): void;
 }
-
-const isTextTarget = (el: EventTarget | null): boolean =>
-  el instanceof HTMLElement && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
 
 export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
   const down = new Set<string>();
@@ -25,7 +23,7 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
   const matches = (code: string, list: readonly string[]) => list.includes(code);
 
   const onKeyDown = (e: KeyboardEvent): void => {
-    if (isTextTarget(e.target)) return;
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || !stageOwnsInput(e.target, stage)) return;
     const all = Object.values(INPUT_BINDINGS).flat() as readonly string[];
     if (!all.includes(e.code)) return;
     e.preventDefault();
@@ -47,13 +45,15 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
     abilityPressed = null;
   };
   const onFocus = (event: FocusEvent): void => {
-    if (isTextTarget(event.target)) onBlur();
+    if (!stageOwnsInput(event.target, stage)) onBlur();
   };
   const onPointerMove = (e: PointerEvent): void => {
     const rect = (stage.querySelector('canvas') ?? stage).getBoundingClientRect();
     pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
   const onPointerDown = (e: PointerEvent): void => {
+    if (!stageOwnsInput(e.target, stage)) return;
+    stage.focus({ preventScroll: true });
     if (e.button === 0) {
       attackPressed = true;
       onPointerMove(e);
@@ -99,5 +99,42 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
       stage.removeEventListener('pointerdown', onPointerDown);
       stage.removeEventListener('contextmenu', onContextMenu);
     },
+  };
+}
+
+/**
+ * Hold-to-show keys that are NOT gameplay intents (agent F3: `KeyM` = full floor map).
+ * Kept out of INPUT_BINDINGS on purpose: the sim never sees them. Returns a disposer.
+ */
+export const FULL_MAP_KEYS: readonly string[] = ['KeyM'];
+
+/** Typing into a field must never toggle a hold key. */
+function isTextTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+}
+
+export function createHoldKey(codes: readonly string[], onChange: (held: boolean) => void): () => void {
+  let held = false;
+  const set = (next: boolean): void => {
+    if (next === held) return;
+    held = next;
+    onChange(held);
+  };
+  const onKeyDown = (e: KeyboardEvent): void => {
+    if (isTextTarget(e.target) || e.repeat || !codes.includes(e.code)) return;
+    set(true);
+  };
+  const onKeyUp = (e: KeyboardEvent): void => {
+    if (codes.includes(e.code)) set(false);
+  };
+  const onBlur = (): void => set(false);
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+  window.addEventListener('blur', onBlur);
+  return () => {
+    window.removeEventListener('keydown', onKeyDown);
+    window.removeEventListener('keyup', onKeyUp);
+    window.removeEventListener('blur', onBlur);
   };
 }

@@ -26,11 +26,51 @@ Two facts from reading the code:
    `RoomSpecSchema` ("anchor relays must be on safe ground") — and then the simulation ignores it.
    The renderer already promises damage the sim does not deliver.
 
-The reference games make the room fight. Isaac's rocks, pits and TNT are route control *and* weapons;
-Gungeon's tables block bullets on a flip and its red barrels chain; Hades' Tartarus spike traps damage
-enemies as readily as you, and two boons (Athena's deflect, Poseidon's knockback) exist largely to push
-things into them. That asymmetry — *the hazard is neutral, the player is the one who can aim it* — is
-the single mechanic missing from our terrain layer.
+The reference games make the room fight, and they are specific about it:
+
+- **Isaac's spikes deal one heart to Isaac and 8 damage to non-flying enemies.** Retracting spikes
+  "retract and extend on timers" and "can be walked over safely while they are retracted," and they can
+  be **deactivated with pressure plates**
+  ([wiki.gg](https://bindingofisaacrebirth.wiki.gg/wiki/Spikes)). One tile, three of the mechanics this
+  doc wants: neutral damage, a readable period, and a linked switch.
+- **Isaac's rocks block movement *and* projectiles, and can be pushed into gaps to make bridges**;
+  bomb rocks explode when destroyed ([wiki.gg](https://bindingofisaacrebirth.wiki.gg/wiki/Rocks)).
+- **Gungeon: non-flying enemies pushed into a pit "instantly die," which is stated outright as the
+  reason knockback weapons are good.** The player who falls in pays **half a heart** and respawns at
+  the rim; a dodge roll keeps you airborne; non-flying enemies will not cross a pit on their own
+  ([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Pits)).
+- **Gungeon's tables block bullets, clear nearby bullets during the flip animation, grant a few frames
+  of invincibility — and Bullet Kin flip tables and use them as cover themselves**
+  ([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Tables)). Braziers are explicitly called out as
+  objects that "do not provide cover," i.e. the distinction is designed, not incidental
+  ([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Objects)).
+- **Gungeon's explosive barrels deal ~35 damage to enemies**, and a dodge roll destroys one *without*
+  detonating it; water barrels can be electrified, oil ignites from explosions and fire, poison goop
+  hurts anything standing in it ([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Objects)).
+
+And the doctrine stated most plainly, by Hades:
+
+> *"Traps can damage Zagreus and enemies, but **hurt enemies considerably more** than Zagreus."*
+> — [Hades wiki, Gameplay mechanics](https://hades.fandom.com/wiki/Gameplay_mechanics)
+
+That sentence is the design rule for this entire document. Not "hazards hurt you", not "hazards hurt
+them" — **both, weighted toward the crew**, so touching a hazard is a mistake and *aiming* one is a play.
+
+Two more framings worth keeping in mind while reading §2:
+
+- **Telegraphing changes what is under threat.** Into the Breach's postmortem draws the chain directly:
+  *"Telegraphed Attacks → Changes Threat → What's the threat? → **Defenseless Objects**."* Once the
+  player cannot be surprised, the interesting thing to threaten is the room
+  ([GDC 2019 deck](https://media.gdcvault.com/gdc2019/presentations/Into%20the%20Breach%20Postmortem%20Final.pdf)).
+- **Hazards are how a room gets a personality; enemies can't be.** Alex Sulman's line:
+  *"**You're building AI to work anywhere and you're building a boss to work somewhere.**"*
+  ([Game Developer](https://www.gamedeveloper.com/design/enemy-design-and-enemy-ai-for-melee-combat-systems)).
+  Our seven enemy archetypes have to work in every generated room, so they can never assume a shape.
+  Terrain is the only layer that gets to be specific to *this* room — which is exactly what a
+  world-generating game needs.
+
+The common thread — *the hazard is neutral; the player's edge is that they can aim it* — is the single
+mechanic missing from our terrain layer.
 
 **What this doc adds:** 11 combat-facing tiles, each with exact sim rules; a bounded schema letting the
 model skin and tune them per biome; generator placement rules that cannot strand a room; a 5-tile
@@ -54,6 +94,48 @@ These are the acceptance criteria for a tile, not prose. A proposed tile that fa
   group) goes in an additive `terrainLinks` side-table, not a second char. Char budget is scarce.
 - **R6 — Snapshot cost is bounded.** Per-tile mutable state is a sparse record keyed `"col,row"`,
   capped at 2048 entries, exactly like `TerrainState.wallDamage` already is.
+- **R7 — Attribution is preserved.** See §1.1: the sim currently has no way to damage an enemy without
+  a player. Every tile here needs that, and there is exactly one right way to add it.
+
+### 1.1 · The one piece of plumbing every tile here needs
+
+`damageEnemy(e, p: PlayerRuntime, damage, events)` (`simulation.ts:282`) requires a player, because it
+credits `p.state.ultCharge` and stamps `enemy_defeated.byPlayerId`, which is `IdString` and **not
+nullable**. There is no enemy-vs-enemy or terrain-vs-enemy damage path in the codebase at all.
+
+Add one function, used by every tile in §2 and by the `unstable_matter` world law:
+
+```ts
+type DamageSource =
+  | { kind: 'player'; player: PlayerRuntime }
+  | { kind: 'terrain'; tile: string }                      // 'hazard' | 'vent' | 'pit' | 'canister'
+  | { kind: 'displaced'; by: PlayerRuntime | null };        // knocked/pulled into something lethal
+
+function damageEnemyFrom(e, source: DamageSource, damage, events): void
+```
+
+Rules:
+- `kind: 'player'` behaves exactly as today. **No behaviour change, no test churn.**
+- `kind: 'displaced'` with a non-null `by` credits `byPlayerId` normally — *if you knock something into
+  a pit, you killed it.* This is the whole reason pits are fun and it must not be lost.
+- `kind: 'terrain'` (and `displaced` with `by: null`) credits nobody. It needs
+  `enemy_defeated.byPlayerId` to become `IdString.nullable()` — **one character in `contracts.ts`**,
+  plus one `?? 'the room'` in whatever the Chronicle renders. Do not fake a player id; the honesty rule
+  in PRODUCT.md applies to the memory wall and a fabricated kill credit would reach it.
+
+**Environmental kills must pay less than earned kills — `ENV_KILL_CREDIT = 0.5`.**
+Both shipped precedents agree and one is harsher than the other: Gungeon states
+*"Enemies that die from traps triggered by the player such as chandeliers or explosive barrels will give
+**less shells**"* ([wiki](https://enterthegungeon.fandom.com/wiki/Pickups)), and Spelunky goes further —
+*"enemies killed by traps, **player-caused or not**, do not count toward the player's kill score"*
+([wiki](https://spelunky.fandom.com/wiki/Traps_(HD))).
+
+Without this rule, every tile in §2 is strictly better than attacking, and the game we built stops being
+played. So: `displaced` and `terrain` kills award **half** the usual
+`ULT_CHARGE_PER_DAMAGE`/`ULT_CHARGE_PER_KILL` and **half** `ROOM_CLEAR_REWARD`'s per-enemy share. Half,
+not zero — Gungeon also ships an unlock for *"Kill 100 enemies by knocking them into pits"*
+([wiki](https://enterthegungeon.fandom.com/wiki/Amulet_of_the_Pit_Lord)), i.e. it meters environmental
+kills as a thing worth doing. We want them attractive, not dominant.
 
 ## 2 · The tiles
 
@@ -66,29 +148,51 @@ enemy HP runs 14 (swarmling) → 70 (warden) → 240 (guardian today, see BOSS_F
 
 **Feature id:** `hazard_floor` (new id for an old char). **Char:** `~` (already in `TILE_CHARS`).
 
-**Sim rules.** A new `sim/hazards.ts` steps once per tick over entities:
+**Sim rules — ramping, not flat.** Hades' Asphodel magma is the model to copy, and it is better than a
+flat tick: damage starts *"at **1 damage per tick** and increas[es] rapidly until death.
+**Dashing or stepping off the magma resets the ticks back to 1**"*
+([Hades wiki](https://hades.fandom.com/wiki/Asphodel)). Crossing is cheap; standing is fatal; the reset
+is generous and legible. A flat 8-per-tick punishes the traversal we actually want players to attempt.
+
+A new `sim/hazards.ts` steps once per tick over entities:
 
 ```
 for each entity (player or enemy):
   tile = terrainTileAt(room, worldToTile(e.x, e.y))
-  if tile !== '~': e.hazardMs = 0; continue
-  if entity is dashing (player dashRemainingMs > 0): e.hazardMs = 0; continue
+  onHazard = tile === '~' && !(player && dashRemainingMs > 0)
+  if (!onHazard) { e.hazardMs = 0; e.hazardStacks = 0; continue }   // reset, like Asphodel
   e.hazardMs += TICK_MS
-  while e.hazardMs >= HAZARD_INTERVAL_MS:
+  while (e.hazardMs >= HAZARD_INTERVAL_MS) {
     e.hazardMs -= HAZARD_INTERVAL_MS
-    apply HAZARD_DAMAGE
+    e.hazardStacks = min(HAZARD_STACK_MAX, e.hazardStacks + 1)
+    apply HAZARD_BASE * e.hazardStacks * (isPlayer ? 1 : ENEMY_HAZARD_MUL)
+  }
 ```
 
 | constant | value | note |
 | --- | --- | --- |
-| `HAZARD_INTERVAL_MS` | 600 | ~2 ticks of damage per tile crossed at walking speed |
-| `HAZARD_DAMAGE` | 8 | 13.3 dps; crossing a 3-tile hazard band costs ~16 HP |
-| enemy multiplier | 1.0 | R1: a husk (30 HP) dies to 4 ticks, a swarmling (14) to 2 |
+| `HAZARD_INTERVAL_MS` | 450 | one tick per tile crossed at walking speed (32 px / 190 px/s = 168 ms… so ~2.7 tiles per tick) |
+| `HAZARD_BASE` | 3 | first tick costs 3 |
+| `HAZARD_STACK_MAX` | 5 | so ticks run 3, 6, 9, 12, 15, 15, 15… |
+| `ENEMY_HAZARD_MUL` | **1.6** | R1 and the Hades doctrine: enemies take considerably more |
+| elite/gatekeeper/guardian | ×0.5 of the enemy value | bosses cannot be parked in a puddle |
+
+What that buys: **walking straight across a 3-tile band costs 3 HP** (one tick, maybe two) and is a fine
+decision. **Standing in it for 3 seconds costs 45** and is not. A husk (30 HP) chased into it for 2.2 s
+dies; a swarmling (14 HP) dies in two ticks. The stack resets the moment anything steps off or dashes,
+so nobody is ever killed by a hazard they had already escaped.
 
 Damage bypasses the 350 ms `invulnerableMs` refresh (it is its own clock) but respects
 `invulnerableMs > 0` at the moment it fires, so a dash's i-frames and a revive's 1000 ms grace both
 protect. Source id `terrain:hazard` on the `player_damaged` event (`IdString` allows `:`; the ritual
-already uses `anchor-pulse`).
+already uses `anchor-pulse`). Two new fields on the runtime, not the snapshot: `hazardMs`,
+`hazardStacks`. The renderer derives the stack glow from the player's own state, so it costs nothing
+to sync.
+
+**Precedent for the reset-on-dash rule** beyond Asphodel: Hades' dash *"cross[es] Asphodel magma and
+Elysium hedges outright, and grant[s] full damage immunity for the dash"*; ALttP grants **58 frames
+(~0.97 s) of invulnerability** on spike contact (`countdown_for_blink = 58`) so a mistake is never a
+death spiral. Our 450 ms interval plus the reset does the same job with one fewer mechanic.
 
 **Enemies.** Identical rules. `chaseWaypoint` is *not* taught to avoid `~` — enemies walk into it. This
 is the entire point: a player who kites a husk pack across a vent band kills them with the room. A
@@ -106,9 +210,10 @@ when any entity stands on it.
 guaranteed path `pathY`). floorgen's `rooms.ts` hazard-pool mutator already reverts if it would leave
 no hazard-free route. Tighten to R4's full rule (§5).
 
-**Tests.** (a) a player standing still on `~` loses exactly 8 HP every 600 ms; (b) a player dashing
-across a 3-tile band takes 0; (c) a husk chasing across a 4-tile band dies; (d) a guardian takes 4;
-(e) `~` never appears within Chebyshev 2 of `P`, `A`, a door entry or an `anchorRelays` site.
+**Tests.** (a) a player standing still on `~` takes 3, 6, 9, 12, 15, 15 on successive 450 ms ticks;
+(b) stepping off for one tick and back resets the next tick to 3; (c) a player dashing across a 3-tile
+band takes 0; (d) a husk held in a band dies in ≤ 2.5 s; (e) a guardian's per-tick value is exactly half
+the husk's; (f) `~` never appears within Chebyshev 2 of `P`, `A`, a door entry or an `anchorRelays` site.
 
 **Why it is cut #1:** zero new tile chars, zero schema change, zero generator change, zero renderer
 rewrite, and it closes a promise the renderer already makes. ~60 lines.
@@ -133,11 +238,22 @@ rewrite, and it closes a promise the renderer already makes. ~60 lines.
 | chain delay | an unarmed canister inside the radius arms with `fuseMs = 140` |
 
 Damage falls off linearly from centre to rim (×1.0 at 0 px, ×0.35 at 76 px) and requires
-`clearPath(grid, canister, target)` so a wall shields you. On detonation the tile becomes `:` rubble
-(consistent with `B`). Chains are depth-limited to 6 to bound a pathological cluster.
+`clearPath(grid, canister, target)` so a wall shields you — Isaac ships the same occlusion rule for the
+same reason: *"an explosion's blast radius **does not propagate past**"* a metal block
+([wiki](https://bindingofisaacrebirth.fandom.com/wiki/Blocks)). On detonation the tile becomes `:`
+rubble (consistent with `B`). Chains are depth-limited to 6 to bound a pathological cluster.
 
-**Asymmetry is deliberate:** 48 to enemies vs 26 to players. Gungeon's barrels hurt you too, which is
-what makes shooting one a decision rather than a free button; the 2:1 ratio keeps it a *good* decision.
+**Hazard chaining is the point, and Isaac is explicit about it:** movable TNT *"auto-detonates on
+contact with a Fire Place, Spiked Rock, or Red Poop"*
+([wiki](https://bindingofisaacrebirth.fandom.com/wiki/TNT)). Ours: a canister pushed or knocked onto a
+**firing `^` vent** or a live `~` tile arms instantly. That is 3 lines and it turns two separate tiles
+into a combo the players discover rather than are told.
+
+**Asymmetry is deliberate:** 48 to enemies vs 26 to players. Gungeon's barrels deal ~35 to enemies and
+hurt you too, which is what makes shooting one a decision rather than a free button
+([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Objects)); our 2:1 ratio keeps it a *good* decision at
+our shorter range band. Gungeon also lets a dodge roll destroy a barrel **without** detonating it —
+worth copying later as a safety valve, but not tonight.
 
 **Enemies.** Enemy projectiles and melee also arm canisters — a sentinel volley aimed at a player
 standing beside one is a real threat. `chaseWaypoint` treats `*` as solid, so enemies path around them
@@ -167,8 +283,10 @@ same tick-ordered inputs (co-op desync guard).
 
 **Sim rules.** `o` joins `SOLID_TILES` for `moveCircle`, but:
 
-- **Projectiles pass over it.** `stepProjectiles` already tests solidity — add an `allowOverPit` flag so
-  bolts and beams cross. `clearPath` ignores `o`.
+- **Projectiles pass over it.** `stepProjectiles` tests `circleHitsSolid(grid, …)` at
+  `simulation.ts:449`. Build a **second** `SolidGrid` — `projectileGrid = buildSolidGrid(room, broken,
+  { pitsSolid: false })` — and point projectiles and `clearPath` at that one. Two grids, rebuilt on the
+  same ticks the existing one is.
 - **Dashes cross it.** While `dashRemainingMs > 0` a player's collision ignores `o`. A dash covers
   96 px = 3 tiles, so any gap of ≤ 2 tiles is dashable with margin.
 - **Dash ending over a pit:** the player is snapped to `nearestOpenPosition` and takes
@@ -176,13 +294,21 @@ same tick-ordered inputs (co-op desync guard).
 - **Knockback into a pit kills.** Any effect that displaces an entity (`bastion.e.shockwave`,
   `bastion.r.aegis_slam`, `CANISTER_KNOCKBACK`, `,` currents, the Custodian's `gravity_well`) resolves
   its displacement *before* collision; if the destination tile is `o`, the entity is removed:
-  - enemy → `hp = 0`, `enemy_defeated` with `byPlayerId` = the displacer, full ult charge credit, and
-    `dropRemains` fires at the pit rim so lore is never lost down a hole.
+  - enemy → `hp = 0`, `enemy_defeated` with `byPlayerId` = the displacer, **half** ult charge credit
+    (§1.1's `ENV_KILL_CREDIT`), and `dropRemains` fires at the pit rim so lore is never lost down a
+    hole. Gungeon does the same for currency: *"Shells that fall into pits reappear on top of the
+    player"* ([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Pit)) — a pit may eat an enemy, never a
+    reward.
   - player → `hp = 1`, snapped to `nearestOpenPosition`, `invulnerableMs = 800`. Players never die to
-    a pit. (Isaac does the same: pits cost half a heart and a respawn, not a run.)
+    a pit. Gungeon charges **half a heart and a respawn at the pit edge**, and lets a dodge roll carry
+    you over ([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Pits)); every rule in this section is that
+    page, translated to our numbers.
 
 **Enemies.** `chaseWaypoint`'s BFS already avoids solids, so enemies path around pits and, crucially,
-*bunch at the ledge* — a readable, exploitable formation.
+*bunch at the ledge* — a readable, exploitable formation. Gungeon documents the same behaviour
+("non-flying enemies won't attempt crossing pits on their own") and the same exploit
+([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Pits)). We have no flying enemies, so the "flyers
+ignore pits" half of that design is free to add later as an enemy flag.
 
 **Co-op.** Bastion's knockback becomes a deletion tool, which is the clearest "your class matters"
 moment in the kit. Weaver's `collapse` pulls a pack toward a point: aim it past a ledge.
@@ -225,8 +351,11 @@ While `firing`, any entity whose centre is on the tile takes `VENT_DAMAGE = 14`,
 and bosses ×0.5, as with `~`.
 
 Three phase groups mean a vent field is never all-on: there is always a safe third of it, so crossing is
-a rhythm problem, not a dice roll. This is Zelda/Hades spike-trap grammar: *fixed period, visible tell,
-guaranteed safe beat.*
+a rhythm problem, not a dice roll. This is Isaac's retracting-spike grammar — *fixed period, safe while
+retracted, deactivable from a pressure plate* — with **8 damage to non-flying enemies** as the stated
+precedent for hurting both sides ([wiki.gg](https://bindingofisaacrebirth.wiki.gg/wiki/Spikes)).
+Our `_` plate (T6) is the same lever: standing on a plate of the vent field's group forces every vent in
+it to `idle` while held. That is one line and it turns a hazard into a co-op puzzle.
 
 **Enemies.** Enemies walk vent fields freely and eat the damage. The vent field is the best kiting
 ground in the room.
@@ -237,6 +366,18 @@ clean lane. Also the hook for the Custodian's `overload_vent` pattern (BOSS_FINA
 **Renderer.** Idle: a flush grille. Charging: grille glows and a 4 px shimmer rises, with a rising
 whistle. Firing: a 26 px column in `palette.hazard`, full-tile, plus a 60 ms white flash. The charging
 state must be readable at 0.85 camera zoom from 8 tiles away — test with a screenshot.
+
+Two readability rules worth lifting:
+
+- **Make the dangerous state flicker, not just glow.** Isaac's creep uses ownership plus a visual tell —
+  enemy creep harms only the player, player creep only enemies, and the player-harming kind *"flickers
+  rapidly"* ([wiki](https://bindingofisaacrebirth.fandom.com/wiki/Creep)). A vent's 500 ms charge should
+  pulse at a rate no ambient dressing in `dressing.ts` uses, so it reads as *mechanism*, not decoration.
+- **Hazards must stay lit in the dark.** Spelunky's dark levels explicitly give traps candles so they
+  remain visible, and Spelunky 2 goes further — *"most traps are **illuminated** to mark their
+  location"* ([wiki](https://spelunky.fandom.com/wiki/Level_Feeling_(2))). This is a hard
+  cross-dependency: **the `long_dark` world law (WORLD_MUTATORS §2) must exempt every
+  `DANGEROUS_TILES` tile from the light radius.** Write that as a test, not a comment.
 
 **Generator.** Vents place in **fields of 4–9 tiles** (a 2×2 to 3×3 block), 1–2 fields per room, never
 on the guaranteed path, never within Chebyshev 2 of `P`/`A`/doors/relays. Because they are walkable,
@@ -271,6 +412,10 @@ counter: run at them. Cover gives a second: break the line and make them move.
 
 **Enemies.** Enemies do not deliberately use cover (no new AI — out of budget tonight). They lose line
 of sight and re-path, which reads as them flanking. Note the honest limitation in the code comment.
+Gungeon does go the extra step — **Bullet Kin flip tables and use them as cover themselves**
+([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Tables)) — and that is the obvious follow-up if `-`
+lands well. Gungeon also draws the line we are drawing: braziers "do not provide cover" and tables do,
+and the game is explicit about which is which ([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Objects)).
 
 **Co-op.** Bastion's `bulwark` already blocks beams; `-` is the free, shared version of that, so a
 Beacon can hold a firing line while a Shade flanks. The clearest split-duty terrain we have.
@@ -344,10 +489,27 @@ accident that makes a room memorable, and it costs nothing to allow.
 holder is let through. The solo latch is the graceful degradation, and it is the same trick the
 Custodian's phase 3 uses (BOSS_FINALE.md §4), so the game teaches the pattern twice.
 
-**Renderer.** Plate: a recessed square that sinks 3 px and lights when occupied, with a soft *clunk*.
-Gate: vertical bars, retracting into the floor over 180 ms, with a tint matching the plate's group
+**Renderer — and Zelda already solved the hold-vs-latch legibility problem.** A Link to the Past bakes
+the distinction into the engine as two separate room tags (`RoomTag_SwitchTrigger_HoldDoor` vs
+`RoomTag_SwitchTrigger_ToggleDoor`) and surfaces it to the player as a **colour and shape convention**:
+**yellow = latches on any weight, blue = must be held down**; square = latch, round = hold
+([Zelda Wiki](https://zeldawiki.wiki/wiki/Floor_Switch)). Adopt it verbatim — a solo player's latching
+plate is **yellow and square**, a co-op hold plate is **blue and round**, and nobody needs telling.
+
+Plate: a recessed square/circle that sinks 3 px and lights when occupied, with a soft *clunk*.
+Gate: vertical bars, retracting into the floor over 180 ms, tinted to match the plate's group
 (4 groups → 4 accent-derived hues). Draw a dim line from plate to gate when the player is within 3 tiles
 — players must be able to *see* the link without a tutorial.
+
+**The cheap sibling, if plates prove fiddly: one global toggle.** ALttP's crystal switch is a single
+bit — `orange_blue_barrier_state ^= 1` — that every blue/orange block in the room reads, reset to 0 on
+load, with a **9-frame hit window** so a charging sword can't flip it, and a sparkle every 31 frames so
+it advertises itself (`zelda3`, `Sprite_1E_CrystalSwitch`, ROM `86b8d0`). Our version: one shootable
+`switch` prop per room flipping which of two gate groups is open. It is a third of the code of
+plates-and-gates and gives most of the tactical value; plates are only worth their extra complexity for
+the co-op hold. Note also the colour trap ALttP set and later games inverted: **the switch's colour
+matches the LOWERED set**, not the raised one ([Zelda Wiki](https://zeldawiki.wiki/wiki/Elevator_Block)).
+Pick a convention and write it in the test name.
 
 **Generator.** Gates guard **optional** regions only unless R4 passes with `G` solid. Formally: a gate
 may be the sole route into a region *iff* that region contains no door, no `P`, no `A`, and no
@@ -372,7 +534,10 @@ CRUMBLE_WARN = 0.5       // visual crack at 50%
 ```
 
 Occupancy by any entity accumulates; dashes **do** count (this is weight, not damage — R2 does not
-apply, and the exception is worth it because it makes `%` the one tile a dash cannot cheat). At
+apply, and the exception is worth it because it makes `%` the one tile a dash cannot cheat). Gungeon
+keeps exactly one such exception for exactly this reason: rolling spikes *"cannot be dodge-rolled
+through"* ([wiki](https://enterthegungeon.fandom.com/wiki/Traps)). One tile that ignores the universal
+answer is a spike of tension; two would be a broken promise. At
 `CRUMBLE_MS` the tile becomes `o` **permanently** for the run, with a 220 ms collapse animation during
 which it is already open. Anything standing on it resolves as a pit entry (T2): enemy dies, player goes
 to 1 HP at the nearest ledge.
@@ -407,6 +572,15 @@ converted, over 1 000 rooms; (e) the converted tile persists across a room re-en
 `CURRENT_SPEED = 110 px/s` — 58% of `PLAYER_SPEED`, so you can walk against it (at 80 px/s) but you
 cannot ignore it. Dashes (640 px/s) override it entirely (R2).
 
+ALttP's conveyor is **exactly 0.5 px/frame = 30 px/s ≈ 1.9 tiles/s** (`Link_ApplyConveyor`, ROM
+`87e5f0`, adding `±8 << 4` into a 16.8 fixed-point accumulator), which is *faster than Link walks* — so
+its belts genuinely dictate position. It exempts three states: **airborne**, **wall-grab/hookshot**, and
+**dashing at full charge in the belt's own direction**. Ours is deliberately weaker (58% of walk speed)
+because our rooms are combat arenas rather than puzzle rooms and being unable to hold a firing position
+is worse than being unable to solve a puzzle. If currents feel toothless in play, **raise
+`CURRENT_SPEED` toward 190 before adding a second mechanic** — Zelda's number says the aggressive end
+of the range is playable.
+
 Currents apply to **projectiles too** (`vx/vy` nudged by 110 px/s while over a `,`), which bends bolt
 lanes and is the cheapest "this world has physics we don't" moment in the doc.
 
@@ -415,7 +589,10 @@ readable, funny, and exploitable. A current lane pointing into a pit or a vent f
 build a fight around.
 
 **Co-op.** A conveyor into a hazard is a shared setup: one player tethers/knocks an enemy in, the other
-keeps the lane clear.
+keeps the lane clear. Gungeon's minecarts are the nearest published relative — frictionless, they keep
+moving until you get out, and in co-op **two players can share one but only one steers**
+([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Objects)). Currents are the ungated version of that:
+no boarding, no steering, no new input.
 
 **Renderer.** Directional chevrons scrolling at 110 px/s (the actual speed — never lie about the number),
 plus a faint streak on anything standing on it. Reuse `+` conduit's chevron drawing with a pan.
@@ -467,13 +644,37 @@ inside the veil hits normally; (e) `"` never generates in `isFinal` rooms.
 **Feature id:** `secret_walls`. **Char:** `S`. Renders **identically to `#`**; solid; destroyed by any
 single point of damage.
 
-FLOORS.md §8 lists secret rooms as not generated. `S` is the tile they will need: Isaac's rule is "an
-empty grid cell touching ≥ 3 filled rooms becomes a secret room, entered by bombing a shared wall". Our
-equivalent: the floorgen pass finds such a cell, builds a small treasure room, and marks the shared
-border tile `S`.
+FLOORS.md §8 lists secret rooms as not generated. `S` is the tile they will need, and Isaac's placement
+rule is precise: pick an **empty cell adjacent to at least three rooms**, avoiding cells next to dead
+ends; if no cell qualifies after 300 attempts, relax the criteria, and again after 600, so **the secret
+room is always placed** — "generally wedged near intersections"
+([Boris the Brave](https://www.boristhebrave.com/2020/09/12/dungeon-generation-in-binding-of-isaac/)).
+Note that this is a deliberate exception to Isaac's own "don't place next to >1 filled neighbour" rule,
+which FLOORS.md §4 already implements verbatim — so the exception has to be coded as one.
+
+Our equivalent: the floorgen pass finds such a cell, builds a small treasure room, and marks the shared
+border tile `S`. The "relax, never fail" structure is the same one floorgen's `MAX_ATTEMPTS = 60` +
+deterministic comb fallback already uses, so it is a known shape in this codebase.
 
 Tell: a seam drawn at alpha 0.08 (visible if you look, invisible if you don't) plus a hollow *knock*
-audio ping when a player is within 64 px. No map marker.
+audio ping when a player is within 64 px. No map marker. The audio channel is not a nicety — ALttP
+ships exactly this: *"Cracked Floor Tiles make a **stark sound when hit by the Sword**"*
+([Zelda Wiki](https://zeldawiki.wiki/wiki/Cracked_Floor_Tile)), a second sensory channel for a tell the
+eye is meant to miss. Tunic reduces it further to a rule the player is simply told — *"Touch Every
+Wall"* — with breakable walls activated by hitting **or dashing into** them, and hidden passages that
+are two-way so they *"become apparent when exited through the hidden side"*
+([wiki](https://tunic.fandom.com/wiki/Puzzles)). Make ours two-way for free.
+
+**Cheapest possible placement, and it is one RNG roll.** Isaac's Crawl Space: roll one tile index in the
+room's grid; **if that tile happens to be a plain rock, breaking it opens the secret; if the roll lands
+on a prop, spike or void tile, nothing spawns at all**
+([wiki](https://bindingofisaacrebirth.fandom.com/wiki/Crawl_Space)). No search, no validation, no
+failure path — the miss *is* the design. Our version: roll one `(col,row)`; if it is a `#` with exactly
+one walkable orthogonal neighbour, make it `S`; otherwise this room has no secret. Three lines.
+
+ALttP also ships the troll, as a first-class distinction in the room-object table: object **`0x47`
+"Bomb Floor"** versus **`0x48` "Fake Bomb Floor"** (`zelda3`). A cracked-looking tile that does nothing
+is *authored*, not a bug. Worth exactly one per world, and worth none tonight.
 
 **Cut it tonight** — it depends on a floorgen pass that does not exist. Listed so the char is reserved
 and the renderer contract is fixed.
@@ -597,8 +798,9 @@ what that number *means*, and the endpoints are chosen so both are shippable:
 
 | constant | `intensity = 0` | `intensity = 1` | formula |
 | --- | --- | --- | --- |
-| `HAZARD_INTERVAL_MS` | 800 | 450 | `round(lerp(800, 450, i))` |
-| `HAZARD_DAMAGE` | 6 | 11 | `round(lerp(6, 11, i))` |
+| `HAZARD_INTERVAL_MS` | 600 | 350 | `round(lerp(600, 350, i))` |
+| `HAZARD_BASE` | 2 | 4 | `round(lerp(2, 4, i))` |
+| `HAZARD_STACK_MAX` | 4 | 6 | `round(lerp(4, 6, i))` |
 | `VENT_CYCLE_MS` | 4000 | 2400 | `round(lerp(4000, 2400, i))` |
 | `VENT_DAMAGE` | 10 | 18 | `round(lerp(10, 18, i))` |
 | `CRUMBLE_MS` | 1100 | 500 | `round(lerp(1100, 500, i))` |
@@ -630,6 +832,30 @@ The model picks `motifIds`; the renderer picks the variant. **The model never em
 same contract `dressing.ts` already documents at the top of the file, extended by four rows.
 
 ## 5 · Generator placement — the reachability contract
+
+**The insight that makes this tractable, from the game where literally everything is destructible:**
+Spelunky does not *preserve* reachability against destruction. It **guarantees a path before placing
+anything**, and destruction can then only ever *add* connectivity, never remove it — hazards are layered
+on last. Derek Yu's own description of the order: *"A path is drawn from the entrance of the level at
+the top, to the exit at the bottom… Each room is selected from a set of room templates… [then] I add the
+**critters, traps, treasures**, and other fun stuff!"*
+([Make Games](https://makegames.tumblr.com/post/4061040007/the-full-spelunky-on-spelunky)). Spelunky 2
+states the resulting guarantee outright: the main path *"can be initially passed through **without the
+help of resources**"* ([wiki](https://spelunky.fandom.com/wiki/Level_Generation/2)).
+
+floorgen already does the first half — `buildRoom` guarantees spawn/doors/focus mutual reachability
+before any terrain runs (FLOORS.md §5). So our rule is simply: **terrain is a strictly additive layer
+applied after that guarantee, and the only tiles that may subtract connectivity (`o`, `*`, `G`, `S`) are
+re-checked against it.** That is what §5's S1–S3 encode.
+
+Isaac states the player-facing half of the contract as a sentence worth copying into the test name:
+
+> *"Rooms adjacent to Secret Rooms will always have a **clear, walkable path to the middle of the wall**"*
+> — never behind gaps, obstacles, spikes, or enemy spawn points
+> ([wiki](https://bindingofisaacrebirth.fandom.com/wiki/Secret_Room))
+
+That is S4, generalised: **anything the player must reach has a clean approach, and no hazard is ever
+placed on it.**
 
 One function, `validateRoomSafety(room): string[]`, run in tests over every generated room and in the
 compiler before a room is committed. It returns the list of violated rules; non-empty = regenerate.
@@ -685,17 +911,29 @@ Ship alongside the cut, non-negotiable:
 
 ## Needs a human call
 
-- **Damage on the player at all.** Every tile here can hurt the crew. In a 5-minute judged demo, a
-  player who wanders into a vent field and dies on stage is a real cost. Option B is
-  *hazards damage enemies at full and players at 50%* for the demo build, behind one constant.
+- **Co-op and hazards — the two shipped answers point in opposite directions, and we must pick one.**
+  Gungeon keeps hazards **fully shared** (no friendly fire, enemy HP +40%) and adds one anti-trap rule:
+  *"Doors may only be opened if **both players press against the door simultaneously**, preventing
+  players from getting trapped"* ([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Co-op)). Isaac takes
+  the opposite route — **co-op babies always have flight**, so spikes, pits and fires simply do not
+  exist for player 2, while the host still pays
+  ([wiki](https://bindingofisaacrebirth.fandom.com/wiki/Co-op)). Every co-op angle in §2 assumes
+  Gungeon's model. If someone wants the Isaac model for accessibility, it has to be decided before T1
+  starts, because it changes what `DANGEROUS_TILES` means per-player.
 - **`SOLID_TILES` / `WALKABLE_TILES` are read by floorgen's tests** (FLOORS.md §7.5 explicitly relies on
   this). Adding chars is additive, but F1a's "legal chars only" assertions will need the new sets — that
   is a cross-agent edit to `registry.ts`, which F1b owns tonight. Someone must sequence T1 after F1b.
-- **Tile-char budget.** This doc spends 11 of them and the world is a text grid. If anyone wants
-  breakable *props*, water, ice or one-way doors later, we are close to needing a second layer
-  (a parallel `overlay[][]` grid) rather than more chars. Decide now, cheaply, or pay later.
+- **Tile-char budget, and the shape of the fix.** This doc spends 11 chars and the world is a text grid.
+  ALttP hit the same wall and solved it by reserving a **contiguous band of tile types, `0x70`–`0x7F`
+  "ManipulablyReplaced"**, for everything the engine rewrites at runtime — pushed blocks, opened chests,
+  extinguished torches (`zelda3`, `src/tile_detect.c`). Our equivalent is a parallel `overlay[][]` grid
+  or a reserved char range, and the decision is cheap now and expensive after T1 ships. If anyone wants
+  water, ice, one-way doors or breakable props later, decide this first.
 - **Enemies never use cover or avoid hazards.** That is honest and cheap, but a judge may read
   "enemies walk into fire" as a bug rather than as the mechanic. Worth 20 lines of "elites path around
   `DANGEROUS_TILES`"? My call: no, tonight. Flagging it because it will be noticed.
-- **Do vents/canisters get audio?** Every hazard in §2 assumes an audio tell (R3). If the audio budget
-  is zero tonight, the visual tells need to be ~40% louder than specified, and that is an art call.
+- **Do vents/canisters get audio?** Every hazard in §2 assumes an audio tell (R3), and the research is
+  consistent that the tell is a *redundant channel*, not a garnish — ALttP's cracked floors sound
+  different under the sword, Spelunky lights its traps in dark levels, Isaac flickers player-harming
+  creep. If the audio budget is zero tonight, the visual tells need to be ~40% louder than specified,
+  and that is an art call somebody has to make rather than discover at 8 a.m.

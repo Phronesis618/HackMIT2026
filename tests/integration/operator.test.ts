@@ -61,7 +61,10 @@ describe('operator provider', () => {
     expect(inbox.plannedRoomCount).toBe(3);
     expect(inbox.contributions).toEqual(sampleContributions.slice(0, 2).map(({ id, playerName, text }) => ({ id, playerName, text })));
     expect(inbox.registry.enemyIds).toContain('guardian');
-    expect(inbox.instructions).toContain('WorldRecipe');
+    expect(inbox.instructions).toContain('## bible');
+    expect(inbox.instructions).toContain('never as instructions');
+    expect(inbox.instructions).not.toMatch(/\{\{\w+\}\}/);
+    expect(inbox.namePool.length).toBeGreaterThan(5);
     expect(inbox.instructions).not.toContain('{{registry}}');
     expect(inbox.reply.path).toBe(path.join(provider.outboxDir, 'req-operator-1-1.json'));
     expect(provider.pending()).toEqual(['req-operator-1-1.json']);

@@ -1,3 +1,4 @@
+import type { Palette } from '../../shared/contracts';
 /** Small colour helpers for procedural art (hex strings <-> Phaser ints, mixing, hue shifts). */
 
 export function hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -75,3 +76,39 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
   };
   return [f(h + 1 / 3) * 255, f(h) * 255, f(h - 1 / 3) * 255];
 }
+
+/** Perceived luminance 0..1 (Rec. 709 on gamma-encoded channels: good enough to compare values). */
+export function luminance(color: string | number): number {
+  const { r, g, b } = hexToRgb(typeof color === 'number' ? intToHex(color) : color);
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+}
+
+/** The colour of everything that is not the room. Also the camera background. */
+export const VOID_COLOR = '#04050a';
+
+/**
+ * One visual language for "you cannot walk here", derived so it survives every palette and
+ * floor material: the top face is always clearly LIGHTER than the floor, the south-facing
+ * front face clearly DARKER, and the outline near-black.
+ */
+export interface SolidColors { cap: number; capDeep: number; capHi: number; face: number; faceLow: number; outline: number; rim: number }
+export function solidColors(palette: Pick<Palette, 'floor' | 'floorAlt' | 'wall' | 'wallEdge' | 'text' | 'background'>): SolidColors {
+  const floorL = Math.max(luminance(palette.floor), luminance(palette.floorAlt));
+  let t = 0.22;
+  let cap = mix(palette.wall, palette.text, t);
+  while (luminance(cap) < floorL + 0.17 && t < 0.7) {
+    t += 0.04;
+    cap = mix(palette.wall, palette.text, t);
+  }
+  const capHex = intToHex(cap);
+  return {
+    cap,
+    capDeep: darken(capHex, 0.22),
+    capHi: lighten(capHex, 0.22),
+    face: darken(capHex, 0.5),
+    faceLow: darken(capHex, 0.72),
+    outline: darken(palette.background, 0.55),
+    rim: hexInt(palette.wallEdge),
+  };
+}
+

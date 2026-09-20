@@ -126,13 +126,13 @@ export function generateFloorPlan(brief: BiomeBrief, tier: number, seed: string,
     const needDeadEnds = attempt <= STRICT_SPECIAL_ATTEMPTS ? wantedTotal : 0;
     const exit = chooseExit(map, budget, needDeadEnds);
     if (!exit) continue;
-    return finishPlan(parsed, safeTier, floorSeed, map, exit, wanted, attempt, false, rng);
+    return finishPlan(parsed, safeTier, seed, map, exit, wanted, attempt, false, rng);
   }
 
   const map = combFallback(budget);
   const exit = map.rooms.reduce((best, room) => (room.depth > best.depth ? room : best), map.rooms[0]!);
   const rng = createRng(seedKey(floorSeed, 'plan', 'fallback'));
-  return finishPlan(parsed, safeTier, floorSeed, map, exit, wanted, MAX_ATTEMPTS, true, rng);
+  return finishPlan(parsed, safeTier, seed, map, exit, wanted, MAX_ATTEMPTS, true, rng);
 }
 
 // ---------------------------------------------------------------------------
@@ -289,7 +289,7 @@ function chooseExit(map: RawMap, budget: number, needDeadEnds: number): RawRoom 
 function finishPlan(
   brief: BiomeBrief,
   tier: number,
-  floorSeed: string,
+  seed: string,
   map: RawMap,
   exit: RawRoom,
   wanted: Record<DeadEndKind, number>,
@@ -297,6 +297,7 @@ function finishPlan(
   usedFallback: boolean,
   rng: Rng,
 ): FloorPlan {
+  const floorSeed = seedKey(seed, brief.id);
   const budget = map.rooms.length;
   const kinds: RoomKind[] = map.rooms.map(() => 'combat');
   kinds[0] = 'entrance';
@@ -356,7 +357,7 @@ function finishPlan(
   return {
     biomeId: brief.id,
     tier,
-    seed: floorSeed,
+    seed,
     grid: { width: map.width, height: map.height },
     rooms,
     entranceId: idOf(0),

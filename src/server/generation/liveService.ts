@@ -85,23 +85,24 @@ export function createLiveGenerationService(options: {
       notes.push('Removed mappings to contribution IDs absent from this request.');
     }
     const generatedAt = Date.now();
-    let committedRoomCount = 1;
+    let worlds: PreparedWorld[];
     try {
-      for (; committedRoomCount <= request.plannedRoomCount; committedRoomCount++) {
-        signal?.throwIfAborted();
-        status('validating', `Compiling and validating room ${committedRoomCount}…`);
-        const compiled = compileWorldRecipe(recipe, { plannedRoomCount: request.plannedRoomCount, seed, committedRoomCount });
-        const mappings = compiled.rooms.flatMap((room) => room.attributions.map((attribution) => ({
+      signal?.throwIfAborted();
+      status('validating', `Compiling and validating all ${request.plannedRoomCount} planned rooms…`);
+      const compiled = compileWorldRecipe(recipe, { plannedRoomCount: request.plannedRoomCount, seed });
+      worlds = compiled.rooms.map((_, index) => {
+        const rooms = compiled.rooms.slice(0, index + 1);
+        const mappings = rooms.flatMap((room) => room.attributions.map((attribution) => ({
           contributionId: attribution.contributionId,
           kind: attribution.kind,
           featureDescription: attribution.featureDescription,
           roomIndex: room.index,
         })));
-        const world = PreparedWorldSchema.parse({
+        return PreparedWorldSchema.parse({
           worldId,
           createdAt: generatedAt,
           recipe: { ...recipe, contributionMappings: mappings },
-          rooms: compiled.rooms,
+          rooms,
           art: compiled.art,
           plannedRoomCount: request.plannedRoomCount,
           provenance: {
@@ -115,17 +116,17 @@ export function createLiveGenerationService(options: {
           },
           receipt: buildReceipt({ worldTitle: recipe.title, source: 'live', contributions: request.contributions, mappings }),
         });
-        status('ready', `Live world ready: ${committedRoomCount}/${request.plannedRoomCount} rooms committed.`);
-        yield world;
-      }
+      });
     } catch {
       signal?.throwIfAborted();
-      if (committedRoomCount > 1) {
-        status('failed', 'Later-room compilation failed; committed rooms are unchanged.');
-        throw new GenerationFailure('Later-room compilation failed.');
-      }
       notes.push('Generated world failed compiler validation.');
       yield fallback();
+      return;
+    }
+    for (const world of worlds) {
+      signal?.throwIfAborted();
+      status('ready', `Live world ready: ${world.rooms.length}/${request.plannedRoomCount} rooms committed.`);
+      yield world;
     }
   }
 

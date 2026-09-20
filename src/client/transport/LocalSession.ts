@@ -51,6 +51,7 @@ export class LocalSession implements GameSession {
   private snapshot: GameSnapshot | null = null;
 
   private pendingIntent: LocalIntent | null = null;
+  private pendingExit: { roomId: string; target: number } | null = null;
   private intentSeq = 0;
   private metaEventCounter = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -58,6 +59,7 @@ export class LocalSession implements GameSession {
   private lastTime = 0;
   private disposed = false;
   private activeGeneration: AbortController | null = null;
+  private generationHasPrefix = false;
   private lastPhase: GamePhase = 'headquarters';
 
   private snapshotListeners = new Set<(s: GameSnapshot) => void>();
@@ -95,6 +97,7 @@ export class LocalSession implements GameSession {
     this.disposed = true;
     this.activeGeneration?.abort();
     this.activeGeneration = null;
+    this.pendingExit = null;
     if (this.timer !== null) this.scheduler.clearInterval(this.timer);
     this.timer = null;
     this.connection = 'offline';
@@ -143,19 +146,25 @@ export class LocalSession implements GameSession {
 
   private handleSimEvents(events: GameEvent[]): GameEvent[] {
     const extra: GameEvent[] = [];
+    if (this.sim.getPhase() !== 'expedition') this.pendingExit = null;
     for (const event of events) {
-      if (event.type !== 'exit_reached') continue;
+      if (event.type !== 'exit_reached' || event.roomIndex !== this.sim.getRoom().index) continue;
       // Floors doors: the sim already moved the crew through the graph on this tick.
       if (event.toRoomId !== undefined) continue;
       if (this.sim.getPhase() === 'training') {
         // The range's only exit leads home.
         extra.push(...this.sim.returnToHeadquarters());
       } else if (this.sim.getPhase() === 'headquarters') {
-        if (this.world) extra.push(...this.enterRoom(0));
+        if (this.awaitingFirstPrefix()) {
+          this.setGeneration({ ...this.generation, message: 'Waiting for the first room to be committed.' });
+        } else if (this.world) extra.push(...this.enterRoom(0));
         else this.setGeneration({ ...this.generation, message: 'Prepare a world before entering the portal.' });
-      } else if (this.world) {
+      } else if (this.world && this.sim.getPhase() === 'expedition') {
         if (event.toRoomIndex < this.world.rooms.length) extra.push(...this.enterRoom(event.toRoomIndex));
-        else this.setGeneration({ ...this.generation, message: `Room ${event.toRoomIndex + 1} is not committed yet.` });
+        else {
+          this.pendingExit = { roomId: this.sim.getRoom().id, target: event.toRoomIndex };
+          this.setGeneration({ ...this.generation, message: `Room ${event.toRoomIndex + 1} is not committed yet.` });
+        }
       }
     }
     return extra;
@@ -212,7 +221,8 @@ export class LocalSession implements GameSession {
   }
 
   enterTraining(): boolean {
-    if (this.disposed || this.sim.getPhase() !== 'headquarters') return false;
+    if (this.disposed || this.sim.getPhase() !== 'headquarters' || this.awaitingFirstPrefix()) return false;
+    this.pendingExit = null;
     const events = this.sim.enterTraining();
     this.snapshot = this.sim.getSnapshot();
     if (events.length) this.emitEvents(events);
@@ -223,9 +233,12 @@ export class LocalSession implements GameSession {
 
   async requestWorld(): Promise<PreparedWorld> {
     if (this.disposed) throw new Error('Session has been disposed.');
+    if (this.sim.getPhase() !== 'headquarters') throw new Error('World generation requires headquarters.');
     this.activeGeneration?.abort();
     const controller = new AbortController();
     this.activeGeneration = controller;
+    this.generationHasPrefix = false;
+    this.pendingExit = null;
     const requestId = randomId('req');
     const startedAt = Date.now();
     const request = GenerationRequestSchema.parse({
@@ -264,9 +277,11 @@ export class LocalSession implements GameSession {
             if (!current()) return;
             const world = parseWorldPrefix(rawWorld, request, previous);
             const first = !previous;
-            previous = structuredClone(world);
-            this.world = world;
             this.sim.setWorld(world);
+            if (this.sim.getWorld() !== world) throw new Error('Simulation rejected the prepared world.');
+            this.world = world;
+            previous = structuredClone(world);
+            this.generationHasPrefix = true;
             this.setGeneration({
               phase: world.provenance.source === 'live' ? 'ready' : 'fallback',
               message: `${world.provenance.label}: ${world.rooms.length}/${world.plannedRoomCount} rooms ready.`,
@@ -283,6 +298,13 @@ export class LocalSession implements GameSession {
                 }),
               ]);
               resolve(world);
+            }
+            if (!current()) return;
+            const events = this.finishPendingExit();
+            if (events.length) {
+              this.snapshot = this.sim.getSnapshot();
+              this.emitEvents(events);
+              for (const listener of this.snapshotListeners) listener(this.snapshot);
             }
           }
           if (current() && (!previous || previous.rooms.length < previous.plannedRoomCount)) {
@@ -324,6 +346,7 @@ export class LocalSession implements GameSession {
 
   returnToHeadquarters(): void {
     if (this.disposed || this.sim.getPhase() === 'headquarters') return;
+    this.pendingExit = null;
     const events = this.sim.returnToHeadquarters();
     this.snapshot = this.sim.getSnapshot();
     if (events.length) this.emitEvents(events);
@@ -332,9 +355,25 @@ export class LocalSession implements GameSession {
   }
 
   private enterRoom(index: number): GameEvent[] {
+    if (this.awaitingFirstPrefix()) return [];
+    this.pendingExit = null;
     const events = this.sim.enterRoom(index);
     this.notifyPhase();
     return events;
+  }
+
+  private finishPendingExit(): GameEvent[] {
+    if (!this.pendingExit) return [];
+    if (this.sim.getPhase() !== 'expedition' || this.pendingExit.roomId !== this.sim.getRoom().id) {
+      this.pendingExit = null;
+      return [];
+    }
+    if (!this.world?.rooms[this.pendingExit.target]) return [];
+    return this.enterRoom(this.pendingExit.target);
+  }
+
+  private awaitingFirstPrefix(): boolean {
+    return this.activeGeneration !== null && !this.generationHasPrefix;
   }
 
   private notifyPhase(): void {

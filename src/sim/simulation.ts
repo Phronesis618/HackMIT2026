@@ -25,7 +25,7 @@ import { TRAINING_REGEN_PER_TICK, TRAINING_RESPAWN_MS, TRAINING_WAKE_RANGE, trai
 import { FLOOR_ENTRANCE_ROOM_ID } from '../shared/floors';
 import { createRoomProvider, type RoomProvider } from './floorProvider';
 import {
-  FLOOR_TUNING, TREASURE_REWARD, advanceBiome, clearReward, createFloorsRun, doorArrival, floorRunState, focusPoint,
+  FLOOR_TUNING, TREASURE_REWARD, advanceBiome, clearReward, connectedTiles, createFloorsRun, doorArrival, floorRunState, focusPoint,
   markCleared, markVisited, sealsDoors, tierMultiplier, type FloorsRun,
 } from './floors';
 
@@ -249,10 +249,17 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       const encounter = gatekeeper ? { ...planned, enemyId: 'guardian' as const, count: 1 } : planned;
       const info = ENEMY_INFO[encounter.enemyId];
       const maxHp = Math.round(info.maxHp * hpScale * (gatekeeper ? FLOOR_TUNING.gatekeeperHpShare : 1));
+      let reachable: Set<number> | undefined;
       for (let i = 0; i < encounter.count; i++) {
         const base = tileToWorld(encounter.x, encounter.y);
         const offset = i === 0 ? 0 : (i % 2 === 0 ? 1 : -1) * Math.ceil(i / 2) * (info.radius * 2 + 6);
-        const spawn = nearestOpenPosition(grid, { x: base.x + offset, y: base.y }, info.radius);
+        let spawn = nearestOpenPosition(grid, { x: base.x + offset, y: base.y }, info.radius);
+        if (floorsRun && i > 0) {
+          // Pack members fan out sideways; never into a pocket the crew cannot reach (sealed doors would never open).
+          reachable ??= connectedTiles(grid, { col: encounter.x, row: encounter.y });
+          const tile = worldToTile(spawn.x, spawn.y);
+          if (!reachable.has(tile.row * grid.width + tile.col)) spawn = nearestOpenPosition(grid, base, info.radius);
+        }
         enemies.push({
           state: {
             id: `${encounter.id.slice(0, 61)}-${i}`, enemyId: encounter.enemyId,
@@ -405,13 +412,15 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     events.push(emit({ type: 'enemy_damaged', enemyId: s.id, byPlayerId: p.state.id, amount, remainingHp: s.hp }));
     if (s.hp === 0) {
       s.telegraph = null;
-      events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: p.state.id }));
+      events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: p.state.id,
+        worldId: phase === 'expedition' ? world?.worldId ?? null : null }));
       dropRemains(e);
     }
   }
 
   /** The first kill of each enemy kind leaves its lore behind where it fell. */
   function dropRemains(e: EnemyRuntime): void {
+    if (phase !== 'expedition') return;
     const lore = world?.recipe.lore ?? [];
     const fragmentIndex = lore.findIndex((f) => f.kind === 'remains' && f.enemyId === e.state.enemyId);
     if (fragmentIndex < 0 || discoveredLore.has(fragmentIndex)) return;
@@ -423,14 +432,15 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   }
 
   function discoverLore(node: LoreNodeRuntime, by: PlayerRuntime, events: GameEvent[]): void {
-    const fragment = world?.recipe.lore[node.state.fragmentIndex];
+    if (phase !== 'expedition' || !world) return;
+    const fragment = world.recipe.lore[node.state.fragmentIndex];
     node.state.state = 'collected';
     node.state.progress = 1;
     node.holdMs = 0;
+    if (!fragment || discoveredLore.has(node.state.fragmentIndex)) return;
     discoveredLore.add(node.state.fragmentIndex);
-    if (!fragment) return;
     events.push(emit({
-      type: 'lore_discovered', playerId: by.state.id, fragmentIndex: node.state.fragmentIndex, kind: fragment.kind,
+      type: 'lore_discovered', worldId: world.worldId, playerId: by.state.id, fragmentIndex: node.state.fragmentIndex, kind: fragment.kind,
       title: fragment.title, source: fragment.source, text: fragment.text, x: node.state.x, y: node.state.y,
     }));
   }
@@ -1175,10 +1185,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       if (world?.worldId !== next?.worldId) {
         rooms.clear();
         discoveredLore = new Set();
-        roomProvider = null;
       }
       world = next;
-      if (next?.floors && !roomProvider) roomProvider = (options.roomProvider ?? createRoomProvider)(next);
+      // Outside a run the provider follows the latest copy of the world (briefs may arrive late).
+      if (!floorsRun) roomProvider = next?.floors ? (options.roomProvider ?? createRoomProvider)(next) : null;
     },
     getWorld() { return world; },
     getRoom() { return room; },
@@ -1266,6 +1276,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         updateObjectives(events);
       } else if (phase === 'training') {
         for (const e of progress.enemies) stepEnemy(e, events);
+        stepProjectiles(events);
         respawnTrainingTargets();
       }
       updateExits(events);

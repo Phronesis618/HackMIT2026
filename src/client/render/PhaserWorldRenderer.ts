@@ -6,6 +6,7 @@ import Phaser from 'phaser';
 import type { ArtRecipe, GameEvent, GameSnapshot, ReceiptLine, RoomSpec } from '../../shared/contracts';
 import type { WorldRenderer } from '../../shared/render';
 import { tokens } from '../../shared/tokens';
+import { VOID_COLOR } from './color';
 import { RoomScene } from './RoomScene';
 
 type WorldLabel = { title: string; tagline: string };
@@ -42,7 +43,7 @@ export class PhaserWorldRenderer implements WorldRenderer {
         parent: container,
         width,
         height,
-        backgroundColor: tokens.color.ink900,
+        backgroundColor: VOID_COLOR,
         antialias: true,
         scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
         scene: [scene],

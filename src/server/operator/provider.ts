@@ -190,7 +190,7 @@ export function createOperatorProvider(options: OperatorProviderOptions): Operat
           assertDisplayText(parsed.recipe);
           outcome = 'accepted';
           log(`operator: accepted "${parsed.recipe.title}" after ${Math.round((now() - createdAt) / 1000)}s (attempt ${attempt})`);
-          return { recipe: parsed.recipe, notes: parsed.notes };
+          return { recipe: parsed.recipe, ...(parsed.notes.length ? { notes: parsed.notes } : {}) };
         } catch (error) {
           if (signal?.aborted) outcome = 'cancelled';
           else if (error instanceof GenerationFailure) outcome = error.repairable ? 'rejected' : 'timeout';

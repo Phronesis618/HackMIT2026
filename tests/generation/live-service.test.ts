@@ -7,6 +7,7 @@ import {
 } from '../../src/shared/contracts';
 import { MOTIF_IDS, PROP_IDS, ENEMY_IDS } from '../../src/shared/registry';
 import { sampleContributions } from '../../src/shared/samples';
+import { FoundationToolSchema } from '../../src/server/generation/stages';
 import { createGenerationService } from '../../src/server/generation';
 import { loadWorldFixtures } from '../../src/server/generation/fixtureService';
 
@@ -46,8 +47,8 @@ describe('live generation', () => {
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     expect(url).toBe('https://api.openai.com/v1/responses');
     expect(body).toMatchObject({
-      store: false, max_output_tokens: 6000,
-      text: { format: { strict: true, type: 'json_schema', schema: z.toJSONSchema(WorldRecipeSchema, { target: 'draft-7' }) } },
+      store: false, max_output_tokens: 2500,
+      text: { format: { strict: true, type: 'json_schema', schema: z.toJSONSchema(FoundationToolSchema, { target: 'draft-7' }) } },
     });
     for (const id of [...MOTIF_IDS, ...PROP_IDS, ...ENEMY_IDS]) expect(body.instructions).toContain(id);
     expect(String(body.input)).not.toContain(sampleContributions[0]!.playerName);

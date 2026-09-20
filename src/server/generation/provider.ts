@@ -185,7 +185,7 @@ function createRecipeProvider(options: ProviderOptions, provider: 'openai' | 'an
       try {
         const { recipe, notes } = parseFullRecipe(raw);
         assertDisplayText(recipe);
-        return { recipe, notes, ...(usage ? { usage } : {}) };
+        return { recipe, ...(notes.length ? { notes } : {}), ...(usage ? { usage } : {}) };
       } catch (error) {
         if (error instanceof StageParseError) throw new GenerationFailure(error.message.slice(0, 200), true);
         throw error;

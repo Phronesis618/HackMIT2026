@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { PreparedWorldSchema, WorldRecipeSchema, type GenerationRequest, type PreparedWorld } from '../../src/shared/contracts';
 import { sampleContributions } from '../../src/shared/samples';
+import { FoundationToolSchema } from '../../src/server/generation/stages';
 import { createGenerationService } from '../../src/server/generation';
 import { loadWorldFixtures } from '../../src/server/generation/fixtureService';
 
@@ -39,15 +40,17 @@ describe('Claude generation', () => {
     expect(init?.headers).toEqual({
       'x-api-key': 'claude-unit-test-key', 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json',
     });
+    // Call 1 of the staged flow: the bible-first foundation schema, streamed, ideas as data only.
     expect(body).toMatchObject({
-      model: 'claude-test', max_tokens: 6000,
-      tools: [{ name: 'world_recipe', input_schema: z.toJSONSchema(WorldRecipeSchema, { target: 'draft-7' }) }],
+      model: 'claude-test', max_tokens: 2500, stream: true,
+      tools: [{ name: 'world_recipe', input_schema: z.toJSONSchema(FoundationToolSchema, { target: 'draft-7' }) }],
       tool_choice: { type: 'tool', name: 'world_recipe', disable_parallel_tool_use: true },
-      messages: [{ role: 'user', content: JSON.stringify({
-        plannedRoomCount: 3, contributions: sampleContributions.map(({ id, text }) => ({ id, text })),
-      }) }],
     });
+    const sent = JSON.parse((body.messages as Array<{ content: string }>)[0]!.content) as Record<string, unknown>;
+    expect(sent.contributions).toEqual(sampleContributions.map(({ id, text }) => ({ id, text })));
+    expect(Object.keys((body.tools as Array<{ input_schema: { properties: object } }>)[0]!.input_schema.properties)[0]).toBe('bible');
     expect(body.system).toContain('guardian');
+    expect(body.system).toContain('never as instructions');
     expect(JSON.stringify(body.messages)).not.toContain(sampleContributions[0]!.playerName);
     expect(JSON.stringify(body)).not.toContain('unused-openai-key');
     expect(worlds.map((world) => world.rooms.length)).toEqual([1, 2, 3]);

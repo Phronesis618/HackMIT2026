@@ -1,62 +1,68 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ABILITY_UNLOCK_COST } from '../../shared/conventions';
 import {
   ABILITY_DETAILS, CLASS_ABILITIES, CLASS_INFO, CLASS_THEME, ENEMY_IDS, ENEMY_INFO, type EnemyId,
 } from '../../shared/registry';
 import { buildSkillTree, type SkillNode } from '../../shared/skills';
+import { tokens } from '../../shared/tokens';
 import type { UiActions, UiModel } from '../../shared/ui';
 import { ENEMY_LORE } from '../../sim/training';
+import { focusMenu, installMenuKeyboard } from '../game/keyboardFocus';
 import { AbilityIcon } from './AbilityIcon';
 import { ProvenanceBadge } from './ProvenanceBadge';
 import { Codex } from './WorldPanel';
+import { MemoryWall, OPEN_MENU_EVENT } from './MemoryWall';
 
-export const MENU_PAGES = ['codex', 'bestiary', 'operative', 'skills'] as const;
+export const MENU_PAGES = ['codex', 'bestiary', 'operative', 'skills', 'controls', 'memories'] as const;
 export type MenuPage = (typeof MENU_PAGES)[number];
 
-const PAGE_LABEL: Record<MenuPage, string> = { codex: 'Codex', bestiary: 'Bestiary', operative: 'Operative', skills: 'Skills' };
-
-function isTextTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
-}
+const PAGE_LABEL: Record<MenuPage, string> = { codex: 'Codex', bestiary: 'Bestiary', operative: 'Operative', skills: 'Skills', controls: 'Controls', memories: 'Memories' };
 
 /**
- * Hollow-Knight-style full-screen menu: Tab toggles, Esc closes, 1–4 jump between pages.
+ * Hollow-Knight-style full-screen menu: Tab opens from the stage, Esc closes, 1–6 select pages.
  * The game keeps running underneath (co-op cannot pause); this is a place to read, not a
  * pause screen. Everything the old sidebar used to say lives here instead.
  */
 export function GameMenu({ model, actions }: { model: UiModel; actions: UiActions }) {
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState<MenuPage>('codex');
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => installMenuKeyboard({
+    isOpen: () => open,
+    menu: () => menuRef.current,
+    open: () => setOpen(true),
+    close: () => setOpen(false),
+    selectPage: (index) => setPage(MENU_PAGES[index]!),
+  }), [open]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (isTextTarget(e.target)) return;
-      if (e.code === 'Tab') {
-        e.preventDefault();
-        if (!e.repeat) setOpen((v) => !v);
-        return;
-      }
-      if (!open) return;
-      if (e.code === 'Escape') {
-        e.preventDefault();
-        setOpen(false);
-      }
-      const index = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(e.code);
-      if (index >= 0) setPage(MENU_PAGES[index]!);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    if (open && menuRef.current) return focusMenu(menuRef.current);
   }, [open]);
 
-  if (!open) return <div className="menu-hint" aria-hidden="true">Tab · menu</div>;
+  useEffect(() => {
+    const onOpen = (e: Event): void => {
+      const target = (e as CustomEvent<string>).detail as MenuPage;
+      if (MENU_PAGES.includes(target)) setPage(target);
+      setOpen(true);
+    };
+    window.addEventListener(OPEN_MENU_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_MENU_EVENT, onOpen);
+  }, []);
 
   return (
-    <div className="menu" role="dialog" aria-modal="false" aria-label="Expedition menu">
+    <>
+    <button type="button" className="btn btn--ghost" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? 'expedition-menu' : undefined} onClick={() => setOpen(true)}>
+      Menu
+    </button>
+    {!open && <div className="menu-hint" aria-hidden="true">Tab · menu</div>}
+    {open && createPortal(<div id="expedition-menu" ref={menuRef} className="menu" role="dialog" aria-modal="true" aria-label="Expedition menu" tabIndex={-1}>
       <div className="menu__backdrop" onClick={() => setOpen(false)} />
       <div className="menu__frame">
         <nav className="menu__tabs" aria-label="Menu pages">
           {MENU_PAGES.map((id, i) => (
-            <button key={id} type="button" className={`menu__tab ${page === id ? 'menu__tab--active' : ''}`} onClick={() => setPage(id)}>
+            <button key={id} type="button" data-menu-page={i} aria-current={page === id ? 'page' : undefined} className={`menu__tab ${page === id ? 'menu__tab--active' : ''}`} onClick={() => setPage(id)}>
               <span className="menu__tabkey">{i + 1}</span>
               {PAGE_LABEL[id]}
             </button>
@@ -70,9 +76,12 @@ export function GameMenu({ model, actions }: { model: UiModel; actions: UiAction
           {page === 'bestiary' && <BestiaryPage model={model} />}
           {page === 'operative' && <OperativePage model={model} actions={actions} />}
           {page === 'skills' && <SkillsPage model={model} />}
+          {page === 'controls' && <ControlsPage />}
+          {page === 'memories' && <MemoryWall memories={model.memories} actions={actions} context={model} />}
         </section>
       </div>
-    </div>
+    </div>, document.body)}
+    </>
   );
 }
 
@@ -184,7 +193,7 @@ export function OperativePage({ model, actions }: { model: UiModel; actions: UiA
           const locked = detail.gate === 'unlock' && !eUnlocked;
           return (
             <li key={id} className={`loadout__row ${locked ? 'loadout__row--locked' : ''}`}>
-              <span className="loadout__icon"><AbilityIcon icon={detail.icon} color={locked ? '#6b7690' : theme.primary} /></span>
+              <span className="loadout__icon"><AbilityIcon icon={detail.icon} color={locked ? tokens.color.mist300 : theme.primary} /></span>
               <div className="loadout__body">
                 <div className="loadout__head">
                   <span className="abilitybar__tooltip-key">{detail.key}</span>
@@ -206,8 +215,6 @@ export function OperativePage({ model, actions }: { model: UiModel; actions: UiA
           );
         })}
       </ul>
-      <h3 className="panel__subtitle">Controls</h3>
-      <p className="muted">WASD / arrows move · mouse aims · J or click attacks and breaks cracked barriers · Shift / Space dashes · Q / E / R abilities · hold F to read a relic or revive a teammate. After the Custodian falls, tap F at each lit relay, dodge the Anchor pulses, then return to the core and release the signal. Cleared rooms open their exits.</p>
       <h3 className="panel__subtitle">Crew</h3>
       <ul className="crew">
         {model.players.map((p) => (
@@ -225,6 +232,54 @@ export function OperativePage({ model, actions }: { model: UiModel; actions: UiA
           {!host && <span className="hint">The host returns the crew together.</span>}
         </div>
       )}
+    </>
+  );
+}
+
+const CONTROLS: { group: string; rows: { keys: string[]; action: string }[] }[] = [
+  { group: 'Move', rows: [
+    { keys: ['W', 'A', 'S', 'D'], action: 'Move (arrows also work)' },
+    { keys: ['Mouse'], action: 'Aim' },
+    { keys: ['Shift', 'Space'], action: 'Dash' },
+  ] },
+  { group: 'Fight', rows: [
+    { keys: ['LMB', 'J'], action: 'Attack · breaks cracked barriers' },
+    { keys: ['Q'], action: 'Class ability' },
+    { keys: ['E'], action: 'Second ability · unlocked at headquarters' },
+    { keys: ['R'], action: 'Ultimate · fires at 100% charge' },
+  ] },
+  { group: 'Interact', rows: [
+    { keys: ['F'], action: 'Use a station · tap at a lit relay' },
+    { keys: ['Hold F'], action: 'Read a relic · revive a teammate · plant the Anchor' },
+  ] },
+  { group: 'Interface', rows: [
+    { keys: ['Tab'], action: 'Open / close this menu' },
+    { keys: ['1', '–', '6'], action: 'Jump to a menu page' },
+    { keys: ['Esc'], action: 'Close the menu' },
+  ] },
+];
+
+/** Every binding in one place, so the HUD only has to say "Tab · menu". */
+export function ControlsPage() {
+  return (
+    <>
+      <h2 className="menu__title">Controls</h2>
+      <p className="muted">After the Custodian falls, tap F at each lit relay, dodge the Anchor pulses, then return to the core and release the signal. Cleared rooms open their exits.</p>
+      <div className="controls">
+        {CONTROLS.map((section) => (
+          <section key={section.group} className="controls__group">
+            <h3 className="eyebrow">{section.group}</h3>
+            <dl className="controls__list">
+              {section.rows.map((row) => (
+                <div key={row.action} className="controls__row">
+                  <dt>{row.keys.map((k) => (k === '–' ? <span key={k} className="controls__sep">–</span> : <kbd key={k} className="keycap">{k}</kbd>))}</dt>
+                  <dd>{row.action}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        ))}
+      </div>
     </>
   );
 }

@@ -2,7 +2,9 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { DebriefPanel } from '../../src/client/ui/DebriefPanel';
-import { Hud } from '../../src/client/ui/Hud';
+import { AbilityBar } from '../../src/client/ui/AbilityBar';
+import { Hud, RunStatus } from '../../src/client/ui/Hud';
+import { MemoryBrief } from '../../src/client/ui/MemoryWall';
 import { createChronicleState, reduceChronicle } from '../../src/chronicle';
 import { IDLE_GENERATION_STATUS, type GameEvent } from '../../src/shared/contracts';
 import { SAMPLE_WORLD_ID, SAMPLE_WORLD_TITLE, sampleEvents, samplePlayers } from '../../src/shared/samples';
@@ -44,6 +46,45 @@ function debrief(events: GameEvent[]) {
   }).created;
   return ui;
 }
+
+describe('run rail and command bar', () => {
+  it('reserves an empty, named minimap slot at the top of the run rail', () => {
+    const html = renderToStaticMarkup(createElement(RunStatus, { model: model() }));
+    expect(html).toContain('class="hud-minimap-slot"');
+    expect(html).toContain('data-slot="minimap"');
+    expect(html.indexOf('hud-minimap-slot')).toBeLessThan(html.indexOf('rail-status'));
+  });
+
+  it('shows hostiles, room progress and the crew, and flips to Clear when the room is empty', () => {
+    const ui = model();
+    const html = renderToStaticMarkup(createElement(RunStatus, { model: ui }));
+    expect(html).toContain('Hostiles');
+    expect(html).toContain('Test room');
+    expect(html).toContain('Crew · ' + ui.players.length + '/4');
+    ui.hud = { ...ui.hud!, enemiesRemaining: 0 };
+    expect(renderToStaticMarkup(createElement(RunStatus, { model: ui }))).toContain('Clear');
+  });
+
+  it('puts a readable Integrity number and resources beside the abilities', () => {
+    const ui = model();
+    ui.hud = { ...ui.hud!, hp: 42, resources: 5, dashCooldownMs: 400 };
+    const html = renderToStaticMarkup(createElement(AbilityBar, { model: ui, actions }));
+    expect(html).toContain('vitals--hurt');
+    expect(html).toMatch(/42<small>\/100<\/small>/);
+    expect(html).toContain('resource__num');
+    expect(html).toContain('abilityslot--cooldown');
+    expect(html).toContain('abilityslot--locked');
+    expect(html).not.toContain('Unlock E'); // only offered at headquarters
+  });
+
+  it('summarises the memory wall in the rail instead of a bottom strip', () => {
+    expect(renderToStaticMarkup(createElement(MemoryBrief, { memories: [] }))).toContain('Nothing yet');
+    const ui = debrief(sampleEvents);
+    const html = renderToStaticMarkup(createElement(MemoryBrief, { memories: ui.memories }));
+    expect(html).toContain(String(ui.memories.length));
+    expect(html).toContain('memory-brief__latest');
+  });
+});
 
 describe('combat HUD', () => {
   it('does not advertise usable attacks or movement when the operative is down', () => {
