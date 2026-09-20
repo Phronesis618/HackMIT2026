@@ -81,16 +81,31 @@ export function moveCircle(
   const sy = dy / steps;
   let blockedX = false;
   let blockedY = false;
+  // When an axis move is blocked only by a corner, slide slightly along the other axis so
+  // entities round corners instead of sticking to them (fixes "stuck on the wall edge").
+  const nudge = Math.max(1, Math.min(r * 0.5, Math.abs(sx) + Math.abs(sy)));
   for (let i = 0; i < steps; i++) {
-    if (sx !== 0) {
+    if (Math.abs(sx) > 1e-6) {
       const nx = x + sx;
-      if (circleHitsSolid(grid, nx, y, r)) blockedX = true;
-      else x = nx;
+      if (!circleHitsSolid(grid, nx, y, r)) x = nx;
+      else if (!circleHitsSolid(grid, nx, y - nudge, r)) {
+        x = nx;
+        y -= nudge;
+      } else if (!circleHitsSolid(grid, nx, y + nudge, r)) {
+        x = nx;
+        y += nudge;
+      } else blockedX = true;
     }
-    if (sy !== 0) {
+    if (Math.abs(sy) > 1e-6) {
       const ny = y + sy;
-      if (circleHitsSolid(grid, x, ny, r)) blockedY = true;
-      else y = ny;
+      if (!circleHitsSolid(grid, x, ny, r)) y = ny;
+      else if (!circleHitsSolid(grid, x - nudge, ny, r)) {
+        y = ny;
+        x -= nudge;
+      } else if (!circleHitsSolid(grid, x + nudge, ny, r)) {
+        y = ny;
+        x += nudge;
+      } else blockedY = true;
     }
   }
   return { x, y, blockedX, blockedY };

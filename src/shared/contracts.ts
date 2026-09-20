@@ -260,11 +260,17 @@ export const RoomSpecSchema = z
       ctx.addIssue({ code: 'custom', message: `non-final room needs at least one exit` });
     }
     const inBounds = (x: number, y: number) => x < room.width && y < room.height;
+    const walkable = (x: number, y: number) => {
+      const ch = room.tiles[y]?.[x];
+      return ch !== undefined && ch !== '#' && ch !== ' ';
+    };
     for (const p of room.props) {
       if (!inBounds(p.x, p.y)) ctx.addIssue({ code: 'custom', message: `prop ${p.id} out of bounds` });
+      else if (!walkable(p.x, p.y)) ctx.addIssue({ code: 'custom', message: `prop ${p.id} is placed on a wall/void tile` });
     }
     for (const e of room.encounters) {
       if (!inBounds(e.x, e.y)) ctx.addIssue({ code: 'custom', message: `encounter ${e.id} out of bounds` });
+      else if (!walkable(e.x, e.y)) ctx.addIssue({ code: 'custom', message: `encounter ${e.id} is placed on a wall/void tile` });
     }
   });
 export type RoomSpec = z.infer<typeof RoomSpecSchema>;
