@@ -14,8 +14,10 @@ export interface SolidGrid {
   solid: Uint8Array;
 }
 
-export function buildSolidGrid(room: RoomSpec, brokenWalls: readonly string[] = []): SolidGrid {
+/** `sealedDoors`: floors rooms lock their door ('X') tiles while a fight is on. */
+export function buildSolidGrid(room: RoomSpec, brokenWalls: readonly string[] = [], sealedDoors = false): SolidGrid {
   const solid = new Uint8Array(room.width * room.height);
+  if (sealedDoors) for (const exit of room.exits) solid[exit.y * room.width + exit.x] = 1;
   for (let row = 0; row < room.height; row++) {
     for (let col = 0; col < room.width; col++) {
       const ch = terrainTileAt(room, col, row, brokenWalls);
