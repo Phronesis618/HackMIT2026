@@ -53,6 +53,15 @@ function loadIdentity(tabName: string | null): PlayerIdentity {
   return fresh;
 }
 
+/** Per-tab storage for the co-op resume credential (a reload must come back as the same operative). */
+function tabStorage(): Storage | undefined {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return undefined;
+  }
+}
+
 const ClientConfigSchema = z.object({ liveGenerationAvailable: z.boolean() });
 
 async function fetchLiveAvailability(): Promise<boolean | null> {
@@ -76,7 +85,7 @@ async function boot(): Promise<void> {
   const tabName = params.get('as')?.trim() || null;
   const identity = loadIdentity(tabName && /^[A-Za-z0-9 _-]{1,24}$/.test(tabName) ? tabName : null);
   const session: GameSession = coOp
-    ? new RemoteSession({ identity })
+    ? new RemoteSession({ identity, resumeStorage: tabStorage() })
     : new LocalSession({ identity, worldProvider: flags.fixtureWorld ? fixtureWorldProvider : serverWorldProvider });
   const renderer = new PhaserWorldRenderer();
   const chronicle = createBrowserChronicle(window.localStorage);
