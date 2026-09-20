@@ -11,6 +11,7 @@ import {
 import { buildSolidGrid, circleHitsSolid } from '../../src/sim/collision';
 import { chaseWaypoint, clearPath, nearestOpenPosition } from '../../src/sim/combat';
 import { createSimulation } from '../../src/sim';
+import { DEMO_TUNING } from '../../src/sim/tuning';
 import * as compiler from '../../src/server/generation/compiler';
 import { loadWorldFixtures } from '../../src/server/generation/fixtureService';
 import { createLiveGenerationService } from '../../src/server/generation/liveService';
@@ -165,6 +166,17 @@ describe('mandatory encounter readiness', () => {
     expect(events).toContainEqual(expect.objectContaining({ type: 'enemy_defeated' }));
     expect(custodian.bossPhase).toBe(3);
     expect(sim.getSnapshot().anchor!.ritual!.stage).toBe('locked');
+    // A10: "phase 3 was reached" on its own would also pass if the Custodian had simply spawned
+    // there. These say the fight actually happened, and cost nothing — the events are already in
+    // hand. It walked up through every phase, in order, and it used its own moves to defend them.
+    expect(events.flatMap((event) => event.type === 'boss_phase_changed' ? [event.phase] : [])).toEqual([2, 3]);
+    const patterns = new Set(events.flatMap((event) => event.type === 'boss_pattern_started' ? [event.patternId] : []));
+    expect(patterns.size).toBeGreaterThanOrEqual(2);
+    // The relay shield holds: no single hit ever took more than the cap of its health (§3.2).
+    const cap = Math.ceil(custodian.maxHp * DEMO_TUNING.bossHitCap);
+    const onBoss = events.flatMap((event) => event.type === 'enemy_damaged' && event.enemyId === custodian.id ? [event.amount] : []);
+    expect(onBoss.length).toBeGreaterThan(10);
+    expect(Math.max(...onBoss)).toBeLessThanOrEqual(cap);
   });
 });
 

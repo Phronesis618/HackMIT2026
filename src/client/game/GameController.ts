@@ -191,6 +191,8 @@ export class GameController {
           prev.abilityQCooldownMs !== hud.abilityQCooldownMs ||
           prev.abilityECooldownMs !== hud.abilityECooldownMs ||
           prev.reviveProgress !== hud.reviveProgress ||
+          prev.hasteMs !== hud.hasteMs ||
+          prev.slowMs !== hud.slowMs ||
           prev.roomCleared !== hud.roomCleared ||
           prev.anchor?.state !== hud.anchor?.state ||
           prev.anchor?.progress !== hud.anchor?.progress ||
@@ -503,6 +505,9 @@ function hudFrom(me: PlayerState, snapshot: GameSnapshot): NonNullable<UiModel['
     abilityQCooldownMs: Math.ceil((me.abilityQCooldownMs ?? 0) / 100) * 100,
     abilityECooldownMs: Math.ceil((me.abilityECooldownMs ?? 0) / 100) * 100,
     reviveProgress: me.reviveProgress ?? 0,
+    // A24: rounded to a tenth so the chip does not rerender the UI every frame.
+    ...((me.hasteMs ?? 0) > 0 ? { hasteMs: Math.ceil((me.hasteMs ?? 0) / 100) * 100 } : {}),
+    ...((me.slowMs ?? 0) > 0 ? { slowMs: Math.ceil((me.slowMs ?? 0) / 100) * 100 } : {}),
     roomCleared: snapshot.roomCleared ?? false,
     anchor: snapshot.anchor,
     ultCharge: Math.round(me.ultCharge ?? 0),

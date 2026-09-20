@@ -1687,7 +1687,7 @@ body { font-size: var(--fs-body); }
   --vital: var(--color-success);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: 'id read' 'bar bar';
+  grid-template-areas: 'id read' 'bar bar' 'chips chips';
   gap: var(--space-sm) var(--space-md);
   align-items: baseline;
   max-width: 340px;
@@ -1733,6 +1733,24 @@ body { font-size: var(--fs-body); }
   background: repeating-linear-gradient(90deg, transparent 0 calc(25% - 1px), var(--color-ink900) calc(25% - 1px) 25%);
 }
 .vitals--critical .vitals__fill { animation: signal 0.5s ease-in-out infinite alternate; }
+
+/* A24: timed states (clear_surge haste, a slow) — one tiny chip each, under the bar. */
+.vitals__chips { grid-area: chips; display: flex; gap: var(--space-sm); list-style: none; margin: 0; padding: 0; }
+.status-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--hair-strong);
+  font: var(--fs-stamp) var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-mist100);
+  white-space: nowrap;
+}
+.status-chip--quick { border-color: var(--color-warmLamp); color: var(--color-warmLamp); }
+.status-chip--slow { border-color: var(--color-mist300); color: var(--color-mist300); }
+.status-chip__time { color: var(--color-mist300); }
 
 .abilitybar { position: relative; }
 .abilitybar__slots { display: flex; align-items: flex-start; gap: var(--space-sm); }

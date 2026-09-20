@@ -20,7 +20,7 @@ export {
   MAX_ATTEMPTS,
   type FloorPlanOptions,
 } from './floorplan';
-export { buildRoom, buildFloor, createLazyFloor, flood, type BuiltFloor, type LazyFloor } from './rooms';
+export { buildRoom, buildFloor, createLazyFloor, flood, bodyFootprint, bodyFits, bodyFlood, type BuiltFloor, type LazyFloor } from './rooms';
 export {
   rollEncounters,
   encounterBudget,

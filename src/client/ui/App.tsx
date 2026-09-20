@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback } from 'react';
 import type { UiActions } from '../../shared/ui';
 import type { UiStore } from '../game/uiStore';
 import { HeadquartersPanel } from './HeadquartersPanel';
-import { Hud, RunStatus } from './Hud';
+import { Hud, RunStatus, telemetryLabel } from './Hud';
 import { MemoryBrief } from './MemoryWall';
 import { ProvenanceBadge } from './ProvenanceBadge';
 import { useUiModel } from './useUiModel';
@@ -13,6 +13,7 @@ import { HeadquartersPrompt, HeadquartersStationPanel } from './HeadquartersStat
 import { EscapeTimer } from './EscapeTimer';
 import { RelicChoice } from './RelicChoice';
 import { FloorsHud } from './FloorsHud';
+import { CoachPrompt } from './CoachPrompt';
 
 const DebriefPanel = lazy(() => import('./DebriefPanel').then((m) => ({ default: m.DebriefPanel })));
 
@@ -46,10 +47,7 @@ export function App({ store, actions, onStageReady }: AppProps) {
           </svg>
           <span className="brand__name">RELAY</span>
           <span className="brand__tag">Worlds end. Your stories don't.</span>
-          <span className="brand__telemetry" aria-hidden="true">
-            {model.world ? `${model.world.title} · ` : ''}
-            {model.phase === 'expedition' && model.room ? `room ${model.room.index + 1}` : model.phase === 'training' ? 'training range' : model.phase === 'debrief' ? 'debrief' : model.phase === 'preparing' ? 'preparing' : 'sanctuary'}
-          </span>
+          <span className="brand__telemetry" aria-hidden="true">{telemetryLabel(model)}</span>
         </div>
         <div className="topbar__status">
           <GameMenu model={model} actions={actions} />
@@ -77,6 +75,7 @@ export function App({ store, actions, onStageReady }: AppProps) {
           {inRun && <RelicChoice model={model} />}
             <FloorsHud model={model} actions={actions} />
             {atHq && <HeadquartersPrompt model={model} actions={actions} />}
+            <CoachPrompt />
           </section>
           {model.phase !== 'debrief' && <AbilityBar model={model} actions={actions} />}
         </div>
@@ -86,7 +85,7 @@ export function App({ store, actions, onStageReady }: AppProps) {
             {atHq && <HeadquartersStationPanel model={model} actions={actions} />}
             {atHq && <HeadquartersPanel model={model} actions={actions} />}
             {model.phase === 'debrief' && <Suspense fallback={null}><DebriefPanel model={model} actions={actions} /></Suspense>}
-            {model.world && <WorldPanel world={model.world} discoveredLore={model.discoveredLore} compact={inRun} />}
+            {model.world && <WorldPanel world={model.world} discoveredLore={model.discoveredLore} compact={inRun} floor={model.floor ?? null} />}
             <MemoryBrief memories={model.memories} />
           </div>
         </aside>

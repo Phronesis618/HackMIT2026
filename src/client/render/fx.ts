@@ -487,6 +487,27 @@ export function drawTelegraphWarning(g: G, t: number, color: number, radius: num
   g.lineStyle(1, WHITE, alpha * 0.5).strokeCircle(0, 0, radius + 2 + easeOut(t) * 6);
 }
 
+/**
+ * A24. The `dash_echo` burn trail, drawn from the snapshot rather than from a one-shot tween:
+ * the points the simulation is actually charging enemies for (`DASH_TRAIL_RADIUS` = 30 px,
+ * 2 damage every 250 ms). One Graphics object, world coordinates, redrawn every frame — so what
+ * burns is exactly what is lit. `maxMs` is the trail's full life, for the fade.
+ */
+/** One burning point, carrying whose trail it is (`color`) so a whole crew draws in one pass. */
+export interface TrailPoint { x: number; y: number; remainingMs: number; color: number }
+
+export function drawBurnTrail(g: G, points: readonly TrailPoint[], maxMs: number, radius: number): void {
+  g.clear();
+  for (const point of points) {
+    // Newest points burn brightest; the oldest are nearly out.
+    const life = clamp01(maxMs > 0 ? point.remainingMs / maxMs : 0);
+    if (life <= 0.02) continue;
+    g.fillStyle(point.color, 0.14 * life).fillCircle(point.x, point.y, radius);
+    g.fillStyle(point.color, 0.3 * life).fillCircle(point.x, point.y, radius * 0.55);
+    g.fillStyle(WHITE, 0.45 * life * life).fillCircle(point.x, point.y, radius * 0.18);
+  }
+}
+
 export function enemyAccent(enemyId: EnemyId): number {
   switch (enemyId) {
     case 'sentinel':

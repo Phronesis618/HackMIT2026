@@ -223,6 +223,48 @@ describe('cover', () => {
       expect(downed).toBe(true);
       expect(revived).toMatchObject({ playerId: 'b-victim', byPlayerId: 'c-medic' });
     });
+
+    /**
+     * A26 — the audit. `beacon.e.rally` is the one ability aimed at the CREW, and it was the last
+     * thing still asking for line of FIRE: a waist-high barricade refused a heal to the operative
+     * taking cover behind it. It goes through `canReach` like every other hands-on interaction.
+     * Every other ability either targets an enemy (line of fire is correct) or only the caster.
+     */
+    it('lets a Beacon rally the operative sheltering behind a barricade', () => {
+      const room = arena((tiles) => {
+        tiles[5]![2] = '.';
+        tiles[5]![5] = 'P';
+        for (const y of [4, 5, 6]) tiles[y]![7] = '-';
+      });
+      const sim = createSimulation();
+      sim.addPlayer({ id: 'a-ally', displayName: 'Ally', classId: 'bastion' });
+      sim.addPlayer({ id: 'b-beacon', displayName: 'Beacon', classId: 'beacon' });
+      sim.setWorld(PreparedWorldSchema.parse({
+        worldId: 'cover-rally', createdAt: 0, recipe: fixture.recipe, art: fixture.art,
+        rooms: [room, arena(() => {}, 1), arena(() => {}, 2, true)], plannedRoomCount: 3,
+        provenance: { source: 'fixture', label: 'TEST FIXTURE', generatedAt: 0, durationMs: 0, attempts: 0, notes: [] },
+        receipt: { worldTitle: fixture.recipe.title, source: 'fixture', headline: 'Cover', lines: [] },
+      }));
+      sim.unlockAbility('b-beacon');
+      sim.enterRoom(0);
+      const seat = (id: string) => sim.getSnapshot().players.find((p) => p.id === id)!;
+      const drive = (id: string, partial: Partial<PlayerIntent>): GameEvent[] => {
+        const p = seat(id);
+        sim.applyIntent({ playerId: id, seq: sim.getTick(), moveX: 0, moveY: 0, aimX: p.x + 100, aimY: p.y,
+          attack: false, dash: false, ability: null, ...partial });
+        return sim.step();
+      };
+      // The Beacon walks through the barricade (cover never blocks footsteps) and stands past it.
+      for (let i = 0; i < 400 && worldToTile(seat('b-beacon').x, 0).col < 9; i++) drive('b-beacon', { moveX: 1 });
+      expect(worldToTile(seat('b-beacon').x, 0).col).toBe(9);
+      const grid = buildSolidGrid(room);
+      // Four tiles apart, inside Rally's 200: no line of fire across the cover, a clear reach.
+      expect(clearPath(grid, seat('b-beacon'), seat('a-ally'))).toBe(false);
+      expect(clearPath(grid, seat('b-beacon'), seat('a-ally'), 1, 'solid')).toBe(true);
+      expect(seat('a-ally').rallyMs).toBe(0);
+      drive('b-beacon', { ability: 'e' });
+      expect(seat('a-ally').rallyMs).toBeGreaterThan(0);
+    });
   });
 
   it('is deterministic across two simulations fed the same intents', () => {

@@ -104,6 +104,12 @@ export interface UiHud {
   collapse?: GameSnapshot['collapse'];
   /** S1: skill-tree nodes this operative has bought (`src/shared/skills.ts`). */
   skillNodeIds?: string[];
+  /**
+   * A24: short-lived states the simulation is applying right now, so the command bar can say so.
+   * `hasteMs` is `clear_surge`'s surge; `slowMs` is a haul or a mire. Both absent at zero.
+   */
+  hasteMs?: number;
+  slowMs?: number;
 }
 
 /** One biome offered on the choice screen (agent F3). Every field is plain, checkable fact. */

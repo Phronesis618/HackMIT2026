@@ -3,6 +3,10 @@ import { RoomScene } from '../../src/client/render/RoomScene';
 import { RoomSpecSchema, WorldFixtureSchema, type GameSnapshot, type ReceiptLine } from '../../src/shared/contracts';
 import { ATTACK_ARC_RAD, ATTACK_RANGE, DEPTH, tileToWorld } from '../../src/shared/conventions';
 import { sampleEvents, sampleSnapshot } from '../../src/shared/samples';
+import { CLASS_THEME } from '../../src/shared/registry';
+import { hexToInt } from '../../src/shared/tokens';
+import * as fx from '../../src/client/render/fx';
+import { DASH_TRAIL_MS, DASH_TRAIL_RADIUS } from '../../src/sim/effects';
 import { headquartersArt, headquartersRoom } from '../../src/sim/headquarters';
 import { floorsFixture } from './floorsFixture';
 import { tokens } from '../../src/shared/tokens';
@@ -92,6 +96,7 @@ vi.mock('../../src/client/render/fx', () => ({
   drawSlash: vi.fn(), drawDashTrail: vi.fn(), drawImpact: vi.fn(), drawDefeat: vi.fn(), drawEnemyStrike: vi.fn(), drawShockwave: vi.fn(),
   drawBladeStorm: vi.fn(), drawBeam: vi.fn(), drawSingularity: vi.fn(), drawFlare: vi.fn(), drawRally: vi.fn(), drawTether: vi.fn(),
   drawShroud: vi.fn(), drawRewind: vi.fn(), drawBlink: vi.fn(), drawRevive: vi.fn(), drawTelegraphWarning: vi.fn(), enemyAccent: vi.fn(() => 0xff5c7a),
+  drawBurnTrail: vi.fn(),
 }));
 
 const fixture = WorldFixtureSchema.parse(fixtureData);
@@ -139,6 +144,30 @@ describe('room presentation against authoritative contracts', () => {
     ]);
     expect(effects()[0]!.setPosition).toHaveBeenCalledWith(208, 144);
     for (const [config] of stage.tweens.add.mock.calls) config.onComplete();
+  });
+
+  /**
+   * A24. The `dash_echo` trail burns enemies in the simulation; before this it had no picture at
+   * all. It is drawn from `snapshot.trails` — the same points the sim charges for — in the
+   * operative's own colour, and nothing is drawn when the field is absent.
+   */
+  it('draws the dash_echo burn trail from the snapshot, in the operative’s colour', () => {
+    const scene = setup();
+    const mine = { playerId: localId, x: 100, y: 120, remainingMs: 1500 };
+    const theirs = { playerId: sampleSnapshot.players[1]!.id, x: 160, y: 120, remainingMs: 400 };
+    scene.renderSnapshot({ ...sampleSnapshot, trails: [mine, theirs] }, localId);
+    const drawn = vi.mocked(fx.drawBurnTrail).mock.calls.at(-1)!;
+    expect(drawn[1]).toHaveLength(2);
+    expect(drawn[1][0]).toMatchObject({ x: 100, y: 120, remainingMs: 1500 });
+    expect(drawn[2]).toBe(DASH_TRAIL_MS);
+    expect(drawn[3]).toBe(DASH_TRAIL_RADIUS);
+    // Two operatives, two class colours: the trail says whose it is.
+    expect(drawn[1][0]!.color).toBe(hexToInt(CLASS_THEME[sampleSnapshot.players[0]!.classId].primary));
+    expect(drawn[1][1]!.color).toBe(hexToInt(CLASS_THEME[sampleSnapshot.players[1]!.classId].primary));
+    // No trail in the snapshot is still one call, so the last frame's points are cleared away.
+    vi.mocked(fx.drawBurnTrail).mockClear();
+    scene.renderSnapshot(sampleSnapshot, localId);
+    expect(vi.mocked(fx.drawBurnTrail).mock.calls.at(-1)![1]).toEqual([]);
   });
 
   it('retains the last enemy location when the death snapshot removes it before events arrive', () => {
