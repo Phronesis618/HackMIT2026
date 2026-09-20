@@ -11,7 +11,28 @@ const KIND_LABEL: Record<MemoryRecord['kind'], string> = {
   lore: 'Lore',
 };
 
-/** Device-local memory wall. Only ever shows records derived from real events. */
+/** Ask the Tab menu to open on a page (GameMenu listens). Keeps rail and menu decoupled. */
+export const OPEN_MENU_EVENT = 'relay:open-menu';
+export function openMenu(page: string): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(OPEN_MENU_EVENT, { detail: page }));
+}
+
+/** Compact rail entry: count + the latest memory; the full wall lives in the menu's Memories page. */
+export function MemoryBrief({ memories }: { memories: MemoryRecord[] }) {
+  const latest = memories.reduce<MemoryRecord | null>((best, m) => (!best || m.createdAt > best.createdAt ? m : best), null);
+  return (
+    <button type="button" className="panel memory-brief" onClick={() => openMenu('memories')} aria-label={`Memory wall · ${memories.length} saved on this device. Open memories.`}>
+      <span className="memory-brief__head">
+        <span className="eyebrow">Memory wall</span>
+        <span className="memory-brief__count">{memories.length}</span>
+      </span>
+      <span className="memory-brief__latest">{latest ? latest.title : 'Nothing yet — memories appear from real play.'}</span>
+      <span className="memory-brief__open" aria-hidden="true">Open ›</span>
+    </button>
+  );
+}
+
+/** Device-local memory wall (menu page). Only ever shows records derived from real events. */
 export function MemoryWall({ memories, actions }: { memories: MemoryRecord[]; actions: UiActions }) {
   const [confirmClear, setConfirmClear] = useState(false);
   const ordered = [...memories].sort((a, b) => b.createdAt - a.createdAt);
