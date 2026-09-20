@@ -240,7 +240,7 @@ function readDom() {
     contributions: all('.contributions .list__item'),
     worldTitle: text('.panel--world .panel__title') ?? text('.world-brief__title'),
     provenance: text('.topbar__status .badge:not(.badge--conn):not(.badge--preview)'),
-    receipt: all('.panel--world .notes .list__item'),
+    receipt: all('.panel--world [aria-label="Creation receipt"] .list__item'),
     prepareDisabled: button('Prepare')?.disabled ?? null,
     enterDisabled: button('Enter portal')?.disabled ?? null,
     returnDisabled: button('Return to headquarters')?.disabled ?? null,
@@ -467,7 +467,8 @@ class Report {
     console.log('\n=== CO-OP E2E RESULTS ===');
     for (const row of this.rows) console.log(`${row.status.padEnd(5)} ${row.id.padEnd(6)} ${row.name}`);
     const fails = this.rows.filter((r) => r.status === 'FAIL').length;
-    console.log(`\n${this.rows.length - fails}/${this.rows.length} checkpoints passed; screenshots + results.json in ${this.outDir}`);
+    const skips = this.rows.filter((r) => r.status === 'SKIP').length;
+    console.log(`\n${this.rows.length - fails - skips}/${this.rows.length} checkpoints passed, ${skips} skipped; screenshots + results.json in ${this.outDir}`);
     return fails;
   }
 }
@@ -701,19 +702,24 @@ async function groupDemo(ctx) {
   // One deliberate strike each (toughest living enemy), then read that enemy's HP on BOTH screens.
   const enemyOn = async (p, enemyId) => (await p.read()).snap.enemies.find((e) => e.id === enemyId);
   const hits = [];
-  for (const attacker of pair) {
-    const living = (await alice.read()).snap.enemies.filter((e) => e.state !== 'dead' && e.hp > 0);
-    if (!living.length) break;
-    const target = living.reduce((a, b) => (b.hp > a.hp ? b : a));
-    const start = target.hp;
-    await fightUntil(attacker, { timeoutMs: 20000, targetId: target.id, stopWhen: (s) => (s.snap.enemies.find((e) => e.id === target.id)?.hp ?? 0) < start });
-    await sleep(120);
-    const [ea, eb] = [await enemyOn(alice, target.id), await enemyOn(bob, target.id)];
-    hits.push({ by: attacker.name, enemy: `${target.enemyId}#${target.id.slice(-3)}`, from: start, aliceSees: ea?.hp, bobSees: eb?.hp });
-  }
-  await shots(pair, 's5-both-hit');
-  report.check('5a', 'each player damages an enemy; HP agrees on both screens', hits.length === 2 && hits.every((h) => h.aliceSees < h.from && Math.abs(h.aliceSees - h.bobSees) <= 40),
+  const strikeRound = async () => {
+    for (const attacker of pair) {
+      if (hits.some((h) => h.by === attacker.name)) continue;
+      const living = (await alice.read()).snap.enemies.filter((e) => e.state !== 'dead' && e.hp > 0);
+      if (!living.length) return;
+      const target = living.reduce((a, b) => (b.hp > a.hp ? b : a));
+      const start = target.hp;
+      await fightUntil(attacker, { timeoutMs: 20000, targetId: target.id, stopWhen: (s) => (s.snap.enemies.find((e) => e.id === target.id)?.hp ?? 0) < start });
+      await sleep(120);
+      const [ea, eb] = [await enemyOn(alice, target.id), await enemyOn(bob, target.id)];
+      hits.push({ by: attacker.name, enemy: `${target.enemyId}#${target.id.slice(-3)}`, from: start, aliceSees: ea?.hp, bobSees: eb?.hp });
+    }
+  };
+  const report5a = () => report.check('5a', 'each player damages an enemy; HP agrees on both screens', hits.length === 2 && hits.every((h) => h.aliceSees < h.from && Math.abs(h.aliceSees - h.bobSees) <= 40),
     `${hits.map((h) => `${h.by} struck ${h.enemy}: ${h.from} -> alice's screen ${h.aliceSees} / bob's screen ${h.bobSees}`).join('; ')} (screens read ~10 ms apart while enemies keep fighting)`);
+  await strikeRound();
+  await shots(pair, 's5-both-hit');
+  if (hits.length === 2) report5a(); // a one-enemy room can die to the first strike: the other player strikes in room 2
 
   const results = await Promise.all(pair.map((p) => fightUntil(p, { timeoutMs: 90000 })));
   await sleep(700);
@@ -731,6 +737,7 @@ async function groupDemo(ctx) {
   if (canUnlock) await unlockButton.click();
   await alice.shot('s5-unlock-menu');
   await alice.tap('Escape');
+  await alice.page.getByRole('button', { name: /^Close/ }).click({ timeout: 800 }).catch(() => {}); // only if Escape did not close it
   await alice.focusStage();
   await sleep(600);
   const unlocked = await agree(pair, (s) => s.snap.players.map((p) => `${p.displayName}:E=${p.abilityEUnlocked}:res=${p.resources}`).sort());
@@ -747,6 +754,8 @@ async function groupDemo(ctx) {
   await shots(pair, 's7-room2');
   report.check('7a', 'guest reaches the exit; the whole crew moves to room 2 together', room2.ok && JSON.parse(room2.values[0]).roomIndex === 1, `both screens: ${room2.values[0]}`);
   if (JSON.parse(room2.values[0]).roomIndex !== 1) return;
+
+  if (hits.length < 2) { await strikeRound(); report5a(); }
 
   // --- 6a: bob walks into the enemies and stands still until downed; alice clears, then holds F.
   const s2 = await bob.read();
