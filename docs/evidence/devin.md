@@ -36,7 +36,24 @@ pass. UI actions and memory samples in tests are mocks, not gameplay evidence.
 Scope was posted to issue #4 before implementation. Direct messaging to other Devin
 sessions was access-denied; GitHub was used for coordination. This work avoids the active H1
 Stillpoint slice and the floors/writing paths. Browser play, file download and live-generation
-effects have not been tested in this session.
+effects were unverified at the initial implementation.
+
+Subsequent browser testing found direction changes discarding edits; `f5c17eb` retains each
+direction's independent draft. `626ca0d` integrates the new menu layout and archive keyboard
+boundary. That run verified actual fixture records, native tab/select navigation, responsive
+layout, filtered/all-record downloads and clear/reload behavior. A submitted memory idea
+left all 15,213 serialized memory characters unchanged. PR #20 was merged at `638105f`.
+
+The merged build passed `npm run check`: 643 tests / 55 files, typecheck and build. A normal
+Chrome host and Incognito guest generated shared fixture records through actual play.
+The guest's exact 200-character memory contribution arrived once on both clients under the
+confirmed current name; 5,514 serialized memory characters were unchanged. Host-only
+preparation/entry remained enforced. No gameplay state or records were injected.
+
+This run exposed focus falling to BODY after composer submission, preventing immediate
+Escape. The follow-up restores focus to the persistent archive region after composer/clear
+actions. Its browser retest and the 24-contribution boundary are pending. Live-generation,
+disconnected/busy and >18-record pagination remain untested in the browser.
 
 ## Render hosting setup — 2026-09-20
 

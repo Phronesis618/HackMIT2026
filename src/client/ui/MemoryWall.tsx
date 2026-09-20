@@ -1,6 +1,6 @@
 import type { MemoryRecord } from '../../shared/contracts';
 import type { UiActions } from '../../shared/ui';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { createFieldReport, filterMemories, MEMORY_KIND_LABELS, MEMORY_SOURCE_LABELS, memoryWorlds } from '../chronicle/memoryArchive';
 import { memorySeedBlockReason, type MemorySeedContext } from '../chronicle/memorySeeds';
 import { MemorySeedComposer } from './MemorySeedComposer';
@@ -28,6 +28,7 @@ export function MemoryBrief({ memories }: { memories: MemoryRecord[] }) {
 
 /** Device-local memory wall (menu page). Only ever shows records derived from real events. */
 export function MemoryWall({ memories, actions, context }: { memories: MemoryRecord[]; actions: UiActions; context?: MemorySeedContext }) {
+  const archiveRef = useRef<HTMLElement>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [query, setQuery] = useState('');
@@ -42,6 +43,10 @@ export function MemoryWall({ memories, actions, context }: { memories: MemoryRec
   const worlds = memoryWorlds(memories);
   const selectedWorld = worlds.some((world) => world.id === worldId) ? worldId : '';
   const ordered = filterMemories(memories, expanded ? { query, worldId: selectedWorld, kind } : { query: '', worldId: '', kind: '' });
+  const closeComposer = (): void => {
+    setSeedId(null);
+    archiveRef.current?.focus();
+  };
   const download = (): void => {
     let url: string | undefined;
     const link = document.createElement('a');
@@ -63,7 +68,7 @@ export function MemoryWall({ memories, actions, context }: { memories: MemoryRec
     }
   };
   return (
-    <section className={`wall ${expanded || selectedMemory ? 'wall--expanded' : ''}`} aria-label="Device-local memory wall" onKeyDown={(event) => {
+    <section ref={archiveRef} tabIndex={-1} className={`wall ${expanded || selectedMemory ? 'wall--expanded' : ''}`} aria-label="Device-local memory wall" onKeyDown={(event) => {
       if (event.key !== 'Escape') event.stopPropagation();
     }}>
       <div className="wall__head">
@@ -76,14 +81,14 @@ export function MemoryWall({ memories, actions, context }: { memories: MemoryRec
             </button>
             {confirmClear ? <>
               <span className="hint">Erase memories on this device?</span>
-              <button type="button" className="btn" onClick={() => { actions.clearMemories(); setConfirmClear(false); }}>Erase memories</button>
-              <button type="button" className="btn btn--ghost" onClick={() => setConfirmClear(false)}>Cancel</button>
+              <button type="button" className="btn" onClick={() => { actions.clearMemories(); setConfirmClear(false); closeComposer(); }}>Erase memories</button>
+              <button type="button" className="btn btn--ghost" onClick={() => { setConfirmClear(false); archiveRef.current?.focus(); }}>Cancel</button>
             </> : <button type="button" className="btn btn--ghost" onClick={() => setConfirmClear(true)}>Clear</button>}
           </div>
         )}
       </div>
-      {selectedMemory && context && <MemorySeedComposer key={selectedMemory.id} memory={selectedMemory} context={context} actions={actions} onClose={() => setSeedId(null)} onSubmit={() => {
-        setSeedId(null);
+      {selectedMemory && context && <MemorySeedComposer key={selectedMemory.id} memory={selectedMemory} context={context} actions={actions} onClose={closeComposer} onSubmit={() => {
+        closeComposer();
         setSeedStatus('Check your idea in the HQ contribution console. Prepare another world there to use the current ideas.');
       }} />}
       {seedStatus && <p className="hint" role="status">{seedStatus}</p>}
