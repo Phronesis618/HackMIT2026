@@ -566,11 +566,11 @@ export const FloorsWorldRecipeSchema = WorldRecipeSchema.extend({
   lore: z.array(LoreFragmentSchema.extend(LoreRefsShape)).max(12),
   /** One room line per room kind per biome. Read by src/shared/floorgen/runtime.ts: it becomes that room's description, with the engine's derived line as the fallback. */
   biomeRoomLines: BiomeRoomLinesListSchema.optional(),
-  /** 2–3 world laws from the closed registry in laws.ts. NOT yet implemented by the sim. */
+  /** 2–3 world laws from the closed registry in laws.ts. Applied by src/sim/laws.ts; a law the sim does not implement is filtered out before the crew is told about it. */
   laws: WorldLawListSchema.optional(),
-  /** Bounded renderer parameters beyond the palette. NOT yet implemented by the renderer. */
+  /** Bounded renderer parameters beyond the palette. Read by src/client/render/lookOverrides.ts. */
   look: WorldLookSchema.optional(),
-  /** The world's names for the terrain mechanics it uses (TILES.md 4.1). NOT yet read by the renderer. */
+  /** The world's names for the terrain mechanics it uses (TILES.md 4.1). Read by RoomScene for the terrain caption. */
   terrainSkins: TerrainSkinListSchema.optional(),
   /** Final-boss title, phase titles and three named moves from the closed registry (BOSS_FINALE.md 2). Read by src/sim/boss.ts; absent = derived from the world seed. */
   custodian: CustodianSchema.nullable().optional(),
