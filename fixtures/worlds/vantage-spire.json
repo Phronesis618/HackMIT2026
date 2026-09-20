@@ -114,7 +114,7 @@
         "kind": "relic",
         "title": "Platform 3 log, Day 4",
         "source": "warden's logbook, page torn at the spine",
-        "text": "17:30. Headcount Platform 3: 1,100. Rated 400. Radioed Winch House 40 at 17:31 and 17:36, no answer. Held the barrier with two lamps and the rope. Sanjay, if you read this before I do, Priya is at the school gate from 18:00 and I am not.",
+        "text": "Headcount Platform 3 at 17:30: 1,100. Rated 400. Radioed Winch House 40 at 17:31 and 17:36, no answer. Held the barrier with two lamps and the rope. Sanjay, if you read this before I do, Priya is at the school gate from 18:00 and I am not.",
         "roomIndex": 0,
         "enemyId": null,
         "authorIndex": 1,
@@ -215,22 +215,22 @@
       {
         "effectId": "bolt_ward",
         "name": "Two Flashes",
-        "description": "Enemy bolts deal 25% less. Ramaswami's signal lamp, Platform 3 issue: one flash holds, two flashes board."
+        "description": "Ramaswami's Platform 3 signal lamp: one flash holds the crowd, two boards it. He held 1,100 riders behind the rope with it until the battery went."
       },
       {
         "effectId": "dash_echo",
         "name": "Trunk 4 Parted",
-        "description": "A dash leaves a charged trail that burns what follows. Trunk 4 carried lantern current for 3 s after it parted in Cable Gallery 12."
+        "description": "Trunk 4 carried the lantern current for three seconds after it parted in Cable Gallery 12. Vik measured the cut end at 41 mm the same afternoon."
       },
       {
         "effectId": "anchor_grace",
         "name": "Tag 4-17",
-        "description": "The Anchor plants in half the time. Vik wired inspection tag 4-17 to Trunk 4 in 40 seconds; Osei needed two to countersign it."
+        "description": "Vik wired tag 4-17 to Trunk 4 at 09:15 on Day 2, verdict in one line at the bottom. Osei countersigned it in blue ink before the shift ended."
       },
       {
         "effectId": "clear_surge",
         "name": "Board Clears",
-        "description": "Clearing a room grants 4 s of haste. Pereira's split-flap board took 4 s to cycle from DELAYED to a platform number, on the days it did."
+        "description": "Pereira's split-flap board took four seconds to cycle from DELAYED to a platform number, on the days it did. She asked for it on four forms."
       }
     ],
     "terrainSkins": [
@@ -373,7 +373,7 @@
       {
         "id": "b3-kiosk-row",
         "name": "Kiosk Row",
-        "tagline": "Pereira's kiosk and 9 shuttered stalls, stock still on the shelves.",
+        "tagline": "Pereira's kiosk and the shuttered stalls, stock still on the shelves.",
         "motifIds": [
           "lanterns"
         ],
@@ -562,7 +562,7 @@
     ],
     "bible": {
       "premise": "Vantage Spire is a 40-storey passenger relay tower: six lift cages on five trunk cables, 9,000 riders a day through Founders' Week.",
-      "collapse": "Rope inspector Hanne Vik condemned Trunk 4 at 41 mm on Founders' Day 2 and superintendent Marek Osei signed it back into service. It parted on Day 3. On Day 5 at 17:40 Cage 2's counterweight dropped 40 storeys into the Threshold Concourse and shorted the lantern circuits into every handrail in the tower.",
+      "collapse": "Superintendent Marek Osei kept all six cages running on four trunks after Trunk 4 parted on Founders' Day 3, over rope inspector Hanne Vik's condemned tag. On Day 5 at 17:40 Cage 2's counterweight dropped 40 storeys into the Threshold Concourse and shorted the lantern current into every handrail in the tower.",
       "people": [
         {
           "name": "Marek Osei",

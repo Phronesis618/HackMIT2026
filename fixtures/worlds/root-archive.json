@@ -155,7 +155,7 @@
         "kind": "relic",
         "title": "Day book, Dry Day 31",
         "source": "porter's day book, last page written in",
-        "text": "Dry Day 31. Opening 07:00: 30 patrons, 30 seats, root up through every chair leg and into the seat. Mrs Halloway has turned a page. Lit 9 lanterns. Lantern 10 marks the end of the Dry Path and I did not light it, since the path has root on it from lantern 3. Locking up at 21:00 regardless. T. Lind.",
+        "text": "Mrs Halloway has turned a page. Opening 07:00 on Dry Day 31: 30 patrons, 30 seats, root up through every chair leg and into the seat. Lit 9 lanterns. Lantern 10 marks the end of the Dry Path and I did not light it, since the path has root on it from lantern 3. Locking up at 21:00 regardless. T. Lind.",
         "roomIndex": 2,
         "enemyId": null,
         "authorIndex": 1,
@@ -216,22 +216,22 @@
       {
         "effectId": "melee_ward",
         "name": "Seat 4",
-        "description": "Melee and charge hits deal 25% less. Mrs Halloway held seat 4 in Reading Room West through 31 dry days and one chapter."
+        "description": "Mrs Halloway held seat 4 in Reading Room West through 31 dry days and one chapter. The oak is worn pale where her arm went."
       },
       {
         "effectId": "relic_mend",
         "name": "One Cup at Opening",
-        "description": "Reading a relic restores 25 Integrity. Order 7 allowed each patron one cup from the ration tank at 07:00. Lind's went back in the tank."
+        "description": "Order 7 allowed each patron one cup from the ration tank at 07:00. Lind poured his own back into the tank every morning and logged it."
       },
       {
         "effectId": "remains_charge",
         "name": "Slip Not Closed",
-        "description": "Recovering remains adds 40% ultimate charge. Farrow carried slip 4471 for 8 days and never got the signature. It is still in the rig."
+        "description": "Farrow carried slip 4471 for 8 days and never got the signature. It is still at the top of the rig, on five more refused the same way."
       },
       {
         "effectId": "first_strike",
         "name": "Lantern 10",
-        "description": "The first hit on an untouched enemy deals double. Lind lit 9 lanterns a night on the Dry Path and never lantern 10."
+        "description": "Lind lit 9 lanterns a night along the Dry Path and never lantern 10. Lantern 10 stands at the end of the path, wick trimmed."
       }
     ],
     "terrainSkins": [
@@ -496,7 +496,7 @@
       {
         "id": "b6-root-stacks",
         "name": "Root Stacks",
-        "tagline": "Where the records grow: 12 rows of root fibre, 3 m high, dry as paper.",
+        "tagline": "Where the records grow: root fibre in rows to head height, dry as paper.",
         "motifIds": [
           "roots",
           "monoliths"
@@ -578,7 +578,7 @@
     ],
     "bible": {
       "premise": "The Root Archive is a record vault where documents are grown into living root fibre, with 12,000 seed jars kept at 4 degrees in the Seed Vault below.",
-      "collapse": "A drought took the well to 2 m on Dry Day 1 and pump engineer Hal Mbeki cut the supply to 400 litres a day. On Dry Day 30 chief archivist Berenike Adjei signed Order 9 and sent all 400 litres to the Seed Vault chillers. The record roots in the Index and Reading Room West grew 2 m a night toward the only water left: the terminal coolant tanks and the patrons.",
+      "collapse": "A drought took the well to 2 m on Dry Day 1 and pump engineer Hal Mbeki cut the supply to 400 litres a day. On Dry Day 30 chief archivist Berenike Adjei turned the whole 400 into the Seed Vault chillers and pinned Order 9 on the door to say so. The record roots in the Index and Reading Room West grew 2 m a night toward the only water left: the terminal coolant tanks and the patrons.",
       "people": [
         {
           "name": "Berenike Adjei",
