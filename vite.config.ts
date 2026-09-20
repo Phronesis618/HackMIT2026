@@ -7,7 +7,12 @@ import react from '@vitejs/plugin-react';
 // paths work in both modes, so the client never hard-codes a backend URL.
 const SERVER_PORT = Number(process.env.PORT ?? 8787);
 
+// Static hosting under a sub-path (GitHub Pages serves this repo at /HackMIT2026/). The
+// Node server always serves at '/', so leave unset for `npm start`.
+const BASE_PATH = process.env.RELAY_BASE_PATH ?? '/';
+
 export default defineConfig({
+  base: BASE_PATH,
   plugins: [react()],
   build: {
     outDir: 'dist/client',

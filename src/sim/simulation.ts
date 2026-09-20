@@ -121,8 +121,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   function placePlayers(): void {
     const spawn = findTile('P') ?? tileToWorld(1, 1);
     orderedPlayers().forEach((p, i) => {
-      const angle = i / Math.max(1, players.size) * Math.PI * 2;
-      const offset = i === 0 ? 0 : TILE_SIZE * 0.7;
+      // Fan the crew out right / down / up first: spawns sit against the west wall, so an
+      // angle of π would land inside it and collapse everyone onto the same point.
+      const angle = [0, 0, Math.PI / 2, -Math.PI / 2, Math.PI][i] ?? (i * Math.PI) / 3;
+      const offset = i === 0 ? 0 : TILE_SIZE * 0.9;
       const point = nearestOpenPosition(grid, {
         x: spawn.x + Math.cos(angle) * offset, y: spawn.y + Math.sin(angle) * offset,
       }, PLAYER_RADIUS);
