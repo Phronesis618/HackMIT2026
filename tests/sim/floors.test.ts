@@ -82,13 +82,19 @@ describe('floors: room kinds', () => {
     const kinds = new Map(plan.rooms.map((room) => [room.kind, room.id]));
     expect([...kinds.keys()]).toEqual(expect.arrayContaining(['rest', 'treasure', 'lore', 'elite']));
 
-    bot.travel(kinds.get('elite')!);
+    // Take one real hit from the elite pack first, so the rest site has something to heal.
+    bot.travel(kinds.get('elite')!, (roomId) => {
+      if (roomId !== kinds.get('elite')) return;
+      for (let i = 0; i < 1200 && bot.snapshot().players[0]!.hp === 100; i++) {
+        bot.tick((player, snapshot) => ({ moveX: Math.sign(snapshot.enemies[0]!.x - player.x), moveY: Math.sign(snapshot.enemies[0]!.y - player.y) }));
+      }
+    });
     const eliteClear = bot.events.filter((event) => event.type === 'room_cleared').at(-1)!;
     expect(eliteClear).toMatchObject({ reward: ROOM_CLEAR_REWARD * FLOOR_TUNING.eliteRewardMultiplier });
 
     bot.travel(kinds.get('lore')!);
     expect(bot.floor().doorsLocked).toBe(false);
-    expect(bot.snapshot().loreNodes.filter((node) => node.kind === 'relic')).toHaveLength(1);
+    expect((bot.snapshot().loreNodes ?? []).filter((node) => node.kind === 'relic')).toHaveLength(1);
 
     bot.travel(kinds.get('treasure')!);
     expect(bot.floor().doorsLocked).toBe(false);
@@ -97,7 +103,7 @@ describe('floors: room kinds', () => {
     bot.useFocus();
     expect(bot.snapshot().players[0]!.resources).toBe(resources + TREASURE_REWARD);
     expect(bot.events.filter((event) => event.type === 'room_cleared')).toHaveLength(clearsBefore + 1);
-    expect(bot.floor().map.find((room) => room.roomId === bot.floor().roomId)!.cleared).toBe(true);
+    expect(bot.floor().map.find((room) => room.roomId === bot.floor().roomId)?.cleared).toBe(true);
     const treasureId = bot.floor().roomId;
     const back = planPath(plan, treasureId, 'r00')[0]!;
     bot.travel(back);
@@ -106,7 +112,7 @@ describe('floors: room kinds', () => {
     expect(bot.snapshot().players[0]!.resources).toBe(resources + TREASURE_REWARD);
 
     const hurt = bot.snapshot().players[0]!;
-    expect(hurt.hp).toBeLessThan(hurt.maxHp); // the elite pack left a mark; the rest site has something to heal
+    expect(hurt.hp).toBeLessThan(hurt.maxHp);
     bot.travel(kinds.get('rest')!);
     const hpBefore = bot.snapshot().players[0]!.hp;
     bot.useFocus();

@@ -6,7 +6,8 @@ import fixtureJson from '../../fixtures/worlds/vantage-spire.json';
 import { PreparedWorldSchema, WorldFixtureSchema, type GameEvent, type GameSnapshot, type PlayerIntent, type PreparedWorld, type RoomSpec } from '../../src/shared/contracts';
 import { PLAYER_RADIUS, tileToWorld } from '../../src/shared/conventions';
 import { DOOR_SIDES, type BiomeBrief, type FloorPlan } from '../../src/shared/floors';
-import { buildSolidGrid, createRoomProvider, toFloorsWorld, type RoomProvider, type Simulation } from '../../src/sim';
+import { upgradeToFloors } from '../../src/shared/floorgen';
+import { buildSolidGrid, createRoomProvider, type RoomProvider, type Simulation } from '../../src/sim';
 import { chaseWaypoint, clearPath } from '../../src/sim/combat';
 
 const fixture = WorldFixtureSchema.parse(fixtureJson);
@@ -20,7 +21,7 @@ const legacyWorld = (seed: string) => PreparedWorldSchema.parse({
 
 /** A seeded floors world on the fixture recipe. `tweak` may edit the briefs (e.g. ask for a rest room). */
 export function floorsWorld(seed: string, tweak?: (briefs: BiomeBrief[]) => void): PreparedWorld {
-  const world = toFloorsWorld(legacyWorld(seed), seed);
+  const world = upgradeToFloors(legacyWorld(seed), seed);
   if (!tweak) return world;
   const briefs = structuredClone(world.floors!.briefs);
   tweak(briefs);
@@ -63,7 +64,7 @@ export class FloorsBot {
     const floor = this.floor();
     return this.provider.getRoom({ biomeId: floor.biomeId, roomId: floor.roomId });
   }
-  plan(): FloorPlan { return this.provider.getPlan(this.floor().biomeId); }
+  plan(): FloorPlan { return this.provider.plan(this.floor().biomeId); }
 
   /** One tick; `decide` returns each operative's partial intent. */
   tick(decide: (player: GameSnapshot['players'][number], snapshot: GameSnapshot) => Partial<PlayerIntent> = () => ({})): GameEvent[] {

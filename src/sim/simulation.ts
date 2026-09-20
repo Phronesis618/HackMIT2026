@@ -340,7 +340,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const chosenBy = decider !== undefined && choice.votes[decider] === biomeId ? decider : null;
     rooms.clear(); // no way back to the biome we leave
     advanceBiome(run, biomeId);
-    events.push(emit({ type: 'biome_entered', worldId: world.worldId, biomeId, biomeName: run.provider.getBrief(biomeId).name,
+    events.push(emit({ type: 'biome_entered', worldId: world.worldId, biomeId, biomeName: run.provider.brief(biomeId).name,
       tier: run.tier, chosenByPlayerId: chosenBy, playerIds: playerIds() }));
     enterFloorRoom(run.provider.getRoom({ biomeId, roomId: FLOOR_ENTRANCE_ROOM_ID }), undefined, events);
   }
@@ -1194,7 +1194,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         if (phase !== 'headquarters' || roomIndex !== 0) return [];
         floorsRun = createFloorsRun(roomProvider, hostPlayerId);
         const events: GameEvent[] = [emit({ type: 'biome_entered', worldId: world.worldId, biomeId: floorsRun.biomeId,
-          biomeName: roomProvider.getBrief(floorsRun.biomeId).name, tier: floorsRun.tier, chosenByPlayerId: null, playerIds: playerIds() })];
+          biomeName: roomProvider.brief(floorsRun.biomeId).name, tier: floorsRun.tier, chosenByPlayerId: null, playerIds: playerIds() })];
         enterFloorRoom(roomProvider.getRoom(roomProvider.entranceRef()), undefined, events);
         return events;
       }

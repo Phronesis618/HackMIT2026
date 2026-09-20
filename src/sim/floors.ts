@@ -48,7 +48,7 @@ export interface FloorsRun {
 export function createFloorsRun(provider: RoomProvider, hostPlayerId: string | null): FloorsRun {
   const entrance = provider.entranceRef();
   return {
-    provider, biomeId: entrance.biomeId, roomId: entrance.roomId, tier: provider.tierOf(entrance.biomeId),
+    provider, biomeId: entrance.biomeId, roomId: entrance.roomId, tier: provider.tier(entrance.biomeId),
     path: [entrance.biomeId], visited: new Set(), cleared: new Set(), usedFeatures: new Set(),
     choice: null, hostPlayerId, mapCache: null,
   };
@@ -94,7 +94,7 @@ export function markCleared(run: FloorsRun, roomId: string): void {
 /** Moves the run one biome deeper; per-biome sets restart because there is no way back. */
 export function advanceBiome(run: FloorsRun, biomeId: string): void {
   run.biomeId = biomeId;
-  run.tier = run.provider.tierOf(biomeId);
+  run.tier = run.provider.tier(biomeId);
   run.path.push(biomeId);
   run.visited = new Set();
   run.cleared = new Set();
@@ -117,7 +117,7 @@ export function doorArrival(run: FloorsRun, from: RoomSpec, toRoomId: string): {
  * while it could be a fight; special rooms show their icon from next door, as in Isaac.
  */
 function buildMap(run: FloorsRun): FloorMapRoom[] {
-  const plan = run.provider.getPlan(run.biomeId);
+  const plan = run.provider.plan(run.biomeId);
   const seen = new Set<string>();
   for (const room of plan.rooms) {
     if (!run.visited.has(room.id)) continue;

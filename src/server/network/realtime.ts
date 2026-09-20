@@ -130,6 +130,7 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
   function electHost(): void {
     if (hostPlayerId && members.get(hostPlayerId)?.client) return;
     hostPlayerId = [...members.values()].find((member) => member.client)?.identity.id ?? null;
+    sim.setHostPlayerId(hostPlayerId); // floors: the (new) host decides biome choices
   }
 
   function clearIntents(): void {
@@ -154,7 +155,9 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
       pendingExit = null;
       return [];
     }
-    const exit = events.find((event) => event.type === 'exit_reached'
+    // Floors: the sim walks doors and biome picks itself; a fresh room only needs clean intents.
+    if (events.some((event) => event.type === 'room_entered')) clearIntents();
+    const exit = events.find((event) => event.type === 'exit_reached' && event.toRoomId === undefined
       && event.roomIndex === sim.getRoom().index
       && (phase !== 'headquarters' || event.playerId === hostPlayerId));
     if (!exit || exit.type !== 'exit_reached') return [];
@@ -376,6 +379,11 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
         publishEvents(events);
         break;
       }
+      case 'choose_biome':
+        // Every operative may vote; the sim only lets the host's vote decide (setHostPlayerId).
+        sim.chooseBiome(member.identity.id, message.biomeId);
+        publishSnapshot();
+        break;
       case 'unlock_ability': {
         if (!sim.unlockAbility) {
           error(client, 'Ability unlocks are unavailable on this server.', 'unlock_ability');
@@ -457,7 +465,8 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
       const phase = sim.getPhase();
       const events = sim.step();
       const extra = handleExits(events);
-      if (phase !== sim.getPhase() || extra.length || events.some((event) => event.type === 'run_ended')) publishSnapshot();
+      if (phase !== sim.getPhase() || extra.length
+        || events.some((event) => event.type === 'run_ended' || event.type === 'room_entered')) publishSnapshot();
       publishEvents([...events, ...extra]);
     }
   }, TICK_MS);
