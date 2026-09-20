@@ -78,7 +78,58 @@
         "hazards": true
       }
     ],
-    "contributionMappings": []
+    "contributionMappings": [],
+    "lore": [
+      {
+        "kind": "relic",
+        "title": "Tide gauge, cracked",
+        "text": "Someone scratched a line into the glass every hour the sea rose. The last mark is above the ceiling.",
+        "roomIndex": 0,
+        "enemyId": null
+      },
+      {
+        "kind": "relic",
+        "title": "Observatory roster",
+        "text": "Forty-one names, each followed by a small lens sigil. Thirty-eight are struck through in the same violet ink the sea glows with.",
+        "roomIndex": 1,
+        "enemyId": null
+      },
+      {
+        "kind": "relic",
+        "title": "Prayer to the Focus",
+        "text": "Turn your face to the lens and be counted. The sea only takes what refuses to be seen.",
+        "roomIndex": 1,
+        "enemyId": null
+      },
+      {
+        "kind": "relic",
+        "title": "Lens-keeper’s last entry",
+        "text": "I have stopped the lens. Whatever it was showing the sea, the sea was learning. Tell no one where the Anchor sits.",
+        "roomIndex": 2,
+        "enemyId": null
+      },
+      {
+        "kind": "remains",
+        "title": "Surveyor’s badge",
+        "text": "A crystal badge still warm from the volley. The etched title reads Sentinel, Second Watch: it was posted here to count the sea, not to shoot at it.",
+        "roomIndex": 0,
+        "enemyId": "sentinel"
+      },
+      {
+        "kind": "remains",
+        "title": "Diver’s tether",
+        "text": "Frayed cable and a mouthful of violet salt. The lurkers were the divers who went down to read the sea up close, and came back speaking its language.",
+        "roomIndex": 0,
+        "enemyId": "lurker"
+      },
+      {
+        "kind": "remains",
+        "title": "The Focus itself",
+        "text": "Six lens-plates fall away from a body that was never a person. The Guardian was the observatory’s eye, and it did not want to be blinded.",
+        "roomIndex": 0,
+        "enemyId": "guardian"
+      }
+    ]
   },
   "art": {
     "paletteFamily": "ink-neon",
@@ -163,7 +214,15 @@
         }
       ],
       "isFinal": false,
-      "attributions": []
+      "attributions": [],
+      "relics": [
+        {
+          "id": "room-0-relic-0",
+          "x": 16,
+          "y": 4,
+          "fragmentIndex": 0
+        }
+      ]
     },
     {
       "id": "generated-room-4iyffj-1",
@@ -238,7 +297,21 @@
         }
       ],
       "isFinal": false,
-      "attributions": []
+      "attributions": [],
+      "relics": [
+        {
+          "id": "room-1-relic-1",
+          "x": 18,
+          "y": 10,
+          "fragmentIndex": 1
+        },
+        {
+          "id": "room-1-relic-2",
+          "x": 20,
+          "y": 8,
+          "fragmentIndex": 2
+        }
+      ]
     },
     {
       "id": "generated-room-ttv436-2",
@@ -299,7 +372,15 @@
       ],
       "exits": [],
       "isFinal": true,
-      "attributions": []
+      "attributions": [],
+      "relics": [
+        {
+          "id": "room-2-relic-3",
+          "x": 6,
+          "y": 10,
+          "fragmentIndex": 3
+        }
+      ]
     }
   ],
   "plannedRoomCount": 3

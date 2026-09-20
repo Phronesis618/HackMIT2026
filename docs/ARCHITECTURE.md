@@ -64,6 +64,26 @@ browser (solo)                                    Node server (one process)
 - **Tokens:** keys `src/shared/tokens.ts` (`VisualTokensSchema`), values `design/tokens.json`,
   applied to `:root` as CSS variables and read by Phaser via `hexToInt`.
 
+## Lore is shown, not told
+
+Worldbuilding never reaches the player as sidebar prose. Every path is data → trusted code
+→ an in-world moment → a real event, so the Chronicle and the Codex only ever contain what
+was actually found:
+
+| Source (data)                          | Placed / triggered by                  | Player experience                                   | Event / record                          |
+| -------------------------------------- | -------------------------------------- | --------------------------------------------------- | --------------------------------------- |
+| `recipe.lore[]` kind `relic`           | compiler → `RoomSpec.relics` (open floor, off the critical route) | glowing tablet on the floor; hold F beside it to read | `lore_discovered` → `lore` memory, Codex |
+| `recipe.lore[]` kind `remains`         | sim, first defeat of that `enemyId` per run | shard drops where the enemy fell; pick up by touch | `lore_discovered` → `lore` memory, Codex |
+| `RoomSpec.attributions` + receipt lines | renderer, proximity                    | a contributor's own words appear beside the prop/encounter their idea shaped | (renderer only)                         |
+| `RoomBlueprint.description`            | renderer, room entry                   | one fading title card over the room                 | (renderer only)                         |
+
+The model writes fragments (`prompts/runtime/world-recipe.md`) in an in-world voice; the
+schema bounds them (`LoreFragmentSchema`); fixtures carry hand-authored ones so the loop is
+demoable offline. `GameSnapshot.loreNodes` is the authoritative state of what is lying in
+the current room and `discoveredLore` what this run has found. Next steps a future agent
+can build on the same rails: NPC echoes (a fragment kind that speaks when approached),
+guardian phase lines, and lore-gated rooms.
+
 ## Conventions (see `src/shared/conventions.ts`)
 
 Pixels are world units; +y is down; tile = 32 px; entity positions are world-space centres;

@@ -193,6 +193,16 @@ export const RoomEncounterSchema = z.object({
 });
 export type RoomEncounter = z.infer<typeof RoomEncounterSchema>;
 
+/** A `relic` lore fragment lying on the floor of this room (see LoreFragmentSchema). */
+export const RoomRelicSchema = z.object({
+  id: IdString,
+  x: TileCoord,
+  y: TileCoord,
+  /** Index into `WorldRecipe.lore`; validated against the recipe in PreparedWorldSchema. */
+  fragmentIndex: z.number().int().min(0),
+});
+export type RoomRelic = z.infer<typeof RoomRelicSchema>;
+
 export const RoomExitSchema = z.object({
   x: TileCoord,
   y: TileCoord,
@@ -218,6 +228,7 @@ export const RoomSpecSchema = z
     exits: z.array(RoomExitSchema).max(4),
     isFinal: z.boolean(),
     attributions: z.array(AttributionSchema).max(24),
+    relics: z.array(RoomRelicSchema).max(6).default([]),
   })
   .superRefine((room, ctx) => {
     if (room.tiles.length !== room.height) {
@@ -272,8 +283,23 @@ export const RoomSpecSchema = z
       if (!inBounds(e.x, e.y)) ctx.addIssue({ code: 'custom', message: `encounter ${e.id} out of bounds` });
       else if (!walkable(e.x, e.y)) ctx.addIssue({ code: 'custom', message: `encounter ${e.id} is placed on a wall/void tile` });
     }
+    for (const r of room.relics) {
+      if (!inBounds(r.x, r.y)) ctx.addIssue({ code: 'custom', message: `relic ${r.id} out of bounds` });
+      else if (!walkable(r.x, r.y)) ctx.addIssue({ code: 'custom', message: `relic ${r.id} is placed on a wall/void tile` });
+    }
   });
 export type RoomSpec = z.infer<typeof RoomSpecSchema>;
+
+/** Every room relic must point at a `relic` fragment of the recipe it ships with. */
+function refineRelicReferences(world: { recipe: WorldRecipe; rooms: RoomSpec[] }, ctx: z.RefinementCtx): void {
+  world.rooms.forEach((room, i) => {
+    for (const relic of room.relics) {
+      const fragment = world.recipe.lore[relic.fragmentIndex];
+      if (!fragment) ctx.addIssue({ code: 'custom', message: `room ${i} relic ${relic.id} references missing lore fragment ${relic.fragmentIndex}` });
+      else if (fragment.kind !== 'relic') ctx.addIssue({ code: 'custom', message: `room ${i} relic ${relic.id} references a ${fragment.kind} fragment` });
+    }
+  });
+}
 
 // ---------------------------------------------------------------------------
 // World recipe (model-facing structured output) and prepared world (client-facing)
@@ -302,6 +328,25 @@ export type ContributionMapping = z.infer<typeof ContributionMappingSchema>;
  * expressions — only enumerated IDs, short text and numbers. Agent B compiles this
  * into RoomSpec[] + ArtRecipe with a deterministic, trusted compiler.
  */
+/**
+ * Lore is shown, not told. The model writes each fragment as bounded data and trusted
+ * code decides how it reaches the player:
+ *  - `relic`: an artifact lying in `roomIndex`; a player holds F beside it to read it.
+ *  - `remains`: what `enemyId` leaves behind. Drops the first time that kind is defeated
+ *    in a run and is picked up by touch, so the bestiary is earned in combat.
+ * Fragments are referenced by their index in `recipe.lore` everywhere else.
+ */
+export const LoreFragmentSchema = z.object({
+  kind: z.enum(['relic', 'remains']),
+  title: z.string().trim().min(1).max(40),
+  text: z.string().trim().min(1).max(240),
+  /** `relic`: the room it lies in. `remains`: ignored (drops wherever the enemy falls). */
+  roomIndex: z.number().int().min(0).max(2),
+  /** `remains` only; null for relics. */
+  enemyId: EnemyIdSchema.nullable(),
+});
+export type LoreFragment = z.infer<typeof LoreFragmentSchema>;
+
 export const WorldRecipeSchema = z.object({
   title: z.string().trim().min(1).max(40),
   tagline: z.string().trim().min(1).max(80),
@@ -310,6 +355,7 @@ export const WorldRecipeSchema = z.object({
   palette: PaletteSchema,
   rooms: z.array(RoomBlueprintSchema).min(1).max(3),
   contributionMappings: z.array(ContributionMappingSchema).max(24),
+  lore: z.array(LoreFragmentSchema).max(12),
 });
 export type WorldRecipe = z.infer<typeof WorldRecipeSchema>;
 
@@ -365,6 +411,7 @@ export const PreparedWorldSchema = z
     if (world.rooms.length > world.plannedRoomCount) {
       ctx.addIssue({ code: 'custom', message: 'more rooms than plannedRoomCount' });
     }
+    refineRelicReferences(world, ctx);
   });
 export type PreparedWorld = z.infer<typeof PreparedWorldSchema>;
 
@@ -377,7 +424,7 @@ export const WorldFixtureSchema = z.object({
   art: ArtRecipeSchema,
   rooms: z.array(RoomSpecSchema).min(1).max(3),
   plannedRoomCount: z.number().int().min(1).max(3),
-});
+}).superRefine(refineRelicReferences);
 export type WorldFixture = z.infer<typeof WorldFixtureSchema>;
 
 // ---------------------------------------------------------------------------
@@ -476,6 +523,21 @@ export const EnemyStateSchema = z.object({
 });
 export type EnemyState = z.infer<typeof EnemyStateSchema>;
 
+/**
+ * A piece of lore physically present in the room: a relic waiting to be read, or remains
+ * an enemy dropped. `progress` is the F-hold while reading a relic.
+ */
+export const LoreNodeSchema = z.object({
+  id: IdString,
+  kind: z.enum(['relic', 'remains']),
+  x: z.number(),
+  y: z.number(),
+  fragmentIndex: z.number().int().min(0),
+  state: z.enum(['sealed', 'reading', 'collected']),
+  progress: z.number().min(0).max(1),
+});
+export type LoreNode = z.infer<typeof LoreNodeSchema>;
+
 export const AnchorStateSchema = z.object({
   x: z.number(),
   y: z.number(),
@@ -498,6 +560,9 @@ export const GameSnapshotSchema = z.object({
   players: z.array(PlayerStateSchema),
   enemies: z.array(EnemyStateSchema),
   projectiles: z.array(ProjectileStateSchema).optional(),
+  loreNodes: z.array(LoreNodeSchema).optional(),
+  /** Fragment indices discovered so far this run (drives the Codex). */
+  discoveredLore: z.array(z.number().int().min(0)).optional(),
   anchor: AnchorStateSchema.nullable(),
   roomCleared: z.boolean().optional(),
 });
@@ -567,6 +632,11 @@ export const GameEventSchema = z.discriminatedUnion('type', [
     ...eventBase, type: z.literal('enemy_attacked'), enemyId: IdString,
     x: z.number(), y: z.number(), facing: z.number(), hitPlayerIds: z.array(IdString),
   }),
+  z.object({
+    ...eventBase, type: z.literal('lore_discovered'), playerId: IdString,
+    fragmentIndex: z.number().int().min(0), kind: z.enum(['relic', 'remains']),
+    title: z.string().max(40), text: z.string().max(240), x: z.number(), y: z.number(),
+  }),
   z.object({ ...eventBase, type: z.literal('exit_reached'), playerId: IdString, roomIndex: z.number().int().min(0), toRoomIndex: z.number().int().min(0) }),
   z.object({ ...eventBase, type: z.literal('anchor_planted'), worldId: IdString, roomIndex: z.number().int().min(0), playerIds: z.array(IdString) }),
   z.object({
@@ -589,7 +659,7 @@ export type GameEventInput = DistributiveOmit<GameEvent, 'id' | 'tick' | 'timeMs
 // Memories (Chronicle output). Only ever derived from real events.
 // ---------------------------------------------------------------------------
 
-export const MemoryKindSchema = z.enum(['creation_receipt', 'arrival_keepsake', 'milestone', 'anchor', 'run_summary']);
+export const MemoryKindSchema = z.enum(['creation_receipt', 'arrival_keepsake', 'milestone', 'anchor', 'run_summary', 'lore']);
 export type MemoryKind = z.infer<typeof MemoryKindSchema>;
 
 export const MemoryRecordSchema = z.object({

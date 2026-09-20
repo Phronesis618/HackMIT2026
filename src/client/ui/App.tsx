@@ -61,7 +61,7 @@ export function App({ store, actions, onStageReady }: AppProps) {
           {(model.phase === 'headquarters' || model.phase === 'preparing') && <HeadquartersPanel model={model} actions={actions} />}
           {(model.phase === 'expedition' || model.phase === 'training') && <Hud model={model} actions={actions} />}
           {model.phase === 'debrief' && <DebriefPanel model={model} actions={actions} />}
-          {model.world && <WorldPanel world={model.world} />}
+          {model.world && <WorldPanel world={model.world} discoveredLore={model.discoveredLore} />}
         </aside>
       </main>
 

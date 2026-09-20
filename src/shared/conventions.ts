@@ -50,6 +50,10 @@ export const REVIVE_DURATION_MS = 2000;
 export const REVIVE_HP = 40;
 export const ANCHOR_RANGE = 64;
 export const ANCHOR_HOLD_MS = 3000;
+/** Relics are read by holding F beside them; remains are picked up by touch. */
+export const LORE_READ_RANGE = 48;
+export const LORE_READ_MS = 700;
+export const LORE_PICKUP_RANGE = 22;
 
 /**
  * DRAW ORDER (Phaser depth). Entities are y-sorted inside their band:

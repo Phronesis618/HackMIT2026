@@ -82,7 +82,58 @@
         "hazards": false
       }
     ],
-    "contributionMappings": []
+    "contributionMappings": [],
+    "lore": [
+      {
+        "kind": "relic",
+        "title": "Reading-room notice",
+        "text": "Please return all records to the roots. Do not water the terminals. The archive remembers what you forget to.",
+        "roomIndex": 0,
+        "enemyId": null
+      },
+      {
+        "kind": "relic",
+        "title": "Index card, overgrown",
+        "text": "Subject: the machine. Filed under: soil. A root has grown clean through the hole where the card was pinned.",
+        "roomIndex": 1,
+        "enemyId": null
+      },
+      {
+        "kind": "relic",
+        "title": "Lantern-lighter’s ledger",
+        "text": "Lit nine lanterns on the dry path. Heard the terminals humming a tune I taught them. Did not light the tenth.",
+        "roomIndex": 1,
+        "enemyId": null
+      },
+      {
+        "kind": "relic",
+        "title": "Seed vault plaque",
+        "text": "Here the archive keeps one copy of everything it was told, so that endings can be argued with.",
+        "roomIndex": 2,
+        "enemyId": null
+      },
+      {
+        "kind": "remains",
+        "title": "Reader’s spectacles",
+        "text": "Cheap frames, lenses fogged green. The husks were patrons who stayed past closing and let the roots do their reading for them.",
+        "roomIndex": 0,
+        "enemyId": "husk"
+      },
+      {
+        "kind": "remains",
+        "title": "Runner’s satchel",
+        "text": "Empty, but the strap is worn through. Lurkers were the couriers who carried records between wings until the roots learned to carry them instead.",
+        "roomIndex": 0,
+        "enemyId": "lurker"
+      },
+      {
+        "kind": "remains",
+        "title": "Head archivist’s seal",
+        "text": "Wax, root-fibre and a fingerprint. The Guardian was the last archivist, grown into the vault it swore to keep, still refusing every withdrawal.",
+        "roomIndex": 0,
+        "enemyId": "guardian"
+      }
+    ]
   },
   "art": {
     "paletteFamily": "ink-neon",
@@ -180,7 +231,15 @@
         }
       ],
       "isFinal": false,
-      "attributions": []
+      "attributions": [],
+      "relics": [
+        {
+          "id": "room-0-relic-0",
+          "x": 2,
+          "y": 3,
+          "fragmentIndex": 0
+        }
+      ]
     },
     {
       "id": "generated-room-1idks1o-1",
@@ -265,7 +324,21 @@
         }
       ],
       "isFinal": false,
-      "attributions": []
+      "attributions": [],
+      "relics": [
+        {
+          "id": "room-1-relic-1",
+          "x": 2,
+          "y": 14,
+          "fragmentIndex": 1
+        },
+        {
+          "id": "room-1-relic-2",
+          "x": 20,
+          "y": 6,
+          "fragmentIndex": 2
+        }
+      ]
     },
     {
       "id": "generated-room-11i4o0v-2",
@@ -336,7 +409,15 @@
       ],
       "exits": [],
       "isFinal": true,
-      "attributions": []
+      "attributions": [],
+      "relics": [
+        {
+          "id": "room-2-relic-3",
+          "x": 19,
+          "y": 3,
+          "fragmentIndex": 3
+        }
+      ]
     }
   ],
   "plannedRoomCount": 3

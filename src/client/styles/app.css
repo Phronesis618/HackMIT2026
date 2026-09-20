@@ -424,6 +424,45 @@ body {
   margin: 0;
   color: var(--color-mist100);
 }
+/* Codex: discovered lore only; undiscovered entries stay ???. */
+.codex {
+  margin-top: var(--space-sm);
+}
+.codex__list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.codex__entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1px;
+  padding: 5px 10px;
+  border-left: 2px solid var(--color-ink500);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: rgba(7, 9, 15, 0.45);
+  color: var(--color-mist300);
+  font-size: 12px;
+}
+.codex__entry--found {
+  border-left-color: var(--color-warmLamp);
+  color: var(--color-mist100);
+}
+.codex__title {
+  font: 11px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.codex__entry--found .codex__title {
+  color: var(--color-warmLamp);
+}
+.codex__text {
+  font-size: 12px;
+  line-height: 1.35;
+}
 .notes {
   margin-top: var(--space-sm);
   font-size: 12px;

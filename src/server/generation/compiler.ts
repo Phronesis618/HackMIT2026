@@ -16,6 +16,7 @@ import {
   type RoomBlueprint,
   type RoomEncounter,
   type RoomProp,
+  type RoomRelic,
   type RoomSpec,
   type WorldRecipe,
 } from '../../shared/contracts';
@@ -67,6 +68,10 @@ export function compileWorldRecipe(rawRecipe: WorldRecipe, options: CompileWorld
   if (droppedMappings > 0) {
     notes.push(`Ignored ${droppedMappings} contribution mapping(s) for rooms outside the planned room count.`);
   }
+  const strandedRelics = recipe.lore.filter((f) => f.kind === 'relic' && f.roomIndex >= plannedRoomCount).length;
+  if (strandedRelics > 0) notes.push(`Ignored ${strandedRelics} relic(s) placed in rooms outside the planned room count.`);
+  const orphanRemains = recipe.lore.filter((f) => f.kind === 'remains' && f.enemyId === null).length;
+  if (orphanRemains > 0) notes.push(`${orphanRemains} remains fragment(s) name no enemy and will never drop.`);
 
   const art = ArtRecipeSchema.parse({
     paletteFamily: 'ink-neon',
@@ -110,6 +115,7 @@ function compileRoom(
   const encounters = placeEncounters(grid, blueprint, index, candidates, mappings, props, isFinal, notes);
   const attributions = buildAttributions(grid, blueprint, index, pathY, mappings, props, encounters);
   if (attributions.length < mappings.length) notes.push(`Room ${index + 1} omitted mappings without an observable target.`);
+  const relics = placeRelics(grid, recipe, index, candidates, props, encounters, notes);
 
   const room = RoomSpecSchema.parse({
     id: `generated-room-${roomSeed.toString(36)}-${index}`,
@@ -124,6 +130,7 @@ function compileRoom(
     exits: isFinal ? [] : [{ x: width - 1, y: pathY, toRoomIndex: index + 1, direction: 'east' }],
     isFinal,
     attributions,
+    relics,
   });
   if (!hasCriticalRoute(room)) throw new Error(`Room ${index + 1} has no safe route to its objective.`);
   return room;
@@ -280,6 +287,44 @@ function placeEncounters(
       ...(mapping ? { attributionId: mapping.contributionId } : {}),
     }];
   });
+}
+
+/**
+ * Relics are non-blocking floor artifacts, so they never touch the critical route. They
+ * take whatever open floor remains after props and encounters, farthest from the route
+ * first so reading one is a small detour rather than a tripwire.
+ */
+function placeRelics(
+  grid: Grid,
+  recipe: WorldRecipe,
+  roomIndex: number,
+  candidates: Coord[],
+  props: RoomProp[],
+  encounters: RoomEncounter[],
+  notes: string[],
+): RoomRelic[] {
+  const occupied = new Set<string>();
+  for (const prop of props) {
+    const { w, h } = PROP_INFO[prop.propId].footprint;
+    markOccupied(occupied, prop.x, prop.y, w, h);
+  }
+  for (const encounter of encounters) markOccupied(occupied, encounter.x - 1, encounter.y - 1, 3, 3);
+  const relics: RoomRelic[] = [];
+  recipe.lore.forEach((fragment, fragmentIndex) => {
+    if (fragment.kind !== 'relic' || fragment.roomIndex !== roomIndex) return;
+    if (relics.length >= 3) {
+      notes.push(`Room ${roomIndex + 1} kept only three relics.`);
+      return;
+    }
+    const coord = candidates.find(({ x, y }) => footprintFits(grid, occupied, x, y, 1, 1));
+    if (!coord) {
+      notes.push(`Room ${roomIndex + 1} omitted the relic "${fragment.title}"; no open floor remained.`);
+      return;
+    }
+    markOccupied(occupied, coord.x - 1, coord.y - 1, 3, 3);
+    relics.push({ id: `room-${roomIndex}-relic-${fragmentIndex}`, x: coord.x, y: coord.y, fragmentIndex });
+  });
+  return relics;
 }
 
 function buildAttributions(
