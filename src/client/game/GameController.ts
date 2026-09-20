@@ -198,9 +198,13 @@ export class GameController {
           store.set({ hud });
         }
       }
-      const players = snapshot.players.map((p) => ({ id: p.id, displayName: p.displayName, classId: p.classId, isLocal: p.id === session.localPlayerId }));
+      const players = snapshot.players.map((p) => ({
+        id: p.id, displayName: p.displayName, classId: p.classId, isLocal: p.id === session.localPlayerId,
+        connected: p.connected !== false,
+      }));
       const prevPlayers = store.get().players;
-      if (prevPlayers.length !== players.length || prevPlayers.some((p, i) => p.id !== players[i]!.id || p.displayName !== players[i]!.displayName || p.classId !== players[i]!.classId)) {
+      if (prevPlayers.length !== players.length || prevPlayers.some((p, i) => p.id !== players[i]!.id || p.displayName !== players[i]!.displayName
+        || p.classId !== players[i]!.classId || (p.connected !== false) !== players[i]!.connected)) {
         store.set({ players });
       }
       const discoveredLore = snapshot.discoveredLore ?? [];

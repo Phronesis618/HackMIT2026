@@ -149,10 +149,12 @@ export function Crew({ model }: { model: UiModel }) {
       <p className="rail-label">Crew · {players.length}/4</p>
       <ul className="rail-crew__list">
         {players.map((p) => (
-          <li key={p.id} className={`rail-crew__row ${p.isLocal ? 'is-local' : ''}`}>
+          <li key={p.id} className={`rail-crew__row ${p.isLocal ? 'is-local' : ''} ${p.connected === false ? 'is-offline' : ''}`}>
             <span className="vitals__swatch" style={{ background: CLASS_THEME[p.classId].primary }} />
             <span className="rail-crew__name">{p.displayName}</span>
-            <span className="rail-crew__class">{CLASS_INFO[p.classId].name}{p.isLocal ? ' · you' : ''}</span>
+            <span className="rail-crew__class">
+              {CLASS_INFO[p.classId].name}{p.isLocal ? ' · you' : ''}{p.connected === false ? ' · offline' : ''}
+            </span>
           </li>
         ))}
       </ul>

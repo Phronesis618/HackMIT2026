@@ -733,6 +733,13 @@ export const PlayerStateSchema = z.object({
   ultCharge: z.number().min(0).max(100).optional(),
   /** Short lockout after firing R (prevents double-fire on held keys). */
   abilityRCooldownMs: z.number().nonnegative().optional(),
+  /**
+   * Co-op only: false while this operative's client is away and the server is holding their seat
+   * (30 s grace). Absent means present — solo play and every legacy snapshot omit it. A seat with
+   * nobody behind it is marked on every screen, ignored by enemies, and not counted as a living
+   * operative when the sim asks whether the crew is down.
+   */
+  connected: z.boolean().optional(),
 });
 export type PlayerState = z.infer<typeof PlayerStateSchema>;
 

@@ -32,6 +32,8 @@ export interface UiPlayer {
   displayName: string;
   classId: ClassId;
   isLocal: boolean;
+  /** Co-op: false while this operative's client is away and the server is holding their seat. */
+  connected?: boolean;
 }
 
 export interface UiWorldSummary {

@@ -166,6 +166,12 @@ export interface Simulation {
   returnToHeadquarters(): GameEvent[];
   /** From HQ only: the practice range (respawning targets, all abilities, no run). */
   enterTraining(): GameEvent[];
+  /**
+   * Co-op: the transport tells the sim when a client goes away and when it comes back. An
+   * operative with nobody behind them is not a target and not a participant; their seat is
+   * still held (see PlayerState.connected).
+   */
+  setPlayerConnected(playerId: string, connected: boolean): void;
   /** Floors co-op: whose `chooseBiome` decides. Null = the first operative (solo). */
   setHostPlayerId(playerId: string | null): void;
   /** Floors: vote while the biome choice is open; the host's vote moves the crew on the next step. */
@@ -230,6 +236,15 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
 
   function playerIds(): string[] {
     return orderedPlayers().map((p) => p.state.id);
+  }
+
+  /**
+   * Operatives with somebody behind them. A co-op seat whose client has dropped keeps its body
+   * in the room for the reconnect grace, but it is nobody's target, it triggers nothing, and it
+   * does not keep a downed crew alive (docs/QA_COOP.md, "ghost seats are invisible as such").
+   */
+  function presentPlayers(): PlayerRuntime[] {
+    return orderedPlayers().filter((p) => p.state.connected !== false);
   }
 
   function findTile(ch: string): Point | null {
@@ -352,7 +367,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   function bossContext(events: GameEvent[]): BossContext {
     return {
       room,
-      players: () => orderedPlayers().filter((p) => p.state.hp > 0)
+      players: () => presentPlayers().filter((p) => p.state.hp > 0)
         .map((p) => ({ id: p.state.id, x: p.state.x, y: p.state.y, hp: p.state.hp, hidden: (p.state.shroudMs ?? 0) > 0 })),
       damagePlayer: (playerId, sourceEnemyId, damage, ranged) => {
         const p = players.get(playerId);
@@ -446,8 +461,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       worldId: world?.worldId ?? '',
       room,
       roomKey: escapeKey(room),
-      players: () => orderedPlayers().map((p) => ({ id: p.state.id, x: p.state.x, y: p.state.y, hp: p.state.hp })),
-      crewSize: () => players.size,
+      // A dropped seat is not part of the escape either: it cannot bleed out and it cannot vote.
+      players: () => presentPlayers().map((p) => ({ id: p.state.id, x: p.state.x, y: p.state.y, hp: p.state.hp })),
+      crewSize: () => presentPlayers().length,
       damagePlayer: (playerId, source, damage) => {
         const p = players.get(playerId);
         return p ? damagePlayer(p, source, damage, false, events, 350, false) : false;
@@ -1480,7 +1496,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       }
       return;
     }
-    const target = orderedPlayers().filter((p) => p.state.hp > 0 && p.state.shroudMs === 0)
+    const target = presentPlayers().filter((p) => p.state.hp > 0 && p.state.shroudMs === 0)
       .sort((a, b) => distance(s, a.state) - distance(s, b.state))[0];
     if (!target || (phase === 'training' && distance(s, target.state) > TRAINING_WAKE_RANGE)) {
       // Training targets doze in their pens until an operative walks up to them.
@@ -1530,10 +1546,11 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
 
   function updateObjectives(events: GameEvent[]): void {
     if (phase !== 'expedition' || !world) return;
-    const living = orderedPlayers().filter((p) => p.state.hp > 0);
+    const present = presentPlayers();
+    const living = present.filter((p) => p.state.hp > 0);
     // During the collapse a downed crew is escape.ts's business: a solo last stand, or a bleed-out
     // that ends the run as `stranded` rather than as a wipe.
-    if (players.size > 0 && living.length === 0 && collapse === null) {
+    if (present.length > 0 && living.length === 0 && collapse === null) {
       finishRun('collapsed', events);
       return;
     }
@@ -1850,6 +1867,13 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       p.unlockedClasses.add(p.state.classId);
       return [emit({ type: 'ability_unlocked', playerId, abilityId: CLASS_ABILITIES[p.state.classId].e,
         cost: ABILITY_UNLOCK_COST, remainingResources: p.state.resources })];
+    },
+    setPlayerConnected(playerId, connected) {
+      const p = players.get(playerId);
+      if (!p) return;
+      // Absent means present: a solo snapshot and every legacy snapshot stay byte-identical.
+      if (connected) delete p.state.connected;
+      else p.state.connected = false;
     },
     setHostPlayerId(playerId) {
       hostPlayerId = playerId;
