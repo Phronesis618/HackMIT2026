@@ -225,8 +225,25 @@ export class GameController {
     const world = session.getWorld();
     const room = snapshot.roomIndex === null ? null : world?.rooms[snapshot.roomIndex];
     if (world && room && snapshot.phase !== 'headquarters' && (store.get().room?.index !== room.index || store.get().phase === 'headquarters' || store.get().phase === 'training')) {
-      renderer.showRoom(room, world.art, world.receipt.lines, { title: world.recipe.title, tagline: world.recipe.tagline });
-      store.set({ room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal }, phase: snapshot.phase, hud: me ? hudFrom(me, snapshot) : store.get().hud });
+      // Each biome renders with its own compiled art; the exit label tells players where they are heading.
+      const biome = world.biomes.find((b) => b.roomIndices.includes(room.index));
+      const nextIndex = room.exits[0]?.toRoomIndex;
+      const nextRoom = nextIndex === undefined ? undefined : world.rooms[nextIndex];
+      const nextBiome = nextRoom ? world.biomes.find((b) => b.roomIndices.includes(nextRoom.index)) : undefined;
+      const exitLabel = nextRoom
+        ? `→ ${nextRoom.name}${nextBiome && nextBiome !== biome ? ` · ${nextBiome.name}` : ''}`
+        : nextIndex !== undefined ? '→ next room (still forming)' : undefined;
+      renderer.showRoom(room, biome?.art ?? world.art, world.receipt.lines, {
+        title: world.recipe.title,
+        tagline: world.recipe.tagline,
+        ...(biome ? { biome: { name: biome.name, index: biome.index, count: world.biomes.length, firstRoom: biome.roomIndices[0] === room.index } } : {}),
+        ...(exitLabel ? { exitLabel } : {}),
+      });
+      store.set({
+        room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal, ...(biome ? { biomeName: biome.name, biomeIndex: biome.index } : {}) },
+        phase: snapshot.phase,
+        hud: me ? hudFrom(me, snapshot) : store.get().hud,
+      });
     }
   }
 
@@ -283,6 +300,7 @@ export class GameController {
         palette: world.art.palette,
         motifIds: world.art.motifIds,
         roomNames: world.rooms.map((room) => room.name),
+        biomes: world.biomes.map((b) => ({ name: b.name, roomNames: b.roomIndices.map((i) => world.rooms[i]?.name).filter((n): n is string => Boolean(n)), palette: b.art.palette })),
       },
       notice: null,
     });

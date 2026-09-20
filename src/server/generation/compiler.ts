@@ -8,11 +8,16 @@
  */
 import {
   ArtRecipeSchema,
+  CompiledBiomeSchema,
+  MAX_ROOMS,
+  recipeRoomBlueprints,
   RoomSpecSchema,
   WorldRecipeSchema,
   type ArtRecipe,
   type Attribution,
+  type CompiledBiome,
   type ContributionMapping,
+  type Palette,
   type RoomBlueprint,
   type RoomEncounter,
   type RoomProp,
@@ -32,6 +37,8 @@ export interface CompileWorldRecipeOptions {
 export interface CompiledWorldRecipe {
   rooms: RoomSpec[];
   art: ArtRecipe;
+  /** One entry per biome in the recipe (empty for single-biome recipes). */
+  biomes: CompiledBiome[];
   /** Honest descriptions of deterministic repairs made by trusted code. */
   notes: string[];
 }
@@ -46,8 +53,8 @@ type Grid = string[][];
 export function compileWorldRecipe(rawRecipe: WorldRecipe, options: CompileWorldRecipeOptions): CompiledWorldRecipe {
   const recipe = WorldRecipeSchema.parse(rawRecipe);
   const plannedRoomCount = options.plannedRoomCount;
-  if (!Number.isInteger(plannedRoomCount) || plannedRoomCount < 1 || plannedRoomCount > 3) {
-    throw new Error(`plannedRoomCount must be an integer from 1 to 3; received ${plannedRoomCount}`);
+  if (!Number.isInteger(plannedRoomCount) || plannedRoomCount < 1 || plannedRoomCount > MAX_ROOMS) {
+    throw new Error(`plannedRoomCount must be an integer from 1 to ${MAX_ROOMS}; received ${plannedRoomCount}`);
   }
   const committedRoomCount = options.committedRoomCount ?? plannedRoomCount;
   if (!Number.isInteger(committedRoomCount) || committedRoomCount < 1 || committedRoomCount > plannedRoomCount) {
@@ -56,12 +63,13 @@ export function compileWorldRecipe(rawRecipe: WorldRecipe, options: CompileWorld
 
   const seed = options.seed ?? hashString(JSON.stringify(recipe));
   const notes: string[] = [];
+  const blueprints = recipeRoomBlueprints(recipe);
   const rooms = Array.from({ length: committedRoomCount }, (_, index) => {
-    const blueprint = recipe.rooms[index] ?? recipe.rooms[recipe.rooms.length - 1]!;
-    if (index >= recipe.rooms.length) {
-      notes.push(`Room ${index + 1} reused the final blueprint because the recipe supplied only ${recipe.rooms.length} room(s).`);
+    const entry = blueprints[index] ?? blueprints[blueprints.length - 1]!;
+    if (index >= blueprints.length) {
+      notes.push(`Room ${index + 1} reused the final blueprint because the recipe supplied only ${blueprints.length} room(s).`);
     }
-    return compileRoom(recipe, blueprint, index, plannedRoomCount, seed, notes);
+    return compileRoom(recipe, entry.blueprint, index, plannedRoomCount, seed, notes, entry.biomeIndex);
   });
 
   const droppedMappings = recipe.contributionMappings.filter((mapping) => mapping.roomIndex >= plannedRoomCount).length;
@@ -73,16 +81,35 @@ export function compileWorldRecipe(rawRecipe: WorldRecipe, options: CompileWorld
   const orphanRemains = recipe.lore.filter((f) => f.kind === 'remains' && f.enemyId === null).length;
   if (orphanRemains > 0) notes.push(`${orphanRemains} remains fragment(s) name no enemy and will never drop.`);
 
-  const art = ArtRecipeSchema.parse({
+  const art = compileArt(recipe.palette, recipe.motifIds, seed);
+  // Biome art: each biome renders with its own motifs (and palette when it declares one), so
+  // crossing into a new biome visibly changes the construction of the world.
+  const biomes: CompiledBiome[] = recipe.biomes.map((biome, biomeIndex) => {
+    const roomIndices = blueprints
+      .map((entry, roomIndex) => ({ entry, roomIndex }))
+      .filter(({ entry, roomIndex }) => entry.biomeIndex === biomeIndex && roomIndex < plannedRoomCount)
+      .map(({ roomIndex }) => roomIndex);
+    return CompiledBiomeSchema.parse({
+      index: biomeIndex,
+      name: biome.name,
+      description: biome.description,
+      roomIndices: roomIndices.length > 0 ? roomIndices : [Math.min(plannedRoomCount - 1, blueprints.findIndex((e) => e.biomeIndex === biomeIndex))].filter((i) => i >= 0),
+      art: compileArt(biome.palette ?? recipe.palette, biome.motifIds, hashString(`${seed}:biome:${biomeIndex}`)),
+    });
+  }).filter((biome) => biome.roomIndices.length > 0);
+
+  return { rooms, art, biomes, notes: notes.slice(0, 10) };
+}
+
+function compileArt(palette: Palette, motifIds: MotifId[], seed: number): ArtRecipe {
+  return ArtRecipeSchema.parse({
     paletteFamily: 'ink-neon',
-    palette: recipe.palette,
-    motifIds: recipe.motifIds,
-    skyline: recipe.motifIds[0],
+    palette,
+    motifIds: motifIds.slice(0, 4),
+    skyline: motifIds[0],
     fog: fraction(seed, 'fog', 20, 55),
     glowIntensity: fraction(seed, 'glow', 50, 85),
   });
-
-  return { rooms, art, notes: notes.slice(0, 10) };
 }
 
 function compileRoom(
@@ -92,6 +119,7 @@ function compileRoom(
   plannedRoomCount: number,
   seed: number,
   notes: string[],
+  biomeIndex = 0,
 ): RoomSpec {
   const roomSeed = hashString(`${seed}:room:${index}:${blueprint.name}`);
   const width = 22 + pick(roomSeed, 'width', 7); // 22–28, inside the 18–28 product target.
@@ -120,6 +148,7 @@ function compileRoom(
   const room = RoomSpecSchema.parse({
     id: `generated-room-${roomSeed.toString(36)}-${index}`,
     index,
+    biomeIndex,
     name: blueprint.name,
     description: blueprint.description,
     width,

@@ -16,7 +16,7 @@ import {
   type PlayerIntent,
   type PreparedWorld,
 } from '../../shared/contracts';
-import { TICK_MS } from '../../shared/conventions';
+import { DEFAULT_PLANNED_ROOM_COUNT, TICK_MS } from '../../shared/conventions';
 import { randomId } from '../../shared/ids';
 import { PROTOCOL_VERSION, decodeClientMessage, encodeMessage, type ClientMessage, type Lobby, type ServerMessage } from '../../shared/protocol';
 import { createSimulation, type Simulation } from '../../sim';
@@ -190,7 +190,7 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
     setGeneration({ phase: 'queued', message: 'Preparing a shared world…', requestId, startedAt, elapsedMs: 0 });
     try {
       for await (const candidate of generate({
-        requestId, sessionId, contributions: contributions.map((contribution) => ({ ...contribution })), plannedRoomCount: 3,
+        requestId, sessionId, contributions: contributions.map((contribution) => ({ ...contribution })), plannedRoomCount: DEFAULT_PLANNED_ROOM_COUNT,
       })) {
         if (closed) break;
         const next = PreparedWorldSchema.parse(candidate);

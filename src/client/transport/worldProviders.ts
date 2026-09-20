@@ -22,6 +22,8 @@ import fixtureJson from '../../../fixtures/worlds/vantage-spire.json';
 
 export interface WorldProvider {
   readonly kind: 'server' | 'client-fixture';
+  /** Fixed room count this provider can serve (bundled fixtures); sessions must request exactly this. */
+  readonly plannedRoomCount?: number;
   prepareWorld(request: GenerationRequestInput, options?: WorldStreamOptions): Promise<PreparedWorld>;
   prepareWorldStream?(request: GenerationRequestInput, options?: WorldStreamOptions): AsyncIterable<PreparedWorld>;
 }
@@ -203,6 +205,7 @@ export const serverWorldProvider: WorldProvider = {
 
 export const fixtureWorldProvider: WorldProvider = {
   kind: 'client-fixture',
+  plannedRoomCount: WorldFixtureSchema.parse(fixtureJson).plannedRoomCount,
   async prepareWorld(rawRequest) {
     const request = GenerationRequestSchema.parse(rawRequest);
     const fixture = WorldFixtureSchema.parse(fixtureJson);
@@ -214,6 +217,7 @@ export const fixtureWorldProvider: WorldProvider = {
       art: fixture.art,
       rooms: fixture.rooms,
       plannedRoomCount: fixture.plannedRoomCount,
+      biomes: [],
       provenance: {
         source: 'fixture',
         label: 'OFFLINE FIXTURE (client preview)',

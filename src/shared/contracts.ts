@@ -34,6 +34,10 @@ export const ContributionText = z.string().trim().min(1).max(200);
 export const Paragraph = z.string().trim().min(1).max(600);
 export const Timestamp = z.number().int().nonnegative(); // Unix ms
 export const TileCoord = z.number().int().min(0).max(63);
+/** Rooms per expedition: up to three biomes of up to three rooms each. */
+export const MAX_ROOMS = 9;
+export const MAX_BIOMES = 3;
+const RoomIndex = z.number().int().min(0).max(MAX_ROOMS - 1);
 
 export const ClassIdSchema = z.enum(CLASS_IDS);
 export const AbilityIdSchema = z.enum(ABILITY_IDS);
@@ -73,7 +77,7 @@ export const GenerationRequestSchema = z.object({
   /** Deterministic seed for fixture selection / layout jitter. */
   seed: z.number().int().nonnegative().optional(),
   /** How many rooms the run will eventually have (rooms may be committed one at a time). */
-  plannedRoomCount: z.number().int().min(1).max(3).default(3),
+  plannedRoomCount: z.number().int().min(1).max(MAX_ROOMS).default(3),
 });
 export type GenerationRequest = z.infer<typeof GenerationRequestSchema>;
 export type GenerationRequestInput = z.input<typeof GenerationRequestSchema>;
@@ -213,7 +217,7 @@ export type RoomRelic = z.infer<typeof RoomRelicSchema>;
 export const RoomExitSchema = z.object({
   x: TileCoord,
   y: TileCoord,
-  toRoomIndex: z.number().int().min(0).max(2),
+  toRoomIndex: RoomIndex,
   direction: z.enum(['north', 'south', 'east', 'west']),
 });
 export type RoomExit = z.infer<typeof RoomExitSchema>;
@@ -223,7 +227,9 @@ const tileCharSet = new Set<string>(TILE_CHARS);
 export const RoomSpecSchema = z
   .object({
     id: IdString,
-    index: z.number().int().min(0).max(2),
+    index: RoomIndex,
+    /** Which biome of the world this room belongs to (0 when the world has no biomes). */
+    biomeIndex: z.number().int().min(0).max(MAX_BIOMES - 1).default(0),
     name: ShortText,
     description: z.string().trim().max(300),
     width: z.number().int().min(8).max(48),
@@ -326,7 +332,7 @@ export const ContributionMappingSchema = z.object({
   contributionId: IdString,
   kind: AttributionKindSchema,
   featureDescription: z.string().trim().min(1).max(200),
-  roomIndex: z.number().int().min(0).max(2),
+  roomIndex: RoomIndex,
 });
 export type ContributionMapping = z.infer<typeof ContributionMappingSchema>;
 
@@ -350,7 +356,7 @@ export const LoreFragmentSchema = z.object({
   source: z.string().trim().min(1).max(60),
   text: z.string().trim().min(1).max(520),
   /** `relic`: the room it lies in. `remains`: ignored (drops wherever the enemy falls). */
-  roomIndex: z.number().int().min(0).max(2),
+  roomIndex: RoomIndex,
   /** `remains` only; null for relics. */
   enemyId: EnemyIdSchema.nullable(),
 });
@@ -367,17 +373,44 @@ export const AttunementSchema = z.object({
 });
 export type Attunement = z.infer<typeof AttunementSchema>;
 
+export const BiomeBlueprintSchema = z.object({
+  name: ShortText,
+  description: z.string().trim().max(300).default(''),
+  motifIds: z.array(MotifIdSchema).min(1).max(3),
+  /** Optional palette override; the biome inherits the world palette when absent. */
+  palette: PaletteSchema.optional(),
+  rooms: z.array(RoomBlueprintSchema).min(1).max(3),
+});
+export type BiomeBlueprint = z.infer<typeof BiomeBlueprintSchema>;
+
+/** Room blueprints in play order: the biomes' rooms when biomes exist, else the flat list. */
+export function recipeRoomBlueprints(recipe: { rooms: RoomBlueprint[]; biomes: BiomeBlueprint[] }): Array<{ blueprint: RoomBlueprint; biomeIndex: number }> {
+  if (recipe.biomes.length > 0) return recipe.biomes.flatMap((biome, biomeIndex) => biome.rooms.map((blueprint) => ({ blueprint, biomeIndex })));
+  return recipe.rooms.map((blueprint) => ({ blueprint, biomeIndex: 0 }));
+}
+
 export const WorldRecipeSchema = z.object({
   title: z.string().trim().min(1).max(40),
   tagline: z.string().trim().min(1).max(80),
   themeSummary: z.string().trim().min(1).max(400),
   motifIds: z.array(MotifIdSchema).min(1).max(4),
   palette: PaletteSchema,
-  rooms: z.array(RoomBlueprintSchema).min(1).max(3),
+  /** Flat room list (legacy / single-biome). When `biomes` is non-empty the compiler uses the biomes' rooms instead. */
+  rooms: z.array(RoomBlueprintSchema).max(MAX_ROOMS),
+  /**
+   * Up to three biomes, each a distinct region (own name, motifs and optional palette) holding
+   * 1–3 room blueprints. Rooms are visited biome by biome; the guardian/anchor room is the
+   * last room of the last biome.
+   */
+  biomes: z.array(BiomeBlueprintSchema).max(MAX_BIOMES).default([]),
   contributionMappings: z.array(ContributionMappingSchema).max(24),
   lore: z.array(LoreFragmentSchema).max(12),
   /** 2–4 world-specific skill nodes; see `src/shared/skills.ts` for how they join the tree. */
   attunements: z.array(AttunementSchema).max(4).default([]),
+}).superRefine((recipe, ctx) => {
+  const total = recipe.biomes.length > 0 ? recipe.biomes.reduce((n, b) => n + b.rooms.length, 0) : recipe.rooms.length;
+  if (total < 1) ctx.addIssue({ code: 'custom', message: 'a recipe needs at least one room (in rooms or in biomes)' });
+  if (total > MAX_ROOMS) ctx.addIssue({ code: 'custom', message: `a recipe may hold at most ${MAX_ROOMS} rooms across its biomes` });
 });
 export type WorldRecipe = z.infer<typeof WorldRecipeSchema>;
 
@@ -406,14 +439,25 @@ export type CreationReceipt = z.infer<typeof CreationReceiptSchema>;
  * === i). Later rooms may be appended by a follow-up message while players play, but a
  * committed room is never changed.
  */
+export const CompiledBiomeSchema = z.object({
+  index: z.number().int().min(0).max(MAX_BIOMES - 1),
+  name: ShortText,
+  description: z.string().trim().max(300).default(''),
+  roomIndices: z.array(RoomIndex).min(1).max(MAX_ROOMS),
+  art: ArtRecipeSchema,
+});
+export type CompiledBiome = z.infer<typeof CompiledBiomeSchema>;
+
 export const PreparedWorldSchema = z
   .object({
     worldId: IdString,
     createdAt: Timestamp,
     recipe: WorldRecipeSchema,
     art: ArtRecipeSchema,
-    rooms: z.array(RoomSpecSchema).min(1).max(3),
-    plannedRoomCount: z.number().int().min(1).max(3),
+    rooms: z.array(RoomSpecSchema).min(1).max(MAX_ROOMS),
+    plannedRoomCount: z.number().int().min(1).max(MAX_ROOMS),
+    /** Compiled biomes: name + which room indices + the art the renderer uses for them. */
+    biomes: z.array(CompiledBiomeSchema).max(MAX_BIOMES).default([]),
     provenance: GenerationProvenanceSchema,
     receipt: CreationReceiptSchema,
   })
@@ -444,8 +488,8 @@ export const WorldFixtureSchema = z.object({
   fixtureNote: z.string().max(200),
   recipe: WorldRecipeSchema,
   art: ArtRecipeSchema,
-  rooms: z.array(RoomSpecSchema).min(1).max(3),
-  plannedRoomCount: z.number().int().min(1).max(3),
+  rooms: z.array(RoomSpecSchema).min(1).max(MAX_ROOMS),
+  plannedRoomCount: z.number().int().min(1).max(MAX_ROOMS),
 }).superRefine(refineRelicReferences);
 export type WorldFixture = z.infer<typeof WorldFixtureSchema>;
 

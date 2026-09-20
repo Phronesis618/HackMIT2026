@@ -8,6 +8,7 @@
 import {
   ATTRIBUTING_SOURCES,
   IDLE_GENERATION_STATUS,
+  MAX_ROOMS,
   GenerationRequestSchema,
   GenerationStatusSchema,
   type Contribution,
@@ -20,7 +21,7 @@ import {
   type PlayerIntent,
   type PreparedWorld,
 } from '../../shared/contracts';
-import { TICK_MS } from '../../shared/conventions';
+import { DEFAULT_PLANNED_ROOM_COUNT, TICK_MS } from '../../shared/conventions';
 import { randomId } from '../../shared/ids';
 import type { ConnectionStatus, GameSession, LocalIntent, Unsubscribe } from '../../shared/session';
 import { createSimulation, type Simulation } from '../../sim';
@@ -31,6 +32,8 @@ export interface LocalSessionOptions {
   worldProvider: WorldProvider;
   /** Injected for tests; defaults to setInterval/performance.now. */
   scheduler?: { setInterval: typeof setInterval; clearInterval: typeof clearInterval; now: () => number };
+  /** Rooms per expedition (1–9); defaults to DEFAULT_PLANNED_ROOM_COUNT. */
+  plannedRoomCount?: number;
 }
 
 const MAX_CATCHUP_TICKS = 5;
@@ -40,6 +43,7 @@ export class LocalSession implements GameSession {
   readonly localPlayerId: string;
 
   private identity: PlayerIdentity;
+  private readonly plannedRoomCount: number;
   private readonly sim: Simulation;
   private readonly provider: WorldProvider;
   private readonly scheduler: NonNullable<LocalSessionOptions['scheduler']>;
@@ -71,6 +75,7 @@ export class LocalSession implements GameSession {
     this.identity = options.identity;
     this.localPlayerId = options.identity.id;
     this.provider = options.worldProvider;
+    this.plannedRoomCount = Math.min(MAX_ROOMS, Math.max(1, Math.round(options.worldProvider.plannedRoomCount ?? options.plannedRoomCount ?? DEFAULT_PLANNED_ROOM_COUNT)));
     this.scheduler = options.scheduler ?? {
       setInterval: globalThis.setInterval.bind(globalThis),
       clearInterval: globalThis.clearInterval.bind(globalThis),
@@ -225,7 +230,7 @@ export class LocalSession implements GameSession {
       requestId,
       sessionId: this.sessionId,
       contributions: this.contributions,
-      plannedRoomCount: 3,
+      plannedRoomCount: this.plannedRoomCount,
     });
     const current = () => !this.disposed && this.activeGeneration === controller && !controller.signal.aborted;
     this.setGeneration({ phase: 'queued', message: 'Requesting a world…', requestId, startedAt, elapsedMs: 0 });

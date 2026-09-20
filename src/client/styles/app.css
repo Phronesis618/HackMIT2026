@@ -2275,3 +2275,37 @@ body {
   .start__loop { grid-template-columns: 1fr 1fr; }
   .start__controls dl { grid-template-columns: 1fr; }
 }
+
+/* ---- Agent A: biome list on the reveal card ---- */
+.reveal__biomes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.reveal__biomes li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 8px 7px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--biome-accent, #7cf5ff) 45%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--biome-floor, #223) 85%, #000), rgba(9, 13, 22, 0.9));
+  text-align: left;
+}
+.reveal__biomeno {
+  font: 9px var(--font-mono);
+  letter-spacing: 0.2em;
+  color: var(--biome-accent, #7cf5ff);
+}
+.reveal__biomename {
+  font: 600 11.5px var(--font-display);
+  letter-spacing: 0.04em;
+  color: var(--color-mist100, #eef5ff);
+}
+.reveal__biomerooms {
+  font: 9.5px/1.4 var(--font-body);
+  color: var(--color-mist300, #8a9bbf);
+}

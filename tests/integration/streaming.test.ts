@@ -37,7 +37,7 @@ async function prefixes(input = request): Promise<PreparedWorld[]> {
 
 function session(provider: WorldProvider) {
   return new LocalSession({
-    identity, worldProvider: provider,
+    identity, worldProvider: provider, plannedRoomCount: 3, // these fixtures model three-room worlds
     scheduler: { setInterval: (() => 0) as unknown as typeof setInterval, clearInterval: () => {}, now: () => 0 },
   });
 }

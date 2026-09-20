@@ -10,6 +10,7 @@ import Phaser from 'phaser';
 import type { ArtRecipe, EnemyState, GameEvent, GameSnapshot, PlayerState, ReceiptLine, RoomSpec } from '../../shared/contracts';
 import { ATTACK_ARC_RAD, ATTACK_RANGE, DEPTH, LORE_READ_RANGE, PLAYER_RADIUS, TILE_SIZE, tileToWorld } from '../../shared/conventions';
 import { hashString } from '../../shared/ids';
+import type { RoomWorldContext } from '../../shared/render';
 import { CLASS_THEME, ENEMY_INFO, type ClassId } from '../../shared/registry';
 import { hexToInt, tokens } from '../../shared/tokens';
 import { ENEMY_COMBAT } from '../../sim/combat';
@@ -42,6 +43,8 @@ interface LoreMarker {
 
 /** Player proximity, in px, before an in-world lore caption reveals its text. */
 const LORE_REVEAL_RADIUS = 56;
+
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX'];
 
 export class RoomScene extends Phaser.Scene {
   static readonly KEY = 'room';
@@ -102,7 +105,7 @@ export class RoomScene extends Phaser.Scene {
   buildRoom(
     room: RoomSpec,
     art: ArtRecipe,
-    opts: { headquarters: boolean; world?: { title: string; tagline: string } },
+    opts: { headquarters: boolean; world?: RoomWorldContext },
     loreLines: ReceiptLine[] = [],
   ): void {
     this.room = room;
@@ -288,12 +291,25 @@ export class RoomScene extends Phaser.Scene {
     layer.add(title);
 
     if (!opts.headquarters && opts.world) {
-      // Which world this is, in every room; the full title stencilled into the floor of
-      // the arrival room so the generated name is the first thing players read.
-      layer.add(this.text(roomW / 2, -13, opts.world.title.toUpperCase(), {
+      // Which world (and which region of it) this is, in every room; the world title is
+      // stencilled into the arrival room's floor and each new biome announces itself the same way.
+      const biome = opts.world.biome;
+      const label = biome && biome.count > 1
+        ? `${opts.world.title.toUpperCase()}  ·  ${ROMAN[biome.index] ?? biome.index + 1} / ${ROMAN[biome.count - 1] ?? biome.count}  ${biome.name.toUpperCase()}`
+        : opts.world.title.toUpperCase();
+      layer.add(this.text(roomW / 2, -13, label, {
         fontFamily: tokens.font.mono, fontSize: '9px', color: p.accent, letterSpacing: 2,
       }).setOrigin(0.5).setAlpha(0.7).setDepth(DEPTH.overlay));
       if (room.index === 0) this.drawWorldStencil(layer, room, opts.world, p);
+      else if (biome?.firstRoom) this.drawWorldStencil(layer, room, { title: biome.name, tagline: `Region ${ROMAN[biome.index] ?? biome.index + 1} of ${opts.world.title}` }, p);
+      if (opts.world.exitLabel) {
+        for (const exit of room.exits) {
+          const c = tileToWorld(exit.x, exit.y);
+          layer.add(this.text(Math.min(c.x, roomW - 8), c.y - TILE_SIZE * 0.9, opts.world.exitLabel, {
+            fontFamily: tokens.font.mono, fontSize: '8px', color: p.accent, letterSpacing: 1,
+          }).setOrigin(1, 1).setAlpha(0.75).setDepth(DEPTH.overlay));
+        }
+      }
     }
 
     // Camera: frame the whole room (zoom computed above).
@@ -695,7 +711,7 @@ export class RoomScene extends Phaser.Scene {
   private drawWorldStencil(
     layer: Phaser.GameObjects.Layer,
     room: RoomSpec,
-    world: { title: string; tagline: string },
+    world: RoomWorldContext,
     palette: ArtRecipe['palette'],
   ): void {
     let spawn = { col: Math.floor(room.width / 2), row: Math.floor(room.height / 2) };

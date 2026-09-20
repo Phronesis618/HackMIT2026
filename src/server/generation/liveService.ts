@@ -117,6 +117,7 @@ export function createLiveGenerationService(options: {
           recipe: { ...recipe, contributionMappings: mappings },
           rooms: compiled.rooms,
           art: compiled.art,
+          biomes: compiled.biomes,
           plannedRoomCount: request.plannedRoomCount,
           provenance: {
             source,

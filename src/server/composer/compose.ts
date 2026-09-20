@@ -21,6 +21,7 @@ import {
   type WorldRecipe,
 } from '../../shared/contracts';
 import { hashString } from '../../shared/ids';
+import { MAX_ROOMS } from '../../shared/contracts';
 import type { EnemyId, MotifId, PropId } from '../../shared/registry';
 import { CREATURE_SYNONYMS, HAZARD_WORDS, PROP_SYNONYMS, REMAINS_TEMPLATES, STOPWORDS, THEMES, type ThemeDef } from './themes';
 
@@ -36,6 +37,7 @@ interface Idea {
 
 interface RoomDraft {
   role: RoomRole;
+  biomeIndex: number;
   name: string;
   description: string;
   motifIds: MotifId[];
@@ -204,6 +206,10 @@ export function composeWorld(request: GenerationRequest): Composition {
   const secondary = secondaryCandidate;
 
   const word = ideas.find((i) => i.word)?.word ?? null;
+  // Every distinct player word gets a turn in room names instead of repeating the first one.
+  const words = [...new Set(ideas.map((i) => i.word).filter((w): w is string => w !== null))];
+  let wordCursor = 0;
+  const nextWord = (): string | null => (words.length > 0 ? words[wordCursor++ % words.length]! : null);
   const lowerWord = word ? word.toLowerCase() : pick(rand, primary.nouns).toLowerCase();
   const fill = (template: string, w: string | null = word): string => template.replace(/\{word\}/g, w ?? pick(rand, primary.nouns));
   const fillLower = (template: string): string => template.replace(/\{word\}/g, lowerWord).replace(/\{flavor\}/g, primary.remainsFlavor);
@@ -218,57 +224,94 @@ export function composeWorld(request: GenerationRequest): Composition {
 
   const palette = jitterPalette(primary.palette, secondary, rand);
 
-  // Rooms.
-  const n = Math.min(3, Math.max(1, request.plannedRoomCount));
-  const roles: RoomRole[] = n === 1 ? ['final'] : n === 2 ? ['entry', 'final'] : ['entry', 'mid', 'final'];
-  const rooms: RoomDraft[] = roles.map((role, index) => {
-    const bankTheme = role === 'mid' && secondary ? secondary : primary;
-    const bank = bankTheme.rooms[role];
-    const roomMotifs: MotifId[] = role === 'entry'
-      ? [uniqueMotifs[0]!, uniqueMotifs[1] ?? uniqueMotifs[0]!]
-      : role === 'mid'
-        ? [uniqueMotifs[2] ?? uniqueMotifs[1] ?? uniqueMotifs[0]!, uniqueMotifs[0]!]
-        : [uniqueMotifs[0]!, uniqueMotifs[3] ?? uniqueMotifs[1] ?? uniqueMotifs[0]!];
-    const pool = [...bankTheme.props];
-    const props: PropId[] = [];
-    const count = 4 + Math.floor(rand() * 2);
-    while (props.length < count && pool.length > 0) props.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]!);
-    if (role === 'final') props.unshift('anchor_pedestal');
-    const enemyPool = bankTheme.enemies[role];
-    const enemies: EnemyId[] = role === 'final'
-      ? ['guardian', enemyPool.find((e) => e !== 'guardian') ?? pick(rand, bankTheme.enemies.mid)]
-      : [...enemyPool];
-    if (role !== 'final' && rand() < 0.45) {
-      const extra = pick(rand, primary.enemies.mid);
-      if (!enemies.includes(extra) && extra !== 'guardian') enemies.push(extra);
+  // Biomes: the expedition crosses up to three regions. The first is the primary theme; the
+  // second belongs to the secondary theme when the ideas suggested one (else a deterministic
+  // sibling theme), so the world visibly changes construction and palette mid-run; the last
+  // is the primary theme's deep interior — darker, denser, where the guardian waits.
+  const n = Math.min(MAX_ROOMS, Math.max(1, request.plannedRoomCount));
+  const counts = distributeRooms(n);
+  const sibling = secondary ?? THEMES.filter((t) => t.id !== primary.id && t.motifs.some((m) => primary.motifs.includes(m)))[Math.floor(rand() * 3)] ?? THEMES[(THEMES.indexOf(primary) + 5) % THEMES.length]!;
+  const biomeThemes: ThemeDef[] = counts.length === 1 ? [primary] : counts.length === 2 ? [primary, sibling] : [primary, sibling, primary];
+  const biomePalettes: Palette[] = biomeThemes.map((theme, b) => {
+    if (b === 0) return palette;
+    if (b === 1) return jitterPalette(theme.palette, null, rand);
+    return deepen(palette);
+  });
+  const biomeNames = biomeThemes.map((theme, b) => {
+    const adjective = pick(rand, theme.adjectives);
+    const noun = pick(rand, theme.nouns);
+    return clip(b === 0 ? `Outer ${noun}` : b === biomeThemes.length - 1 && b > 0 ? `Deep ${noun}` : `${adjective} ${noun}`, 80);
+  });
+  const biomeMotifs: MotifId[][] = biomeThemes.map((theme, b) => {
+    if (b === 0) return uniqueMotifs.slice(0, 3);
+    if (b === biomeThemes.length - 1 && b > 0) return [...new Set([uniqueMotifs[3] ?? uniqueMotifs[1] ?? uniqueMotifs[0]!, uniqueMotifs[0]!, uniqueMotifs[2] ?? uniqueMotifs[0]!])].slice(0, 3);
+    return [...new Set(theme.motifs)].slice(0, 3);
+  });
+
+  const rooms: RoomDraft[] = [];
+  counts.forEach((count, b) => {
+    const theme = biomeThemes[b]!;
+    const lastBiome = b === counts.length - 1;
+    for (let k = 0; k < count; k++) {
+      const globalIndex = rooms.length;
+      const role: RoomRole = globalIndex === 0 && n > 1 ? 'entry' : lastBiome && k === count - 1 ? 'final' : 'mid';
+      const bank = theme.rooms[role];
+      const motifs = biomeMotifs[b]!;
+      const roomMotifs: MotifId[] = role === 'entry'
+        ? [motifs[0]!, motifs[1] ?? motifs[0]!]
+        : role === 'mid'
+          ? [motifs[(k + 1) % motifs.length]!, motifs[0]!]
+          : [motifs[0]!, motifs[2] ?? motifs[1] ?? motifs[0]!];
+      const pool = [...theme.props];
+      const props: PropId[] = [];
+      const propCount = 4 + Math.floor(rand() * 2);
+      while (props.length < propCount && pool.length > 0) props.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]!);
+      if (role === 'final') props.unshift('anchor_pedestal');
+      const enemyPool = theme.enemies[role];
+      const enemies: EnemyId[] = role === 'final'
+        ? ['guardian', enemyPool.find((e) => e !== 'guardian') ?? pick(rand, theme.enemies.mid)]
+        : [...enemyPool];
+      // Deeper rooms bring in a heavier mix; the last biome leans on the primary theme's mid pool.
+      if (role !== 'final' && (globalIndex >= 2 ? rand() < 0.7 : rand() < 0.35)) {
+        const extra = pick(rand, (lastBiome ? primary : theme).enemies.mid);
+        if (!enemies.includes(extra) && extra !== 'guardian') enemies.push(extra);
+      }
+      const hazards = rand() < theme.hazardChance + (role === 'final' ? 0.1 : 0) + (lastBiome ? 0.1 : 0);
+      // At most one player-named room per biome; the rest use the theme's own names.
+      const namedHere = rooms.some((r) => r.biomeIndex === b && r.word !== null);
+      const plainNames = bank.names.filter((t) => !t.includes('{word}'));
+      const candidates = namedHere && plainNames.length > 0 ? plainNames : bank.names;
+      const unused = candidates.filter((t) => !rooms.some((r) => r.name === fill(t, word)));
+      const nameTemplate = pick(rand, unused.length > 0 ? unused : candidates);
+      const usesWord = nameTemplate.includes('{word}');
+      const roomWord = usesWord ? nextWord() : null;
+      rooms.push({
+        role,
+        biomeIndex: b,
+        name: clip(fill(nameTemplate, roomWord ?? word), 80),
+        description: clip(fill(pick(rand, bank.descriptions), roomWord ?? word), 300),
+        motifIds: [...new Set(roomMotifs)].slice(0, 3),
+        propIds: props.slice(0, 6),
+        enemyIds: [...new Set(enemies)].slice(0, 3),
+        hazards,
+        word: usesWord ? roomWord ?? word : null,
+        used: { encounter: false, prop: false, hazard: false, structure: false, name: usesWord && (roomWord ?? word) !== null, motif: false },
+      });
     }
-    const hazards = rand() < bankTheme.hazardChance + (role === 'final' ? 0.1 : 0);
-    const nameTemplate = pick(rand, bank.names);
-    const usesWord = nameTemplate.includes('{word}');
-    return {
-      role,
-      name: clip(fill(nameTemplate), 80),
-      description: clip(fill(pick(rand, bank.descriptions)), 300),
-      motifIds: [...new Set(roomMotifs)].slice(0, 3),
-      propIds: props.slice(0, 6),
-      enemyIds: [...new Set(enemies)].slice(0, 3),
-      hazards,
-      word: usesWord ? word : null,
-      used: { encounter: false, prop: false, hazard: false, structure: false, name: usesWord && word !== null, motif: false },
-    } satisfies RoomDraft & { role: RoomRole };
   });
   const finalIndex = rooms.length - 1;
 
   // Contribution mappings: at most one per idea, each describing a feature we really place.
   const mappings: ContributionMapping[] = [];
-  const roomOrder = (prefer: number[]): number[] => prefer.filter((i) => i >= 0 && i < rooms.length);
-  const nonFinalFirst = roomOrder([1, 0, 2]);
+  const all = rooms.map((_, i) => i);
+  const roomOrder = (prefer: number[]): number[] => [...prefer, ...all].filter((i, k, arr) => i >= 0 && i < rooms.length && arr.indexOf(i) === k);
+  const nonFinalFirst = roomOrder([1, 2, 0]).filter((i) => i !== finalIndex || rooms.length === 1);
   for (const idea of ideas) {
     const creature = CREATURE_SYNONYMS.find((entry) => idea.tokens.some((t) => entry.words.some((w) => matches(t, w))));
     if (creature) {
       const target = creature.enemyId === 'guardian'
         ? finalIndex
-        : [...nonFinalFirst, finalIndex].find((i) => !rooms[i]!.used.encounter && (i !== finalIndex || rooms.length === 1) ) ?? finalIndex;
+        : [...nonFinalFirst, finalIndex].find((i) => !rooms[i]!.used.encounter) ?? finalIndex;
       const room = rooms[target]!;
       if (!room.used.encounter) {
         const rest = room.enemyIds.filter((e) => e !== creature.enemyId);
@@ -340,12 +383,20 @@ export function composeWorld(request: GenerationRequest): Composition {
   title = clip(title, 40);
   const tagline = clip(fillLower(pick(rand, primary.taglines)), 80);
   const shapedBy = ideas.length > 0 ? ` Shaped by ${ideas.length} idea${ideas.length === 1 ? '' : 's'}: ${ideas.map((i) => `“${i.text}”`).join('; ')}.` : '';
-  const themeSummary = clip(`${primary.summary}${secondary ? ` Threads of the ${secondary.id} run through the middle halls.` : ''}${shapedBy}`, 400);
+  const themeSummary = clip(`${primary.summary} The expedition crosses ${counts.length} region${counts.length === 1 ? '' : 's'}: ${biomeNames.join(', ')}.${shapedBy}`, 400);
 
   // Lore: a relic per room in the theme's voice, remains for every enemy kind in play.
   const lore: LoreFragment[] = [];
+  const enemyKindsAll = [...new Set(rooms.flatMap((r) => r.enemyIds))];
+  const relicBudget = Math.max(1, Math.min(rooms.length, 12 - enemyKindsAll.length));
+  // Spread relics along the run (always the first and last room), in the voice of each room's biome theme.
+  const relicRooms = rooms.length <= relicBudget
+    ? rooms.map((_, i) => i)
+    : Array.from({ length: relicBudget }, (_, k) => Math.round((k * (rooms.length - 1)) / Math.max(1, relicBudget - 1)));
   rooms.forEach((room, index) => {
-    const template = primary.relics[(index + Math.floor(rand() * primary.relics.length)) % primary.relics.length]!;
+    if (!relicRooms.includes(index)) return;
+    const voice = biomeThemes[room.biomeIndex] ?? primary;
+    const template = voice.relics[(index + Math.floor(rand() * voice.relics.length)) % voice.relics.length]!;
     lore.push({
       kind: 'relic',
       title: clip(template.title, 40),
@@ -355,8 +406,7 @@ export function composeWorld(request: GenerationRequest): Composition {
       enemyId: null,
     });
   });
-  const enemyKinds = [...new Set(rooms.flatMap((r) => r.enemyIds))];
-  for (const enemyId of enemyKinds) {
+  for (const enemyId of enemyKindsAll) {
     if (lore.length >= 12) break;
     const options = REMAINS_TEMPLATES[enemyId];
     const template = pick(rand, options);
@@ -380,14 +430,46 @@ export function composeWorld(request: GenerationRequest): Composition {
     themeSummary,
     motifIds: uniqueMotifs,
     palette,
-    rooms: rooms.map<RoomBlueprint>((r) => ({
-      name: r.name, description: r.description, motifIds: r.motifIds, propIds: r.propIds, enemyIds: r.enemyIds, hazards: r.hazards,
+    rooms: rooms.map(toBlueprint),
+    biomes: counts.map((_, b) => ({
+      name: biomeNames[b]!,
+      description: clip(biomeThemes[b]!.summary, 300),
+      motifIds: biomeMotifs[b]!,
+      palette: biomePalettes[b]!,
+      rooms: rooms.filter((r) => r.biomeIndex === b).map(toBlueprint),
     })),
     contributionMappings: mappings,
     lore,
     attunements,
   });
   return { recipe, themes: { primary: primary.id, secondary: secondary?.id ?? null, scores } };
+}
+
+const toBlueprint = (r: RoomDraft): RoomBlueprint => ({
+  name: r.name, description: r.description, motifIds: r.motifIds, propIds: r.propIds, enemyIds: r.enemyIds, hazards: r.hazards,
+});
+
+/** Rooms per biome for an expedition of n rooms: fill three biomes as evenly as possible, front-loaded. */
+export function distributeRooms(n: number): number[] {
+  const total = Math.min(MAX_ROOMS, Math.max(1, n));
+  const biomes = Math.min(3, total);
+  const counts = Array.from({ length: biomes }, (_, i) => Math.floor(total / biomes) + (i < total % biomes ? 1 : 0));
+  return counts;
+}
+
+/** The deep interior of a world: darker floors and walls, hotter hazard, same identity. */
+function deepen(base: Palette): Palette {
+  return {
+    ...base,
+    background: shift(base.background, 8, 0.05, -0.02),
+    floor: shift(base.floor, 10, 0.06, -0.05),
+    floorAlt: shift(base.floorAlt, 10, 0.06, -0.05),
+    wall: shift(base.wall, 10, 0.08, -0.06),
+    wallEdge: shift(base.wallEdge, 12, 0.1, 0),
+    accent: shift(base.accent, 14, 0.1, 0.02),
+    accentSoft: shift(base.accentSoft, -20, 0.1, 0),
+    hazard: shift(base.hazard, 0, 0.15, 0.06),
+  };
 }
 
 export function composeWorldRecipe(request: GenerationRequest): WorldRecipe {

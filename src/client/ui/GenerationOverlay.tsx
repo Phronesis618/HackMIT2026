@@ -107,7 +107,17 @@ export function RevealCard({ world, onEnter, onDismiss }: { world: UiWorldSummar
             ))}
           </div>
         )}
-        {world.roomNames && world.roomNames.length > 0 && (
+        {world.biomes && world.biomes.length > 1 ? (
+          <ol className="reveal__biomes">
+            {world.biomes.map((biome, i) => (
+              <li key={i} style={{ ['--biome-accent' as string]: biome.palette.accent, ['--biome-floor' as string]: biome.palette.floor } as CSSProperties}>
+                <span className="reveal__biomeno">{['I', 'II', 'III'][i] ?? i + 1}</span>
+                <span className="reveal__biomename">{biome.name}</span>
+                <span className="reveal__biomerooms">{biome.roomNames.join(' · ')}</span>
+              </li>
+            ))}
+          </ol>
+        ) : world.roomNames && world.roomNames.length > 0 && (
           <ol className="reveal__rooms">
             {world.roomNames.map((name, i) => <li key={i}><span className="reveal__roomno">{i + 1}</span>{name}</li>)}
           </ol>

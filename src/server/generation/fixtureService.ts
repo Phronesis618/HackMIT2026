@@ -66,6 +66,7 @@ export function prepareFromFixture(p: FixturePreparation): PreparedWorld {
     art: p.fixture.art,
     rooms,
     plannedRoomCount: p.request.plannedRoomCount,
+    biomes: [],
     provenance: {
       source: p.source,
       label,

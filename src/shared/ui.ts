@@ -55,10 +55,14 @@ export interface UiWorldSummary {
   motifIds?: MotifId[];
   /** Names of the rooms committed so far. */
   roomNames?: string[];
+  /** Biomes (regions) of the world with the rooms committed in each, for the reveal card and menus. */
+  biomes?: Array<{ name: string; roomNames: string[]; palette: Palette }>;
 }
 
 export interface UiRoomSummary {
   index: number;
+  biomeName?: string;
+  biomeIndex?: number;
   name: string;
   description: string;
   isFinal: boolean;

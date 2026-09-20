@@ -34,6 +34,7 @@ const themes: { fixtureId: string; seed: number; recipe: WorldRecipe }[] = [
         },
       ],
       contributionMappings: [],
+      biomes: [],
       lore: [
         { kind: 'relic', roomIndex: 0, enemyId: null, title: 'Tide gauge, cracked', source: 'scratched into the glass of a brass tide gauge',
           text: 'Hour 1: two fingers over the low mark. Hour 6: the glass is warm. Hour 14: it is not water, whatever they say in the gallery, water does not look back. I have stopped marking the hours and started marking the faces.' },
@@ -89,6 +90,7 @@ const themes: { fixtureId: string; seed: number; recipe: WorldRecipe }[] = [
         },
       ],
       contributionMappings: [],
+      biomes: [],
       lore: [
         { kind: 'relic', roomIndex: 0, enemyId: null, title: 'Reading-room notice', source: 'a laminated notice, half swallowed by root',
           text: 'Please return all records to the roots when finished. Do not water the terminals. Do not answer the terminals. The archive remembers what you forget to, and it has been getting very good at remembering.' },

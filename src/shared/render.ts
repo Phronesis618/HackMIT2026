@@ -7,6 +7,16 @@
  */
 import type { ArtRecipe, GameEvent, GameSnapshot, ReceiptLine, RoomSpec } from './contracts';
 
+/** World context for room presentation: all validated recipe text, no gameplay meaning. */
+export interface RoomWorldContext {
+  title: string;
+  tagline: string;
+  /** The biome this room belongs to, when the world has biomes. */
+  biome?: { name: string; index: number; count: number; firstRoom: boolean };
+  /** Where the exit leads ("→ Plunder Hold · Rusted Flotilla"), for the in-world exit label. */
+  exitLabel?: string;
+}
+
 export interface WorldRenderer {
   /** Create the canvas inside `container`. Resolves when the first scene is ready. */
   mount(container: HTMLElement): Promise<void>;
@@ -22,7 +32,7 @@ export interface WorldRenderer {
    * `world` (title + tagline of the generated world) lets the renderer label rooms and
    * stencil the world's name into the arrival room. Both are validated recipe text.
    */
-  showRoom(room: RoomSpec, art: ArtRecipe, loreLines?: ReceiptLine[], world?: { title: string; tagline: string }): void;
+  showRoom(room: RoomSpec, art: ArtRecipe, loreLines?: ReceiptLine[], world?: RoomWorldContext): void;
   /** Called every animation frame with the latest authoritative snapshot. */
   renderSnapshot(snapshot: GameSnapshot, localPlayerId: string): void;
   /** Fire-and-forget visual/audio reactions to events (dash trail, hit flash, ...). */

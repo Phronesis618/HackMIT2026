@@ -70,6 +70,8 @@ async function boot(): Promise<void> {
   applyTokens();
   const params = new URLSearchParams(window.location.search);
   const coOp = params.get('mode') === 'coop';
+  const roomsRaw = Number(params.get('rooms'));
+  const roomsParam = Number.isInteger(roomsRaw) && roomsRaw >= 1 && roomsRaw <= 9 ? roomsRaw : undefined;
   const flags = parsePreviewFlags(coOp ? '' : window.location.search);
   const availability = flags.fixtureWorld ? false : await fetchLiveAvailability();
   if (availability === null && !coOp) flags.fixtureWorld = true;
@@ -77,7 +79,7 @@ async function boot(): Promise<void> {
   const identity = loadIdentity(tabName && /^[A-Za-z0-9 _-]{1,24}$/.test(tabName) ? tabName : null);
   const session: GameSession = coOp
     ? new RemoteSession({ identity })
-    : new LocalSession({ identity, worldProvider: flags.fixtureWorld ? fixtureWorldProvider : serverWorldProvider });
+    : new LocalSession({ identity, worldProvider: flags.fixtureWorld ? fixtureWorldProvider : serverWorldProvider, plannedRoomCount: roomsParam });
   const renderer = new PhaserWorldRenderer();
   const chronicle = createBrowserChronicle(window.localStorage);
   const audio = createBrowserAudio();
