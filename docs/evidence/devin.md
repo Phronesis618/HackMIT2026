@@ -21,6 +21,25 @@ No browser, paid provider or physical LAN verification is claimed.
 After integrating main `71f1dc2`, the combined `npm run check` passed **759 tests / 62 files**,
 typecheck and production build. Incoming floors tests and co-op evidence remain intact.
 
+## Co-op verification and compact header — 2026-09-20
+
+Delegated browser testing on `d5edb63` verified named and ordinary two-tab reconnects
+without duplicates, including repeated ordinary-tab reloads after shared localStorage
+changes. Both named clients restored room two with matching hostiles and membership.
+Shared contributions, honest fixture receipt, physical portal and synchronized room-one
+combat passed. Host migration left exactly one host. Device identity remained separate.
+The contribution cap accepted 24 and blocked 25; both preview routes labelled their
+fixture content and opened the requested room. The console had no runtime errors.
+
+At 800 CSSpx the preview status strip overflowed to 884px against a 792px client width;
+HQ fit. The header now permits wrapping and keeps each label intact. Against main
+`71f1dc2`, `npm run check` passed **754 tests / 62 files**, typecheck, build and whitespace.
+Focused browser verification on `bb6380b` passed: both preview routes, HQ and menus fit at
+800 CSSpx (`scrollWidth=clientWidth=792`); desktop HQ/preview fit at 1280 CSSpx. Full
+provenance/status labels remain visible. The console contained no errors or warnings.
+Normal zoom and keyboard repeat were restored. Solo/co-op were not replayed on this
+CSS-only follow-up; physical LAN/live-provider and floor-mode verification are not claimed.
+
 ## Anchored victory and co-op reload correction — 2026-09-20
 
 The delegated run on `1099cdc` completed all three rooms, the Guardian, three relays and

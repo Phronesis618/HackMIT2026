@@ -17,6 +17,27 @@
   unchanged-base suite runs passed, so the cause is unconfirmed. No existing test was weakened.
   This fix does not reconstruct expeditions already discarded by the old hub reducer.
 
+## Final browser sweep and compact header — 2026-09-20
+
+- Branch: `devin/1789894710-responsive-status`, based on main `71f1dc2`.
+- **Implemented:** status controls and provenance badges wrap instead of exceeding the
+  header width; individual controls do not shrink into broken labels.
+- **Verified:** `npm run check`: **754 tests / 62 files**, typecheck/build and whitespace.
+  On `d5edb63`, browser co-op checks passed for two named and ordinary tabs: stable
+  membership/classes through repeated HQ/room-two reloads, host migration, shared receipt,
+  physical portal, synchronized combat and room progression. Device identity remained
+  separate from named identities. The 24-idea cap and both labelled preview paths passed.
+  Final observed console sweep had no runtime errors.
+- **Browser verified (`bb6380b`):** both preview routes now fit at 800 CSSpx:
+  `scrollWidth=clientWidth=792`, down from the previous 884px overflow. Preview provenance,
+  connection status and controls remain visible. HQ, Controls and Memories stay readable;
+  desktop HQ/preview fit at 1280 CSSpx. Final console sweep had no errors or warnings.
+  Keyboard repeat and normal zoom were restored. This focused run did not repeat solo/co-op.
+- **Mocked:** fixture generation; no browser state/events were injected.
+- **Unverified:** physical multi-device LAN, live generation, browser floor mode, four-active-
+  seat/grace-expiry browser checks and fine one-shot/release timings under VM slowdown.
+  Real-socket and input regression suites cover the latter lifecycle logic.
+
 ## Co-op reload readiness — 2026-09-20
 
 - Branch: `devin/1789893771-coop-reconnect`, based on main `dc2c934`.

@@ -1614,7 +1614,8 @@ body { font-size: var(--fs-body); }
 /* ---- top bar: one bordered status, the rest are quiet stamps ---- */
 .topbar { padding-inline: var(--space-md); }
 .topbar .btn { font-size: var(--fs-stamp); padding: 6px 8px; }
-.topbar__status { gap: var(--space-md); flex-wrap: nowrap; }
+.topbar__status { gap: var(--space-md); flex-wrap: wrap; }
+.topbar__status > * { flex-shrink: 0; }
 .topbar .badge { border-color: transparent; background: none; padding: 0; white-space: nowrap; }
 .topbar .badge--conn { display: inline-flex; align-items: center; gap: var(--space-sm); color: var(--color-mist300); }
 .topbar .badge--conn::before { content: ''; width: 6px; height: 6px; background: var(--color-mist300); }
