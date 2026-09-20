@@ -97,14 +97,14 @@ type DeadEndKind = (typeof DEAD_END_KINDS)[number];
 
 /**
  * Documented clamping: requests beyond the cap are trimmed one at a time from the kind
- * with the most requests (ties: lore, then treasure, then rest), so one of each survives
- * longest.
+ * with the most requests (ties: treasure, then rest, then lore — lore is kept longest),
+ * so one of each survives as long as possible.
  */
 export function clampDeadEndSpecials(specials: BiomeSpecials, cap: number): Record<DeadEndKind, number> {
   const out = { treasure: specials.treasure, lore: specials.lore, rest: specials.rest };
-  const trimOrder: readonly DeadEndKind[] = ['lore', 'treasure', 'rest'];
+  const trimOrder: readonly DeadEndKind[] = ['treasure', 'rest', 'lore'];
   while (out.treasure + out.lore + out.rest > Math.max(0, cap)) {
-    let victim: DeadEndKind = 'lore';
+    let victim: DeadEndKind = 'treasure';
     for (const kind of trimOrder) if (out[kind] > out[victim]) victim = kind;
     out[victim]--;
   }
