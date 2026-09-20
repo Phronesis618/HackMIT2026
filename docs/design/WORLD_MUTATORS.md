@@ -1,6 +1,13 @@
 # WORLD MUTATORS — laws the world writes for itself, and how worlds stop looking alike
 
-**Status: design only. Nothing here is implemented.** This answers the lead's third ask: *"ideally the AI
+**Status (agent M1, `feat/world-laws`): partly implemented.** Harness `src/sim/laws.ts` (`resolveLaws`, `NEUTRAL_LAWS`,
+`applyEncounterLaws`, `deriveWorldLaws`, `worldLawsView`, `lawEffectText`). In force: `thin_air`, `tidal_drag`,
+`committed_strike`, `glass_lattice`, `long_echo`, `first_light`, `few_and_terrible`, `the_many` (sim) and `long_dark`
+(renderer, `src/client/render/lighting.ts`). Look: 6 palette families + contrast clamp (`color.ts`), 6 lighting modes,
+all 12 floor materials, all 12 atmospheres. Not yet: the other 9 laws (they resolve to numbers nobody reads), `wallStyle`,
+`skylineDepth`, `grain`, per-biome intensity scaling (§3.3). Laws in a recipe always apply; with no laws in the recipe,
+`RELAY_LAWS=1` (server/Node) or `?laws=1` (browser) derives 2 laws + a look from the motifs. Dev look switches:
+`?palette=&lighting=&floor=&atmo=&dark=<px>`. The rest of this document is the original design. This answers the lead's third ask: *"ideally the AI
 can also script strong gameplay mechanics or changes that help the game feel less repetitive and more
 different between worlds, and can also change up how things look in the worlds."*
 
