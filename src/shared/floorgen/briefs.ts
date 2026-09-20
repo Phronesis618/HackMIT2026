@@ -76,11 +76,19 @@ const MOTIF_PROP: Record<MotifId, PropId> = {
 const POOL_SIZE = [2, 3, 3, 4, 4] as const;
 const MAX_ADDED_COST = [2, 3, 4, 5, 5] as const;
 
-/** Same defaults the legacy compiler uses for a blueprint without terrain. */
+/**
+ * What a biome plays with when its brief does not say. Every set pairs PR #16's movement
+ * features with the combat-facing ones from docs/design/TILES.md, because a world nobody wrote
+ * a brief for should still have a room that fights back — and four is the schema's cap.
+ */
 export function defaultBiomeTerrain(motif: MotifId, density: BiomeTerrain['density'] = 'balanced'): BiomeTerrain {
-  if (motif === 'roots' || motif === 'crystals') return { features: ['breakable_walls', 'rubble'], layout: 'scattered', density };
-  if (motif === 'arches' || motif === 'monoliths' || motif === 'spires') return { features: ['breakable_walls', 'bridges'], layout: 'barricades', density };
-  return { features: ['bridges', 'conduits'], layout: 'crossroads', density };
+  if (motif === 'roots' || motif === 'crystals') {
+    return { features: ['breakable_walls', 'rubble', 'pits', 'canisters'], layout: 'scattered', density };
+  }
+  if (motif === 'arches' || motif === 'monoliths' || motif === 'spires') {
+    return { features: ['breakable_walls', 'bridges', 'cover', 'vents'], layout: 'barricades', density };
+  }
+  return { features: ['bridges', 'conduits', 'canisters', 'cover'], layout: 'crossroads', density };
 }
 
 function unique<T>(items: readonly T[]): T[] {

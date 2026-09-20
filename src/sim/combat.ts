@@ -119,9 +119,15 @@ export function nearestOpenPosition(grid: SolidGrid, preferred: Point, radius: n
   return best;
 }
 
-/** Cardinal BFS keeps pursuit deterministic around walls and prop footprints. */
+/**
+ * Cardinal BFS keeps pursuit deterministic around walls and prop footprints.
+ *
+ * Every check here is on the MOVEMENT layer: walking is not shooting. Reading the shot layer
+ * would have an enemy refuse to step over a '-' barricade it can see nothing through, and stall
+ * on the spot rather than walk around — which is what happened the first time cover shipped.
+ */
 export function chaseWaypoint(grid: SolidGrid, from: Point, target: Point, radius: number): Point {
-  if (clearPath(grid, from, target, radius)) return target;
+  if (clearPath(grid, from, target, radius, 'solid')) return target;
   const start = worldToTile(from.x, from.y);
   const goalPoint = nearestOpenPosition(grid, target, radius);
   const goal = worldToTile(goalPoint.x, goalPoint.y);
@@ -150,5 +156,5 @@ export function chaseWaypoint(grid: SolidGrid, from: Point, target: Point, radiu
   while (parents.get(next) !== startId && parents.get(next) !== -1) next = parents.get(next)!;
   const waypoint = tileToWorld(next % grid.width, Math.floor(next / grid.width));
   const startCenter = tileToWorld(start.col, start.row);
-  return clearPath(grid, from, waypoint, radius) ? waypoint : startCenter;
+  return clearPath(grid, from, waypoint, radius, 'solid') ? waypoint : startCenter;
 }

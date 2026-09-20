@@ -75,16 +75,26 @@ describe('cover', () => {
     expect(player.hp).toBe(PLAYER_MAX_HP);
   });
 
-  it('stops a sentinel from ever landing a bolt, and sends it looking for an angle', () => {
-    const sim = expedition(arena(wall, 0, false, [{ id: 'gunner', enemyId: 'sentinel', x: 9, y: 5, count: 1 }]));
-    let telegraphs = 0;
-    for (let i = 0; i < 200; i++) {
-      for (const event of tick(sim)) if (event.type === 'enemy_telegraphed') telegraphs++;
-    }
-    // It never gets a shot off from behind the barricade; it repositions instead.
-    expect(telegraphs).toBe(0);
-    expect(sim.getSnapshot().players[0]!.hp).toBe(PLAYER_MAX_HP);
-    expect(sim.getSnapshot().enemies[0]!.state).toBe('chasing');
+  it('denies a sentinel its opening shot and makes it come to the crew', () => {
+    /** When the sentinel first commits to a shot, and how far away it was when it did. */
+    const shootsAt = (sim: Simulation) => {
+      for (let i = 0; i < 600; i++) {
+        if (!tick(sim).some((event) => event.type === 'enemy_telegraphed')) continue;
+        const snapshot = sim.getSnapshot();
+        return { tick: i, range: Math.hypot(snapshot.enemies[0]!.x - snapshot.players[0]!.x, snapshot.enemies[0]!.y - snapshot.players[0]!.y) };
+      }
+      return { tick: Infinity, range: Infinity };
+    };
+    const gunner = [{ id: 'gunner', enemyId: 'sentinel', x: 9, y: 5, count: 1 }];
+    // A sentinel's range is 280 px and it starts seven tiles away, so with a clean line it opens
+    // fire from where it stands. The barricade takes that shot away: it has to give up the range
+    // advantage its whole archetype is built on and walk into the crew's half of the room.
+    const open = shootsAt(expedition(arena(() => {}, 0, false, gunner)));
+    const covered = shootsAt(expedition(arena(wall, 0, false, gunner)));
+    expect(open.tick).toBeLessThan(40); // its opening cooldown, then the windup
+    expect(open.range).toBeGreaterThan(190); // it stops at 0.7 of its 280 range and fires
+    expect(covered.tick).toBeGreaterThan(open.tick * 2);
+    expect(covered.range).toBeLessThan(open.range - TILE_SIZE * 2);
   });
 
   it('still lets a player melee the thing standing on the other side of it', () => {
