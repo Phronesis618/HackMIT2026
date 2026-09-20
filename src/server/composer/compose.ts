@@ -12,7 +12,7 @@
  * ideas — two "pirate" worlds share a vocabulary but not a title, palette, layout or lore.
  */
 import {
-  WorldRecipeSchema,
+  FloorsWorldRecipeSchema,
   type ContributionMapping,
   type GenerationRequest,
   type LoreFragment,
@@ -22,6 +22,7 @@ import {
 } from '../../shared/contracts';
 import { hashString } from '../../shared/ids';
 import type { EnemyId, MotifId, PropId, WorldRuleId } from '../../shared/registry';
+import { BiomeBriefListSchema, type BiomeBrief, type BiomeLayout } from '../../shared/floors';
 import { CREATURE_SYNONYMS, HAZARD_WORDS, PROP_SYNONYMS, REMAINS_TEMPLATES, STOPWORDS, THEMES, type ThemeDef } from './themes';
 
 type RoomRole = 'entry' | 'mid' | 'final';
@@ -68,6 +69,22 @@ const THEME_RULES: Record<string, WorldRuleId[]> = {
 
 /** Legacy pipeline: at most three rooms per world (the floors pipeline derives its biomes from the recipe). */
 const MAX_ROOMS = 3;
+
+/**
+ * Floors briefs (docs/design/FLOORS.md): 1 opener + 3 pairs of choices + 1 finale. Each slot has a
+ * layout personality; the composer fills the slots with its themes so a floors run through a
+ * composed world changes construction, palette vocabulary and enemy mix at every biome choice.
+ */
+const BRIEF_LAYOUTS: Array<{ noun: string; layout: BiomeLayout; hazards: boolean }> = [
+  { noun: 'Approach', hazards: false, layout: { linearity: 0.8, branchiness: 0.2, specials: { treasure: 1, lore: 1, rest: 0, elite: 0 } } },
+  { noun: 'Warren', hazards: true, layout: { linearity: 0.1, branchiness: 0.9, specials: { treasure: 1, lore: 3, rest: 1, elite: 1 } } },
+  { noun: 'Wall', hazards: false, layout: { linearity: 0.95, branchiness: 0.05, specials: { treasure: 1, lore: 1, rest: 0, elite: 3 } } },
+  { noun: 'Crossing', hazards: false, layout: { linearity: 0.3, branchiness: 0.6, specials: { treasure: 1, lore: 2, rest: 1, elite: 2 } } },
+  { noun: 'Vaults', hazards: true, layout: { linearity: 0.55, branchiness: 0.45, specials: { treasure: 2, lore: 1, rest: 0, elite: 3 } } },
+  { noun: 'Shelter', hazards: false, layout: { linearity: 0.35, branchiness: 0.35, specials: { treasure: 1, lore: 2, rest: 2, elite: 1 } } },
+  { noun: 'Works', hazards: true, layout: { linearity: 0.7, branchiness: 0.3, specials: { treasure: 1, lore: 1, rest: 1, elite: 2 } } },
+  { noun: 'Core', hazards: true, layout: { linearity: 0.5, branchiness: 0.5, specials: { treasure: 2, lore: 2, rest: 2, elite: 4 } } },
+];
 
 const ROOM_NOUNS: Record<RoomRole, string[]> = {
   entry: ['Gate', 'Threshold', 'Landing', 'Approach'],
@@ -383,7 +400,7 @@ export function composeWorld(request: GenerationRequest): Composition {
   const adj = pick(rand, primary.adjectives);
   const noun = pick(rand, primary.nouns);
   const patterns = word
-    ? [`The ${adj} ${noun}`, `${noun} of the ${word}`, `The ${word} ${noun}`, `${adj} ${noun} of ${word}`]
+    ? [`The ${adj} ${noun}`, `${noun} of the ${word}`, `The ${word} ${noun}`, `${adj} ${noun} of the ${word}`]
     : [`The ${adj} ${noun}`, `The ${adj} ${pick(rand, primary.nouns)}`];
   let title = pick(rand, patterns);
   if (title.length > 40) title = `The ${adj} ${noun}`;
@@ -435,11 +452,37 @@ export function composeWorld(request: GenerationRequest): Composition {
   if (secondRule && secondRule !== rules[0] && rand() < 0.75) rules.push(secondRule);
   if (rules.includes('unstable_ground') && !rooms.some((r) => r.hazards)) rooms[Math.min(1, rooms.length - 1)]!.hazards = true;
 
+  // Floors briefs: opener and finale in the primary theme; the three choice pairs alternate the
+  // primary, the secondary/sibling and a contrasting third theme so every fork is a real change.
+  const third = THEMES.filter((t) => t.id !== primary.id && t.id !== sibling.id && !t.motifs.some((m) => primary.motifs.includes(m)))[Math.floor(rand() * 4)]
+    ?? THEMES[(THEMES.indexOf(primary) + 9) % THEMES.length]!;
+  const briefThemes: ThemeDef[] = [primary, sibling, primary, third, sibling, primary, third, primary];
+  const briefNames = new Set<string>();
+  const biomes: BiomeBrief[] = BRIEF_LAYOUTS.map((slot, index) => {
+    const theme = briefThemes[index]!;
+    let name = clip(index === 0 ? `Outer ${pick(rand, theme.nouns)}` : index === 7 ? `Heart of the ${word ?? pick(rand, primary.nouns)}` : `${pick(rand, theme.adjectives)} ${slot.noun}`, 80);
+    for (let n = 2; briefNames.has(name); n++) name = clip(`${pick(rand, theme.adjectives)} ${slot.noun} ${n}`, 80);
+    briefNames.add(name);
+    const enemyPool = [...new Set([...theme.enemies.entry, ...theme.enemies.mid, ...theme.enemies.final])].filter((e) => e !== 'guardian').slice(0, 5);
+    const propPool = [...new Set(theme.props)].filter((p) => p !== 'anchor_pedestal').slice(0, 5);
+    return {
+      id: `b${index + 1}`,
+      name,
+      tagline: clip(fillLower(pick(rand, theme.taglines)), 140),
+      motifIds: [...new Set(theme.motifs)].slice(0, 3),
+      enemyPool: enemyPool.length > 0 ? enemyPool : ['husk'],
+      propPool: propPool.length > 0 ? propPool : ['crate'],
+      hazards: slot.hazards || rand() < theme.hazardChance * 0.5,
+      layout: slot.layout,
+    };
+  });
+  BiomeBriefListSchema.parse(biomes);
+
   const attunements = [...primary.attunements, ...(secondary ? [secondary.attunements[0]!] : [])]
     .slice(0, 4)
     .map((a) => ({ effectId: a.effectId, name: clip(a.name, 40), description: clip(a.description, 160) }));
 
-  const recipe = WorldRecipeSchema.parse({
+  const recipe = FloorsWorldRecipeSchema.parse({
     title,
     tagline,
     themeSummary,
@@ -450,6 +493,7 @@ export function composeWorld(request: GenerationRequest): Composition {
     lore,
     attunements,
     rules,
+    biomes,
   });
   return { recipe, themes: { primary: primary.id, secondary: secondary?.id ?? null, scores } };
 }

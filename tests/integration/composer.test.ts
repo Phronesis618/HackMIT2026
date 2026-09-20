@@ -11,6 +11,8 @@ import { COMPOSER_MODEL, createComposerProvider } from '../../src/server/compose
 import { compileWorldRecipe, createGenerationService } from '../../src/server/generation';
 import { GenerationFailure, type RecipeProvider } from '../../src/server/generation/provider';
 import { parseWorldPrefix } from '../../src/client/transport/worldProviders';
+import { BiomeBriefListSchema } from '../../src/shared/floors';
+import { floorsSeedFor, upgradeToFloors } from '../../src/shared/floorgen';
 
 const fixturesDir = path.resolve(__dirname, '../../fixtures/worlds');
 
@@ -124,6 +126,31 @@ describe('composeWorld', () => {
       expect(sized.rooms).toHaveLength(n);
       expect(compileWorldRecipe(sized, { plannedRoomCount: n, seed: 1 }).rooms).toHaveLength(n);
     }
+  });
+
+  it('ships eight theme-driven floors biome briefs that the floors pipeline accepts as its own', () => {
+    const { recipe, themes } = composeWorld(request(['space pirates', 'a frozen moon full of crystal moths'], 'req-briefs'));
+    expect(BiomeBriefListSchema.safeParse(recipe.biomes).success).toBe(true);
+    const briefs = recipe.biomes!;
+    expect(briefs).toHaveLength(8);
+    expect(new Set(briefs.map((b) => b.name)).size).toBe(8);
+    // Choice pairs really differ: the middle slots draw on at least two construction vocabularies.
+    expect(new Set(briefs.slice(1, 7).map((b) => b.motifIds[0])).size).toBeGreaterThanOrEqual(2);
+    for (const brief of briefs) {
+      expect(brief.enemyPool.some((e) => e !== 'guardian')).toBe(true);
+      expect(brief.propPool).not.toContain('anchor_pedestal');
+    }
+    // A composed legacy world upgrades into a floors world using the composer's briefs, not derived ones.
+    const compiled = compileWorldRecipe(recipe, { plannedRoomCount: 3, seed: 5 });
+    const world = PreparedWorldSchema.parse({
+      worldId: 'world-composed-briefs', createdAt: 0, recipe, art: compiled.art, rooms: compiled.rooms, plannedRoomCount: 3,
+      provenance: { source: 'procedural', label: 'COMPOSED · relay-composer', model: 'relay-composer', generatedAt: 0, durationMs: 1, attempts: 1, notes: [] },
+      receipt: { worldTitle: recipe.title, source: 'procedural', headline: 'h', lines: [] },
+    });
+    const floors = upgradeToFloors(world, floorsSeedFor(world));
+    expect(floors.floors?.briefs.map((b) => b.name)).toEqual(briefs.map((b) => b.name));
+    expect(floors.rooms).toHaveLength(1);
+    expect(themes.primary).toBeTruthy();
   });
 
   it('produces distinct worlds across many different ideas', () => {
