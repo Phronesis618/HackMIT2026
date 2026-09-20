@@ -106,6 +106,62 @@ beforeEach(() => {
   vi.stubGlobal('cancelAnimationFrame', vi.fn());
 });
 
+describe('arrival thumbnail lifecycle', () => {
+  async function arrive() {
+    const prepared = await world('readiness-thumbnail');
+    const context = await setup(prepared);
+    const room = prepared.rooms[0]!;
+    context.socket.receive({ type: 'events', eventSequence: 1, events: [{
+      id: 'readiness-arrival', type: 'room_entered', tick: 0, timeMs: 0,
+      worldId: prepared.worldId, roomId: room.id, roomIndex: 0, roomName: room.name,
+      playerIds: [identity.id],
+    }] });
+    const image = 'data:image/jpeg;base64,AAAA';
+    vi.mocked(context.renderer.captureThumbnail).mockResolvedValue(image);
+    const move = (roomIndex: number) => {
+      const state = snapshot(prepared);
+      context.socket.receive({ type: 'snapshot', snapshot: {
+        ...state, roomIndex, roomId: prepared.rooms[roomIndex]!.id,
+      } });
+    };
+    return { ...context, image, move };
+  }
+
+  it('attaches a delayed image while the original arrival room is still visible', async () => {
+    const { chronicle, renderer, image } = await arrive();
+    await vi.advanceTimersByTimeAsync(900);
+    expect(renderer.captureThumbnail).toHaveBeenCalledOnce();
+    expect(chronicle.getMemories()[0]?.thumbnailDataUrl).toBe(image);
+  });
+
+  it('never captures a later room for an arrival whose timer was delayed', async () => {
+    const { chronicle, renderer, move } = await arrive();
+    move(2);
+    await vi.advanceTimersByTimeAsync(900);
+    expect(renderer.captureThumbnail).not.toHaveBeenCalled();
+    expect(chronicle.getMemories()[0]?.thumbnailDataUrl).toBeUndefined();
+    expect(chronicle.getMemories()[0]?.kind).toBe('arrival_keepsake');
+  });
+
+  it.each(['later room', 'leave and return', 'dispose', 'clear memories'] as const)(
+    'rejects an in-flight snapshot after %s', async (action) => {
+      const { chronicle, renderer, image, move } = await arrive();
+      let finish: (value: string) => void = () => {};
+      vi.mocked(renderer.captureThumbnail).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+      await vi.advanceTimersByTimeAsync(900);
+      expect(renderer.captureThumbnail).toHaveBeenCalledOnce();
+      if (action === 'later room' || action === 'leave and return') move(1);
+      if (action === 'leave and return') move(0);
+      if (action === 'dispose') controller?.dispose();
+      if (action === 'clear memories') chronicle.clear();
+      finish(image);
+      await Promise.resolve();
+      expect(chronicle.getMemories().every((memory) => memory.thumbnailDataUrl === undefined)).toBe(true);
+      if (action === 'clear memories') expect(chronicle.getMemories()).toEqual([]);
+    },
+  );
+});
+
 describe('confirmed remote identity persistence', () => {
   it('saves acknowledged name and class changes, never the identity before acknowledgement', async () => {
     const { actions, persistIdentity, socket, store } = await setup(null);
