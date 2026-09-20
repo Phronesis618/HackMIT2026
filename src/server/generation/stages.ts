@@ -188,7 +188,17 @@ export function parseWithFit<T extends z.ZodType>(schema: T, raw: unknown): Retu
  * Tool input sometimes arrives with a nested object or list serialised as a JSON string
  * (seen live: `bible` as a string). Parse such values back, one level deep, and clone the rest.
  */
-export function coerceJson(raw: unknown): unknown {
+/** Models sometimes mark emphasis with Markdown; the game renders plain text. */
+const stripMarkdown = (text: string): string => text.replace(/\*\*|__|`/g, '').replace(/(^|\s)\*(\S[^*]*\S)\*(?=\s|[.,;:!?]|$)/g, '$1$2');
+function plainStrings(value: unknown): unknown {
+  if (typeof value === 'string') return stripMarkdown(value);
+  if (Array.isArray(value)) return value.map(plainStrings);
+  if (typeof value === 'object' && value !== null) return Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, plainStrings(inner)]));
+  return value;
+}
+
+export function coerceJson(input: unknown): unknown {
+  const raw = plainStrings(input);
   if (typeof raw === 'string' && /^\s*[[{]/.test(raw)) {
     try {
       return coerceJson(JSON.parse(raw) as unknown);

@@ -16,16 +16,14 @@ import { buildReceipt } from './receipt';
 
 /**
  * The compiler can refuse a model's terrain for a given seed (no safe route, no spawn, no room
- * for the relays). A finished world is worth more than its terrain choices: retreat to the
- * motif-default terrain, then to neighbouring layout seeds, before giving up on the world.
+ * for the relays). A finished world is worth more than its terrain choices: retreat once to
+ * the motif-default terrain (same seed, so still deterministic) before giving up on the world.
  */
 function compileWithRetreat(recipe: WorldRecipe, plannedRoomCount: number, seed: number, notes: string[], log: (message: string) => void) {
   const plain: WorldRecipe = { ...recipe, rooms: recipe.rooms.map((room) => ({ ...room, terrain: null })) };
   const attempts: Array<[WorldRecipe, number, string]> = [
     [recipe, seed, ''],
-    [plain, seed, 'The compiler refused the generated terrain; motif-default terrain was used instead.'],
-    [plain, seed + 1, 'The compiler refused the generated terrain; motif-default terrain and an alternate layout seed were used.'],
-    [plain, seed + 2, 'The compiler refused the generated terrain; motif-default terrain and an alternate layout seed were used.'],
+    ...(recipe.rooms.some((room) => room.terrain) ? [[plain, seed, 'The compiler refused the generated terrain; motif-default terrain was used instead.'] as [WorldRecipe, number, string]] : []),
   ];
   let last: unknown;
   for (const [candidate, candidateSeed, note] of attempts) {

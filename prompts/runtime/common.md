@@ -40,3 +40,5 @@ from which facts you pick. A reader should believe a working game writer wrote e
     Use lists of two or four, seldom three.
 
 Every maxLength in the schema counts characters, not words. Stay comfortably under each.
+Plain text only: no Markdown, no asterisks, no emphasis marks. A register that says
+"underlined" or "in bold" is a fact about the paper; describe it, do not typeset it.
