@@ -395,7 +395,8 @@ export const PlayerIntentSchema = z.object({
   aimY: z.number(),
   attack: z.boolean(),
   dash: z.boolean(),
-  ability: z.enum(['q', 'e']).nullable(),
+  /** Pressed ability slot: Q, E (unlockable) or R (ultimate, needs full charge). */
+  ability: z.enum(['q', 'e', 'r']).nullable(),
   /** Held every tick, unlike attack/dash/ability presses. */
   interact: z.boolean().optional(),
 });
@@ -427,6 +428,10 @@ export const PlayerStateSchema = z.object({
   shroudMs: z.number().nonnegative().optional(),
   rallyMs: z.number().nonnegative().optional(),
   reviveProgress: z.number().min(0).max(1).optional(),
+  /** Ultimate charge 0..100; R fires at 100 and resets to 0. */
+  ultCharge: z.number().min(0).max(100).optional(),
+  /** Short lockout after firing R (prevents double-fire on held keys). */
+  abilityRCooldownMs: z.number().nonnegative().optional(),
 });
 export type PlayerState = z.infer<typeof PlayerStateSchema>;
 
@@ -467,7 +472,8 @@ export const AnchorStateSchema = z.object({
 });
 export type AnchorState = z.infer<typeof AnchorStateSchema>;
 
-export const GamePhaseSchema = z.enum(['headquarters', 'expedition', 'debrief']);
+/** `training` = the HQ practice range: real enemies that respawn, no run, all abilities unlocked. */
+export const GamePhaseSchema = z.enum(['headquarters', 'training', 'expedition', 'debrief']);
 export type GamePhase = z.infer<typeof GamePhaseSchema>;
 
 export const GameSnapshotSchema = z.object({

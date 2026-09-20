@@ -19,7 +19,7 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
   const down = new Set<string>();
   let attackPressed = false;
   let dashPressed = false;
-  let abilityPressed: 'q' | 'e' | null = null;
+  let abilityPressed: 'q' | 'e' | 'r' | null = null;
   let pointer: { x: number; y: number } | null = null;
 
   const matches = (code: string, list: readonly string[]) => list.includes(code);
@@ -35,6 +35,7 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
     if (matches(e.code, INPUT_BINDINGS.dash)) dashPressed = true;
     if (matches(e.code, INPUT_BINDINGS.abilityQ)) abilityPressed = 'q';
     if (matches(e.code, INPUT_BINDINGS.abilityE)) abilityPressed = 'e';
+    if (matches(e.code, INPUT_BINDINGS.abilityR)) abilityPressed = 'r';
   };
   const onKeyUp = (e: KeyboardEvent): void => {
     down.delete(e.code);

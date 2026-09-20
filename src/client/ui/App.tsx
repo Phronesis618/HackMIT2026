@@ -8,6 +8,7 @@ import { ProvenanceBadge } from './ProvenanceBadge';
 import { useUiModel } from './useUiModel';
 import { WorldPanel } from './WorldPanel';
 import { DebriefPanel } from './DebriefPanel';
+import { AbilityBar } from './AbilityBar';
 
 export interface AppProps {
   store: UiStore;
@@ -52,13 +53,14 @@ export function App({ store, actions, onStageReady }: AppProps) {
         <section className="stage-wrap">
           <div className="stage" ref={stageRef} tabIndex={0} aria-label="RELAY game canvas" />
           <div className="stage-caption" aria-hidden="true">
-            <span>{model.phase === 'expedition' || model.phase === 'debrief' ? model.room?.name : 'RELAY / SANCTUARY'}</span>
-            <span>WASD move · Shift dash · J attack · Q / E ability · hold F interact</span>
+            <span>{model.phase === 'expedition' || model.phase === 'debrief' || model.phase === 'training' ? model.room?.name : 'RELAY / SANCTUARY'}</span>
+            <span>WASD move · Shift dash · J / click attack · Q E R abilities · hold F interact</span>
           </div>
+          {model.phase !== 'debrief' && <AbilityBar model={model} actions={actions} />}
         </section>
         <aside className="side">
           {(model.phase === 'headquarters' || model.phase === 'preparing') && <HeadquartersPanel model={model} actions={actions} />}
-          {model.phase === 'expedition' && <Hud model={model} actions={actions} />}
+          {(model.phase === 'expedition' || model.phase === 'training') && <Hud model={model} actions={actions} />}
           {model.phase === 'debrief' && <DebriefPanel model={model} actions={actions} />}
           {model.world && <WorldPanel world={model.world} />}
         </aside>

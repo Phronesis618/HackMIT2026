@@ -11,16 +11,16 @@
       "lanterns"
     ],
     "palette": {
-      "background": "#081210",
-      "floor": "#13241e",
-      "floorAlt": "#1a3028",
-      "wall": "#294137",
-      "wallEdge": "#779f72",
-      "accent": "#c7e58c",
-      "accentSoft": "#83ae6c",
+      "background": "#0a1a14",
+      "floor": "#183628",
+      "floorAlt": "#1f4432",
+      "wall": "#2f5a44",
+      "wallEdge": "#9be07a",
+      "accent": "#c7ff8c",
+      "accentSoft": "#ffb86b",
       "glow": "#dbf3a4",
       "hazard": "#ff9668",
-      "text": "#e2efdf"
+      "text": "#effbe8"
     },
     "rooms": [
       {
@@ -87,16 +87,16 @@
   "art": {
     "paletteFamily": "ink-neon",
     "palette": {
-      "background": "#081210",
-      "floor": "#13241e",
-      "floorAlt": "#1a3028",
-      "wall": "#294137",
-      "wallEdge": "#779f72",
-      "accent": "#c7e58c",
-      "accentSoft": "#83ae6c",
+      "background": "#0a1a14",
+      "floor": "#183628",
+      "floorAlt": "#1f4432",
+      "wall": "#2f5a44",
+      "wallEdge": "#9be07a",
+      "accent": "#c7ff8c",
+      "accentSoft": "#ffb86b",
       "glow": "#dbf3a4",
       "hazard": "#ff9668",
-      "text": "#e2efdf"
+      "text": "#effbe8"
     },
     "motifIds": [
       "roots",

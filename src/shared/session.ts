@@ -47,6 +47,8 @@ export interface GameSession {
   /** Moves everyone into room 0 of the prepared world. No-op without a world. */
   enterPortal(): void;
   returnToHeadquarters(): void;
+  /** Optional: HQ practice range. Solo sessions implement it; co-op returns false. */
+  enterTraining?(): boolean;
 
   // --- live state ---
   getPhase(): GamePhase;

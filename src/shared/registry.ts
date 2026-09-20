@@ -20,18 +20,22 @@ export const CLASS_INFO: Record<ClassId, { name: string; role: string; status: I
   weaver: { name: 'Weaver', role: 'Control. Tethers, slows, reshapes space.', status: 'implemented' },
 };
 
-/** Ability IDs. `attack` and `dash` are engine-level; Q/E abilities are per class. */
+/** Ability IDs. `attack` and `dash` are engine-level; Q/E/R abilities are per class. */
 export const ABILITY_IDS = [
   'attack',
   'dash',
   'bastion.q.bulwark',
   'bastion.e.shockwave',
+  'bastion.r.aegis_slam',
   'shade.q.blink_strike',
   'shade.e.shroud',
+  'shade.r.blade_storm',
   'beacon.q.flare',
   'beacon.e.rally',
+  'beacon.r.solar_lance',
   'weaver.q.tether',
   'weaver.e.rewind',
+  'weaver.r.collapse',
 ] as const;
 export type AbilityId = (typeof ABILITY_IDS)[number];
 
@@ -43,19 +47,86 @@ export const ABILITY_STATUS: Record<AbilityId, ImplementationStatus> = {
   dash: 'implemented',
   'bastion.q.bulwark': 'implemented',
   'bastion.e.shockwave': 'implemented',
+  'bastion.r.aegis_slam': 'implemented',
   'shade.q.blink_strike': 'implemented',
   'shade.e.shroud': 'implemented',
+  'shade.r.blade_storm': 'implemented',
   'beacon.q.flare': 'implemented',
   'beacon.e.rally': 'implemented',
+  'beacon.r.solar_lance': 'implemented',
   'weaver.q.tether': 'implemented',
   'weaver.e.rewind': 'implemented',
+  'weaver.r.collapse': 'implemented',
 };
 
-export const CLASS_ABILITIES: Record<ClassId, { q: AbilityId; e: AbilityId }> = {
-  bastion: { q: 'bastion.q.bulwark', e: 'bastion.e.shockwave' },
-  shade: { q: 'shade.q.blink_strike', e: 'shade.e.shroud' },
-  beacon: { q: 'beacon.q.flare', e: 'beacon.e.rally' },
-  weaver: { q: 'weaver.q.tether', e: 'weaver.e.rewind' },
+export const CLASS_ABILITIES: Record<ClassId, { q: AbilityId; e: AbilityId; r: AbilityId }> = {
+  bastion: { q: 'bastion.q.bulwark', e: 'bastion.e.shockwave', r: 'bastion.r.aegis_slam' },
+  shade: { q: 'shade.q.blink_strike', e: 'shade.e.shroud', r: 'shade.r.blade_storm' },
+  beacon: { q: 'beacon.q.flare', e: 'beacon.e.rally', r: 'beacon.r.solar_lance' },
+  weaver: { q: 'weaver.q.tether', e: 'weaver.e.rewind', r: 'weaver.r.collapse' },
+};
+
+/** Ultimates charge from combat: damage dealt / ULT_CHARGE_PER_DAMAGE + ULT_CHARGE_PER_KILL per kill. */
+export const ULT_CHARGE_MAX = 100;
+export const ULT_CHARGE_PER_DAMAGE = 0.6; // charge per point of damage dealt
+export const ULT_CHARGE_PER_KILL = 15;
+
+export type AbilityKey = 'LMB' | 'Shift' | 'Q' | 'E' | 'R';
+/** Symbolic icon ids the UI draws as inline SVG (League-style ability buttons). */
+export type AbilityIcon =
+  | 'blade'
+  | 'twin_blades'
+  | 'pulse'
+  | 'orb'
+  | 'dash'
+  | 'shield'
+  | 'magnet'
+  | 'slam'
+  | 'blink'
+  | 'shroud'
+  | 'storm'
+  | 'flare'
+  | 'rally'
+  | 'lance'
+  | 'tether'
+  | 'rewind'
+  | 'singularity';
+
+export interface AbilityDetail {
+  id: AbilityId;
+  name: string;
+  key: AbilityKey;
+  icon: AbilityIcon;
+  /** One line, player-facing, describes what actually happens in the simulation. */
+  description: string;
+  /** Extra numbers players care about. */
+  stats: string;
+  /** Unlockable abilities cost resources at HQ; ultimates need full charge instead of cooldown. */
+  gate: 'always' | 'unlock' | 'ultimate';
+}
+
+export const ABILITY_DETAILS: Record<AbilityId, AbilityDetail> = {
+  attack: { id: 'attack', name: 'Strike', key: 'LMB', icon: 'blade', description: 'Your class weapon. Hold to attack at the weapon’s cadence.', stats: 'Aim with the mouse.', gate: 'always' },
+  dash: { id: 'dash', name: 'Dash', key: 'Shift', icon: 'dash', description: 'Burst in your movement direction. Brief invulnerability.', stats: '150 ms · 0.8 s cooldown', gate: 'always' },
+  'bastion.q.bulwark': { id: 'bastion.q.bulwark', name: 'Bulwark', key: 'Q', icon: 'shield', description: 'Raise an energy shield: melee hits are reduced to 20% and beams are blocked.', stats: '2.2 s · 6 s cooldown', gate: 'always' },
+  'bastion.e.shockwave': { id: 'bastion.e.shockwave', name: 'Magnetic Shockwave', key: 'E', icon: 'magnet', description: 'Blast every enemy around you: damage, stun and knockback.', stats: '35 dmg · 1.5 s stun · 8 s cooldown', gate: 'unlock' },
+  'bastion.r.aegis_slam': { id: 'bastion.r.aegis_slam', name: 'Aegis Slam', key: 'R', icon: 'slam', description: 'Slam the ground: a huge shockwave damages, stuns and hurls every nearby enemy, and raises Bulwark.', stats: '60 dmg · 2 s stun · 170 range · needs full charge', gate: 'ultimate' },
+  'shade.q.blink_strike': { id: 'shade.q.blink_strike', name: 'Phase Step', key: 'Q', icon: 'blink', description: 'Blink toward your aim, cutting everything along the path.', stats: '32 dmg · 112 range · 4 s cooldown', gate: 'always' },
+  'shade.e.shroud': { id: 'shade.e.shroud', name: 'Shroud', key: 'E', icon: 'shroud', description: 'Vanish: enemies lose you, you move 40% faster, and your next strike hits much harder.', stats: '+18 dmg · 2.2 s · 9 s cooldown', gate: 'unlock' },
+  'shade.r.blade_storm': { id: 'shade.r.blade_storm', name: 'Blade Storm', key: 'R', icon: 'storm', description: 'A whirlwind of blades around you: three rapid cuts on every enemy in reach, and you cannot be touched.', stats: '3 × 22 dmg · 120 range · needs full charge', gate: 'ultimate' },
+  'beacon.q.flare': { id: 'beacon.q.flare', name: 'Flare', key: 'Q', icon: 'flare', description: 'Detonate a flare at your aim point: damage and MARK enemies so they take 30% more.', stats: '24 dmg · 4 s mark · 5 s cooldown', gate: 'always' },
+  'beacon.e.rally': { id: 'beacon.e.rally', name: 'Rally', key: 'E', icon: 'rally', description: 'Repair yourself and nearby allies and quicken everyone’s weapons.', stats: '+35 hp · 4 s haste · 10 s cooldown', gate: 'unlock' },
+  'beacon.r.solar_lance': { id: 'beacon.r.solar_lance', name: 'Solar Lance', key: 'R', icon: 'lance', description: 'Fire a piercing lance of light along your aim: every enemy in the line is scorched and marked.', stats: '55 dmg · 420 range · needs full charge', gate: 'ultimate' },
+  'weaver.q.tether': { id: 'weaver.q.tether', name: 'Tether', key: 'Q', icon: 'tether', description: 'Hook the enemy you aim at, drag it to you and slow it.', stats: '12 dmg · 3 s slow · 4.5 s cooldown', gate: 'always' },
+  'weaver.e.rewind': { id: 'weaver.e.rewind', name: 'Rewind', key: 'E', icon: 'rewind', description: 'Snap back to where you were 3 seconds ago, restoring the health you had then.', stats: '3 s rewind · 10 s cooldown', gate: 'unlock' },
+  'weaver.r.collapse': { id: 'weaver.r.collapse', name: 'Collapse', key: 'R', icon: 'singularity', description: 'Open a singularity at your aim point: enemies are dragged in, crushed and stunned.', stats: '45 dmg · 200 pull · 1.2 s stun · needs full charge', gate: 'ultimate' },
+};
+
+export const CLASS_THEME: Record<ClassId, { title: string; weapon: string; primary: string; secondary: string }> = {
+  bastion: { title: 'Bastion', weapon: 'Arc-blade and tower shield', primary: '#7cf5ff', secondary: '#ffcf8a' },
+  shade: { title: 'Shade', weapon: 'Twin phase blades', primary: '#b48cff', secondary: '#ff6bd6' },
+  beacon: { title: 'Beacon', weapon: 'Lantern staff', primary: '#ffcf8a', secondary: '#fff3c4' },
+  weaver: { title: 'Weaver', weapon: 'Plasma loom', primary: '#5ef0b0', secondary: '#7cf5ff' },
 };
 
 /** Enemy archetypes. `guardian` is the room-3 Anchor encounter. */

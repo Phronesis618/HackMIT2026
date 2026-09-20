@@ -47,11 +47,11 @@ export const headquartersRoom: RoomSpec = RoomSpecSchema.parse({
 export const headquartersArt: ArtRecipe = {
   paletteFamily: 'ink-neon',
   palette: {
-    background: '#07090f',
-    floor: '#11172a',
-    floorAlt: '#151d33',
-    wall: '#1c2742',
-    wallEdge: '#3a4c78',
+    background: '#0b1020',
+    floor: '#182238',
+    floorAlt: '#1e2b46',
+    wall: '#2a3a5e',
+    wallEdge: '#6c86c8',
     accent: '#7cf5ff',
     accentSoft: '#ffcf8a',
     glow: '#7cf5ff',

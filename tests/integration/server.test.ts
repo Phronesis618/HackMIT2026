@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 import { PreparedWorldSchema } from '../../src/shared/contracts';
 import { decodeServerMessage, encodeMessage, PROTOCOL_VERSION, type ServerMessage } from '../../src/shared/protocol';
-import { PLAYER_RADIUS, ROOM_CLEAR_REWARD, TICK_MS, tileToWorld } from '../../src/shared/conventions';
+import { ABILITY_UNLOCK_COST, PLAYER_RADIUS, ROOM_CLEAR_REWARD, TICK_MS, tileToWorld } from '../../src/shared/conventions';
 import { buildSolidGrid } from '../../src/sim/collision';
 import { chaseWaypoint } from '../../src/sim/combat';
 import { createRelayServer, type RelayServer } from '../../src/server/app';
@@ -170,7 +170,7 @@ describe('LocalSession against the real server', () => {
       session.advance(TICK_MS);
     }
     expect(session.getSnapshot()?.roomCleared).toBe(true);
-    expect(session.getSnapshot()?.players[0]?.resources).toBe(ROOM_CLEAR_REWARD);
+    expect(session.getSnapshot()?.players[0]?.resources).toBe(ABILITY_UNLOCK_COST + ROOM_CLEAR_REWARD);
     const exit = world.rooms[0]!.exits[0]!;
     for (let i = 0; i < 2000 && session.getSnapshot()?.roomIndex === 0; i++) {
       const me = session.getSnapshot()!.players[0]!;

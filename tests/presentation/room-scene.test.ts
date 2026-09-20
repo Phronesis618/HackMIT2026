@@ -72,6 +72,14 @@ vi.mock('../../src/client/render/drawing', () => ({
   drawMotif: vi.fn(), drawProp: vi.fn(), drawSanctuary: vi.fn(), drawSkyline: vi.fn(), drawVignette: vi.fn(),
 }));
 vi.mock('../../src/client/render/characters', () => ({ drawOperative: vi.fn(), drawHostile: vi.fn() }));
+vi.mock('../../src/client/render/environment', () => ({
+  drawBackdrop: vi.fn(), drawFloor: vi.fn(), drawWalls: vi.fn(), drawLightPools: vi.fn(), drawMotes: vi.fn(), makeMotes: vi.fn(() => []), propHasLight: vi.fn(),
+}));
+vi.mock('../../src/client/render/fx', () => ({
+  drawSlash: vi.fn(), drawDashTrail: vi.fn(), drawImpact: vi.fn(), drawDefeat: vi.fn(), drawEnemyStrike: vi.fn(), drawShockwave: vi.fn(),
+  drawBladeStorm: vi.fn(), drawBeam: vi.fn(), drawSingularity: vi.fn(), drawFlare: vi.fn(), drawRally: vi.fn(), drawTether: vi.fn(),
+  drawShroud: vi.fn(), drawRewind: vi.fn(), drawBlink: vi.fn(), drawRevive: vi.fn(), drawTelegraphWarning: vi.fn(), enemyAccent: vi.fn(() => 0xff5c7a),
+}));
 
 const fixture = WorldFixtureSchema.parse(fixtureData);
 const firstRoom = fixture.rooms[0]!;

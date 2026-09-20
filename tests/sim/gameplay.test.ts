@@ -249,13 +249,13 @@ describe('class abilities and transactions', () => {
 
   it('purchases E once with earned resources and keeps class-specific unlocks at HQ', () => {
     const sim = setup('bastion', []);
-    expect(sim.unlockAbility(playerId)).toEqual([]);
+    // New operatives start with exactly one unlock's worth; spend it, then E is locked again for a second class.
     input(sim, { ability: 'e' });
     expect(sim.step().some((e) => e.type === 'ability_used')).toBe(false);
-    expect(me(sim).resources).toBe(ROOM_CLEAR_REWARD);
+    expect(me(sim).resources).toBe(ABILITY_UNLOCK_COST + ROOM_CLEAR_REWARD);
     const purchase = sim.unlockAbility(playerId);
     expect(purchase).toEqual([expect.objectContaining({
-      type: 'ability_unlocked', abilityId: 'bastion.e.shockwave', cost: ABILITY_UNLOCK_COST, remainingResources: 0,
+      type: 'ability_unlocked', abilityId: 'bastion.e.shockwave', cost: ABILITY_UNLOCK_COST, remainingResources: ROOM_CLEAR_REWARD,
     })]);
     expect(sim.unlockAbility(playerId)).toEqual([]);
     expect(sim.unlockAbility('missing-player')).toEqual([]);
@@ -324,7 +324,7 @@ describe('progression, objectives, and co-op', () => {
     expect(sim.getRoom().index).toBe(0);
     const events = fight(sim);
     expect(events.filter((e) => e.type === 'room_cleared')).toHaveLength(1);
-    expect(me(sim).resources).toBe(ROOM_CLEAR_REWARD);
+    expect(me(sim).resources).toBe(ABILITY_UNLOCK_COST + ROOM_CLEAR_REWARD);
     expect(sim.enterRoom(1)).toContainEqual(expect.objectContaining({ type: 'room_entered', roomIndex: 1 }));
   });
 

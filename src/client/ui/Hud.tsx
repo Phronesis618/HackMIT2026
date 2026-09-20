@@ -1,6 +1,7 @@
 import type { UiActions, UiModel } from '../../shared/ui';
 import { ABILITY_UNLOCK_COST } from '../../shared/conventions';
-import { CLASS_INFO, type ClassId } from '../../shared/registry';
+import { CLASS_INFO, ENEMY_IDS, ENEMY_INFO, type ClassId } from '../../shared/registry';
+import { ENEMY_LORE } from '../../sim/training';
 
 const abilities: Record<ClassId, { q: string; e: string; description: string }> = {
   bastion: { q: 'Bulwark', e: 'Shockwave', description: 'Q guards against damage. E knocks back and stuns nearby hostiles.' },
@@ -18,16 +19,16 @@ export function Hud({ model, actions }: { model: UiModel; actions: UiActions }) 
   const down = hud.state === 'down';
   const critical = !down && hpPct <= 25;
   const ability = abilities[model.localPlayer.classId];
-  const qCooldown = hud.abilityQCooldownMs ?? 0;
-  const eCooldown = hud.abilityECooldownMs ?? 0;
   const resources = hud.resources ?? 0;
   const host = model.connection.isHost !== false;
+  const training = model.phase === 'training';
+  const awake = new Set(hud.training?.awakeEnemyIds ?? []);
   return (
     <div className={`panel panel--hud ${down || critical ? 'panel--danger' : ''}`}>
-      <p className="eyebrow">{CLASS_INFO[model.localPlayer.classId].name} · Expedition {room.index + 1}</p>
+      <p className="eyebrow">{CLASS_INFO[model.localPlayer.classId].name} · {training ? 'Training Range' : `Expedition ${room.index + 1}`}</p>
       <div className="panel__row">
         <h2 className="panel__title">
-          Room {room.index + 1} · {room.name}
+          {training ? room.name : `Room ${room.index + 1} · ${room.name}`}
         </h2>
         {room.isFinal && <span className="badge badge--fixture">ANCHOR ROOM</span>}
       </div>
@@ -50,32 +51,29 @@ export function Hud({ model, actions }: { model: UiModel; actions: UiActions }) 
         </div>
       </div>
 
-      <div className="abilities">
-        <div className={`ability ${!down && hud.dashReady ? 'ability--ready' : ''}`}>
-          <span className="ability__key">Shift</span>
-          <span>{down ? 'unavailable' : `Dash${hud.dashReady ? '' : ` ${(hud.dashCooldownMs / 1000).toFixed(1)}s`}`}</span>
-        </div>
-        <div className={`ability ${!down && hud.attackReady ? 'ability--ready' : ''}`}>
-          <span className="ability__key">J</span>
-          <span>{down ? 'unavailable' : hud.attackReady ? 'Attack' : 'recovering'}</span>
-        </div>
-        <div className={`ability ${!down && qCooldown <= 0 ? 'ability--ready' : ''}`}>
-          <span className="ability__key">Q</span>
-          <span>{down ? 'unavailable' : qCooldown > 0 ? `${(qCooldown / 1000).toFixed(1)}s` : ability.q}</span>
-        </div>
-        <div className={`ability ${!down && hud.abilityEUnlocked && eCooldown <= 0 ? 'ability--ready' : ''}`}>
-          <span className="ability__key">E</span>
-          <span>{down ? 'unavailable' : !hud.abilityEUnlocked ? 'locked' : eCooldown > 0 ? `${(eCooldown / 1000).toFixed(1)}s` : ability.e}</span>
-        </div>
-      </div>
-
+      {training && (
+        <ul className="training-guide">
+          {ENEMY_IDS.map((id) => {
+            const active = [...awake].some((awakeId) => awakeId.startsWith(`tr-${id}`));
+            return (
+              <li key={id} className={`training-guide__row ${active ? 'training-guide__row--active' : ''}`}>
+                <span className="training-guide__name">{ENEMY_INFO[id].name}</span>
+                <span className="training-guide__attack">{ENEMY_LORE[id].attack}</span>
+                <span className="training-guide__tip">{ENEMY_LORE[id].tip}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       <p className="muted">
-        State: <strong>{hud.state}</strong> · Hostiles: {hud.enemiesRemaining} · Players: {model.players.length}
+        State: <strong>{hud.state}</strong> · Weapon: {down ? 'unavailable' : hud.attackReady ? 'ready' : 'recovering'} · Hostiles: {hud.enemiesRemaining} ·
+        Players: {model.players.length}
+        {training ? ' · targets respawn' : ''}
       </p>
       {!down && <p className="hint">WASD / arrows to move · mouse to aim · J / click to attack · Shift / Space to dash. Hold F near a fallen teammate to revive. Clear the room, then walk into a glowing exit to move on.</p>}
-      <p className="hint">{ability.description}</p>
-      <p className="muted">{hud.roomCleared ? 'Room cleared' : 'Clear hostiles to earn resources'} · Resources: {resources}</p>
-      {!hud.abilityEUnlocked && (
+      <p className="hint">{ability.description} Hover the ability bar under the canvas for exact numbers.</p>
+      {!training && <p className="muted">{hud.roomCleared ? 'Room cleared' : 'Clear hostiles to earn resources'} · Resources: {resources}</p>}
+      {!hud.abilityEUnlocked && !training && (
         <button type="button" className="btn btn--primary" onClick={actions.unlockAbility} disabled={down || resources < ABILITY_UNLOCK_COST || !actions.unlockAbility || model.connection.status !== 'connected'}>
           Unlock {ability.e} · {ABILITY_UNLOCK_COST} resources
         </button>

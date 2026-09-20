@@ -20,7 +20,7 @@ import type {
 } from './contracts';
 import type { ConnectionStatus, SessionMode } from './session';
 
-export type UiPhase = 'headquarters' | 'preparing' | 'expedition' | 'debrief';
+export type UiPhase = 'headquarters' | 'preparing' | 'training' | 'expedition' | 'debrief';
 
 export interface UiPlayer {
   id: string;
@@ -62,6 +62,11 @@ export interface UiHud {
   reviveProgress?: number;
   roomCleared?: boolean;
   anchor?: AnchorState | null;
+  /** Ultimate charge 0..100 and the short post-fire lockout. */
+  ultCharge?: number;
+  abilityRCooldownMs?: number;
+  /** Training range only: which target is awake and how it attacks (for the practice notes). */
+  training?: { awakeEnemyIds: string[] } | null;
 }
 
 export interface UiModel {
@@ -97,4 +102,6 @@ export interface UiActions {
   dismissNotice(): void;
   toggleAudio?(): void;
   unlockAbility?(): void;
+  /** Solo only: enter the HQ training range (respawning targets, every ability unlocked). */
+  enterTraining?(): void;
 }

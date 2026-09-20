@@ -119,6 +119,14 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
           Enter portal
         </button>
       </div>
+      {model.connection.mode === 'local' && actions.enterTraining && (
+        <div className="training-entry">
+          <button type="button" className="btn btn--training" onClick={() => actions.enterTraining?.()} disabled={busy}>
+            Training range
+          </button>
+          <span className="hint">See every enemy’s attack and try all abilities (E and R unlocked there). No run, no risk.</span>
+        </div>
+      )}
 
       <div className={`generation status-line--${gen.phase}`} aria-busy={busy}>
         <div className="panel__row">

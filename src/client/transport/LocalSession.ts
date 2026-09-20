@@ -144,7 +144,10 @@ export class LocalSession implements GameSession {
     const extra: GameEvent[] = [];
     for (const event of events) {
       if (event.type !== 'exit_reached') continue;
-      if (this.sim.getPhase() === 'headquarters') {
+      if (this.sim.getPhase() === 'training') {
+        // The range's only exit leads home.
+        extra.push(...this.sim.returnToHeadquarters());
+      } else if (this.sim.getPhase() === 'headquarters') {
         if (this.world) extra.push(...this.enterRoom(0));
         else this.setGeneration({ ...this.generation, message: 'Prepare a world before entering the portal.' });
       } else if (this.world) {
@@ -198,6 +201,16 @@ export class LocalSession implements GameSession {
     this.snapshot = this.sim.getSnapshot();
     if (events.length) this.emitEvents(events);
     for (const listener of this.snapshotListeners) listener(this.snapshot);
+  }
+
+  enterTraining(): boolean {
+    if (this.disposed || this.sim.getPhase() !== 'headquarters') return false;
+    const events = this.sim.enterTraining();
+    this.snapshot = this.sim.getSnapshot();
+    if (events.length) this.emitEvents(events);
+    for (const listener of this.snapshotListeners) listener(this.snapshot);
+    this.notifyPhase();
+    return true;
   }
 
   async requestWorld(): Promise<PreparedWorld> {

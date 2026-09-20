@@ -8,14 +8,15 @@ import {
   PLAYER_MAX_HP, PLAYER_RADIUS, REVIVE_DURATION_MS, REVIVE_HP, REVIVE_RANGE,
   ROOM_CLEAR_REWARD, TICK_MS, TILE_SIZE, tileToWorld, worldToTile,
 } from '../shared/conventions';
-import { CLASS_ABILITIES, ENEMY_INFO, type ClassId } from '../shared/registry';
+import { CLASS_ABILITIES, ENEMY_INFO, ULT_CHARGE_MAX, ULT_CHARGE_PER_DAMAGE, ULT_CHARGE_PER_KILL, type ClassId } from '../shared/registry';
 import { buildSolidGrid, moveCircle, type SolidGrid } from './collision';
 import { CLASS_COMBAT, ENEMY_COMBAT, chaseWaypoint, clearPath, decay, distance, inArc, nearestOpenPosition, type Point } from './combat';
 import { headquartersRoom } from './headquarters';
+import { TRAINING_REGEN_PER_TICK, TRAINING_RESPAWN_MS, TRAINING_WAKE_RANGE, trainingRoom } from './training';
 
 type LivePlayerState = PlayerState & Required<Pick<PlayerState,
   'resources' | 'abilityEUnlocked' | 'abilityQCooldownMs' | 'abilityECooldownMs' |
-  'shieldMs' | 'shroudMs' | 'rallyMs' | 'reviveProgress'>>;
+  'shieldMs' | 'shroudMs' | 'rallyMs' | 'reviveProgress' | 'ultCharge' | 'abilityRCooldownMs'>>;
 
 interface PlayerRuntime {
   state: LivePlayerState;
@@ -36,6 +37,9 @@ interface EnemyRuntime {
   cooldownMs: number;
   hitMs: number;
   attackCount: number;
+  /** Where it was placed; training targets respawn here. */
+  spawn: Point;
+  respawnMs: number;
 }
 
 interface RoomProgress {
@@ -57,6 +61,8 @@ export interface Simulation {
   /** HQ permits room previews; active expeditions must clear the room before using its exits. */
   enterRoom(roomIndex: number): GameEvent[];
   returnToHeadquarters(): GameEvent[];
+  /** From HQ only: the practice range (respawning targets, all abilities, no run). */
+  enterTraining(): GameEvent[];
   unlockAbility(playerId: string): GameEvent[];
   /** Buttons are pressed this tick; interact is held this tick. */
   applyIntent(intent: PlayerIntent): void;
@@ -105,7 +111,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     Object.assign(p.state, {
       vx: 0, vy: 0, state: p.state.hp > 0 ? 'idle' : 'down',
       dashCooldownMs: 0, attackCooldownMs: 0, invulnerableMs: 0,
-      abilityQCooldownMs: 0, abilityECooldownMs: 0,
+      abilityQCooldownMs: 0, abilityECooldownMs: 0, abilityRCooldownMs: 0,
       shieldMs: 0, shroudMs: 0, rallyMs: 0, reviveProgress: 0,
     });
     p.intent = null;
@@ -146,18 +152,32 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       for (let i = 0; i < encounter.count; i++) {
         const base = tileToWorld(encounter.x, encounter.y);
         const offset = i === 0 ? 0 : (i % 2 === 0 ? 1 : -1) * Math.ceil(i / 2) * (info.radius * 2 + 6);
+        const spawn = nearestOpenPosition(grid, { x: base.x + offset, y: base.y }, info.radius);
         enemies.push({
           state: {
             id: `${encounter.id.slice(0, 61)}-${i}`, enemyId: encounter.enemyId,
-            ...nearestOpenPosition(grid, { x: base.x + offset, y: base.y }, info.radius),
+            ...spawn,
             facing: Math.PI, hp: info.maxHp, maxHp: info.maxHp, state: 'idle',
             telegraph: null, slowMs: 0, stunMs: 0, markMs: 0,
           },
-          cooldownMs: 500, hitMs: 0, attackCount: 0,
+          cooldownMs: 500, hitMs: 0, attackCount: 0, spawn, respawnMs: 0,
         });
       }
     }
     return enemies;
+  }
+
+  /** Training targets come back a few seconds after being defeated. */
+  function respawnTrainingTargets(): void {
+    for (const e of progress.enemies) {
+      if (e.state.hp > 0) continue;
+      e.respawnMs = e.respawnMs === 0 ? TRAINING_RESPAWN_MS : decay(e.respawnMs);
+      if (e.respawnMs > 0) continue;
+      const info = ENEMY_INFO[e.state.enemyId];
+      Object.assign(e.state, { ...e.spawn, hp: info.maxHp, state: 'idle', telegraph: null, slowMs: 0, stunMs: 0, markMs: 0 });
+      e.cooldownMs = 600;
+      e.hitMs = 0;
+    }
   }
 
   function loadRoom(next: RoomSpec, nextPhase: GamePhase): void {
@@ -167,7 +187,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const saved = nextPhase === 'expedition' ? rooms.get(next.index) : undefined;
     const anchorPoint = room.isFinal ? findTile('A') : null;
     progress = saved ?? {
-      enemies: nextPhase === 'expedition' ? spawnEnemies() : [],
+      enemies: nextPhase === 'expedition' || nextPhase === 'training' ? spawnEnemies() : [],
       anchor: anchorPoint ? { ...anchorPoint, state: 'dormant', progress: 0 } : null,
       cleared: false,
     };
@@ -181,8 +201,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         ...identity, x: 0, y: 0, vx: 0, vy: 0, facing: 0,
         hp: PLAYER_MAX_HP, maxHp: PLAYER_MAX_HP, state: 'idle',
         dashCooldownMs: 0, attackCooldownMs: 0, invulnerableMs: 0,
-        resources: 0, abilityEUnlocked: false, abilityQCooldownMs: 0, abilityECooldownMs: 0,
-        shieldMs: 0, shroudMs: 0, rallyMs: 0, reviveProgress: 0,
+        // New operatives start with exactly one unlock's worth of resources so the E ability
+        // can be unlocked at HQ before the first expedition.
+        resources: ABILITY_UNLOCK_COST, abilityEUnlocked: false, abilityQCooldownMs: 0, abilityECooldownMs: 0,
+        shieldMs: 0, shroudMs: 0, rallyMs: 0, reviveProgress: 0, ultCharge: 0, abilityRCooldownMs: 0,
       },
       intent: null, unlockedClasses: new Set(), dashRemainingMs: 0,
       dashDirection: { x: 1, y: 0 }, attackRemainingMs: 0, hitRemainingMs: 0,
@@ -201,6 +223,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     s.hp -= amount;
     e.hitMs = 130;
     s.state = s.hp === 0 ? 'dead' : s.telegraph ? 'attacking' : 'hit';
+    // Ultimates charge from real combat: damage dealt plus a bonus per kill.
+    p.state.ultCharge = Math.min(ULT_CHARGE_MAX, p.state.ultCharge + amount * ULT_CHARGE_PER_DAMAGE + (s.hp === 0 ? ULT_CHARGE_PER_KILL : 0));
     events.push(emit({ type: 'enemy_damaged', enemyId: s.id, byPlayerId: p.state.id, amount, remainingHp: s.hp }));
     if (s.hp === 0) {
       s.telegraph = null;
@@ -211,7 +235,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   function damagePlayer(p: PlayerRuntime, e: EnemyRuntime, damage: number, ranged: boolean, events: GameEvent[]): boolean {
     const s = p.state;
     if (s.hp <= 0 || s.invulnerableMs > 0 || (ranged && s.shieldMs > 0)) return false;
-    const amount = Math.min(s.hp, s.shieldMs > 0 ? Math.ceil(damage * 0.2) : damage);
+    let amount = Math.min(s.hp, s.shieldMs > 0 ? Math.ceil(damage * 0.2) : damage);
+    // Training range: hits land (so the telegraphs teach), but nobody goes down.
+    if (phase === 'training') amount = Math.min(amount, Math.max(0, s.hp - 1));
+    if (amount <= 0) return false;
     s.hp -= amount;
     s.invulnerableMs = 350;
     s.reviveProgress = 0;
@@ -263,21 +290,86 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     }
   }
 
-  function useAbility(p: PlayerRuntime, slot: 'q' | 'e', intent: PlayerIntent, events: GameEvent[]): void {
+  /** Push an enemy away from (or toward, with negative distance) a point, respecting walls. */
+  function shove(e: EnemyRuntime, from: Point, distancePx: number): void {
+    const d = distance(from, e.state) || 1;
+    const moved = moveCircle(grid, e.state.x, e.state.y, ENEMY_INFO[e.state.enemyId].radius,
+      ((e.state.x - from.x) / d) * distancePx, ((e.state.y - from.y) / d) * distancePx);
+    e.state.x = moved.x;
+    e.state.y = moved.y;
+  }
+
+  function useAbility(p: PlayerRuntime, slot: 'q' | 'e' | 'r', intent: PlayerIntent, events: GameEvent[]): void {
     const s = p.state;
-    if (slot === 'e' && !s.abilityEUnlocked) return;
-    if ((slot === 'q' ? s.abilityQCooldownMs : s.abilityECooldownMs) > 0) return;
+    // E is an HQ unlock during expeditions; the training range unlocks everything for practice.
+    if (slot === 'e' && !s.abilityEUnlocked && phase !== 'training') return;
+    if (slot === 'r' && (s.ultCharge < ULT_CHARGE_MAX || s.abilityRCooldownMs > 0)) return;
+    if ((slot === 'q' ? s.abilityQCooldownMs : slot === 'e' ? s.abilityECooldownMs : 0) > 0) return;
     const id = CLASS_ABILITIES[s.classId][slot];
     const spec = CLASS_COMBAT[s.classId];
     if (slot === 'q') s.abilityQCooldownMs = spec.qCooldown;
-    else s.abilityECooldownMs = spec.eCooldown;
+    else if (slot === 'e') s.abilityECooldownMs = spec.eCooldown;
+    else {
+      s.ultCharge = 0;
+      s.abilityRCooldownMs = 1200;
+    }
     const hits: string[] = [];
     events.push(emit({ type: 'ability_used', playerId: s.id, abilityId: id, x: s.x, y: s.y, facing: s.facing, hitEnemyIds: hits }));
     const strike = (e: EnemyRuntime, damage: number): void => {
       hits.push(e.state.id);
       damageEnemy(e, p, damage, events);
     };
+    const aimPoint = (maxRange: number): Point => {
+      const aimDistance = Math.min(maxRange, distance(s, { x: intent.aimX, y: intent.aimY }));
+      return moveCircle(grid, s.x, s.y, 2, Math.cos(s.facing) * aimDistance, Math.sin(s.facing) * aimDistance);
+    };
     switch (id) {
+      // ---- ultimates ------------------------------------------------------------
+      case 'bastion.r.aegis_slam':
+        s.shieldMs = Math.max(s.shieldMs, 1800);
+        for (const e of arcTargets(s, s.facing, 170, Math.PI * 2)) {
+          strike(e, 60);
+          if (e.state.hp <= 0) continue;
+          e.state.stunMs = 2000;
+          e.state.telegraph = null;
+          shove(e, s, 110);
+        }
+        break;
+      case 'shade.r.blade_storm':
+        s.invulnerableMs = Math.max(s.invulnerableMs, 900);
+        s.shroudMs = Math.max(s.shroudMs, 900);
+        for (const e of arcTargets(s, s.facing, 120, Math.PI * 2)) {
+          for (let cut = 0; cut < 3 && e.state.hp > 0; cut++) strike(e, 22);
+          if (e.state.hp > 0) e.state.slowMs = Math.max(e.state.slowMs ?? 0, 1500);
+        }
+        break;
+      case 'beacon.r.solar_lance':
+        for (const e of livingEnemies()) {
+          // Everything within 26 px of the aim line up to 420 px, walls included, is scorched.
+          const dx = Math.cos(s.facing);
+          const dy = Math.sin(s.facing);
+          const along = (e.state.x - s.x) * dx + (e.state.y - s.y) * dy;
+          if (along < 0 || along > 420) continue;
+          const across = Math.abs(-(e.state.x - s.x) * dy + (e.state.y - s.y) * dx);
+          if (across > 26 + ENEMY_INFO[e.state.enemyId].radius) continue;
+          strike(e, 55);
+          if (e.state.hp > 0) e.state.markMs = 5000;
+        }
+        break;
+      case 'weaver.r.collapse': {
+        const centre = aimPoint(260);
+        for (const e of livingEnemies()) {
+          if (distance(centre, e.state) > 200 + ENEMY_INFO[e.state.enemyId].radius) continue;
+          const d = distance(centre, e.state);
+          shove(e, centre, -Math.max(0, d - 30)); // drag toward the singularity
+          strike(e, 45);
+          if (e.state.hp <= 0) continue;
+          e.state.stunMs = 1200;
+          e.state.slowMs = 3000;
+          e.state.telegraph = null;
+        }
+        break;
+      }
       case 'bastion.q.bulwark':
         s.shieldMs = 2200;
         break;
@@ -361,7 +453,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
 
   function stepPlayer(p: PlayerRuntime, events: GameEvent[]): void {
     const s = p.state;
-    for (const key of ['dashCooldownMs', 'attackCooldownMs', 'invulnerableMs', 'abilityQCooldownMs', 'abilityECooldownMs', 'shieldMs', 'shroudMs', 'rallyMs'] as const) s[key] = decay(s[key]);
+    for (const key of ['dashCooldownMs', 'attackCooldownMs', 'invulnerableMs', 'abilityQCooldownMs', 'abilityECooldownMs', 'abilityRCooldownMs', 'shieldMs', 'shroudMs', 'rallyMs'] as const) s[key] = decay(s[key]);
     p.hitRemainingMs = decay(p.hitRemainingMs);
     p.damagedThisTick = false;
     const intent = p.intent;
@@ -372,6 +464,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       s.vx = s.vy = 0;
       return;
     }
+    // Training range: health regenerates once the hit invulnerability has passed.
+    if (phase === 'training' && s.invulnerableMs === 0 && s.hp < s.maxHp) s.hp = Math.min(s.maxHp, s.hp + TRAINING_REGEN_PER_TICK);
     p.history.push({ x: s.x, y: s.y, hp: s.hp });
     if (p.history.length > Math.round(3000 / TICK_MS)) p.history.shift();
     const moveX = intent?.moveX ?? 0;
@@ -384,7 +478,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       p.attackRemainingMs = 0;
       s.dashCooldownMs = DASH_COOLDOWN_MS;
       s.invulnerableMs = Math.max(s.invulnerableMs, DASH_INVULNERABLE_MS);
-      events.push(emit({ type: 'player_dashed', playerId: s.id, x: s.x, y: s.y, facing: s.facing }));
+      // The event's facing is the direction of travel (renderers draw the trail behind it),
+      // not the aim direction — you can dash sideways while looking at an enemy.
+      events.push(emit({ type: 'player_dashed', playerId: s.id, x: s.x, y: s.y, facing: Math.atan2(p.dashDirection.y, p.dashDirection.x) }));
     } else if (p.dashRemainingMs === 0 && intent?.ability) {
       useAbility(p, intent.ability, intent, events);
     } else if (p.dashRemainingMs === 0 && intent?.attack && s.attackCooldownMs === 0 && p.attackRemainingMs === 0) {
@@ -457,7 +553,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     }
     const target = orderedPlayers().filter((p) => p.state.hp > 0 && p.state.shroudMs === 0)
       .sort((a, b) => distance(s, a.state) - distance(s, b.state))[0];
-    if (!target) {
+    if (!target || (phase === 'training' && distance(s, target.state) > TRAINING_WAKE_RANGE)) {
+      // Training targets doze in their pens until an operative walks up to them.
       s.state = 'idle';
       return;
     }
@@ -549,7 +646,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
 
   function updateExits(events: GameEvent[]): void {
     if (phase === 'debrief') return;
-    const open = phase === 'headquarters' || progress.cleared;
+    const open = phase === 'headquarters' || phase === 'training' || progress.cleared;
     for (const p of orderedPlayers()) {
       const { col, row } = worldToTile(p.state.x, p.state.y);
       const exit = room.exits.find((e) => e.x === col && e.y === row);
@@ -595,7 +692,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       if (!world) throw new Error('enterRoom: no world prepared');
       const next = world.rooms[roomIndex];
       if (!next) throw new Error(`enterRoom: room ${roomIndex} is not committed yet`);
-      if (phase === 'debrief') return [];
+      if (phase === 'debrief' || phase === 'training') return [];
       if (phase === 'expedition' && (
         room.index === roomIndex || !progress.cleared || livingEnemies().length > 0 ||
         !orderedPlayers().some((p) => p.state.hp > 0) ||
@@ -610,9 +707,18 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       const events: GameEvent[] = [];
       finishRun('aborted', events);
       rooms.clear();
-      for (const p of players.values()) p.state.hp = p.state.maxHp;
+      for (const p of players.values()) {
+        p.state.hp = p.state.maxHp;
+        p.state.ultCharge = 0;
+      }
       loadRoom(hq, 'headquarters');
       return events;
+    },
+    enterTraining() {
+      if (phase !== 'headquarters') return [];
+      loadRoom(trainingRoom, 'training');
+      for (const p of players.values()) p.state.ultCharge = ULT_CHARGE_MAX; // try the ultimate immediately
+      return [emit({ type: 'room_entered', worldId: 'training', roomIndex: 0, roomId: trainingRoom.id, roomName: trainingRoom.name, playerIds: playerIds() })];
     },
     unlockAbility(playerId) {
       const p = players.get(playerId);
@@ -639,6 +745,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       if (phase === 'expedition') {
         for (const e of progress.enemies) stepEnemy(e, events);
         updateObjectives(events);
+      } else if (phase === 'training') {
+        for (const e of progress.enemies) stepEnemy(e, events);
+        respawnTrainingTargets();
       }
       updateExits(events);
       return events;

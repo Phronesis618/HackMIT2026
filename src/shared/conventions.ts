@@ -85,6 +85,7 @@ export const INPUT_BINDINGS = {
   dash: ['ShiftLeft', 'ShiftRight', 'Space'],
   abilityQ: ['KeyQ'],
   abilityE: ['KeyE'],
+  abilityR: ['KeyR'],
   interact: ['KeyF'],
 } as const;
 

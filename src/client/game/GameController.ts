@@ -13,7 +13,7 @@ import { CLASS_INFO, CLASS_IDS, type ClassId } from '../../shared/registry';
 import type { WorldRenderer } from '../../shared/render';
 import type { GameSession } from '../../shared/session';
 import type { UiActions, UiModel } from '../../shared/ui';
-import { headquartersArt, headquartersRoom } from '../../sim';
+import { headquartersArt, headquartersRoom, trainingArt, trainingRoom } from '../../sim';
 import type { AudioPort } from '../audio';
 import { cueForEvent } from '../audio';
 import type { BrowserChronicle } from '../chronicle';
@@ -167,6 +167,12 @@ export class GameController {
           reviveProgress: me.reviveProgress ?? 0,
           roomCleared: snapshot.roomCleared ?? false,
           anchor: snapshot.anchor,
+          ultCharge: Math.round(me.ultCharge ?? 0),
+          abilityRCooldownMs: Math.ceil((me.abilityRCooldownMs ?? 0) / 100) * 100,
+          training:
+            snapshot.phase === 'training'
+              ? { awakeEnemyIds: snapshot.enemies.filter((e) => e.state !== 'idle' && e.state !== 'dead').map((e) => e.id) }
+              : null,
         };
         if (
           !prev ||
@@ -184,6 +190,9 @@ export class GameController {
           prev.roomCleared !== hud.roomCleared ||
           prev.anchor?.state !== hud.anchor?.state ||
           prev.anchor?.progress !== hud.anchor?.progress ||
+          prev.ultCharge !== hud.ultCharge ||
+          prev.abilityRCooldownMs !== hud.abilityRCooldownMs ||
+          (prev.training?.awakeEnemyIds.join(',') ?? '') !== (hud.training?.awakeEnemyIds.join(',') ?? '') ||
           Math.abs(prev.dashCooldownMs - hud.dashCooldownMs) > 40
         ) {
           store.set({ hud });
@@ -203,9 +212,16 @@ export class GameController {
   private handleSnapshot(snapshot: GameSnapshot): void {
     this.latestSnapshot = snapshot;
     const { session, store, renderer } = this.deps;
+    if (snapshot.phase === 'training') {
+      if (store.get().phase !== 'training') {
+        renderer.showRoom(trainingRoom, trainingArt);
+        store.set({ phase: 'training', room: { index: 0, name: trainingRoom.name, description: trainingRoom.description, isFinal: false } });
+      }
+      return;
+    }
     const world = session.getWorld();
     const room = snapshot.roomIndex === null ? null : world?.rooms[snapshot.roomIndex];
-    if (world && room && (store.get().room?.index !== room.index || store.get().phase === 'headquarters')) {
+    if (world && room && snapshot.phase !== 'headquarters' && (store.get().room?.index !== room.index || store.get().phase === 'headquarters' || store.get().phase === 'training')) {
       renderer.showRoom(room, world.art);
       store.set({ room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal }, phase: snapshot.phase });
     }
@@ -263,11 +279,14 @@ export class GameController {
     });
   }
 
-  private handlePhase(phase: 'headquarters' | 'expedition' | 'debrief'): void {
+  private handlePhase(phase: 'headquarters' | 'training' | 'expedition' | 'debrief'): void {
     const { renderer, store } = this.deps;
     if (phase === 'headquarters') {
       renderer.showHeadquarters(headquartersRoom, headquartersArt);
       store.set({ phase: 'headquarters', room: null, hud: null });
+    } else if (phase === 'training') {
+      renderer.showRoom(trainingRoom, trainingArt);
+      store.set({ phase: 'training', room: { index: 0, name: trainingRoom.name, description: trainingRoom.description, isFinal: false } });
     } else if (phase === 'debrief') {
       store.set({ phase: 'debrief' });
     }
@@ -328,6 +347,10 @@ export class GameController {
         store.set({ audioMuted: audio.isMuted() });
       },
       unlockAbility: () => session.unlockAbility?.(),
+      enterTraining: () => {
+        const ok = session.enterTraining?.() ?? false;
+        if (!ok) this.notice('info', 'The training range is available in solo play from headquarters.');
+      },
     };
   }
 }
