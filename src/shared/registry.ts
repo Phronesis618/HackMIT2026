@@ -254,7 +254,7 @@ export const TERRAIN_CAPTION: Record<TerrainFeatureId, string> = {
   hazard_floor: 'SCALDING FLOOR · the burn ramps while you stand in it',
   canisters: 'VOLATILE CANISTER · one hit and it blows, both ways',
   pits: 'OPEN PIT · dash across it, or knock something into it',
-  vents: 'TIMED VENT · it fires on a beat you can watch',
+  vents: 'TIMED VENT · lights up before it fires',
   cover: 'LOW COVER · stops shots, not footsteps',
 };
 

@@ -221,10 +221,10 @@ function floorsMemoryFromEvent(
       const participants = participantsFor(event.playerIds);
       const biomeName = currentBiome?.biomeName ?? 'the current biome';
       const first = event.kind === 'elite'
-        ? { title: `First elite room — ${worldTitle}`, summary: `${joinNames(participants)} entered the first elite room of the run: ${event.roomName}, in ${biomeName}.` }
+        ? { title: `First elite room: ${worldTitle}`, summary: `${joinNames(participants)} entered the first elite room of the run: ${event.roomName}, in ${biomeName}.` }
         : event.kind === 'treasure'
-          ? { title: `First cache — ${worldTitle}`, summary: `${joinNames(participants)} reached the first cache of the run: ${event.roomName}, in ${biomeName}.` }
-          : { title: `First rest site — ${worldTitle}`, summary: `${joinNames(participants)} reached the first rest site of the run: ${event.roomName}, in ${biomeName}.` };
+          ? { title: `First cache: ${worldTitle}`, summary: `${joinNames(participants)} reached the first cache of the run: ${event.roomName}, in ${biomeName}.` }
+          : { title: `First rest site: ${worldTitle}`, summary: `${joinNames(participants)} reached the first rest site of the run: ${event.roomName}, in ${biomeName}.` };
       return addMemory({
         id: memoryId('milestone', event),
         kind: 'milestone',
@@ -252,7 +252,7 @@ function floorsMemoryFromEvent(
         roomIndex: event.roomIndex,
         createdAt: ctx.now,
         participants,
-        title: `Gatekeeper down — ${currentBiome.biomeName}`,
+        title: `Gatekeeper down: ${currentBiome.biomeName}`,
         summary: `${joinNames(participants)} cleared the gatekeeper room of ${currentBiome.biomeName}, tier ${currentBiome.tier + 1} of 5.`,
         sourceEventIds: [event.id],
         provenanceSource,
@@ -310,7 +310,7 @@ function memoryFromEvent(
         roomIndex: null,
         createdAt: ctx.now,
         participants,
-        title: `Creation receipt — ${event.worldTitle}`,
+        title: `Creation receipt: ${event.worldTitle}`,
         summary: receiptSummary(event.source, receipt, participants),
         sourceEventIds: [event.id],
         provenanceSource: event.source,
@@ -332,7 +332,7 @@ function memoryFromEvent(
         roomIndex: 0,
         createdAt: ctx.now,
         participants,
-        title: `Arrival — ${event.roomName}`,
+        title: `Arrival: ${event.roomName}`,
         summary:
           participants.length > 1
             ? `${names} stepped through the portal into ${worldTitle} together. First room: ${event.roomName}.`
@@ -353,8 +353,8 @@ function memoryFromEvent(
         roomIndex: event.roomIndex,
         createdAt: ctx.now,
         participants,
-        title: `Anchor planted — ${worldTitle}`,
-        summary: `${joinNames(participants)} planted the Anchor in room ${event.roomIndex + 1}. ${worldTitle} will not collapse.`,
+        title: `Anchor planted: ${worldTitle}`,
+        summary: `${joinNames(participants)} planted the Anchor in room ${event.roomIndex + 1} of ${worldTitle}.`,
         sourceEventIds: [event.id],
         provenanceSource: ctx.world?.provenanceSource ?? 'fixture',
       };
@@ -381,7 +381,7 @@ function memoryFromEvent(
         roomIndex: null,
         createdAt: ctx.now,
         participants,
-        title: `Expedition ended — ${worldTitle}`,
+        title: `Expedition ended: ${worldTitle}`,
         summary: `${joinNames(participants)} ${outcome}.`,
         sourceEventIds: [event.id],
         provenanceSource: ctx.world?.provenanceSource ?? 'fixture',
@@ -400,7 +400,7 @@ function memoryFromEvent(
         createdAt: ctx.now,
         participants,
         title: clip(event.title, 80),
-        summary: clip(`${event.source} — ${event.text} (${event.kind === 'relic' ? 'read' : 'recovered'} by ${joinNames(participants)})`, 400),
+        summary: clip(`${event.source}: ${event.text} (${event.kind === 'relic' ? 'read' : 'recovered'} by ${joinNames(participants)})`, 400),
         sourceEventIds: [event.id],
         provenanceSource: world.provenanceSource,
       };
@@ -419,8 +419,8 @@ function memoryFromEvent(
         roomIndex: null,
         createdAt: ctx.now,
         participants,
-        title: clip(`Carried out — ${event.title}`, 80),
-        summary: clip(`${joinNames(participants)} carried ${event.title} out of ${world.title} as it came down. ${event.detail}`, 400),
+        title: clip(`Carried out: ${event.title}`, 80),
+        summary: clip(`${joinNames(participants)} carried ${event.title} out of ${world.title} during the escape. ${event.detail}`, 400),
         sourceEventIds: [event.id],
         provenanceSource: world.provenanceSource,
       };
@@ -441,7 +441,7 @@ function memoryFromEvent(
         roomIndex: null,
         createdAt: ctx.now,
         participants,
-        title: `First victory — ${world.title}`,
+        title: `First victory: ${world.title}`,
         summary: `${victor} defeated the first hostile recorded in ${world.title}.`,
         sourceEventIds: [event.id],
         provenanceSource: world.provenanceSource,
@@ -458,7 +458,7 @@ function receiptSummary(source: GenerationSource, receipt: CreationReceipt | nul
   const who = joinNames(participants);
   if (source === 'fixture') {
     return count > 0
-      ? `${who} contributed ${count} idea${count === 1 ? '' : 's'}. This world is an offline fixture — the ideas were recorded but did not shape it.`
+      ? `${who} contributed ${count} idea${count === 1 ? '' : 's'}. This world is an offline fixture. The ideas were recorded and did not shape it.`
       : `${who} opened an offline fixture world. No contributions were recorded.`;
   }
   if (source === 'live_fallback_fixture') {

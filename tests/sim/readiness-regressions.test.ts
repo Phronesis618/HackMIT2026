@@ -8,7 +8,10 @@ import { LORE_READ_MS, PLAYER_RADIUS, TICK_MS, tileToWorld } from '../../src/sha
 import { ENEMY_PROJECTILE_PATTERN } from '../../src/sim/combat';
 import { createSimulation, type Simulation } from '../../src/sim';
 
-const fixture = WorldFixtureSchema.parse(fixtureJson);
+// The fixture's own world laws are stripped: these cases measure the base rules, and
+// vantage-spire now carries laws the engine really applies (tests/sim/laws.test.ts covers those).
+const { laws: _laws, look: _look, custodian: _custodian, ...bareRecipe } = WorldFixtureSchema.parse(fixtureJson).recipe;
+const fixture = { ...WorldFixtureSchema.parse(fixtureJson), recipe: bareRecipe };
 const playerId = 'readiness-player';
 const worldId = 'readiness-world';
 const huskFragment = fixture.recipe.lore.findIndex((fragment) => fragment.kind === 'remains' && fragment.enemyId === 'husk');

@@ -93,7 +93,7 @@ export const DEFAULT_BIOME_BRIEFS: readonly BiomeBrief[] = [
     layout: { linearity: 0.6, branchiness: 0.4, specials: { treasure: 1, lore: 2, rest: 1, elite: 2 } },
   },
   {
-    id: 'b3a', name: 'Crystal Galleries', tagline: 'A mine that was turned into a museum of itself.',
+    id: 'b3a', name: 'Crystal Galleries', tagline: 'A crystal mine refitted as a museum. Twelve galleries, three still lit.',
     motifIds: ['crystals', 'arches'], enemyPool: ['channeler', 'lurker', 'swarmling', 'warden'], propPool: ['crystal_cluster', 'lantern', 'pillar'], hazards: true,
     layout: { linearity: 0.2, branchiness: 0.8, specials: { treasure: 2, lore: 3, rest: 2, elite: 3 } },
   },
@@ -103,7 +103,7 @@ export const DEFAULT_BIOME_BRIEFS: readonly BiomeBrief[] = [
     layout: { linearity: 0.9, branchiness: 0.15, specials: { treasure: 1, lore: 2, rest: 2, elite: 4 } },
   },
   {
-    id: 'b4', name: 'Anchor Vault', tagline: 'The room the whole city was built to keep shut.',
+    id: 'b4', name: 'Anchor Vault', tagline: 'One vault door, 4 metres thick. The city was built around it.',
     motifIds: ['monoliths', 'crystals', 'cables'], enemyPool: ['warden', 'channeler', 'sentinel', 'lurker', 'swarmling'], propPool: ['monolith_shard', 'crystal_cluster', 'terminal'], hazards: true,
     layout: { linearity: 0.5, branchiness: 0.5, specials: { treasure: 2, lore: 4, rest: 2, elite: 4 } },
   },

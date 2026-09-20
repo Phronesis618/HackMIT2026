@@ -37,10 +37,10 @@ export function buildReceipt(params: {
         ? `Offline fixture “${worldTitle}”. Your ${ideas} ${were} recorded but did not shape this world.`
         : `Offline fixture “${worldTitle}”. No contributions were submitted.`;
   } else if (source === 'live_fallback_fixture') {
-    headline = `Live generation failed — fallback fixture “${worldTitle}”. Your ${ideas} ${were} recorded but did not shape this world.`;
+    headline = `Live generation failed. Offline fixture “${worldTitle}” instead. Your ${ideas} ${were} recorded but did not shape this world.`;
   } else if (source === 'procedural') {
     const used = lines.filter((l) => l.used).length;
-    headline = `“${worldTitle}” was composed from your ${ideas} by the offline composer (no model call); ${used} shaped observable features.`;
+    headline = `“${worldTitle}” was composed from your ${ideas} by the offline composer, with no model call; ${used} shaped observable features.`;
   } else {
     const used = lines.filter((l) => l.used).length;
     headline = `“${worldTitle}” was generated from your ${ideas}; ${used} shaped observable features.`;

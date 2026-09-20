@@ -58,11 +58,11 @@ export function StartScreen({ model, actions, onStart }: { model: UiModel; actio
           </div>
           <p className="start__tagline">Worlds end. Your stories don't.</p>
           <p className="start__premise">
-            You are operatives of a multiversal relay. Somewhere, a world is about to fold in on itself.
-            Bring an idea to the sanctuary — a place, a creature, a rumour — and the relay will build a world
-            out of what your crew imagined. Step through the portal together, fight through its halls, read
-            what the dead left behind, and plant an Anchor before the collapse. Come back with resources,
-            and with a memory wall that remembers exactly what you did there.
+            You are operatives of a multiversal relay, and a world is about to fold in on itself.
+            Bring one idea each to the sanctuary: a place, a creature, a rumour. The relay builds a world
+            from those ideas in under a minute. Step through the portal together, fight through its rooms,
+            read the notes the dead left, and plant the Anchor before the collapse. The memory wall
+            keeps the receipt, the arrival photo and the kill count.
           </p>
           <ol className="start__loop" aria-label="How a run works">
             <li><b>Imagine</b><span>Each operative contributes one idea.</span></li>
