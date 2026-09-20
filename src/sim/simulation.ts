@@ -1562,7 +1562,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (!progress.cleared && living.length > 0 && livingEnemies().length === 0) {
       progress.cleared = true;
       const reward = environmentalShare(floorsRun ? clearReward(room) : ROOM_CLEAR_REWARD);
-      for (const p of players.values()) p.state.resources += reward;
+      for (const p of players.values()) {
+        p.state.resources += reward + clearBonusResources(p.effects);
+        p.hasteMs = Math.max(p.hasteMs, clearHasteMs(p.effects));
+      }
       events.push(emit({ type: 'room_cleared', worldId: world.worldId, roomIndex: room.index, roomId: room.id, playerIds: playerIds(), reward }));
       if (floorsRun && room.roomId !== undefined) {
         markCleared(floorsRun, room.roomId);
