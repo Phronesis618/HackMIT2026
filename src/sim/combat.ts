@@ -1,4 +1,4 @@
-import { ATTACK_ARC_RAD, ATTACK_COOLDOWN_MS, ATTACK_RANGE, PLAYER_SPEED, TICK_MS, tileToWorld, worldToTile } from '../shared/conventions';
+import { ATTACK_ARC_RAD, ATTACK_COOLDOWN_MS, ATTACK_RANGE, PLAYER_SPEED, TICK_MS, TILE_SIZE, tileToWorld, worldToTile } from '../shared/conventions';
 import type { ClassId, EnemyId } from '../shared/registry';
 import { circleHitsSolid, type GridLayer, type SolidGrid } from './collision';
 
@@ -151,7 +151,16 @@ export function chaseWaypoint(grid: SolidGrid, from: Point, target: Point, radiu
       queue.push(nextId);
     }
   }
-  if (!parents.has(goalId)) return from;
+  if (!parents.has(goalId)) {
+    // A route search that samples TILE CENTRES cannot thread a corridor whose clearance is under
+    // the body's diameter, even where `moveCircle`'s corner slide would carry it through: a
+    // two-tile gap beside a wall has no legal centre for a radius-18 body. Standing still for
+    // ever is the worst possible answer — in a floors room with sealed doors it is a softlock,
+    // because the room can never be cleared. Re-plan with a body that fits one tile and let the
+    // movement step do the squeezing; if that fails too, there really is no way through.
+    const tight = Math.min(radius, TILE_SIZE / 2 - 1);
+    return tight < radius ? chaseWaypoint(grid, from, target, tight) : from;
+  }
   let next = goalId;
   while (parents.get(next) !== startId && parents.get(next) !== -1) next = parents.get(next)!;
   const waypoint = tileToWorld(next % grid.width, Math.floor(next / grid.width));

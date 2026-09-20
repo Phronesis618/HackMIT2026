@@ -986,7 +986,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   function arcTargets(origin: Point, facing: number, range: number, arc: number): EnemyRuntime[] {
     return livingEnemies().filter((e) =>
       inArc(origin, e.state, facing, range, arc, ENEMY_INFO[e.state.enemyId].radius) &&
-      canStrike(origin, e.state),
+      canStrike(origin, e.state, ENEMY_INFO[e.state.enemyId].radius),
     ).sort((a, b) => distance(origin, a.state) - distance(origin, b.state));
   }
 
@@ -995,9 +995,13 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
    * movement layer, where '-' cover is open but walls are not: you can hit the thing standing
    * on the other side of a barricade, and still not the thing behind a wall (TILES.md T4).
    */
-  function canStrike(origin: Point, target: Point): boolean {
+  function canStrike(origin: Point, target: Point, radius = 0): boolean {
     if (clearPath(grid, origin, target)) return true;
-    return distance(origin, target) <= TILE_SIZE && clearPath(grid, origin, target, 1, 'solid');
+    // Measured to the target's BODY, not its centre: a Warden is 18 px across its half, so it can
+    // stand with its shoulder against the far side of a barricade while its centre is more than a
+    // tile away. Without the radius the crew could never touch a big enemy holding cover, and
+    // neither side could shoot the other — a stand-off that ends the room only when the clock does.
+    return distance(origin, target) <= TILE_SIZE + radius && clearPath(grid, origin, target, 1, 'solid');
   }
 
   /**
