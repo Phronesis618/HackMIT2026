@@ -266,6 +266,12 @@ export const RoomSpecSchema = z
     attributions: z.array(AttributionSchema).max(24),
     relics: z.array(RoomRelicSchema).max(6).default([]),
     anchorRelays: z.array(z.object({ x: TileCoord, y: TileCoord })).length(3).optional(),
+    /**
+     * How hard this room's terrain was tuned (docs/design/TILES.md §4.2). The model asks for a
+     * number in [0,1]; trusted code decides what it means (`terrainTuning` in shared/terrain.ts).
+     * Absent = the baseline 0.5, so every legacy room and fixture keeps today's numbers.
+     */
+    terrainIntensity: z.number().min(0).max(1).optional(),
     // --- floors rooms only (all absent on legacy rooms; see docs/design/FLOORS.md) ---
     /** Address of this room: `{biomeId, roomId}`. `id` is `${biomeId}:${roomId}`. */
     biomeId: FloorIdString.optional(),

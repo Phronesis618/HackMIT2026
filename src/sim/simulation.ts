@@ -18,8 +18,9 @@ import {
   nearestOpenPosition, type Point, type ProjectilePattern,
 } from './combat';
 import { headquartersRoom } from './headquarters';
-import { terrainSpeedMultiplier, type TerrainState } from '../shared/terrain';
+import { isTerrainDamageSource, roomTerrainTuning, terrainSpeedMultiplier, type TerrainState } from '../shared/terrain';
 import { createTerrainState, strikeBreakableWalls } from './terrain';
+import { createHazardClock, stepHazardTiles, type HazardClock } from './hazards';
 import { ANCHOR_DISCHARGE_MS, ANCHOR_PULSE_SPEED, ANCHOR_PULSE_WARNING_MS, guardianPhase, RELAY_ACTIVATION_RANGE } from '../shared/finale';
 import { TRAINING_REGEN_PER_TICK, TRAINING_RESPAWN_MS, TRAINING_WAKE_RANGE, trainingRoom } from './training';
 import { FLOOR_ENTRANCE_ROOM_ID } from '../shared/floors';
@@ -47,6 +48,8 @@ interface PlayerRuntime {
   interactPressed: boolean;
   damagedThisTick: boolean;
   history: Array<Point & { hp: number }>;
+  /** T1: damaging-tile bookkeeping; derived from sim state, never serialised. */
+  hazard: HazardClock;
 }
 
 interface EnemyRuntime {
@@ -61,6 +64,8 @@ interface EnemyRuntime {
   channelMsRemaining: number;
   channelAngle: number;
   channelTimerMs: number;
+  /** T1: damaging-tile bookkeeping; enemies burn on the same terms the crew does. */
+  hazard: HazardClock;
   /** Floors gatekeepers are Custodians held to their first phase. */
   maxBossPhase?: 1 | 2 | 3;
 }
@@ -193,6 +198,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     p.damagedThisTick = false;
     p.history = [];
     p.onExit = false;
+    p.hazard = createHazardClock();
   }
 
   function doorsLocked(): boolean {
@@ -269,7 +275,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
             ...(encounter.enemyId === 'guardian' ? { bossPhase: 1, recoveryMs: 0 } : {}),
           },
           cooldownMs: 500, hitMs: 0, attackCount: 0, spawn, respawnMs: 0,
-          channelMsRemaining: 0, channelAngle: 0, channelTimerMs: 0,
+          channelMsRemaining: 0, channelAngle: 0, channelTimerMs: 0, hazard: createHazardClock(),
           ...(gatekeeper ? { maxBossPhase: 1 as const } : {}),
         });
       }
@@ -287,6 +293,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       Object.assign(e.state, { ...e.spawn, hp: info.maxHp, state: 'idle', telegraph: null, slowMs: 0, stunMs: 0, markMs: 0 });
       e.cooldownMs = 600;
       e.hitMs = 0;
+      e.hazard = createHazardClock();
     }
   }
 
@@ -393,6 +400,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       intent: null, unlockedClasses: new Set(), dashRemainingMs: 0,
       dashDirection: { x: 1, y: 0 }, attackRemainingMs: 0, hitRemainingMs: 0,
       onExit: false, interacting: false, interactHeld: false, interactPressed: false, damagedThisTick: false, history: [],
+      hazard: createHazardClock(),
     };
   }
 
@@ -401,20 +409,38 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   }
 
   function damageEnemy(e: EnemyRuntime, p: PlayerRuntime, damage: number, events: GameEvent[]): void {
+    damageEnemyFrom(e, p, damage, events);
+  }
+
+  /**
+   * The one place an enemy loses health. `by` is null when the room itself did it (a hazard
+   * floor, a vent, a canister, a pit): terrain is neutral and has no attacker, so the credit
+   * goes to the nearest operative — which is exactly whoever baited the enemy onto the tile.
+   */
+  function damageEnemyFrom(e: EnemyRuntime, by: PlayerRuntime | null, damage: number, events: GameEvent[]): void {
     const s = e.state;
     if (s.hp <= 0) return;
     const amount = Math.min(s.hp, Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1)));
+    if (amount <= 0) return;
+    const credit = by ?? terrainCredit(s);
     s.hp -= amount;
     e.hitMs = 130;
     s.state = s.hp === 0 ? 'dead' : s.telegraph ? 'attacking' : 'hit';
-    // Ultimates charge from real combat: damage dealt plus a bonus per kill.
-    p.state.ultCharge = Math.min(ULT_CHARGE_MAX, p.state.ultCharge + amount * ULT_CHARGE_PER_DAMAGE + (s.hp === 0 ? ULT_CHARGE_PER_KILL : 0));
-    events.push(emit({ type: 'enemy_damaged', enemyId: s.id, byPlayerId: p.state.id, amount, remainingHp: s.hp }));
-    if (s.hp === 0) {
-      s.telegraph = null;
-      events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: p.state.id }));
-      dropRemains(e);
+    if (s.hp === 0) s.telegraph = null;
+    if (credit) {
+      // Ultimates charge from real combat: damage dealt plus a bonus per kill.
+      credit.state.ultCharge = Math.min(ULT_CHARGE_MAX, credit.state.ultCharge + amount * ULT_CHARGE_PER_DAMAGE + (s.hp === 0 ? ULT_CHARGE_PER_KILL : 0));
+      events.push(emit({ type: 'enemy_damaged', enemyId: s.id, byPlayerId: credit.state.id, amount, remainingHp: s.hp }));
+      if (s.hp === 0) events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: credit.state.id }));
     }
+    if (s.hp === 0) dropRemains(e);
+  }
+
+  /** Nearest operative to a point; downed ones count only if nobody is up. Null with no crew. */
+  function terrainCredit(at: Point): PlayerRuntime | null {
+    const living = orderedPlayers().filter((p) => p.state.hp > 0);
+    const candidates = living.length > 0 ? living : orderedPlayers();
+    return candidates.sort((a, b) => distance(at, a.state) - distance(at, b.state))[0] ?? null;
   }
 
   /** The first kill of each enemy kind leaves its lore behind where it fell. */
@@ -471,16 +497,25 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     progress.loreNodes = progress.loreNodes.filter((n) => !(n.state.kind === 'remains' && n.state.state === 'collected'));
   }
 
-  function damagePlayer(p: PlayerRuntime, sourceEnemyId: string, damage: number, ranged: boolean, events: GameEvent[]): boolean {
+  /**
+   * `invulnerableMsAfter` is the i-frame window a hit grants. Terrain passes 0: a hazard keeps
+   * its own clock, and 350 ms of free i-frames every burn tick would make standing in a fire a
+   * way to ignore the enemies around it.
+   */
+  function damagePlayer(
+    p: PlayerRuntime, sourceEnemyId: string, damage: number, ranged: boolean, events: GameEvent[],
+    invulnerableMsAfter = 350,
+  ): boolean {
     const s = p.state;
     if (s.hp <= 0 || s.invulnerableMs > 0 || (ranged && s.shieldMs > 0)) return false;
-    if (enemyDamageScale !== 1 && sourceEnemyId !== 'anchor-pulse') damage = Math.round(damage * enemyDamageScale);
+    // Floors tier scaling multiplies what ENEMIES hit for; the room itself is not an enemy.
+    if (enemyDamageScale !== 1 && sourceEnemyId !== 'anchor-pulse' && !isTerrainDamageSource(sourceEnemyId)) damage = Math.round(damage * enemyDamageScale);
     let amount = Math.min(s.hp, s.shieldMs > 0 ? Math.ceil(damage * 0.2) : damage);
     // Training range: hits land (so the telegraphs teach), but nobody goes down.
     if (phase === 'training') amount = Math.min(amount, Math.max(0, s.hp - 1));
     if (amount <= 0) return false;
     s.hp -= amount;
-    s.invulnerableMs = 350;
+    s.invulnerableMs = Math.max(s.invulnerableMs, invulnerableMsAfter);
     s.reviveProgress = 0;
     p.damagedThisTick = true;
     p.hitRemainingMs = 160;
@@ -1132,6 +1167,31 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (ritual.activeRelay === ritual.relays.length) ritual.stage = 'core';
   }
 
+  /**
+   * T1 hook: damaging tiles. Every rule lives in sim/hazards.ts; this is only the glue that
+   * owns the entities. Enemies burn on exactly the same terms the crew does, and nothing here
+   * teaches `chaseWaypoint` to avoid a hazard — kiting a pack across one is the entire point.
+   */
+  function stepTerrainHazards(events: GameEvent[]): void {
+    const tuning = roomTerrainTuning(room);
+    const timeMs = tick * TICK_MS;
+    const walls = progress.terrain.brokenWalls;
+    for (const p of orderedPlayers()) {
+      if (p.state.hp <= 0) continue;
+      const subject = { x: p.state.x, y: p.state.y, kind: 'player' as const, immune: p.dashRemainingMs > 0 };
+      for (const hit of stepHazardTiles(room, walls, timeMs, subject, p.hazard, tuning)) {
+        damagePlayer(p, hit.source, hit.damage, false, events, 0);
+      }
+    }
+    for (const e of progress.enemies) {
+      if (e.state.hp <= 0) continue;
+      const subject = { x: e.state.x, y: e.state.y, kind: 'enemy' as const, enemyId: e.state.enemyId, immune: false };
+      for (const hit of stepHazardTiles(room, walls, timeMs, subject, e.hazard, tuning)) {
+        damageEnemyFrom(e, null, hit.damage, events);
+      }
+    }
+  }
+
   function updateExits(events: GameEvent[]): void {
     if (phase === 'debrief') return;
     const open = phase === 'headquarters' || phase === 'training' || progress.cleared;
@@ -1267,6 +1327,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       const events: GameEvent[] = [];
       enterChosenBiome(events);
       for (const p of orderedPlayers()) stepPlayer(p, events);
+      stepTerrainHazards(events);
       if (phase === 'expedition') {
         for (const e of progress.enemies) stepEnemy(e, events);
         stepProjectiles(events);

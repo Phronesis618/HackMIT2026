@@ -202,16 +202,38 @@ export type TileChar = (typeof TILE_CHARS)[number];
 
 export const SOLID_TILES: ReadonlySet<string> = new Set(['#', ' ', 'B']);
 export const WALKABLE_TILES: ReadonlySet<string> = new Set(['.', '~', 'P', 'X', 'A', '=', '>', ':', '+']);
-export const TERRAIN_FEATURE_IDS = ['breakable_walls', 'bridges', 'rubble', 'conduits'] as const;
+/**
+ * Tiles that damage or delete an entity. The generator keeps them away from spawns,
+ * doors, the focus and relay sites (see `validateRoomSafety` in src/shared/terrain.ts).
+ */
+export const DANGEROUS_TILES: ReadonlySet<string> = new Set(['~']);
+export const TERRAIN_FEATURE_IDS = [
+  'breakable_walls', 'bridges', 'rubble', 'conduits', // PR #16 — movement modifiers
+  'hazard_floor',                                     // docs/design/TILES.md — combat-facing
+] as const;
 export type TerrainFeatureId = (typeof TERRAIN_FEATURE_IDS)[number];
 export const TERRAIN_LAYOUT_IDS = ['scattered', 'barricades', 'crossroads'] as const;
 export const TERRAIN_DENSITIES = ['sparse', 'balanced', 'dense'] as const;
+/** Where hazards prefer to sit. A generator hint only; it never overrides reachability. */
+export const HAZARD_BIAS_IDS = ['none', 'edges', 'centre', 'lanes'] as const;
 export const BREAKABLE_WALL_HP = 36;
 export const TERRAIN_FEATURE_INFO: Record<TerrainFeatureId, string> = {
   breakable_walls: 'B: destructible bulkheads, 36 HP; break into slowing rubble to open a route.',
   bridges: '=: a walkable crossing through a wall run, with > ramps on both sides; no jumping other walls.',
   rubble: ':: debris patches slow walking to 65%; dashes retain their normal speed.',
   conduits: '+: conductive floor lanes boost walking to 125%; dashes retain their normal speed.',
+  hazard_floor: '~: scalding floor, 8 damage every 600 ms to anything standing on it, enemies included; dashes cross it safely.',
+};
+/**
+ * The HUD line shown when a player stands beside a feature. A world may rename it through
+ * `WorldRecipe.terrainSkins` (see TerrainSkinSchema); this is the always-present fallback.
+ */
+export const TERRAIN_CAPTION: Record<TerrainFeatureId, string> = {
+  breakable_walls: 'CRACKED BARRIER · attack to break',
+  bridges: 'RAISED CROSSING · a route over the wall',
+  rubble: 'RUBBLE · slows footsteps, not dashes',
+  conduits: 'CONDUIT · faster footsteps',
+  hazard_floor: 'SCALDING FLOOR · burns anything standing on it',
 };
 
 /**

@@ -2,14 +2,21 @@ import type Phaser from 'phaser';
 import type { Palette, RoomSpec } from '../../shared/contracts';
 import { TILE_SIZE, tileToWorld } from '../../shared/conventions';
 import { terrainTileAt, terrainTileKey, type TerrainState } from '../../shared/terrain';
+import { TERRAIN_CAPTION } from '../../shared/registry';
 import { hexInt, mix } from './color';
 
 export interface TerrainTile { x: number; y: number }
 
+/**
+ * Tiles this layer draws or captions. '~' is painted by the floor pass in environment.ts; it is
+ * listed here so a player standing beside scalding floor still gets told what it is.
+ */
+const CAPTIONED_TILES = 'B=>:+~';
+
 export function collectTerrainTiles(room: RoomSpec): TerrainTile[] {
   const tiles: TerrainTile[] = [];
   room.tiles.forEach((row, y) => {
-    [...row].forEach((tile, x) => { if ('B=>:+'.includes(tile)) tiles.push({ x, y }); });
+    [...row].forEach((tile, x) => { if (CAPTIONED_TILES.includes(tile)) tiles.push({ x, y }); });
   });
   return tiles;
 }
@@ -26,11 +33,12 @@ export function terrainCaption(
   }
   if (!nearest) return null;
   switch (terrainTileAt(room, nearest.x, nearest.y, state?.brokenWalls)) {
-    case 'B': return 'CRACKED BARRIER · attack to break';
-    case ':': return 'RUBBLE · slows footsteps, not dashes';
-    case '+': return 'CONDUIT · faster footsteps';
+    case 'B': return TERRAIN_CAPTION.breakable_walls;
+    case ':': return TERRAIN_CAPTION.rubble;
+    case '+': return TERRAIN_CAPTION.conduits;
+    case '~': return TERRAIN_CAPTION.hazard_floor;
     case '>':
-    case '=': return 'RAISED CROSSING · a route over the wall';
+    case '=': return TERRAIN_CAPTION.bridges;
     default: return null;
   }
 }
