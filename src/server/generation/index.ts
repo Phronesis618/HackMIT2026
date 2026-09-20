@@ -11,7 +11,7 @@ import type { GenerationRequest, GenerationStatus, PreparedWorld } from '../../s
 import { DEFAULT_ANTHROPIC_MODEL, type AIProvider, type GenerationMode } from '../config';
 import { createFixtureGenerationService, loadWorldFixtures } from './fixtureService';
 import { createLiveGenerationService } from './liveService';
-import { createAnthropicProvider, createOpenAIProvider, type ProviderUsage } from './provider';
+import { createAnthropicProvider, createOpenAIProvider, type ProviderUsage, type RecipeProvider } from './provider';
 
 export interface GenerationServiceInfo {
   /** Mode requested by configuration. */
@@ -21,6 +21,8 @@ export interface GenerationServiceInfo {
   liveConfigured: boolean;
   liveImplemented: boolean;
   fixtureIds: string[];
+  /** Which provider serves live requests: anthropic | openai | operator (demo inbox). */
+  provider: string;
 }
 
 export interface GenerationService {
@@ -41,6 +43,12 @@ export interface GenerationServiceOptions {
   fetch?: typeof fetch;
   timeoutMs?: number;
   onUsage?: (usage: ProviderUsage) => void;
+  /**
+   * A pre-built provider that replaces the API providers when mode is `live` (no key needed).
+   * Used by Agent A's demo-only operator inbox (src/server/operator). `model` is the label
+   * that ends up in provenance ("LIVE · <model>").
+   */
+  recipeProvider?: { provider: RecipeProvider; model: string };
 }
 
 export function createGenerationService(options: GenerationServiceOptions): GenerationService {
@@ -50,12 +58,13 @@ export function createGenerationService(options: GenerationServiceOptions): Gene
     throw new Error(`No valid world fixtures found in ${options.fixturesDir}`);
   }
 
-  const provider = options.provider ?? (options.anthropicApiKey?.trim() ? 'anthropic' : 'openai');
-  const apiKey = (provider === 'anthropic' ? options.anthropicApiKey : options.openaiApiKey)?.trim();
-  const model = provider === 'anthropic' ? options.anthropicModel?.trim() || DEFAULT_ANTHROPIC_MODEL : options.openaiModel;
-  const liveConfigured = options.mode === 'live' && Boolean(apiKey);
+  const custom = options.recipeProvider;
+  const provider = custom ? options.provider ?? 'custom' : options.provider ?? (options.anthropicApiKey?.trim() ? 'anthropic' : 'openai');
+  const apiKey = custom ? undefined : (provider === 'anthropic' ? options.anthropicApiKey : options.openaiApiKey)?.trim();
+  const model = custom ? custom.model : provider === 'anthropic' ? options.anthropicModel?.trim() || DEFAULT_ANTHROPIC_MODEL : options.openaiModel;
+  const liveConfigured = options.mode === 'live' && (Boolean(custom) || Boolean(apiKey));
   const notes: string[] = [];
-  if (options.mode === 'live' && !apiKey) {
+  if (options.mode === 'live' && !custom && !apiKey) {
     const keyName = provider === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY';
     notes.push(`Live generation requested but ${keyName} is not set; serving offline fixture.`);
   }
@@ -63,10 +72,10 @@ export function createGenerationService(options: GenerationServiceOptions): Gene
   log(`${liveConfigured ? 'live' : 'fixture'} mode; provider=${provider}; ${fixtures.length} fallback fixture(s) available.`);
 
   const fixtureService = createFixtureGenerationService({ fixtures, extraNotes: notes });
-  const service = liveConfigured && apiKey
+  const service = liveConfigured && (custom || apiKey)
     ? createLiveGenerationService({
-      provider: (provider === 'anthropic' ? createAnthropicProvider : createOpenAIProvider)({
-        apiKey, model, fetch: options.fetch, timeoutMs: options.timeoutMs,
+      provider: custom ? custom.provider : (provider === 'anthropic' ? createAnthropicProvider : createOpenAIProvider)({
+        apiKey: apiKey!, model, fetch: options.fetch, timeoutMs: options.timeoutMs,
         onUsage: options.onUsage ?? ((usage) => log(`Provider tokens: input=${usage.inputTokens}, output=${usage.outputTokens}, total=${usage.totalTokens}`)),
       }),
       model, fixtures, log,
@@ -88,6 +97,7 @@ export function createGenerationService(options: GenerationServiceOptions): Gene
       liveConfigured,
       liveImplemented: true,
       fixtureIds: fixtures.map((f) => f.fixtureId),
+      provider,
     }),
   };
 }

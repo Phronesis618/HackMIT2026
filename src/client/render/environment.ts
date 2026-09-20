@@ -8,6 +8,7 @@ import type { Palette, RoomProp, RoomSpec } from '../../shared/contracts';
 import { TILE_SIZE, tileToWorld } from '../../shared/conventions';
 import type { MotifId } from '../../shared/registry';
 import { darken, hexInt, intToHex, lighten, mix, shiftHue } from './color';
+import { drawTilePattern, type FloorPattern, type MoteStyle } from './dressing';
 import type { G } from './fx';
 
 const TAU = Math.PI * 2;
@@ -227,8 +228,12 @@ function drawSilhouettes(
   }
 }
 
-/** Floor plating with subtle hue variation, seams, cracks and rare glowing runes. */
-export function drawFloor(g: G, room: RoomSpec, palette: Palette, seed: number): void {
+/**
+ * Floor with subtle hue variation, cracks and rare glowing runes. The material itself
+ * (`pattern`) comes from the world's dominant motif — plates, flagstone, grating, crystal,
+ * organic soil, monolith slabs or lantern-hall boards — so worlds differ underfoot too.
+ */
+export function drawFloor(g: G, room: RoomSpec, palette: Palette, seed: number, pattern: FloorPattern = 'plates'): void {
   const rand = rng(seed + 7);
   const base = palette.floor;
   const alt = palette.floorAlt;
@@ -247,9 +252,7 @@ export function drawFloor(g: G, room: RoomSpec, palette: Palette, seed: number):
       const v = rand();
       const color = (row + col) % 2 === 0 ? (v < 0.5 ? base : alt) : v < 0.35 ? warm : v < 0.7 ? cool : alt;
       g.fillStyle(hexInt(color), 1).fillRect(x, y, TILE_SIZE, TILE_SIZE);
-      // plate bevel
-      g.fillStyle(lighten(color, 0.08), 1).fillRect(x, y, TILE_SIZE, 1.5);
-      g.fillStyle(seam, 0.7).fillRect(x, y + TILE_SIZE - 1.5, TILE_SIZE, 1.5).fillRect(x + TILE_SIZE - 1.5, y, 1.5, TILE_SIZE);
+      drawTilePattern(g, pattern, { x, y, col, row, color, seam, rand, palette });
       // shadow where floor meets a wall above (gives the wall height)
       if (room.tiles[row - 1]?.[col] === '#') {
         for (let k = 0; k < 4; k++) g.fillStyle(0x000000, 0.22 - k * 0.05).fillRect(x, y + k * 3, TILE_SIZE, 3);
@@ -370,16 +373,81 @@ export function makeMotes(roomW: number, roomH: number, seed: number, count = 42
   return motes;
 }
 
-/** Ambient drifting motes (redrawn every frame; purely visual). */
-export function drawMotes(g: G, motes: Mote[], t: number, roomW: number, roomH: number, palette: Palette): void {
+/**
+ * Ambient particles (redrawn every frame; purely visual). The `style` follows the world's
+ * dominant motif: sparks rise in spire worlds, dust settles under arches, spores drift
+ * between roots, embers climb out of ruined machinery, fireflies wander lantern halls…
+ */
+export function drawMotes(g: G, motes: Mote[], t: number, roomW: number, roomH: number, palette: Palette, style: MoteStyle = 'sparks'): void {
   g.clear();
   const warm = hexInt(palette.accentSoft);
   const cool = hexInt(palette.accent);
+  const pale = mix(palette.text, palette.background, 0.35);
+  const green = shiftHue(palette.accent, 110, 0.05, 0.05);
+  const ember = shiftHue(palette.hazard, 20, 0.1, 0.05);
+  const wrapY = (v: number) => ((v % roomH) + roomH) % roomH;
+  const wrapX = (v: number) => ((v % roomW) + roomW) % roomW;
   for (const m of motes) {
-    const y = ((m.y - t * m.speed) % roomH + roomH) % roomH;
-    const x = ((m.x + Math.sin(t * 0.6 + m.phase) * 12) % roomW + roomW) % roomW;
-    const a = 0.25 + 0.25 * Math.sin(t * 2 + m.phase);
-    g.fillStyle(m.warm ? warm : cool, a).fillCircle(x, y, m.r);
+    switch (style) {
+      case 'sparks': {
+        const y = wrapY(m.y - t * m.speed * 1.4);
+        const x = wrapX(m.x + Math.sin(t * 0.6 + m.phase) * 8);
+        const a = 0.3 + 0.3 * Math.sin(t * 3 + m.phase);
+        g.fillStyle(m.warm ? warm : cool, a).fillCircle(x, y, m.r * 0.8);
+        break;
+      }
+      case 'dust': {
+        const y = wrapY(m.y + t * m.speed * 0.35);
+        const x = wrapX(m.x + Math.sin(t * 0.3 + m.phase) * 16);
+        g.fillStyle(pale, 0.16 + 0.1 * Math.sin(t + m.phase)).fillCircle(x, y, m.r * 0.7);
+        break;
+      }
+      case 'flicker': {
+        const on = Math.sin(t * 7 + m.phase * 5) > 0.75;
+        if (!on) break;
+        const y = wrapY(m.y * 0.6);
+        g.fillStyle(warm, 0.85).fillCircle(m.x, y, m.r * 0.9);
+        g.lineStyle(1, warm, 0.5).lineBetween(m.x - 3, y, m.x + 3, y + (m.warm ? 2 : -2));
+        break;
+      }
+      case 'glints': {
+        const pulse = Math.max(0, Math.sin(t * 1.7 + m.phase));
+        const a = pulse * pulse * pulse * pulse * 0.9;
+        if (a < 0.03) break;
+        const s = 1.5 + pulse * 3;
+        g.lineStyle(1, m.warm ? cool : 0xffffff, a).lineBetween(m.x - s, m.y, m.x + s, m.y).lineBetween(m.x, m.y - s, m.x, m.y + s);
+        break;
+      }
+      case 'spores': {
+        const y = wrapY(m.y + Math.sin(t * 0.5 + m.phase) * 10 - t * m.speed * 0.15);
+        const x = wrapX(m.x + t * m.speed * 0.5);
+        g.fillStyle(green, 0.14 + 0.1 * Math.sin(t * 1.5 + m.phase)).fillCircle(x, y, m.r * 2.2);
+        g.fillStyle(green, 0.5).fillCircle(x, y, m.r * 0.7);
+        break;
+      }
+      case 'ash': {
+        const y = wrapY(m.y + t * m.speed * 0.5);
+        const x = wrapX(m.x + Math.sin(t * 0.8 + m.phase) * 6);
+        g.fillStyle(pale, 0.22).fillRect(x, y, m.r * 1.6, m.r * 1.2);
+        break;
+      }
+      case 'fireflies': {
+        const x = wrapX(m.x + Math.sin(t * 0.7 + m.phase) * 30);
+        const y = wrapY(m.y + Math.cos(t * 0.5 + m.phase * 1.3) * 18);
+        const a = 0.35 + 0.45 * Math.max(0, Math.sin(t * 1.3 + m.phase));
+        g.fillStyle(warm, a * 0.18).fillCircle(x, y, m.r * 4);
+        g.fillStyle(warm, a).fillCircle(x, y, m.r * 0.9);
+        break;
+      }
+      case 'embers': {
+        const life = ((t * m.speed * 1.2 + m.phase * 40) % roomH) / roomH; // 0 at the floor, 1 at the top
+        const y = roomH - life * roomH;
+        const x = wrapX(m.x + Math.sin(t * 2 + m.phase) * 6);
+        const a = (1 - life) * 0.9;
+        g.fillStyle(life < 0.4 ? warm : ember, a).fillCircle(x, y, m.r * (1.1 - life * 0.6));
+        break;
+      }
+    }
   }
 }
 

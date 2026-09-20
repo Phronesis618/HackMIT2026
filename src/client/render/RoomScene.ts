@@ -17,6 +17,7 @@ import { drawHostile, drawOperative } from './characters';
 import { hexInt } from './color';
 import { drawMotif, drawProp, drawSanctuary, drawVignette } from './drawing';
 import { drawBackdrop, drawFloor, drawLightPools, drawMotes, drawWalls, makeMotes, type Mote } from './environment';
+import { drawFloorDressing, drawOverhead, drawWallDressing, FLOOR_PATTERN, MOTE_STYLE, stencilColors, type MoteStyle } from './dressing';
 import * as fx from './fx';
 
 interface EntityView {
@@ -53,6 +54,7 @@ export class RoomScene extends Phaser.Scene {
   private telegraphs: Phaser.GameObjects.Graphics | null = null;
   private motesGfx: Phaser.GameObjects.Graphics | null = null;
   private motes: Mote[] = [];
+  private moteStyle: MoteStyle = 'sparks';
   private projectilesView: Phaser.GameObjects.Graphics | null = null;
   /** In-world DM-style narration: markers over the props/encounters a real idea shaped. */
   private loreMarkers: LoreMarker[] = [];
@@ -97,10 +99,16 @@ export class RoomScene extends Phaser.Scene {
 
   // ---- room ------------------------------------------------------------------
 
-  buildRoom(room: RoomSpec, art: ArtRecipe, opts: { headquarters: boolean }, loreLines: ReceiptLine[] = []): void {
+  buildRoom(
+    room: RoomSpec,
+    art: ArtRecipe,
+    opts: { headquarters: boolean; world?: { title: string; tagline: string } },
+    loreLines: ReceiptLine[] = [],
+  ): void {
     this.room = room;
     this.art = art;
     this.isHeadquarters = opts.headquarters;
+    this.moteStyle = opts.headquarters ? 'fireflies' : MOTE_STYLE[art.motifIds[0] ?? art.skyline];
     this.tweens.killAll();
     this.seenEffects.clear();
     this.enemyPositions.clear();
@@ -139,13 +147,21 @@ export class RoomScene extends Phaser.Scene {
     drawBackdrop(backdrop, roomW, roomH, p, art.skyline, seed);
     layer.add(backdrop);
 
+    // The dominant motif decides the construction style of the whole room (see dressing.ts).
+    const dominant = art.motifIds[0] ?? art.skyline;
     const floor = this.add.graphics().setDepth(DEPTH.floor);
-    drawFloor(floor, room, p, seed);
+    drawFloor(floor, room, p, seed, opts.headquarters ? 'plates' : FLOOR_PATTERN[dominant]);
     layer.add(floor);
 
     const lights = this.add.graphics().setDepth(DEPTH.floorDecal);
     drawLightPools(lights, room, p);
     layer.add(lights);
+
+    if (!opts.headquarters) {
+      const clutter = this.add.graphics().setDepth(DEPTH.floorDecal + 1);
+      drawFloorDressing(clutter, room, p, art.motifIds, seed);
+      layer.add(clutter);
+    }
 
     const decals = this.add.graphics().setDepth(DEPTH.floorDecal + 1);
     for (let row = 0; row < room.height; row++) {
@@ -170,6 +186,11 @@ export class RoomScene extends Phaser.Scene {
     const walls = this.add.graphics().setDepth(DEPTH.propsBehind);
     drawWalls(walls, room, p, seed);
     layer.add(walls);
+    if (!opts.headquarters) {
+      const dressing = this.add.graphics().setDepth(DEPTH.propsBehind);
+      drawWallDressing(dressing, room, p, art.motifIds, seed);
+      layer.add(dressing);
+    }
 
     if (opts.headquarters) {
       const sanctuary = this.add.graphics().setDepth(DEPTH.floorDecal + 2);
@@ -239,9 +260,16 @@ export class RoomScene extends Phaser.Scene {
       this.tweens.add({ targets: descriptionCard, alpha: 1, duration: tokens.motion.slowMs, delay: 320, hold: 4200, yoyo: true, onComplete: () => descriptionCard.destroy() });
     }
 
-    this.motes = makeMotes(roomW, roomH, seed, opts.headquarters ? 30 : 48);
+    this.motes = makeMotes(roomW, roomH, seed, opts.headquarters ? 30 : this.moteStyle === 'embers' || this.moteStyle === 'sparks' ? 64 : 48);
     this.motesGfx = this.add.graphics().setDepth(DEPTH.effects - 2);
     layer.add(this.motesGfx);
+
+    if (!opts.headquarters) {
+      // Overhead structure (cables, vault ribs, lantern strings, canopy…) at low alpha.
+      const overhead = this.add.graphics().setDepth(DEPTH.fog - 1);
+      drawOverhead(overhead, room, p, art.motifIds, seed);
+      layer.add(overhead);
+    }
 
     const fog = this.add.graphics().setDepth(DEPTH.fog);
     drawVignette(fog, roomW, roomH, art.fog * 0.6, p);
@@ -258,6 +286,15 @@ export class RoomScene extends Phaser.Scene {
       .setAlpha(0.85)
       .setDepth(DEPTH.overlay);
     layer.add(title);
+
+    if (!opts.headquarters && opts.world) {
+      // Which world this is, in every room; the full title stencilled into the floor of
+      // the arrival room so the generated name is the first thing players read.
+      layer.add(this.text(roomW / 2, -13, opts.world.title.toUpperCase(), {
+        fontFamily: tokens.font.mono, fontSize: '9px', color: p.accent, letterSpacing: 2,
+      }).setOrigin(0.5).setAlpha(0.7).setDepth(DEPTH.overlay));
+      if (room.index === 0) this.drawWorldStencil(layer, room, opts.world, p);
+    }
 
     // Camera: frame the whole room (zoom computed above).
     cam.setZoom(zoom);
@@ -652,6 +689,43 @@ export class RoomScene extends Phaser.Scene {
    * Crude Isaac-style floor tutorial: WASD + mouse + the action keys, drawn once on the
    * headquarters floor instead of repeating the same sentence in the HUD every room.
    */
+  /** The generated world's title and tagline, set into the arrival room's floor below the spawn. */
+  private drawWorldStencil(
+    layer: Phaser.GameObjects.Layer,
+    room: RoomSpec,
+    world: { title: string; tagline: string },
+    palette: ArtRecipe['palette'],
+  ): void {
+    let spawn = { col: Math.floor(room.width / 2), row: Math.floor(room.height / 2) };
+    room.tiles.forEach((line, row) => {
+      const col = line.indexOf('P');
+      if (col >= 0) spawn = { col, row };
+    });
+    // Prefer the open floor below the spawn; fall back to above it when the spawn hugs the south wall.
+    const below = room.tiles[spawn.row + 2]?.[spawn.col] === '.' && room.tiles[spawn.row + 3]?.[spawn.col] === '.';
+    const roomW = room.width * TILE_SIZE;
+    const title = world.title.toUpperCase();
+    const fontSize = title.length > 22 ? 11 : title.length > 16 ? 13 : 15;
+    const letterSpacing = title.length > 22 ? 2 : 3;
+    // Estimate the title width so the plate fits it and the whole stencil stays inside the room.
+    const estimated = title.length * (fontSize * 0.68 + letterSpacing);
+    const halfW = Math.min(roomW / 2 - TILE_SIZE, Math.max(150, estimated / 2 + 22));
+    const cx = Math.min(Math.max(spawn.col * TILE_SIZE + TILE_SIZE / 2, halfW + TILE_SIZE / 2), roomW - halfW - TILE_SIZE / 2);
+    const cy = below ? (spawn.row + 2.6) * TILE_SIZE : (spawn.row - 2.2) * TILE_SIZE;
+    const colors = stencilColors(palette);
+    const plate = this.add.graphics().setDepth(DEPTH.floorDecal + 2);
+    plate.fillStyle(hexToInt(palette.background), 0.22).fillRoundedRect(cx - halfW, cy - 24, halfW * 2, 46, 6);
+    plate.lineStyle(1, hexToInt(colors.glow), 0.35).strokeRoundedRect(cx - halfW, cy - 24, halfW * 2, 46, 6);
+    plate.lineStyle(1, hexToInt(colors.glow), 0.5).lineBetween(cx - halfW + 20, cy - 2, cx + halfW - 20, cy - 2);
+    layer.add(plate);
+    layer.add(this.text(cx, cy - 12, title, {
+      fontFamily: tokens.font.display, fontSize: `${fontSize}px`, color: colors.glow, letterSpacing,
+    }).setOrigin(0.5).setAlpha(0.8).setDepth(DEPTH.floorDecal + 3));
+    layer.add(this.text(cx, cy + 9, world.tagline, {
+      fontFamily: tokens.font.body, fontSize: '9px', color: palette.text, align: 'center', wordWrap: { width: halfW * 2 - 24 },
+    }).setOrigin(0.5).setAlpha(0.7).setDepth(DEPTH.floorDecal + 3));
+  }
+
   private drawControlsFloorHint(layer: Phaser.GameObjects.Layer, cx: number, cy: number, palette: ArtRecipe['palette']): void {
     const g = this.add.graphics().setDepth(DEPTH.floorDecal + 1);
     const ink = hexToInt(palette.wallEdge);
@@ -982,7 +1056,7 @@ export class RoomScene extends Phaser.Scene {
         if (open) g.lineStyle(1.5, 0xffffff, 0.4 + 0.4 * pulse).strokeCircle(c.x, c.y, 14 + pulse * 4);
       }
     }
-    if (this.motesGfx) drawMotes(this.motesGfx, this.motes, t, this.room.width * TILE_SIZE, this.room.height * TILE_SIZE, this.art.palette);
+    if (this.motesGfx) drawMotes(this.motesGfx, this.motes, t, this.room.width * TILE_SIZE, this.room.height * TILE_SIZE, this.art.palette, this.moteStyle);
     if (this.loreView && this.loreMarkers.length > 0) {
       this.loreView.clear();
       for (const marker of this.loreMarkers) {

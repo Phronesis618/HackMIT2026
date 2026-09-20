@@ -19,8 +19,10 @@ export interface WorldRenderer {
    * Build a room from trusted data. Called once per room entry; may be called again for a
    * new room. `loreLines` (the creation receipt) lets the renderer surface player-authored
    * worldbuilding in-world, near whatever it actually shaped, instead of as sidebar prose.
+   * `world` (title + tagline of the generated world) lets the renderer label rooms and
+   * stencil the world's name into the arrival room. Both are validated recipe text.
    */
-  showRoom(room: RoomSpec, art: ArtRecipe, loreLines?: ReceiptLine[]): void;
+  showRoom(room: RoomSpec, art: ArtRecipe, loreLines?: ReceiptLine[], world?: { title: string; tagline: string }): void;
   /** Called every animation frame with the latest authoritative snapshot. */
   renderSnapshot(snapshot: GameSnapshot, localPlayerId: string): void;
   /** Fire-and-forget visual/audio reactions to events (dash trail, hit flash, ...). */

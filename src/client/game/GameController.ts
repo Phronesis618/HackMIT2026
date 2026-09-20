@@ -209,7 +209,7 @@ export class GameController {
     const world = session.getWorld();
     const room = snapshot.roomIndex === null ? null : world?.rooms[snapshot.roomIndex];
     if (world && room && snapshot.phase !== 'headquarters' && (store.get().room?.index !== room.index || store.get().phase === 'headquarters' || store.get().phase === 'training')) {
-      renderer.showRoom(room, world.art, world.receipt.lines);
+      renderer.showRoom(room, world.art, world.receipt.lines, { title: world.recipe.title, tagline: world.recipe.tagline });
       store.set({ room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal }, phase: snapshot.phase, hud: me ? hudFrom(me, snapshot) : store.get().hud });
     }
   }

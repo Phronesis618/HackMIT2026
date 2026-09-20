@@ -1,5 +1,37 @@
 # Handoff — Agent A (Fable, `feat/core`)
 
+## Operator mode + world dressing (Sep 20, early morning)
+
+- **Implemented — operator generation transport (demo-only):** `RELAY_AI_PROVIDER=operator`
+  with `RELAY_GENERATION_MODE=live` writes each world request to `.relay/operator/inbox/` and
+  waits for a `WorldRecipe` reply in `outbox/` (`src/server/operator/provider.ts`, wired in
+  `src/server/app.ts`; additive `recipeProvider` hook + `provider` in `GenerationServiceInfo`
+  in B's `src/server/generation/index.ts`). Replies are validated exactly like API output
+  (Zod, text guard, compiler); invalid replies are re-issued with `repair` until the deadline
+  (`RELAY_OPERATOR_TIMEOUT_MS`, default 180 s), then a labelled fixture is served. Provenance
+  is `live` / `LIVE · cursor-agent`. Pre-flight for the operator: `npx tsx
+  scripts/operator-validate.ts <reply.json>`. Runbook in `docs/DEMO.md`.
+- **Verified:** `tests/integration/operator.test.ts` (8 tests: request file contents, accept,
+  repair round-trip, upstream repair, text guard, timeout fallback, abort, HTTP wiring). Two
+  real end-to-end runs in the browser with the Cursor agent answering: "The Drowned Carillon"
+  (accepted, 63 s) and "The Black Ledger Flotilla" (accepted, 53 s, entered room 1). One
+  earlier request fell back after two over-length taglines — the reason the repair loop and
+  validator exist.
+- **Implemented — world dressing (`src/client/render/dressing.ts`):** the dominant motif
+  now decides the room's construction, not just its tint: floor material (lattice / flagstone /
+  grating / crystal / organic / slabs / boards), wall dressing (pinnacles, arch openings, pipe
+  runs, crystal shards, tendrils, glyph bands, hanging lanterns, gears + vents), floor clutter,
+  low-alpha overhead structure (catenaries, vault ribs, lantern strings, canopy, stalactites,
+  chains) and particle atmosphere (sparks, dust, flicker, glints, spores, ash, fireflies,
+  embers). `showRoom(..., world)` (additive optional param) labels every room with the world
+  title and stencils title + tagline into the arrival room's floor. `ProvenanceBadge` no
+  longer repeats the model name.
+- **Verified:** screenshots of spires, ruined_machinery, arches, roots and crystals rooms are
+  visibly different materials/colours; `npm run check` green (229 tests / 20 files).
+- **Unverified:** API-key providers still not run against a real key (none available here);
+  operator latency depends on the agent (~1 min); Cursor's embedded browser tab freezes
+  Phaser's rAF loop when unfocused, so screenshots there need forced `game.step()` frames.
+
 ## Offline replay follow-up
 
 - Branch: `devin/1789861332-offline-expedition-memories`, based on merged PR #10.

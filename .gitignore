@@ -26,3 +26,6 @@ Thumbs.db
 # Local scratch (agents: keep temporary scripts out of the repo)
 tmp/
 .tmp/
+
+# Demo-only operator inbox/outbox (RELAY_AI_PROVIDER=operator); contains live requests
+.relay/

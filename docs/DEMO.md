@@ -66,6 +66,30 @@ model output, or unavailable models can fall back to an explicitly labelled fixt
 The first committed room can be entered while later rooms arrive; an uncommitted exit must
 wait for its destination.
 
+### Operator mode (demo-only, no API key)
+
+`RELAY_AI_PROVIDER=operator` with `RELAY_GENERATION_MODE=live` turns the world-generation
+call into a watched folder so a coding agent (the Cursor session running Agent A) can play
+the model live:
+
+1. The server writes `.relay/operator/inbox/<requestId>-<attempt>.json` per world request:
+   the players' real ideas, the runtime instructions, the closed registry, and `reply.path`.
+2. The watching agent authors one `WorldRecipe` JSON object and writes it to `reply.path`
+   (`.relay/operator/outbox/…`). The protocol and schema are written into
+   `.relay/operator/README.md` and `world-recipe.schema.json` on first use.
+3. The server validates the reply exactly like API output (Zod schema, no markup/URLs/code),
+   compiles it into rooms, and shows it as `LIVE · cursor-agent`. An invalid reply is retired
+   and re-issued as attempt+1 with a `repair` message, as often as needed; no accepted reply
+   within `RELAY_OPERATOR_TIMEOUT_MS` (default 180 s) of the first request serves a clearly
+   labelled fixture instead. Consumed pairs land in `.relay/operator/done/`.
+
+Runbook: set the two variables in `.env`, start the server, then in the Cursor chat with Agent A
+say "watch the operator inbox". The agent arms a background watcher on the inbox and answers
+each request as it appears (expect roughly one minute from *Prepare world* to *ready*). Keep
+that chat open for the whole demo; `GET /api/health` reports `provider: "operator"` and
+`operatorPending`. Do not describe operator output as an unattended API call; the badge and
+the receipt already say what it is.
+
 ## Recovery
 
 - If the crew disconnects, use the displayed connection state to rejoin; do not present a

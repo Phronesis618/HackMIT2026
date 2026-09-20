@@ -8,18 +8,23 @@ import type { WorldRenderer } from '../../shared/render';
 import { tokens } from '../../shared/tokens';
 import { RoomScene } from './RoomScene';
 
+type WorldLabel = { title: string; tagline: string };
+
 export class PhaserWorldRenderer implements WorldRenderer {
   private game: Phaser.Game | null = null;
   private scene: RoomScene | null = null;
   private mounting: Promise<void> | null = null;
-  private pendingRoom: { room: RoomSpec; art: ArtRecipe; headquarters: boolean; loreLines: ReceiptLine[] } | null = null;
+  private pendingRoom: { room: RoomSpec; art: ArtRecipe; headquarters: boolean; loreLines: ReceiptLine[]; world?: WorldLabel } | null = null;
 
   mount(container: HTMLElement): Promise<void> {
     if (this.mounting) return this.mounting;
     this.mounting = new Promise((resolve) => {
       const scene = new RoomScene(() => {
         if (this.pendingRoom) {
-          scene.buildRoom(this.pendingRoom.room, this.pendingRoom.art, { headquarters: this.pendingRoom.headquarters }, this.pendingRoom.loreLines);
+          scene.buildRoom(
+            this.pendingRoom.room, this.pendingRoom.art,
+            { headquarters: this.pendingRoom.headquarters, world: this.pendingRoom.world }, this.pendingRoom.loreLines,
+          );
           this.pendingRoom = null;
         }
         resolve();
@@ -51,13 +56,13 @@ export class PhaserWorldRenderer implements WorldRenderer {
     this.build(room, art, true, []);
   }
 
-  showRoom(room: RoomSpec, art: ArtRecipe, loreLines: ReceiptLine[] = []): void {
-    this.build(room, art, false, loreLines);
+  showRoom(room: RoomSpec, art: ArtRecipe, loreLines: ReceiptLine[] = [], world?: WorldLabel): void {
+    this.build(room, art, false, loreLines, world);
   }
 
-  private build(room: RoomSpec, art: ArtRecipe, headquarters: boolean, loreLines: ReceiptLine[]): void {
-    if (this.scene && this.scene.sys.isActive()) this.scene.buildRoom(room, art, { headquarters }, loreLines);
-    else this.pendingRoom = { room, art, headquarters, loreLines };
+  private build(room: RoomSpec, art: ArtRecipe, headquarters: boolean, loreLines: ReceiptLine[], world?: WorldLabel): void {
+    if (this.scene && this.scene.sys.isActive()) this.scene.buildRoom(room, art, { headquarters, world }, loreLines);
+    else this.pendingRoom = { room, art, headquarters, loreLines, world };
   }
 
   renderSnapshot(snapshot: GameSnapshot, localPlayerId: string): void {

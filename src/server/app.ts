@@ -18,6 +18,7 @@ import { formatIssues, GenerationRequestSchema, GenerationStatusSchema, Prepared
 import { describeForClient, type ServerConfig } from './config';
 import { createGenerationService, type GenerationService } from './generation';
 import { attachRealtime, type RealtimeHandle } from './network/realtime';
+import { createOperatorProvider, OPERATOR_MODEL } from './operator/provider';
 
 export interface RelayServer {
   httpServer: http.Server;
@@ -32,10 +33,20 @@ const START_TIME = Date.now();
 
 export function createRelayServer(config: ServerConfig, deps: { log?: (m: string) => void } = {}): RelayServer {
   const log = deps.log ?? ((m: string) => console.log(`[server] ${m}`));
+  // DEMO ONLY: `operator` hands requests to a coding agent watching an inbox directory.
+  const operator = config.generation.mode === 'live' && config.generation.provider === 'operator'
+    ? createOperatorProvider({
+      dir: config.generation.operatorDir,
+      timeoutMs: config.generation.operatorTimeoutMs,
+      log: (m) => log(`generation: ${m}`),
+    })
+    : null;
+  if (operator) log(`generation: operator inbox at ${operator.inboxDir} (reply deadline ${Math.round(config.generation.operatorTimeoutMs / 1000)}s)`);
   const generation = createGenerationService({
     ...config.generation,
     fixturesDir: config.fixturesDir,
     log: (m) => log(`generation: ${m}`),
+    ...(operator ? { recipeProvider: { provider: operator, model: OPERATOR_MODEL } } : {}),
   });
 
   const httpServer = http.createServer((req, res) => {
@@ -62,6 +73,8 @@ export function createRelayServer(config: ServerConfig, deps: { log?: (m: string
           liveConfigured: info.liveConfigured,
           liveImplemented: info.liveImplemented,
           fixtureIds: info.fixtureIds,
+          provider: info.provider,
+          ...(operator ? { operatorPending: operator.pending().length } : {}),
         },
         realtimeClients: realtime.clientCount(),
       });

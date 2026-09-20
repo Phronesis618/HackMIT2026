@@ -12,8 +12,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export type GenerationMode = 'fixture' | 'live';
-export type AIProvider = 'anthropic' | 'openai';
+/**
+ * anthropic / openai — direct API providers (need a key).
+ * operator          — DEMO ONLY: no key. Each request is written to an inbox directory and a
+ *                     coding agent watching that directory (e.g. Cursor) writes the WorldRecipe
+ *                     reply. See src/server/operator/provider.ts and docs/DEMO.md.
+ */
+export type AIProvider = 'anthropic' | 'openai' | 'operator';
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
+export const DEFAULT_OPERATOR_TIMEOUT_MS = 180_000;
 
 export interface ServerConfig {
   port: number;
@@ -26,6 +33,10 @@ export interface ServerConfig {
     anthropicModel: string;
     openaiApiKey: string | null;
     openaiModel: string;
+    /** Inbox/outbox root for the `operator` provider. */
+    operatorDir: string;
+    /** How long the `operator` provider waits for a reply before the labelled fixture fallback. */
+    operatorTimeoutMs: number;
   };
   /** Absolute path to the production client bundle, or null if not built. */
   staticDir: string | null;
@@ -69,10 +80,11 @@ export function loadServerConfig(options: LoadConfigOptions = {}): ServerConfig 
   const apiKey = (env.OPENAI_API_KEY ?? '').trim();
   const anthropicApiKey = (env.ANTHROPIC_API_KEY ?? '').trim();
   const provider = (env.RELAY_AI_PROVIDER ?? '').trim() || (anthropicApiKey ? 'anthropic' : 'openai');
-  if (provider !== 'anthropic' && provider !== 'openai') {
-    throw new Error('RELAY_AI_PROVIDER must be anthropic or openai.');
+  if (provider !== 'anthropic' && provider !== 'openai' && provider !== 'operator') {
+    throw new Error('RELAY_AI_PROVIDER must be anthropic, openai or operator.');
   }
   const requestedMode: GenerationMode = env.RELAY_GENERATION_MODE === 'live' ? 'live' : 'fixture';
+  const operatorTimeoutMs = Number((env.RELAY_OPERATOR_TIMEOUT_MS ?? '').trim());
 
   const staticDir = path.join(REPO_ROOT, 'dist', 'client');
 
@@ -87,6 +99,8 @@ export function loadServerConfig(options: LoadConfigOptions = {}): ServerConfig 
       anthropicModel: (env.ANTHROPIC_MODEL ?? '').trim() || DEFAULT_ANTHROPIC_MODEL,
       openaiApiKey: apiKey.length > 0 ? apiKey : null,
       openaiModel: (env.OPENAI_MODEL ?? '').trim() || 'gpt-5-mini',
+      operatorDir: path.resolve(REPO_ROOT, (env.RELAY_OPERATOR_DIR ?? '').trim() || path.join('.relay', 'operator')),
+      operatorTimeoutMs: Number.isFinite(operatorTimeoutMs) && operatorTimeoutMs > 0 ? operatorTimeoutMs : DEFAULT_OPERATOR_TIMEOUT_MS,
     },
     staticDir: fs.existsSync(path.join(staticDir, 'index.html')) ? staticDir : null,
     fixturesDir: path.join(REPO_ROOT, 'fixtures', 'worlds'),
@@ -95,11 +109,11 @@ export function loadServerConfig(options: LoadConfigOptions = {}): ServerConfig 
 
 /** Safe, non-secret subset for GET /api/config. */
 export function describeForClient(config: ServerConfig): { generationMode: GenerationMode; liveGenerationAvailable: boolean } {
-  const apiKey = config.generation.provider === 'anthropic'
-    ? config.generation.anthropicApiKey : config.generation.openaiApiKey;
+  const { provider, anthropicApiKey, openaiApiKey } = config.generation;
+  const apiKey = provider === 'anthropic' ? anthropicApiKey : openaiApiKey;
   return {
     generationMode: config.generation.mode,
-    liveGenerationAvailable: config.generation.mode === 'live' && Boolean(apiKey?.trim()),
+    liveGenerationAvailable: config.generation.mode === 'live' && (provider === 'operator' || Boolean(apiKey?.trim())),
   };
 }
 
