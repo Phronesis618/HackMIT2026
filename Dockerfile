@@ -13,7 +13,11 @@ COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/src ./src
 COPY --from=build --chown=node:node /app/fixtures ./fixtures
-COPY --from=build --chown=node:node /app/prompts/runtime ./prompts/runtime
+# The whole prompts/ tree, not just prompts/runtime: src/server/generation/exemplars.ts
+# readdir()s prompts/exemplars/ on the first live generation. Copying only runtime/ made
+# every live request throw ENOENT and silently fall back to a fixture world.
+# `node scripts/check-docker-context.mjs` guards this.
+COPY --from=build --chown=node:node /app/prompts ./prompts
 COPY --from=build --chown=node:node /app/design ./design
 USER node
 EXPOSE 8787
