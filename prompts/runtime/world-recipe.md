@@ -31,6 +31,13 @@ physically is and where it was found ("scratched into a tide gauge", "a warden's
 lens cracked"). `text` is the fragment itself: two to four sentences, up to about 400
 characters, in the voice of whoever left it.
 
+Every world also grows its own branch of the operative skill tree: write 3 or 4
+`attunements`. Each picks one `effectId` from the registry's attunement effects (the
+mechanical effect is fixed by the engine) and gives it a `name` and `description` that
+belong to this world and its lore — a boon the place itself confers, named the way its
+inhabitants would have named it. Prefer effects that answer this world's dangers (wards
+against the kinds of attack its enemies use, mending where relics are the theme).
+
 Map only supplied contribution IDs to features you actually selected. Each mapping
 names a room index and feature kind. Within each room, prop mappings correspond in
 order to propIds, and encounter mappings correspond in order to enemyIds. A hazard

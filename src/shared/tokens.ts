@@ -31,7 +31,7 @@ export const VisualTokensSchema = z.object({
     danger: HexColor,
     success: HexColor,
   }),
-  font: z.object({ display: z.string(), body: z.string(), mono: z.string() }),
+  font: z.object({ display: z.string(), body: z.string(), mono: z.string(), serif: z.string() }),
   space: z.object({ xs: px, sm: px, md: px, lg: px, xl: px }),
   radius: z.object({ sm: px, md: px, lg: px, pill: px }),
   glow: z.object({ portal: z.string(), panel: z.string(), accent: z.string() }),

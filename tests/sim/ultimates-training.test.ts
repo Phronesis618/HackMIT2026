@@ -22,7 +22,7 @@ function arena(): PreparedWorld {
   return PreparedWorldSchema.parse({
     worldId: 'test-ult-world', createdAt: 0,
     recipe: { title: 'Ult Arena', tagline: 't', themeSummary: 't', motifIds: ['spires'], palette,
-      rooms: [{ name: 'Arena', description: '', motifIds: ['spires'], propIds: [], enemyIds: ['husk'], hazards: false }], contributionMappings: [], lore: [] },
+      rooms: [{ name: 'Arena', description: '', motifIds: ['spires'], propIds: [], enemyIds: ['husk'], hazards: false }], contributionMappings: [], lore: [], attunements: [] },
     art: { paletteFamily: 'ink-neon', palette, motifIds: ['spires'], skyline: 'spires', fog: 0, glowIntensity: 0.5 },
     plannedRoomCount: 1,
     rooms: [{

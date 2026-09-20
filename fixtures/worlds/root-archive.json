@@ -11,16 +11,16 @@
       "lanterns"
     ],
     "palette": {
-      "background": "#0a1a14",
-      "floor": "#183628",
-      "floorAlt": "#1f4432",
-      "wall": "#2f5a44",
-      "wallEdge": "#9be07a",
-      "accent": "#c7ff8c",
-      "accentSoft": "#ffb86b",
+      "background": "#081210",
+      "floor": "#13241e",
+      "floorAlt": "#1a3028",
+      "wall": "#294137",
+      "wallEdge": "#779f72",
+      "accent": "#c7e58c",
+      "accentSoft": "#83ae6c",
       "glow": "#dbf3a4",
       "hazard": "#ff9668",
-      "text": "#effbe8"
+      "text": "#e2efdf"
     },
     "rooms": [
       {
@@ -140,21 +140,38 @@
         "roomIndex": 0,
         "enemyId": "guardian"
       }
+    ],
+    "attunements": [
+      {
+        "effectId": "melee_ward",
+        "name": "Reader’s Calm",
+        "description": "Patrons who stayed past closing learned to let the roots pass over them."
+      },
+      {
+        "effectId": "relic_mend",
+        "name": "Returned to the Roots",
+        "description": "A record read and returned is a record that keeps you."
+      },
+      {
+        "effectId": "remains_charge",
+        "name": "Courier’s Ledger",
+        "description": "Every satchel recovered is a delivery the archive still owes you."
+      }
     ]
   },
   "art": {
     "paletteFamily": "ink-neon",
     "palette": {
-      "background": "#0a1a14",
-      "floor": "#183628",
-      "floorAlt": "#1f4432",
-      "wall": "#2f5a44",
-      "wallEdge": "#9be07a",
-      "accent": "#c7ff8c",
-      "accentSoft": "#ffb86b",
+      "background": "#081210",
+      "floor": "#13241e",
+      "floorAlt": "#1a3028",
+      "wall": "#294137",
+      "wallEdge": "#779f72",
+      "accent": "#c7e58c",
+      "accentSoft": "#83ae6c",
       "glow": "#dbf3a4",
       "hazard": "#ff9668",
-      "text": "#effbe8"
+      "text": "#e2efdf"
     },
     "motifIds": [
       "roots",

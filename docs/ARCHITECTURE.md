@@ -76,6 +76,7 @@ was actually found:
 | `recipe.lore[]` kind `remains`         | sim, first defeat of that `enemyId` per run | shard drops where the enemy fell; pick up by touch | `lore_discovered` → `lore` memory, Codex |
 | `RoomSpec.attributions` + receipt lines | renderer, proximity                    | a contributor's own words appear beside the prop/encounter their idea shaped | (renderer only)                         |
 | `RoomBlueprint.description`            | renderer, room entry                   | one fading title card over the room                 | (renderer only)                         |
+| `recipe.attunements[]` (effect id + world-written name/text) | `buildSkillTree` in `src/shared/skills.ts` | the world's own branch of the skill tree, in the Tab menu | (design data; effects not wired yet)  |
 
 The model writes fragments (`prompts/runtime/world-recipe.md`) in an in-world voice; the
 schema bounds them (`LoreFragmentSchema`); fixtures carry hand-authored ones so the loop is

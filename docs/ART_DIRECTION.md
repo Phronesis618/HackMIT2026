@@ -52,3 +52,23 @@ No copied game assets. Keep sprite sheets and audio under `design/`; reference t
 The foundation ships procedural vector placeholders (`src/client/render/drawing.ts`,
 `RoomScene.ts`) that establish palette and layering only. Plain circles are **not** final
 character art.
+
+
+## Interface identity — "the relay's own instrumentation" (2026-09-20)
+
+The DOM UI is a field terminal reading a collapsing world, not a website:
+
+- **Geometry:** square (2–4 px radii), hairline frames (`--hair`) with corner ticks on
+  panels, cards and the menu frame. No soft glow on chrome; glow is reserved for the portal.
+- **Type:** `Syne` for display (titles, tabs, node names), `IBM Plex Sans` body,
+  `IBM Plex Mono` for every stamp/label/button, and `Fraunces` (italic for provenance) for
+  found documents — lore, memories, taglines — so paper reads as paper inside the terminal.
+- **Colour roles:** cyan = the machine (frames, telemetry, controls); warm lamp = anything
+  human (lore, memory, attunements, active tab); coral only for hostiles.
+- **Texture:** dot-grid ground, faint scanlines over the stage, a `//` prefix on captions,
+  a telemetry readout in the top bar. Buttons are mono uppercase with a hard offset shadow
+  on the primary action. Values live in `design/tokens.json`; the identity rules sit at the
+  end of `src/client/styles/app.css` and override the generic defaults above them.
+- **Skill tree:** vertical, root at the bottom (Nine Sols): core spine solid cyan, class
+  branches dashed in the class colour, the world's attunement branch in lamp with diamond
+  cores, all climbing to a larger capstone.

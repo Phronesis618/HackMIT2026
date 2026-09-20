@@ -948,3 +948,809 @@ button:focus-visible, summary:focus-visible, .stage:focus-visible {
   color: var(--color-mist300);
   font-size: 11.5px;
 }
+
+/* ---- run layout: no sidebar, the canvas takes the width; prompts overlay it ---- */
+.layout--run {
+  grid-template-columns: minmax(0, 1fr);
+}
+.hud-strip {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+  max-width: min(360px, 60%);
+  pointer-events: none;
+  z-index: 3;
+}
+.hud-strip .combat-status {
+  margin: 0;
+  font-size: 12.5px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: rgba(7, 9, 15, 0.78);
+  backdrop-filter: blur(4px);
+}
+.combat-status--calm {
+  border-left-color: var(--color-neonCyan);
+}
+.menu-hint {
+  position: fixed;
+  right: 18px;
+  bottom: 12px;
+  color: var(--color-mist300);
+  font: 10px var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* ---- Tab menu (Hollow-Knight-style): full-screen, tabs on the left, one page at a time ---- */
+.menu {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: var(--space-lg);
+}
+.menu__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 9, 15, 0.72);
+  backdrop-filter: blur(6px);
+}
+.menu__frame {
+  position: relative;
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  width: min(980px, 100%);
+  height: min(680px, 100%);
+  background: rgba(11, 15, 26, 0.96);
+  border: 1px solid rgba(124, 245, 255, 0.18);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glow-panel), 0 30px 80px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.menu__tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-md) var(--space-sm);
+  border-right: 1px solid rgba(124, 245, 255, 0.12);
+  background: linear-gradient(180deg, rgba(255, 207, 138, 0.04), transparent 50%), var(--color-ink800);
+}
+.menu__tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-mist300);
+  font: inherit;
+  font-family: var(--font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.menu__tab:hover {
+  color: var(--color-mist100);
+}
+.menu__tab--active {
+  color: var(--color-warmLamp);
+  border-color: rgba(255, 207, 138, 0.35);
+  background: rgba(255, 207, 138, 0.08);
+}
+.menu__tabkey {
+  font: 10px var(--font-mono);
+  width: 16px;
+  height: 16px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  opacity: 0.7;
+}
+.menu__tabs-foot {
+  margin-top: auto;
+}
+.menu__page {
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-lg);
+}
+.menu__title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: 0 0 var(--space-sm);
+  color: var(--color-mist100);
+}
+
+/* bestiary */
+.bestiary {
+  list-style: none;
+  margin: var(--space-md) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 10px;
+}
+.bestiary__entry {
+  padding: 10px 12px;
+  border: 1px solid var(--color-ink500);
+  border-radius: var(--radius-sm);
+  background: rgba(7, 9, 15, 0.5);
+}
+.bestiary__entry--known {
+  border-color: rgba(255, 207, 138, 0.4);
+}
+.bestiary__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.bestiary__name {
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-neonCoral);
+}
+.bestiary__stat {
+  font: 10px var(--font-mono);
+  color: var(--color-mist300);
+}
+.bestiary__attack {
+  margin: 6px 0 2px;
+  font-size: 12.5px;
+}
+.bestiary__tip {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-mist300);
+}
+.bestiary__lore {
+  display: grid;
+  gap: 2px;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--color-warmLamp);
+  background: rgba(255, 207, 138, 0.05);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.bestiary__locked {
+  margin: 8px 0 0;
+  font: 11px var(--font-mono);
+  color: var(--color-mist300);
+  opacity: 0.8;
+}
+
+/* operative loadout + crew */
+.loadout {
+  list-style: none;
+  margin: var(--space-md) 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.loadout__row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-ink500);
+  border-left: 2px solid var(--class-color, var(--color-neonCyan));
+  border-radius: var(--radius-sm);
+  background: rgba(7, 9, 15, 0.5);
+}
+.loadout__row--locked {
+  opacity: 0.75;
+}
+.loadout__icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+}
+.loadout__body p {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+}
+.loadout__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.crew {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.crew__row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-ink600);
+}
+
+@media (max-width: 960px) {
+  .menu { padding: var(--space-sm); }
+  .menu__frame { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); height: 100%; }
+  .menu__tabs { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid rgba(124, 245, 255, 0.12); }
+  .menu__tabs-foot { margin-top: 0; margin-left: auto; }
+}
+
+/* =====================================================================================
+   RELAY identity — "the relay's own instrumentation".
+   The screen is a field terminal reading a collapsing world: hairline frames with
+   corner ticks, monospace stamps, square geometry, one warm lamp colour for anything
+   human (lore, memories), cyan for the machine, and glow reserved for the portal.
+   Found documents (lore) are set in a serif so they read as paper inside the terminal.
+   This block deliberately sits last and overrides the generic defaults above.
+   ===================================================================================== */
+
+:root {
+  --hair: rgba(124, 245, 255, 0.16);
+  --hair-strong: rgba(124, 245, 255, 0.34);
+  --lamp-hair: rgba(255, 207, 138, 0.28);
+  --tick: 9px;
+}
+
+body {
+  background:
+    radial-gradient(circle at 1px 1px, rgba(138, 155, 191, 0.13) 1px, transparent 1.5px) 0 0 / 22px 22px,
+    linear-gradient(180deg, #0a0e18 0%, var(--color-ink900) 40%, #05070c 100%);
+  font-family: var(--font-body);
+  letter-spacing: 0.005em;
+}
+
+/* ---- frames: hairline + corner ticks ---- */
+.panel,
+.menu__frame,
+.card,
+.notice,
+.generation,
+.bestiary__entry,
+.loadout__row,
+.skilltree__detail {
+  position: relative;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hair);
+  box-shadow: none;
+  background: rgba(9, 13, 22, 0.86);
+}
+.panel::before,
+.menu__frame::before,
+.card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--hair-strong), var(--hair-strong)) top left / var(--tick) 1px no-repeat,
+    linear-gradient(var(--hair-strong), var(--hair-strong)) top left / 1px var(--tick) no-repeat,
+    linear-gradient(var(--hair-strong), var(--hair-strong)) top right / var(--tick) 1px no-repeat,
+    linear-gradient(var(--hair-strong), var(--hair-strong)) top right / 1px var(--tick) no-repeat,
+    linear-gradient(var(--hair-strong), var(--hair-strong)) bottom left / var(--tick) 1px no-repeat,
+    linear-gradient(var(--hair-strong), var(--hair-strong)) bottom left / 1px var(--tick) no-repeat,
+    linear-gradient(var(--hair-strong), var(--hair-strong)) bottom right / var(--tick) 1px no-repeat,
+    linear-gradient(var(--hair-strong), var(--hair-strong)) bottom right / 1px var(--tick) no-repeat;
+}
+.panel--hq {
+  border-top: 1px solid var(--lamp-hair);
+  background: linear-gradient(180deg, rgba(255, 207, 138, 0.05), transparent 30%), rgba(9, 13, 22, 0.86);
+}
+.panel--world,
+.panel--debrief,
+.panel--danger {
+  border-top-color: var(--hair);
+}
+.panel--danger {
+  border-color: rgba(255, 92, 122, 0.4);
+}
+
+/* ---- stamps (eyebrows, labels, badges) ---- */
+.eyebrow,
+.field__label,
+.panel__subtitle,
+.codex__title,
+.status,
+.stage-caption,
+.menu-hint,
+.generation__time,
+.list__meta,
+.card__meta,
+.bestiary__stat,
+.skillnode__label,
+.skilltree__kind,
+.abilityslot__key {
+  font-family: var(--font-mono);
+}
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-warmLamp);
+  letter-spacing: 0.16em;
+}
+.eyebrow::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  flex: none;
+}
+.panel__title,
+.menu__title,
+.brand__name,
+.skilltree__name,
+.bestiary__name,
+.card__title,
+.menu__tab {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+.panel__title,
+.menu__title {
+  letter-spacing: 0.04em;
+  font-size: 17px;
+}
+.badge {
+  border-radius: 0;
+  border: 1px solid var(--hair-strong);
+  background: rgba(7, 9, 15, 0.7);
+  font-family: var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 10px;
+  padding: 3px 7px;
+}
+.badge--preview,
+.badge--fixture {
+  border-color: var(--lamp-hair);
+  color: var(--color-warmLamp);
+}
+.badge--conn-connected {
+  border-color: rgba(94, 240, 176, 0.45);
+}
+
+/* ---- top bar as an instrument strip ---- */
+.topbar {
+  background: rgba(5, 7, 12, 0.85);
+  border-bottom: 1px solid var(--hair);
+  backdrop-filter: none;
+  padding-block: 6px;
+}
+.brand {
+  gap: 12px;
+}
+.brand__mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  fill: none;
+  stroke: var(--color-neonCyan);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.brand__mark circle {
+  fill: var(--color-neonCoral);
+  stroke: none;
+}
+.brand__name {
+  font-size: 15px;
+  letter-spacing: 0.4em;
+  color: var(--color-mist100);
+}
+.brand__tag {
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: var(--color-mist300);
+  font-size: 13px;
+}
+.brand__telemetry {
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid var(--hair);
+  font: 10px var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-neonCyanSoft);
+}
+
+/* ---- stage: scanlines + hairline frame ---- */
+.stage-wrap {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hair);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+.stage-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px);
+  mix-blend-mode: screen;
+  z-index: 2;
+}
+.stage-caption {
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-neonCyanSoft);
+}
+.stage-caption span::before {
+  content: '// ';
+  opacity: 0.6;
+}
+
+/* ---- controls ---- */
+.btn {
+  border-radius: 0;
+  border: 1px solid var(--hair-strong);
+  background: rgba(7, 9, 15, 0.7);
+  color: var(--color-mist100);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 9px 14px;
+  transition: background var(--motion-fastMs), color var(--motion-fastMs), transform var(--motion-fastMs), box-shadow var(--motion-fastMs);
+}
+.btn:hover:not(:disabled) {
+  transform: none;
+  background: rgba(124, 245, 255, 0.1);
+  box-shadow: none;
+}
+.btn--primary {
+  background: var(--color-neonCyan);
+  color: var(--color-ink900);
+  border-color: var(--color-neonCyan);
+  box-shadow: 3px 3px 0 var(--color-neonCyanSoft);
+}
+.btn--primary:hover:not(:disabled) {
+  background: var(--color-mist100);
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0 var(--color-neonCyanSoft);
+}
+.btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-mist300);
+}
+.btn--training {
+  border-color: var(--lamp-hair);
+  color: var(--color-warmLamp);
+}
+.input {
+  border-radius: 0;
+  border: 1px solid var(--hair);
+  background: rgba(5, 7, 12, 0.8);
+  font-family: var(--font-body);
+}
+.input:focus {
+  border-color: var(--color-neonCyan);
+  box-shadow: none;
+}
+.chip {
+  border-radius: 0;
+  border: 1px solid var(--hair);
+  background: rgba(5, 7, 12, 0.6);
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+.chip--active {
+  border-color: var(--color-neonCyan);
+  box-shadow: inset 3px 0 0 var(--color-neonCyan);
+}
+
+/* ---- found documents: lore reads as paper inside the terminal ---- */
+.codex__entry,
+.bestiary__lore,
+.list__item {
+  border-radius: 0;
+  background: transparent;
+  border-left: 0;
+  border-top: 1px solid var(--hair);
+  padding-left: 0;
+  padding-right: 0;
+}
+.codex__entry--found,
+.bestiary__lore {
+  border-top-color: var(--lamp-hair);
+}
+.codex__text,
+.bestiary__lore > span:last-child,
+.card__summary,
+.tagline,
+.debrief__outcome {
+  font-family: var(--font-serif);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-mist100);
+}
+.codex__entry:not(.codex__entry--found) .codex__text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-mist300);
+}
+.codex__source {
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: var(--color-warmLamp);
+}
+.tagline {
+  font-size: 15px;
+  color: var(--color-warmLamp);
+}
+.bestiary__name {
+  font-size: 13px;
+}
+
+/* ---- menu ---- */
+.menu__backdrop {
+  background: rgba(3, 5, 9, 0.8);
+  backdrop-filter: blur(3px);
+}
+.menu__frame {
+  border-radius: var(--radius-sm);
+  background: rgba(7, 9, 15, 0.97);
+}
+.menu__tabs {
+  background: rgba(5, 7, 12, 0.9);
+  border-right: 1px solid var(--hair);
+  padding: var(--space-lg) var(--space-sm) var(--space-sm);
+}
+.menu__tab {
+  border-radius: 0;
+  border: 0;
+  border-left: 2px solid transparent;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  padding: 10px 12px;
+}
+.menu__tab--active {
+  background: transparent;
+  border-left-color: var(--color-warmLamp);
+}
+.menu__tabkey {
+  border-radius: 0;
+}
+.menu__page {
+  background:
+    linear-gradient(90deg, var(--hair) 1px, transparent 1px) 0 0 / 100% 100% no-repeat,
+    transparent;
+}
+
+/* ---- memory wall / notices ---- */
+.card {
+  border-radius: 0;
+  border-top: 1px solid var(--lamp-hair);
+}
+.card__meta {
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+.notice {
+  border-radius: 0;
+}
+
+/* ---- prompts on the canvas ---- */
+.hud-strip .combat-status {
+  border-radius: 0;
+  border-left-width: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ---- skills page: vertical tree (root at the bottom) + detail panel ---- */
+.skills__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-md);
+}
+.skills__note {
+  margin: 4px 0 var(--space-md);
+  padding: 6px 10px;
+  border-left: 3px solid var(--lamp-hair);
+  font: 10.5px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-mist300);
+}
+.skills {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.skills__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: var(--space-md);
+  min-height: 0;
+  flex: 1;
+}
+.skilltree__scroll {
+  overflow: auto;
+  border: 1px solid var(--hair);
+  background:
+    linear-gradient(0deg, rgba(124, 245, 255, 0.06), transparent 30%),
+    radial-gradient(circle at 1px 1px, rgba(138, 155, 191, 0.14) 1px, transparent 1.5px) 0 0 / 22px 22px,
+    rgba(5, 7, 12, 0.7);
+  scrollbar-width: thin;
+}
+.skilltree {
+  position: relative;
+  margin: 24px auto;
+}
+.skilltree__lines {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.skilltree__line {
+  fill: none;
+  stroke: var(--hair-strong);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 5;
+}
+.skilltree__line--core {
+  stroke: var(--color-neonCyanSoft);
+  stroke-dasharray: none;
+}
+.skilltree__line--attunement {
+  stroke: var(--lamp-hair);
+}
+.skillnode {
+  position: absolute;
+  width: 130px;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--color-mist300);
+  cursor: pointer;
+  font: inherit;
+}
+.skillnode__ring {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid var(--hair-strong);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(124, 245, 255, 0.12), transparent 65%),
+    var(--color-ink900);
+  box-shadow: 0 0 0 4px var(--color-ink900);
+  position: relative;
+  transition: border-color var(--motion-fastMs), box-shadow var(--motion-fastMs), transform var(--motion-fastMs);
+}
+.skillnode__ring::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--hair);
+}
+.skillnode--core .skillnode__ring {
+  border-color: var(--color-neonCyanSoft);
+}
+.skillnode--class .skillnode__ring {
+  border-color: var(--class-color, var(--color-neonCyan));
+  border-style: dashed;
+}
+.skillnode--attunement .skillnode__ring {
+  border-color: var(--color-warmLamp);
+  background: radial-gradient(circle at 50% 50%, rgba(255, 207, 138, 0.16), transparent 65%), var(--color-ink900);
+}
+.skillnode--attunement .skillnode__ring::after {
+  border-radius: 0;
+  transform: rotate(45deg);
+  inset: 11px;
+  border-color: var(--lamp-hair);
+}
+.skillnode--capstone .skillnode__ring {
+  width: 56px;
+  height: 56px;
+  border-width: 2px;
+}
+.skillnode--planned .skillnode__ring {
+  opacity: 0.85;
+}
+.skillnode:hover .skillnode__ring,
+.skillnode--selected .skillnode__ring {
+  transform: scale(1.08);
+  border-style: solid;
+  box-shadow: 0 0 0 4px var(--color-ink900), 0 0 0 5px var(--hair-strong);
+}
+.skillnode--selected .skillnode__ring {
+  box-shadow: 0 0 0 4px var(--color-ink900), 0 0 0 5px var(--color-warmLamp);
+}
+.skillnode__label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+  line-height: 1.25;
+  color: var(--color-mist100);
+}
+.skillnode--planned .skillnode__label {
+  color: var(--color-mist300);
+}
+.skilltree__detail {
+  padding: var(--space-md);
+  align-self: start;
+  position: sticky;
+  top: 0;
+}
+.skilltree__kind {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-neonCyanSoft);
+}
+.skilltree__kind--attunement {
+  color: var(--color-warmLamp);
+}
+.skilltree__name {
+  margin: 6px 0 8px;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+}
+.skilltree__desc {
+  margin: 0 0 12px;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.skilltree__meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+.skilltree__meta dt {
+  font: 10px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-mist300);
+  align-self: baseline;
+}
+.skilltree__meta dd {
+  margin: 0;
+}
+.skilltree__detail code {
+  font-family: var(--font-mono);
+  color: var(--color-neonCyanSoft);
+}
+
+@media (max-width: 960px) {
+  .brand__telemetry { display: none; }
+  .skills__body { grid-template-columns: 1fr; height: auto; }
+  .skilltree__scroll { max-height: 60vh; }
+  .skilltree__detail { position: static; }
+}

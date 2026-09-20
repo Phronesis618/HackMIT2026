@@ -9,6 +9,7 @@ import { useUiModel } from './useUiModel';
 import { WorldPanel } from './WorldPanel';
 import { DebriefPanel } from './DebriefPanel';
 import { AbilityBar } from './AbilityBar';
+import { GameMenu } from './GameMenu';
 
 export interface AppProps {
   store: UiStore;
@@ -19,6 +20,7 @@ export interface AppProps {
 
 export function App({ store, actions, onStageReady }: AppProps) {
   const model = useUiModel(store);
+  const inRun = model.phase === 'expedition' || model.phase === 'training';
   const stageRef = useCallback(
     (el: HTMLDivElement | null) => {
       if (el) onStageReady(el);
@@ -30,9 +32,18 @@ export function App({ store, actions, onStageReady }: AppProps) {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <span className="brand__mark" />
+          <svg className="brand__mark" viewBox="0 0 32 32" aria-hidden="true">
+            <path d="M6 22a10 10 0 0 1 20 0" />
+            <path d="M10.5 22a5.5 5.5 0 0 1 11 0" />
+            <circle cx="16" cy="22" r="1.8" />
+            <path d="M16 4v6" />
+          </svg>
           <span className="brand__name">RELAY</span>
           <span className="brand__tag">Worlds end. Your stories don't.</span>
+          <span className="brand__telemetry" aria-hidden="true">
+            {model.world ? `${model.world.title} · ` : ''}
+            {model.phase === 'expedition' && model.room ? `room ${model.room.index + 1}` : model.phase === 'training' ? 'training range' : model.phase === 'debrief' ? 'debrief' : model.phase === 'preparing' ? 'preparing' : 'sanctuary'}
+          </span>
         </div>
         <div className="topbar__status">
           <a className="btn btn--ghost" href={model.connection.mode === 'remote' ? '/' : '?mode=coop'}>
@@ -49,23 +60,26 @@ export function App({ store, actions, onStageReady }: AppProps) {
         </div>
       </header>
 
-      <main className="layout">
+      <main className={`layout ${inRun ? 'layout--run' : ''}`}>
         <section className="stage-wrap">
           <div className="stage" ref={stageRef} tabIndex={0} aria-label="RELAY game canvas" />
           <div className="stage-caption" aria-hidden="true">
-            <span>{model.phase === 'expedition' || model.phase === 'debrief' || model.phase === 'training' ? model.room?.name : 'RELAY / SANCTUARY'}</span>
+            <span>{inRun || model.phase === 'debrief' ? model.room?.name : 'RELAY / SANCTUARY'}</span>
           </div>
+          {inRun && <Hud model={model} actions={actions} />}
           {model.phase !== 'debrief' && <AbilityBar model={model} actions={actions} />}
         </section>
-        <aside className="side">
-          {(model.phase === 'headquarters' || model.phase === 'preparing') && <HeadquartersPanel model={model} actions={actions} />}
-          {(model.phase === 'expedition' || model.phase === 'training') && <Hud model={model} actions={actions} />}
-          {model.phase === 'debrief' && <DebriefPanel model={model} actions={actions} />}
-          {model.world && <WorldPanel world={model.world} discoveredLore={model.discoveredLore} />}
-        </aside>
+        {!inRun && (
+          <aside className="side">
+            {(model.phase === 'headquarters' || model.phase === 'preparing') && <HeadquartersPanel model={model} actions={actions} />}
+            {model.phase === 'debrief' && <DebriefPanel model={model} actions={actions} />}
+            {model.world && <WorldPanel world={model.world} discoveredLore={model.discoveredLore} />}
+          </aside>
+        )}
       </main>
 
       <MemoryWall memories={model.memories} actions={actions} />
+      <GameMenu model={model} actions={actions} />
 
       {model.notice && (
         <div className={`notice notice--${model.notice.kind}`} role="status">

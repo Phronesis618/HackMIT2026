@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { z } from 'zod';
 import { WorldRecipeSchema, type GenerationRequest, type WorldRecipe } from '../../shared/contracts';
-import { ENEMY_IDS, MOTIF_IDS, PROP_IDS } from '../../shared/registry';
+import { ATTUNEMENT_EFFECT_IDS, ATTUNEMENT_EFFECT_INFO, ENEMY_IDS, MOTIF_IDS, PROP_IDS } from '../../shared/registry';
 
 const responseSchema = z.object({
   status: z.literal('completed'),
@@ -66,7 +66,7 @@ export function createAnthropicProvider(options: ProviderOptions): RecipeProvide
 
 function createRecipeProvider(options: ProviderOptions, provider: 'openai' | 'anthropic'): RecipeProvider {
   const instructions = fs.readFileSync(new URL('../../../prompts/runtime/world-recipe.md', import.meta.url), 'utf8')
-    .replace('{{registry}}', JSON.stringify({ motifIds: MOTIF_IDS, propIds: PROP_IDS, enemyIds: ENEMY_IDS }));
+    .replace('{{registry}}', JSON.stringify({ motifIds: MOTIF_IDS, propIds: PROP_IDS, enemyIds: ENEMY_IDS, attunementEffects: Object.fromEntries(ATTUNEMENT_EFFECT_IDS.map((id) => [id, ATTUNEMENT_EFFECT_INFO[id].summary])) }));
   const schema = z.toJSONSchema(WorldRecipeSchema, { target: 'draft-7' });
   const fetchResponse = options.fetch ?? fetch;
   const timeoutMs = Math.min(25_000, Math.max(1, options.timeoutMs ?? 25_000));
@@ -203,6 +203,7 @@ function assertDisplayText(recipe: WorldRecipe): void {
     ...recipe.rooms.flatMap((room) => [room.name, room.description]),
     ...recipe.contributionMappings.map((mapping) => mapping.featureDescription),
     ...recipe.lore.flatMap((fragment) => [fragment.title, fragment.source, fragment.text]),
+    ...recipe.attunements.flatMap((a) => [a.name, a.description]),
   ];
   if (text.some((value) => /[<>]|```|(?:https?:\/\/|www\.|data:|javascript:)|\b(?:eval|function)\s*\(/i.test(value))) {
     throw new GenerationFailure('Recipe text contained markup, a URL, or code.', true);

@@ -50,6 +50,12 @@ const themes: { fixtureId: string; seed: number; recipe: WorldRecipe }[] = [
         { kind: 'remains', roomIndex: 0, enemyId: 'guardian', title: 'The Focus itself', source: 'six lens-plates that fell away from a body',
           text: 'It was never a person. It was the observatory\u2019s own eye, the great lens given something to stand with, and it did not want to be blinded a second time. Through the plates, faintly, the sea is still trying to show you something.' },
       ],
+      attunements: [
+        { effectId: 'bolt_ward', name: 'Counted by the Lens', description: 'Turn your face to the lens and be kept: the sea\u2019s bolts find less of you.' },
+        { effectId: 'hazard_ward', name: 'Salt-Sure Footing', description: 'The divers\u2019 trick for the shallows: what glows underfoot burns a watcher less.' },
+        { effectId: 'relic_mend', name: 'Tide-Gauge Reading', description: 'Each mark read from the glass steadies the hand that reads it.' },
+        { effectId: 'guardian_bane', name: 'Lens-Keeper\u2019s Stop', description: 'You know where the Focus was blinded once. Strike there.' },
+      ],
     },
   },
   {
@@ -98,6 +104,11 @@ const themes: { fixtureId: string; seed: number; recipe: WorldRecipe }[] = [
           text: 'Lurkers were the couriers who carried records between wings until the roots learned to carry them instead. The satchel is empty. The last delivery slip inside reads: recipient will come to you.' },
         { kind: 'remains', roomIndex: 0, enemyId: 'guardian', title: 'Head archivist\u2019s seal', source: 'a wax seal, root-fibre and one fingerprint',
           text: 'The Guardian was the last archivist, who chose to be grown into the vault rather than leave it unkept. It refused every withdrawal for a very long time. Under the wax, the fingerprint has the whorl of a leaf.' },
+      ],
+      attunements: [
+        { effectId: 'melee_ward', name: 'Reader\u2019s Calm', description: 'Patrons who stayed past closing learned to let the roots pass over them.' },
+        { effectId: 'relic_mend', name: 'Returned to the Roots', description: 'A record read and returned is a record that keeps you.' },
+        { effectId: 'remains_charge', name: 'Courier\u2019s Ledger', description: 'Every satchel recovered is a delivery the archive still owes you.' },
       ],
     },
   },

@@ -97,6 +97,12 @@
         "text": "Wardens kept the crowds in line with these, one flash to hold, two to board. They kept doing it after the crowds were gone, flashing hold at empty platforms, and somewhere along the way the lamp stopped being a lamp and started being an argument." },
       { "kind": "remains", "roomIndex": 0, "enemyId": "guardian", "title": "Relay core fragment", "source": "a shard of switching core, humming",
         "text": "Six voices at once, all of them routing, none of them agreeing. The Guardian was the relay's own switching heart, defending the one world it had left to route to. Hold the shard to your ear and it will offer you a connection; do not accept." }
+    ],
+    "attunements": [
+      { "effectId": "bolt_ward", "name": "Warden's Two Flashes", "description": "Hold, then board: the platform wardens' signal, learned, makes the tower's bolts hesitate around you." },
+      { "effectId": "dash_echo", "name": "Trunk 4, Cut", "description": "A dash through the gallery drags live cable behind it; what follows you gets the charge." },
+      { "effectId": "anchor_grace", "name": "Left for Collection", "description": "The spire keeps what is planted, and it has been waiting to keep something. The Anchor takes faster." },
+      { "effectId": "clear_surge", "name": "Departures Clear", "description": "When the board finally reads a destination, the concourse moves like a crowd that hears its train." }
     ]
   },
   "art": {

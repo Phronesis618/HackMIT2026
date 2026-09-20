@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import {
   ABILITY_IDS,
+  ATTUNEMENT_EFFECT_IDS,
   CLASS_IDS,
   ENEMY_IDS,
   MOTIF_IDS,
@@ -349,6 +350,17 @@ export const LoreFragmentSchema = z.object({
 });
 export type LoreFragment = z.infer<typeof LoreFragmentSchema>;
 
+/**
+ * A world-grown skill: the mechanical effect is one of the registry's closed set (what a
+ * future sim pass implements); the name and description are the world speaking.
+ */
+export const AttunementSchema = z.object({
+  effectId: z.enum(ATTUNEMENT_EFFECT_IDS),
+  name: z.string().trim().min(1).max(40),
+  description: z.string().trim().min(1).max(160),
+});
+export type Attunement = z.infer<typeof AttunementSchema>;
+
 export const WorldRecipeSchema = z.object({
   title: z.string().trim().min(1).max(40),
   tagline: z.string().trim().min(1).max(80),
@@ -358,6 +370,8 @@ export const WorldRecipeSchema = z.object({
   rooms: z.array(RoomBlueprintSchema).min(1).max(3),
   contributionMappings: z.array(ContributionMappingSchema).max(24),
   lore: z.array(LoreFragmentSchema).max(12),
+  /** 2–4 world-specific skill nodes; see `src/shared/skills.ts` for how they join the tree. */
+  attunements: z.array(AttunementSchema).max(4),
 });
 export type WorldRecipe = z.infer<typeof WorldRecipeSchema>;
 

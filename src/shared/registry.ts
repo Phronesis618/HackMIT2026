@@ -200,6 +200,30 @@ export type TileChar = (typeof TILE_CHARS)[number];
 export const SOLID_TILES: ReadonlySet<string> = new Set(['#', ' ']);
 export const WALKABLE_TILES: ReadonlySet<string> = new Set(['.', '~', 'P', 'X', 'A']);
 
+/**
+ * World attunements: the skill-tree branch a world grows for itself. The model picks a
+ * mechanical effect from this closed set and writes the in-world name/description; the
+ * effect ids are what a future simulation pass will implement, so they must stay stable.
+ */
+export const ATTUNEMENT_EFFECT_IDS = [
+  'hazard_ward', 'bolt_ward', 'melee_ward', 'relic_mend', 'remains_charge',
+  'clear_surge', 'first_strike', 'guardian_bane', 'dash_echo', 'anchor_grace',
+] as const;
+export type AttunementEffectId = (typeof ATTUNEMENT_EFFECT_IDS)[number];
+
+export const ATTUNEMENT_EFFECT_INFO: Record<AttunementEffectId, { summary: string; status: ImplementationStatus }> = {
+  hazard_ward: { summary: 'Hazard floor and area-denial bolts deal 40% less.', status: 'planned' },
+  bolt_ward: { summary: 'Enemy projectiles deal 25% less.', status: 'planned' },
+  melee_ward: { summary: 'Melee and charge hits deal 25% less.', status: 'planned' },
+  relic_mend: { summary: 'Reading a relic restores 25 Integrity.', status: 'planned' },
+  remains_charge: { summary: 'Recovering remains adds 40% ultimate charge.', status: 'planned' },
+  clear_surge: { summary: 'Clearing a room grants 4 s of haste.', status: 'planned' },
+  first_strike: { summary: 'Your first hit on an untouched enemy deals double.', status: 'planned' },
+  guardian_bane: { summary: 'The Guardian takes 20% more from you.', status: 'planned' },
+  dash_echo: { summary: 'Dashing leaves a short trail that burns enemies.', status: 'planned' },
+  anchor_grace: { summary: 'The Anchor plants in half the time.', status: 'planned' },
+};
+
 export function isClassId(value: string): value is ClassId {
   return (CLASS_IDS as readonly string[]).includes(value);
 }
