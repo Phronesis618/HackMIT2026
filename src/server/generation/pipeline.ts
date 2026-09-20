@@ -64,6 +64,8 @@ interface PipelineOptions {
   status: (phase: GenerationStatus['phase'], message: string) => void;
   countCall: () => void;
   onCall?: ((metric: CallMetric) => void) | undefined;
+  /** The shape (keys, types, first characters) of a reply that failed validation. Never the key, never the prompt. */
+  onRejected?: ((stage: string, shape: string) => void) | undefined;
 }
 
 const summary = (lint: WorldLint): LintSummary => ({ score: lint.score, failedFields: lint.failedFields, fieldCount: lint.fieldCount, rules: lint.rules });
@@ -187,7 +189,14 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
       try {
         const raw = await call('foundation', 'foundation', { contributions, namePool: namePool(seed), ...worldSeeds(seed), ...(repair ? { repair } : {}) }, FoundationToolSchema, 2_500);
         signal?.throwIfAborted();
-        const candidate = parseFoundation(raw);
+        let candidate: ReturnType<typeof parseFoundation>;
+        try {
+          candidate = parseFoundation(raw);
+        } catch (error) {
+          const shape = raw && typeof raw === 'object' ? Object.fromEntries(Object.entries(raw as Record<string, unknown>).map(([key, value]) => [key, typeof value === 'string' ? `string(${value.length}): ${value.slice(0, 160)}` : Array.isArray(value) ? `array(${value.length})` : typeof value])) : typeof raw;
+          options.onRejected?.('foundation', JSON.stringify(shape).slice(0, 900));
+          throw error;
+        }
         assertDisplayText('legacy' in candidate ? candidate.legacy : { ...candidate.foundation.header, bible: candidate.foundation.bible });
         parsedFoundation = candidate;
       } catch (error) {
@@ -363,6 +372,8 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
       } : {}),
     });
     if (derivedBriefs.length) notes.push(clipNote(`Biome brief(s) ${derivedBriefs.map((index) => index + 1).join(', ')} of 8 were derived by trusted code, not written by the model.`));
+    const cut = fitOverlong(recipe, bible);
+    if (cut) notes.push(clipNote(`${cut} line(s) over their length limit were cut at a sentence or clause end by trusted code.`));
     assertDisplayText(recipe);
 
     const after = lintWorld(recipe, bible);

@@ -87,6 +87,7 @@ export function createLiveGenerationService(options: {
         floorsSeed: request.seed === undefined ? worldId : String(request.seed),
         countCall: () => { attempts++; },
         onCall: options.onCall,
+        onRejected: (stage, shape) => options.log(`Rejected ${stage} reply shape: ${shape}`),
       });
     } catch (error) {
       signal?.throwIfAborted();

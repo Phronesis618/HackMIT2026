@@ -14,8 +14,8 @@ consequence of what went wrong here (a flooded station drags; a ward on backup p
 Respect lawConflicts, at most one combat law and one vision law, and keep the summed
 difficulty between -1 and 3. intensity 0 to 1 (0.5 is normal).
 name (max 36): what the inhabitants called it, from a bible person, place or object.
-description (hard max 160, aim 110): one bible fact that explains why this place works this
-way, then what the crew should expect, plainly. Two short sentences. The player reads this
+description (hard max 160, aim 110): one bible fact, naming a bible person, place or object,
+that explains why this place works this way, then what the crew should expect, plainly. Two short sentences. The player reads this
 before entering.
 
 ## terrainSkins

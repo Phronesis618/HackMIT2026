@@ -67,12 +67,12 @@ const tight = (max: number) => z.string().trim().min(1).max(max);
  */
 export const ModelBibleSchema = z.object({
   premise: tight(120),
-  collapse: tight(240),
-  people: z.array(z.object({ name: tight(32), job: tight(36), want: tight(64) })).min(3).max(4),
+  collapse: tight(200),
+  people: z.array(z.object({ name: tight(32), job: tight(36), want: tight(56) })).min(3).max(4),
   places: z.array(tight(28)).min(3).max(4),
   objects: z.array(tight(28)).min(3).max(4),
   events: z.array(z.object({ date: tight(20), fact: tight(120) })).min(5).max(6),
-  authors: z.array(z.object({ name: tight(32), document: tight(36), register: tight(130), never: tight(56) })).length(3),
+  authors: z.array(z.object({ name: tight(32), document: tight(36), register: tight(110), never: tight(56) })).length(3),
   enemies: z.array(z.object({ enemyId: z.enum(ENEMY_IDS), formerJob: tight(48) })).min(3).max(5),
 });
 
@@ -188,6 +188,30 @@ export function parseWithFit<T extends z.ZodType>(schema: T, raw: unknown): Retu
  * Tool input sometimes arrives with a nested object or list serialised as a JSON string
  * (seen live: `bible` as a string). Parse such values back, one level deep, and clone the rest.
  */
+/**
+ * A nested object that arrived as a string (seen live on `bible`, 4 of 8 worlds in one run).
+ * Tries, in order: the string as JSON, without code fences, from the first bracket to the last,
+ * and once more if the result is itself a string (double encoding). Returns undefined when
+ * nothing parses to an object or list: the caller then reports an ordinary repairable failure.
+ * NOT verified against a live payload: failed attempts were not being saved when this was seen.
+ */
+export function parseLooseJson(text: string): unknown {
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  const open = trimmed.search(/[[{]/);
+  const close = Math.max(trimmed.lastIndexOf('}'), trimmed.lastIndexOf(']'));
+  const candidates = [trimmed, ...(open >= 0 && close > open ? [trimmed.slice(open, close + 1)] : [])];
+  for (const candidate of candidates) {
+    try {
+      let value = JSON.parse(candidate) as unknown;
+      if (typeof value === 'string') value = JSON.parse(value) as unknown;
+      if (typeof value === 'object' && value !== null) return value;
+    } catch {
+      // next candidate
+    }
+  }
+  return undefined;
+}
+
 /** Models sometimes mark emphasis with Markdown; the game renders plain text. */
 const stripMarkdown = (text: string): string => text.replace(/\*\*|__|`/g, '').replace(/(^|\s)\*(\S[^*]*\S)\*(?=\s|[.,;:!?]|$)/g, '$1$2');
 function plainStrings(value: unknown): unknown {
@@ -208,15 +232,9 @@ export function coerceJson(input: unknown): unknown {
   }
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw;
   return Object.fromEntries(Object.entries(raw as Record<string, unknown>).map(([key, value]) => {
-    if (typeof value === 'string' && /^\s*[[{]/.test(value)) {
-      const open = value.trimStart()[0] === '{' ? ['{', '}'] : ['[', ']'];
-      for (const candidate of [value, value.slice(value.indexOf(open[0]!), value.lastIndexOf(open[1]!) + 1)]) {
-        try {
-          return [key, JSON.parse(candidate) as unknown];
-        } catch {
-          // try the next candidate
-        }
-      }
+    if (typeof value === 'string') {
+      const parsed = parseLooseJson(value);
+      if (parsed !== undefined) return [key, parsed];
     }
     return [key, value];
   }));
