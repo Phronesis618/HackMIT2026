@@ -13,7 +13,9 @@ import type { Lesson, LessonContext } from './types';
 
 // ---- priorities -----------------------------------------------------------------
 // A prompt that keeps someone alive outranks a prompt that teaches them a place.
-const P = { revive: 80, hub: 70, control: 62, adaptive: 66, terrain: 46, room: 44, finale: 50, law: 30 } as const;
+// Attack is the verb the game is about, so it outranks the dash even for a player who is
+// being hit; movement outranks both, but only ever fires for someone who skipped the hub.
+const P = { revive: 80, hub: 70, move: 67, attack: 66, adaptive: 64, control: 62, finale: 50, terrain: 46, room: 44, law: 30 } as const;
 
 // ---- small readers over the context ----------------------------------------------
 
@@ -126,7 +128,7 @@ const CONTROL_LESSONS: Lesson[] = [
     scope: 'run',
     keys: ['W', 'A', 'S', 'D'],
     text: RUN_TEXT.move,
-    priority: P.control + 2,
+    priority: P.move,
     holdMs: 12_000,
     trigger: (ctx) => inRun(ctx) && ctx.phaseMs > 3000 && !ctx.facts.moved,
     satisfied: (ctx) => ctx.facts.moved,
@@ -137,7 +139,7 @@ const CONTROL_LESSONS: Lesson[] = [
     scope: 'run',
     keys: ['LMB'],
     text: RUN_TEXT.attack,
-    priority: P.control + 1,
+    priority: P.attack,
     holdMs: 12_000,
     trigger: (ctx) => inRun(ctx) && ctx.phaseMs > 1200 && liveEnemies(ctx) > 0 && !ctx.facts.attacked,
     satisfied: (ctx) => ctx.facts.attacked,

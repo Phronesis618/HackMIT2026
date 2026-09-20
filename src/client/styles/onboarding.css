@@ -1,27 +1,27 @@
 /*
  * The coach band and the Field Notes page.
  *
- * Geometry (docs/design/ONBOARDING.md §5): the band sits 20 px above the bottom of
- * `.stage-wrap`, centred. At 1280x720 the stage is 938x527, so the band lands clear of the
- * operative (camera-centred), of `.hud-strip` (stage top + 40), of `.escape` (stage top + 10)
- * and of `.relic-choice` (stage bottom + 96). The ability bar, the minimap and the
- * `Tab · menu` chip are outside the stage entirely.
+ * Geometry (docs/design/ONBOARDING.md §5): almost everything this game draws over the stage
+ * is centred — the HUD strip and the escape clock at the top, the Custodian's name-and-health
+ * strip painted at the bottom of the canvas, the relic pedestal cards at stage bottom + 96,
+ * and the operative themselves whenever the camera follows. The free lane is therefore the
+ * bottom LEFT: 48 px up (clear of the boss strip) and 24 px in. The ability bar, the minimap
+ * and the `Tab · menu` chip are outside the stage entirely.
  */
 
 .coach {
   position: absolute;
-  left: 50%;
-  bottom: 20px;
-  transform: translateX(-50%);
+  left: var(--space-lg);
+  bottom: 48px;
   z-index: 8;
   pointer-events: none;
   display: flex;
-  justify-content: center;
-  width: min(560px, 82%);
+  justify-content: flex-start;
+  max-width: min(460px, calc(100% - 2 * var(--space-lg)));
 }
 
 /* If a notice ever moves back to the bottom of the page, the band steps over it. */
-.coach--raised { bottom: 96px; }
+.coach--raised { bottom: 120px; }
 
 .coach__line {
   display: flex;
@@ -62,7 +62,7 @@
 }
 
 @media (max-width: 960px) {
-  .coach { width: 92%; bottom: 12px; }
+  .coach { left: var(--space-sm); bottom: 40px; max-width: calc(100% - 2 * var(--space-sm)); }
   .coach__line { font-size: var(--fs-sm, 13px); }
 }
 

@@ -50,12 +50,15 @@ describe('onboarding prose', () => {
     expect(long.startsWith('Scalding floor')).toBe(true);
   });
 
-  it('clips a long law line on a word boundary rather than overflowing', () => {
-    const line = lawLine('Thin Air', 'Movement speed 200 to 260; dash cooldown 900 ms to 720 ms across the whole floor');
-    expect(line.length).toBeLessThanOrEqual(MAX_LINE);
-    expect(line.endsWith('…')).toBe(true);
-    expect(line.startsWith('Thin Air: Movement speed')).toBe(true);
+  it('keeps one rule per law line, and clips on a word boundary if even that is long', () => {
+    // The engine states several numbers in separate sentences; the band takes the first.
+    expect(lawLine('Rated for 400', 'Enemy groups 1.8x size, up to 12 per room. Enemy health 1.15x.'))
+      .toBe('Rated for 400: Enemy groups 1.8x size, up to 12 per room.');
     expect(lawLine('Long Echo', 'Attacks reach 15% further.')).toBe('Long Echo: Attacks reach 15% further.');
+    const long = lawLine('Thin Air', 'Movement speed 200 to 260 and dash cooldown 900 ms to 720 ms across the whole floor');
+    expect(long.length).toBeLessThanOrEqual(MAX_LINE);
+    expect(long.endsWith('…')).toBe(true);
+    expect(long.startsWith('Thin Air: Movement speed')).toBe(true);
   });
 
   it('gives every lesson an id, a group and a priority, and no duplicate ids', () => {

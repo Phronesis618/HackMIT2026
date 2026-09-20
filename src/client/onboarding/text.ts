@@ -29,7 +29,7 @@ export const RUN_TEXT = {
   attack: 'Attack. The mouse aims.',
   dash: 'Dash. It passes through danger.',
   abilityQ: 'Your class ability is ready.',
-  unlockE: 'Menu, Operative: unlock a second ability.',
+  unlockE: 'Unlock a second ability on the Operative page.',
   abilityR: 'Ultimate ready.',
   map: 'Hold for the floor map.',
   revive: 'Stand over them to revive.',
@@ -102,7 +102,12 @@ export function terrainLine(feature: TerrainFeatureId, worldName?: string): stri
  * only joins them and keeps the band from overflowing.
  */
 export function lawLine(name: string, effect: string): string {
-  const clean = `${name.trim()}: ${effect.trim()}`.replace(/\s+/g, ' ');
+  // One rule per line. `lawEffectText` often states two or three numbers in separate
+  // sentences; the first one is the rule, and the world panel still holds all of them.
+  const flat = effect.trim().replace(/\s+/g, ' ');
+  // A full stop only ends a sentence when a space follows it: "1.8x" is one number.
+  const first = /^.*?[.!?](?=\s|$)/.exec(flat)?.[0] ?? flat;
+  const clean = `${name.trim().replace(/\s+/g, ' ')}: ${first}`;
   if (clean.length <= MAX_LINE) return clean;
   const cut = clean.slice(0, MAX_LINE - 1);
   const stop = cut.lastIndexOf(' ');
