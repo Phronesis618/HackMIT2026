@@ -1,5 +1,22 @@
 # Handoff — Agent C (Devin)
 
+## Overnight hub persistence repair — 2026-09-20
+
+- Branch: `devin/1789894002-hub-replay-scope`, implementation `5a10f45`, based on `dc2c934`.
+- **Implemented:** scope hub replay keys by world; restrict legacy raw keys to the saved
+  current/latest run, retaining counters; reject explicitly foreign/training event origins.
+  Two real fixture sessions previously produced six Chronicle memories but only one hub run.
+- **Verified:** after integrating main `71f1dc2`, `npm run check`: **759 tests / 62 files**,
+  typecheck/build and whitespace passed. Five added cases cover repeat expeditions, reload, legacy active/completed stores,
+  replay protection and explicit event origins. Three failed against the original reducer.
+  Baseline production HTTP smoke passed health/config, HTML, JS/CSS and fixture generation.
+- **Mocked:** device storage uses an isolated Map; reducer-only cases use scripted events.
+  Repeat-expedition cases use real `LocalSession` and fixture providers.
+- **Unverified:** browser interaction, physical LAN and live generation. One full-suite run
+  missed the WebSocket `player_attacked` assertion; focused and full reruns passed. Three
+  unchanged-base suite runs passed, so the cause is unconfirmed. No existing test was weakened.
+  This fix does not reconstruct expeditions already discarded by the old hub reducer.
+
 ## Co-op reload readiness — 2026-09-20
 
 - Branch: `devin/1789893771-coop-reconnect`, based on main `dc2c934`.
@@ -20,22 +37,6 @@
 - **Mocked:** fixture generation and in-memory storage; real HTTP/WebSocket servers in tests.
 - **Unverified:** browser co-op retest, physical LAN, live model output and full responsive/
   preview/cap sweep. Browser rendering remains slow in this VM. No protocol or dependency changes.
-## Overnight hub persistence repair — 2026-09-20
-
-- Branch: `devin/1789894002-hub-replay-scope`, implementation `5a10f45`, based on `dc2c934`.
-- **Implemented:** scope hub replay keys by world; restrict legacy raw keys to the saved
-  current/latest run, retaining counters; reject explicitly foreign/training event origins.
-  Two real fixture sessions previously produced six Chronicle memories but only one hub run.
-- **Verified:** `npm run check`: **714 tests / 60 files**, typecheck/build and whitespace
-  passed. Five added cases cover repeat expeditions, reload, legacy active/completed stores,
-  replay protection and explicit event origins. Three failed against the original reducer.
-  Baseline production HTTP smoke passed health/config, HTML, JS/CSS and fixture generation.
-- **Mocked:** device storage uses an isolated Map; reducer-only cases use scripted events.
-  Repeat-expedition cases use real `LocalSession` and fixture providers.
-- **Unverified:** browser interaction, physical LAN and live generation. One full-suite run
-  missed the WebSocket `player_attacked` assertion; focused and full reruns passed. Three
-  unchanged-base suite runs passed, so the cause is unconfirmed. No existing test was weakened.
-  This fix does not reconstruct expeditions already discarded by the old hub reducer.
 
 ## Browser readiness follow-up — 2026-09-20
 
