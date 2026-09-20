@@ -118,9 +118,12 @@ Reached with the repo's own deep-link `?world=fixture&room=2&laws=1`, and again 
       choice locked (`chosen = remains:9`). The debrief read *"Operative-601 **returned with the
       world anchored**. Deepest point: Winch House 40, tier 5 of 5, 11 rooms in."*
       (`/tmp/relay-shots/q2/ending-d/23-escape.png`, `24-relic-choice.png`, `25-debrief.png`).
-      The other five runs ended `stranded` — and *not one of any of them ran out of clock*; they
-      used 11–17 % of it and died fighting. Why that is not a verdict on the game is in the next
-      box.
+      Across **thirteen** such runs: 7 died to the Custodian (every non-bastion attempt; bastion
+      lost 3 of 9), 1 died in the ritual, 4 reached the collapse and ended `stranded`, and 1
+      walked out. **Not one of the five that reached the collapse was beaten by the timer** —
+      they walked 8–12 hops in 14–23 % of the clock and were killed by the enemies in the
+      uncleared rooms they were retreating through. **The Custodian is the wall, not the escape.**
+      Why none of this is a verdict on the shipped game is in the next box.
 
 - [ ] **Is the escape fair for a human? Walkable — observed once — but the odds are still not
       measured, and the new evidence is harder than the game, not easier.** The budget is `clamp(45 s + 15 s/hop, 60 s, 180 s) × 1.2` solo —
@@ -133,8 +136,9 @@ Reached with the repo's own deep-link `?world=fixture&room=2&laws=1`, and again 
       at `tierMultiplier(4) = 1.72×`, under `long_dark` (vision 206 px). A crew that had walked
       the route would be retreating through rooms it had emptied, with the upgrades those rooms
       paid for. So: the escape **works**; whether it is winnable is still open, and the number
-      here is a floor well below the real one. The one run that got out is the one whose Custodian
-      fight left it at **62** integrity instead of 17–29; after that the walk home cost it nothing.
+      here is a floor well below the real one. The single predictor of getting out was how much
+      integrity the Custodian left behind: the winning run came out of that fight at **62**, the
+      four `stranded` ones at **17–32**.
 
 ## Solo survivability, first five rooms, authored laws ON
 
@@ -353,10 +357,10 @@ The live half is now **done**: 49.2 s to portal-ready, honestly labelled. The fl
 > `?floors=1&laws=1` (client) — **left to the team.** Q2 changed no defaults.
 
 Q2's own read, offered and not acted on: **the bar Q1 set has now been cleared on the letter of
-it** — the ending has been played, and one live world reached the portal in 49.2 s. Nothing in six
+it** — the ending has been played, and one live world reached the portal in 49.2 s. Nothing in thirteen
 tier-4 runs hung, crashed, logged an error or left a state a player could not leave; every failure
 was a death, handled correctly all the way to the hub. What has *not* been cleared is the spirit
-of it: the winning run was 1 of 6, from a position no player reaches, so **how hard the ending is
+of it: the winning run was 1 of 13, from a position no player reaches, so **how hard the ending is
 for a real player with a real route's upgrades is still unmeasured**. The residual risk is not a
 crash — it is a judge who beats the Custodian, does not get out, and sees a `stranded` debrief
 instead of a relic. That is a tuning question, and a tuning edit hours before a demo would be a

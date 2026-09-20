@@ -53,14 +53,14 @@ visited, so the route itself is the same one a played route would have had. That
 
 ## Stage by stage
 
-Six runs of `--only floorsend --tier 4 --tier-at exit`, cold profile each. **One of them — run
-`d`, a bastion on `vantage-spire`, biome `b7-winch-house-40` — went all the way through**, and the
-table is written from it (`/tmp/relay-shots/q2/ending-d/`). Where another run showed something
-better or worse, it is named.
+Thirteen runs of `--only floorsend --tier 4 --tier-at exit`, cold profile each. **One of them —
+run `d`, a bastion on `vantage-spire`, biome `b7-winch-house-40` — went all the way through**, and
+the table is written from it (`/tmp/relay-shots/q2/ending-d/`). Where another run showed something
+better or worse, it is named, and the whole tally is at the end of this file.
 
 | # | Stage | Observed? | What was seen, and the numbers |
 |---|---|---|---|
-| 1 | Cold hub, canvas, no errors | **observed** | 4/4 runs. `0` uncaught page errors, `0` `console.error` lines in every run. `01-hub-cold.png` |
+| 1 | Cold hub, canvas, no errors | **observed** | 13/13 runs. `0` uncaught page errors, `0` `console.error` lines in every run. `01-hub-cold.png` |
 | 2 | Weapon stand, real input | **observed** | walked to the stand, `F`, class changed, panel read `CURRENT · …`. `02-weapon-stand.png` |
 | 3 | Idea → receipt | **observed** | `0.2 s` (fixture), `OFFLINE FIXTURE` badge, one receipt line `recorded · not used in this world`. `03-world-receipt.png` |
 | 4 | Departure ritual at the gate | **observed** | overlay with `F or Esc leaves now`, run started `2.6 s` later. `04-first-room.png` |
@@ -115,6 +115,33 @@ So:
   last stand at 25 HP, then a `stranded` debrief that says exactly what happened, then the hub.
 - **Still not shown:** whether the escape is fair for a *human* who walked the route. This setup
   is strictly harder than the game it tests, so 1-in-6 is a floor, not the odds.
+
+## How often, and where it goes wrong
+
+**Thirteen runs** of `--only floorsend --tier 4 --tier-at exit`, cold profile each, across four
+classes and both shipped fixture families plus one live world. Where each run stopped:
+
+| Where it ended | Runs | Notes |
+|---|---|---|
+| Died to the Custodian | **7** | every non-bastion attempt (weaver, shade, beacon) is in here; bastion lost 3 of 9 |
+| Cleared the Custodian, died in the ritual | **1** | left the fight at 11 integrity |
+| Reached the collapse, ended `stranded` | **4** | used **14–23 %** of the clock; none ran out of time |
+| **Walked out, chose a relic, anchored** | **1** | run `d` — 9 hops, 24 s of 216 s, no damage taken |
+
+Read down the middle column and the shape is clear: **the Custodian is the wall, not the escape.**
+Seven of thirteen runs never got past it, and the class matters enormously — **bastion cleared it
+6 times in 9; weaver, shade and beacon cleared it 0 times in 4 between them**, at
+`tierMultiplier(4) = 1.72×` with no attunements and no unlocked `E`.
+
+And of the five runs that did reach the collapse, **not one was beaten by the timer**. They walked
+8–12 room hops in 24–49 s of a 216 s budget and were killed by the enemies in the uncleared rooms
+they were retreating through. The single predictor of getting out was how much integrity the
+Custodian left behind: the winning run came out of that fight at **62**, the four `stranded` ones
+at **17–32**.
+
+None of this is a measurement of the shipped game, for the reason the section above gives — a
+crew that walks the route arrives with upgrades and an empty corridor home. It is a measurement of
+the hardest version of the ending that exists, and that version is completable.
 
 ## What a judge should take from this
 
