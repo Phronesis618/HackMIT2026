@@ -10,7 +10,8 @@ import { BiomeChoice, choiceKeyAction, pickBiome } from '../../src/client/ui/Bio
 import { FullMap } from '../../src/client/ui/FullMap';
 import { Minimap } from '../../src/client/ui/Minimap';
 import { buildMinimap, describeLayout, floorUiFrom, minimapPitch } from '../../src/client/ui/floorsModel';
-import { RunStatus } from '../../src/client/ui/Hud';
+import { RunStatus, floorLocationLabel, telemetryLabel } from '../../src/client/ui/Hud';
+import { WorldPanel } from '../../src/client/ui/WorldPanel';
 import { IDLE_GENERATION_STATUS, type GameSnapshot } from '../../src/shared/contracts';
 import { ROOM_BUDGETS } from '../../src/shared/floors';
 import { lintProse } from '../../src/shared/prose';
@@ -199,6 +200,34 @@ describe('run rail in floors mode', () => {
     expect(html).toContain('<dt>Room</dt>');
     expect(html).toContain('<dd>1<small>/3</small></dd>');
     expect(html).not.toContain('<dt>Biome</dt>');
+  });
+
+  /**
+   * A25. Two places still read the legacy room count in a floors run: the top bar said
+   * "room 1" (the index restarts every biome) and the world brief said "1/1 rooms"
+   * (`plannedRoomCount` is 1 in a floors world). Both count the current biome now.
+   */
+  it('the top bar and the world brief count the biome, not the legacy room list', () => {
+    const next = Object.values(plan.rooms.find((room) => room.id === plan.entranceId)!.doors)[0]!;
+    const ui = railModel([plan.entranceId, next]);
+    const where = `biome 1/5 · room 2 of ${ROOM_BUDGETS[0]}`;
+    expect(floorLocationLabel(ui.floor!)).toBe(where);
+    expect(telemetryLabel(ui)).toBe(`${world.recipe.title} · ${where}`);
+    const brief = renderToStaticMarkup(createElement(WorldPanel, { world: ui.world!, compact: true, floor: ui.floor }));
+    expect(brief).toContain(where);
+    expect(brief).not.toContain('1/1 rooms');
+    const dossier = renderToStaticMarkup(createElement(WorldPanel, { world: ui.world!, floor: ui.floor }));
+    expect(dossier).toContain(where);
+    expect(dossier).not.toContain('1/1 rooms');
+  });
+
+  it('a legacy world keeps the room line and the room count it always had', () => {
+    const ui = { ...railModel([plan.entranceId]), floor: null };
+    ui.world = { ...ui.world!, committedRoomCount: 3, plannedRoomCount: 3 };
+    expect(telemetryLabel(ui)).toBe(`${world.recipe.title} · room 1`);
+    const brief = renderToStaticMarkup(createElement(WorldPanel, { world: ui.world!, compact: true }));
+    expect(brief).toContain('3/3 rooms');
+    expect(renderToStaticMarkup(createElement(WorldPanel, { world: ui.world! }))).toContain('3/3 rooms ready');
   });
 });
 

@@ -1,6 +1,28 @@
-import type { UiActions, UiModel } from '../../shared/ui';
+import type { UiActions, UiFloor, UiModel } from '../../shared/ui';
 import { anchorInstruction } from '../../shared/finale';
 import { CLASS_INFO, CLASS_THEME } from '../../shared/registry';
+
+/**
+ * A25. Where the crew is, in one line, for the top bar and the world brief.
+ *
+ * A floors run has one room list per biome, so "room 3" and "1/1 rooms" were both meaningless
+ * there: `plannedRoomCount` is 1 in a floors world and the room index restarts every biome. It
+ * counts the rooms of the CURRENT biome against that biome's budget instead, and says which
+ * biome of the five it is. Legacy worlds keep the line they had.
+ */
+export function floorLocationLabel(floor: UiFloor): string {
+  return `biome ${floor.depth}/${floor.depthCount} · room ${floor.roomsVisited} of ${floor.roomCount}`;
+}
+
+/** The top bar's one-line telemetry: the world, then where in it the crew is standing. */
+export function telemetryLabel(model: UiModel): string {
+  const where = model.phase === 'expedition'
+    ? model.floor ? floorLocationLabel(model.floor) : model.room ? `room ${model.room.index + 1}` : null
+    : model.phase === 'training' ? 'training range'
+      : model.phase === 'debrief' ? 'debrief'
+        : model.phase === 'preparing' ? 'preparing' : 'sanctuary';
+  return `${model.world ? `${model.world.title} · ` : ''}${where ?? 'sanctuary'}`;
+}
 
 /**
  * In-the-moment prompts only, overlaid on the canvas. Everything explanatory (abilities,

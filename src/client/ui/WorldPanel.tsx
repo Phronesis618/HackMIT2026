@@ -1,5 +1,6 @@
 import { ENEMY_INFO } from '../../shared/registry';
-import type { UiWorldSummary } from '../../shared/ui';
+import type { UiFloor, UiWorldSummary } from '../../shared/ui';
+import { floorLocationLabel } from './Hud';
 import { openMenu } from './MemoryWall';
 import { ProvenanceBadge } from './ProvenanceBadge';
 
@@ -77,8 +78,14 @@ function activeLawNames(world: UiWorldSummary): string[] {
 }
 
 /** Creation receipt: shown immediately after a world is prepared. Honest by construction. */
-export function WorldPanel({ world, discoveredLore = [], compact = false }: { world: UiWorldSummary; discoveredLore?: number[]; compact?: boolean }) {
+export function WorldPanel(
+  { world, discoveredLore = [], compact = false, floor = null }:
+  { world: UiWorldSummary; discoveredLore?: number[]; compact?: boolean; floor?: UiFloor | null },
+) {
   const r = world.receipt;
+  // A25. A floors world commits one room list per biome, so `plannedRoomCount` is 1 there and
+  // "1/1 rooms" said nothing. Count the current biome's rooms instead; legacy worlds unchanged.
+  const rooms = floor ? floorLocationLabel(floor) : `${world.committedRoomCount}/${world.plannedRoomCount} rooms`;
   // In a run the rail only identifies the world; the Codex and receipt are one Tab away.
   if (compact) {
     return (
@@ -87,7 +94,7 @@ export function WorldPanel({ world, discoveredLore = [], compact = false }: { wo
         <span className="world-brief__title">{world.title}</span>
         <span className="tagline">{world.tagline}</span>
         <span className="world-brief__foot">
-          <span>{world.committedRoomCount}/{world.plannedRoomCount} rooms{activeLawNames(world).length > 0 ? ` · ${activeLawNames(world).join(' · ')}` : ''}</span>
+          <span>{rooms}{activeLawNames(world).length > 0 ? ` · ${activeLawNames(world).join(' · ')}` : ''}</span>
           <span className="world-brief__codex">Codex {new Set(discoveredLore).size}/{world.lore.length} ›</span>
         </span>
       </button>
@@ -95,7 +102,7 @@ export function WorldPanel({ world, discoveredLore = [], compact = false }: { wo
   }
   return (
     <div className="panel panel--world">
-      <p className="eyebrow">World dossier · {world.committedRoomCount}/{world.plannedRoomCount} rooms ready</p>
+      <p className="eyebrow">World dossier · {floor ? rooms : `${rooms} ready`}</p>
       <div className="panel__row">
         <h2 className="panel__title">{world.title}</h2>
         <ProvenanceBadge provenance={world.provenance} />
