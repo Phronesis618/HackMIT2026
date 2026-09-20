@@ -303,15 +303,18 @@ const REFUSAL_LABEL: Record<SkillPurchaseRefusal, string> = {
 
 function selectedState(node: SkillNode, owned: readonly string[]): string {
   if (node.status === 'planned') return 'Planned · not in the game yet';
-  if (ownsSkillNode(node, owned)) return node.cost === 0 ? 'Active · innate' : 'Active';
+  if (node.cost === 0) return 'Innate';
+  if (ownsSkillNode(node, owned)) return 'Active';
   return 'Available · not bought';
 }
 
-export function SkillsPage({ model, actions }: { model: UiModel; actions?: Pick<UiActions, 'purchaseSkill'> }) {
+export function SkillsPage({ model, actions, selectedId: initialId = 'core.root' }: {
+  model: UiModel; actions?: Pick<UiActions, 'purchaseSkill'>; selectedId?: string;
+}) {
   const world = model.world ? { title: model.world.title, attunements: model.world.attunements } : null;
   const tree = buildSkillTree(model.localPlayer.classId, world);
   const owned = model.hud?.skillNodeIds ?? [];
-  const [selectedId, setSelectedId] = useState<string>('core.root');
+  const [selectedId, setSelectedId] = useState<string>(initialId);
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = scrollRef.current;
