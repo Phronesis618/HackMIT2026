@@ -161,7 +161,7 @@ export function buildSkillTree(classId: ClassId, world: SkillWorldContext | null
   const tiers = Math.max(...nodes.map((n) => n.tier)) + 1;
   return {
     title: `${CLASS_INFO[classId].name} tree`,
-    subtitle: world ? `Attuned to ${world.title}` : 'No world attuned — attunements grow once a world is prepared',
+    subtitle: world ? `Attuned to ${world.title}` : 'No world attuned. The attunement branch appears once a world is prepared.',
     nodes,
     tiers,
   };

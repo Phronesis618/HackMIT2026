@@ -144,7 +144,7 @@
         "kind": "relic",
         "title": "Gauge 3, 17 Rime",
         "source": "tide-gauge log, page water-stained",
-        "text": "17 Rime, 13:40. Gauge 3: 1.1 m. Water 91 degrees under the beam, 5 degrees at the gauge. Sky clear. Remark: the crystal at Berth 2 is climbing the piles at 10 cm a minute by my watch. It was 3 cm a day. Reading sent 13:44. B. Okonkwo.",
+        "text": "Gauge 3: 1.1 m. Water 91 degrees under the beam, 5 degrees at the gauge. Sky clear. Remark: the crystal at Berth 2 is climbing the piles at 10 cm a minute by my watch. It was 3 cm a day. 17 Rime, 13:40. Reading sent 13:44. B. Okonkwo.",
         "roomIndex": 1,
         "enemyId": null,
         "authorIndex": 0,
@@ -164,7 +164,7 @@
         "kind": "relic",
         "title": "Lens log, 19 Rime",
         "source": "lens log, last entry, pencil",
-        "text": "19 Rime. The lens stays on Berth 2 at 31 degrees; if the beam moves, the crystal under it sets in an hour and the Petrel is lost for good. I have 11 cans of water in the Lens Gallery, one for each of her crew. Okonkwo has not sent a reading since the 17th. The doors are salt to the lintel. S. Aalto.",
+        "text": "The lens stays on Berth 2 at 31 degrees. If the beam moves, the crystal under it sets in an hour and the Petrel is lost for good. 19 Rime: 11 cans of water in the Lens Gallery, one for each of her crew. Okonkwo has not sent a reading since the 17th. The doors are salt to the lintel. S. Aalto.",
         "roomIndex": 2,
         "enemyId": null,
         "authorIndex": 2,
@@ -215,22 +215,22 @@
       {
         "effectId": "hazard_ward",
         "name": "Quintero's Boots",
-        "description": "Hazard floor and area bolts deal 40% less. Quintero walked the Berth 2 salt in dive boots on 16 Rime and kept all ten toes."
+        "description": "Quintero walked the Berth 2 salt in dive boots on 16 Rime and kept all ten toes. The soles are cut through at the ball of the foot."
       },
       {
         "effectId": "melee_ward",
         "name": "Survival Suit, Petrel Issue",
-        "description": "Melee and charge hits deal 25% less. The Petrel's suits are rated for 6 hours in 4-degree water; Alsted's crew wore them onto the salt."
+        "description": "The Petrel's suits are rated for 6 hours in 4-degree water. Alsted's crew put them on at 05:00 and walked out over the salt in them."
       },
       {
         "effectId": "relic_mend",
         "name": "Reading Sent 06:04",
-        "description": "Reading a relic restores 25 Integrity. Okonkwo sent gauge 3 to the mainland every 6 hours for 9 years and missed one, on 18 Rime."
+        "description": "Okonkwo sent gauge 3 to the mainland every 6 hours for nine years. He missed one reading, on 18 Rime, and logged the omission under it."
       },
       {
         "effectId": "guardian_bane",
         "name": "31 Degrees",
-        "description": "The Custodian takes 20% more damage. Aalto tilted the 4-metre lens to 31 degrees; at 32 the beam falls short of Berth 2 and the mount jams."
+        "description": "Aalto set the lens at 31 degrees; at 32 the beam falls short of Berth 2 and the mount jams. The brass is worn pale at the mark."
       }
     ],
     "terrainSkins": [
@@ -262,7 +262,7 @@
       {
         "featureId": "vents",
         "name": "tide-gauge vents",
-        "caption": "TIDE-GAUGE VENTS · steam on a beat you can watch"
+        "caption": "TIDE-GAUGE VENTS · light up before they fire"
       },
       {
         "featureId": "canisters",
@@ -279,7 +279,7 @@
       {
         "id": "b0-prism-landing",
         "name": "Prism Landing",
-        "tagline": "Where the boats used to land. 40 m of salt shelf and the first fog lamps.",
+        "tagline": "Where the Petrel used to tie up. Salt shelf underfoot and the first fog lamps.",
         "motifIds": [
           "crystals",
           "arches"
@@ -353,7 +353,7 @@
       {
         "id": "b2-berth-2",
         "name": "Berth 2",
-        "tagline": "The Petrel, 2 m deep in salt, and 10 of her crew between her and the pier.",
+        "tagline": "The Petrel, 2 m deep in salt, and 6 of her crew between her and the pier.",
         "motifIds": [
           "crystals",
           "monoliths"
@@ -600,7 +600,7 @@
         {
           "name": "Marisol Quintero",
           "job": "pier diver and salvage hand",
-          "want": "her cutting torch back from stores, with a full bottle"
+          "want": "a channel cut through to the Petrel before the 18 Rime tide"
         },
         {
           "name": "Ferro Alsted",
@@ -645,7 +645,7 @@
         },
         {
           "date": "18 Rime, 05:00",
-          "fact": "Crystal sealed Sluice 2 and the Lens Gallery doors; Alsted's crew walked out over the salt toward Gauge Pier and did not reach it."
+          "fact": "Crystal sealed Sluice 2 and the Lens Gallery doors; Alsted took 10 of the Petrel's crew out over the salt toward Gauge Pier and Quintero counted 4 reach it."
         },
         {
           "date": "19 Rime",
@@ -696,19 +696,19 @@
       {
         "lawId": "tidal_drag",
         "name": "Salt Underfoot",
-        "description": "Walking is 17% slower for crew and enemies and dashes recharge a third faster. The salt at Berth 2 is 2 m deep and wet on top.",
+        "description": "The salt at Berth 2 is 2 m deep and wet on top. Walking is slow for crew and enemies alike; dashes come back sooner.",
         "intensity": 0.5
       },
       {
         "lawId": "glass_lattice",
         "name": "Aalto's Tables",
-        "description": "Operatives have 48 Integrity and deal 1.8x damage. Aalto's tables say brine boils under the beam in 20 minutes; skin takes 4 seconds.",
+        "description": "Aalto's tables: brine boils under the beam in 20 minutes, skin in 4 seconds. Operatives have half their Integrity and hit far harder.",
         "intensity": 0.5
       },
       {
-        "lawId": "held_breath",
-        "name": "Fog on Gauge Pier",
-        "description": "Enemy attack sounds are muted; every telegraph lasts a third longer and draws brighter. Gauge Pier fog lamp 6 of 9 still lights at dusk under 4 cm of salt.",
+        "lawId": "few_and_terrible",
+        "name": "Eleven on the Roster",
+        "description": "The Petrel carried 11 crew and each has 2 cm of crystal in the seams. Fewer enemies per room; each is tougher and hits harder.",
         "intensity": 0.5
       }
     ],
@@ -743,7 +743,7 @@
         {
           "patternId": "shatter_step",
           "name": "Lens mount",
-          "tell": "THE LENS MOUNT SWINGS TO THE MARK. WALK OFF IT."
+          "tell": "THE LENS MOUNT SWINGS TO THE BRIGHT PATCH. LEAVE IT."
         }
       ]
     }

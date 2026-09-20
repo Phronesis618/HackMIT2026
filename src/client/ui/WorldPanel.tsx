@@ -49,7 +49,9 @@ export const DERIVED_LAWS_DISCLOSURE =
  * are the engine's, and the panel says so rather than passing them off as the world's writing.
  */
 export function WorldLaws({ world }: { world: UiWorldSummary }) {
-  const laws = world.laws ?? [];
+  // Honesty: a law the engine does not apply is not listed at all. Fixtures, derivation and the
+  // live prompt are already filtered to implemented laws; this is the last guard for an old world.
+  const laws = (world.laws ?? []).filter((law) => law.active);
   if (laws.length === 0) return null;
   return (
     <section aria-label="World laws">
@@ -59,14 +61,19 @@ export function WorldLaws({ world }: { world: UiWorldSummary }) {
       )}
       <ul className="list">
         {laws.map((law) => (
-          <li key={law.lawId} className={`list__item ${law.active ? 'list__item--used' : 'list__item--unused'}`}>
+          <li key={law.lawId} className="list__item list__item--used">
             <span className="list__who">{law.name}</span> {law.effect}
-            <div className="list__meta">{law.active ? law.description : `${law.description} · not in force in this build`}</div>
+            <div className="list__meta">{law.description}</div>
           </li>
         ))}
       </ul>
     </section>
   );
+}
+
+/** Names of the laws this world actually runs under, for the one-line rail. */
+function activeLawNames(world: UiWorldSummary): string[] {
+  return (world.laws ?? []).filter((law) => law.active).map((law) => law.name);
 }
 
 /** Creation receipt: shown immediately after a world is prepared. Honest by construction. */
@@ -80,7 +87,7 @@ export function WorldPanel({ world, discoveredLore = [], compact = false }: { wo
         <span className="world-brief__title">{world.title}</span>
         <span className="tagline">{world.tagline}</span>
         <span className="world-brief__foot">
-          <span>{world.committedRoomCount}/{world.plannedRoomCount} rooms{(world.laws?.length ?? 0) > 0 ? ` · ${world.laws!.map((law) => law.name).join(' · ')}` : ''}</span>
+          <span>{world.committedRoomCount}/{world.plannedRoomCount} rooms{activeLawNames(world).length > 0 ? ` · ${activeLawNames(world).join(' · ')}` : ''}</span>
           <span className="world-brief__codex">Codex {new Set(discoveredLore).size}/{world.lore.length} ›</span>
         </span>
       </button>

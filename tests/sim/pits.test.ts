@@ -15,7 +15,10 @@ import { buildSolidGrid, isSolidAt } from '../../src/sim/collision';
 import { clearPath } from '../../src/sim/combat';
 import { createSimulation, type Simulation } from '../../src/sim';
 
-const fixture = WorldFixtureSchema.parse(fixtureJson);
+// The fixture's own world laws are stripped: these cases measure the base rules, and
+// vantage-spire now carries laws the engine really applies (tests/sim/laws.test.ts covers those).
+const { laws: _laws, look: _look, custodian: _custodian, ...bareRecipe } = WorldFixtureSchema.parse(fixtureJson).recipe;
+const fixture = { ...WorldFixtureSchema.parse(fixtureJson), recipe: bareRecipe };
 
 function arena(paint: (tiles: string[][]) => void, index = 0, isFinal = false, encounters: unknown[] = []): RoomSpec {
   const tiles: string[][] = Array.from({ length: 11 }, (_, y) =>

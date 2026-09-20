@@ -115,7 +115,7 @@ const MOTIF_WORDS: Record<MotifId, string> = {
 
 /** Layout personality in plain words, from the brief's linearity and branchiness. */
 export function describeLayout(layout: BiomeBrief['layout']): string {
-  const shape = layout.linearity >= 0.66 ? 'Long and direct' : layout.linearity <= 0.34 ? 'Wide and sprawling' : 'Winding';
+  const shape = layout.linearity >= 0.66 ? 'Long and direct' : layout.linearity <= 0.34 ? 'Wide and branching' : 'Winding';
   const sides = layout.branchiness >= 0.66 ? 'Many dead ends.' : layout.branchiness <= 0.34 ? 'Few side rooms.' : 'Some side rooms.';
   return `${shape}. ${sides}`;
 }

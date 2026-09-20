@@ -140,7 +140,7 @@ export function BestiaryPage({ model }: { model: UiModel }) {
   return (
     <>
       <h2 className="menu__title">Bestiary</h2>
-      <p className="muted">How each hostile fights is field knowledge. What it was before this world ended is only known from what it leaves behind.</p>
+      <p className="muted">How each hostile fights is on this page. What it did before this world ended is on the thing it drops.</p>
       <ul className="bestiary">
         {ENEMY_IDS.map((id) => {
           const remains = remainsFor(id);

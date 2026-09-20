@@ -15,10 +15,13 @@ function intent(partial: Partial<PlayerIntent> = {}): PlayerIntent {
 function loadFixtureWorld(): PreparedWorld {
   const raw = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../fixtures/worlds/vantage-spire.json'), 'utf8'));
   const fixture = WorldFixtureSchema.parse(raw);
+  // The fixture's own world laws are stripped: these cases measure the base rules, and
+  // vantage-spire now carries laws the engine really applies (tests/sim/laws.test.ts covers those).
+  const { laws: _laws, look: _look, custodian: _custodian, ...bareRecipe } = fixture.recipe;
   return PreparedWorldSchema.parse({
     worldId: 'test-world',
     createdAt: 0,
-    recipe: fixture.recipe,
+    recipe: bareRecipe,
     art: fixture.art,
     rooms: fixture.rooms,
     plannedRoomCount: fixture.plannedRoomCount,

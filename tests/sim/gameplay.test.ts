@@ -11,7 +11,10 @@ import {
 import { CLASS_ABILITIES, CLASS_IDS, ENEMY_IDS, type ClassId, type EnemyId } from '../../src/shared/registry';
 import { createSimulation, type Simulation } from '../../src/sim';
 
-const fixture = WorldFixtureSchema.parse(fixtureJson);
+// The fixture's own world laws are stripped: these cases measure the base rules, and
+// vantage-spire now carries laws the engine really applies (tests/sim/laws.test.ts covers those).
+const { laws: _laws, look: _look, custodian: _custodian, ...bareRecipe } = WorldFixtureSchema.parse(fixtureJson).recipe;
+const fixture = { ...WorldFixtureSchema.parse(fixtureJson), recipe: bareRecipe };
 const playerId = 'a-player';
 
 function encounter(enemyId: EnemyId = 'husk', x = 6, y = 7, id = 'enemy'): RoomEncounter {
