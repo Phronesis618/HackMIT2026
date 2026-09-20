@@ -137,9 +137,9 @@ describe('Custodian pattern registry', () => {
     expect(resolved.moves[2]!.tell).toBe(CUSTODIAN_PATTERNS.sweep_arc.defaultTell);
   });
 
-  it('scales health with the crew and caps a single hit at 12% of it', () => {
+  it('scales health with the crew and caps a single hit at 18% of it', () => {
     expect(custodianMaxHp(1)).toBe(CUSTODIAN_BASE_HP);
-    expect([custodianMaxHp(2), custodianMaxHp(3), custodianMaxHp(4)]).toEqual([1600, 2000, 2400]);
+    expect([custodianMaxHp(2), custodianMaxHp(3), custodianMaxHp(4)]).toEqual([1250, 1650, 2050]);
     expect(capCustodianHit(999, 1200)).toBe(Math.round(1200 * CUSTODIAN_HIT_CAP));
     expect(capCustodianHit(20, 1200)).toBe(20);
     expect(gatekeeperMaxHp(0, 1)).toBe(320);
@@ -151,11 +151,12 @@ describe('Custodian in the simulation', () => {
   it('gives the Anchor keeper crew-sized health and never lets one hit take more than the cap', () => {
     const sim = setup();
     const boss = sim.getSnapshot().enemies[0]!;
-    expect(boss).toMatchObject({ bossPhase: 1, hp: 1200, maxHp: 1200 });
+    expect(boss).toMatchObject({ bossPhase: 1, hp: 850, maxHp: 850 });
     const events = idle(sim, 600, { attack: true, aimX: boss.x, aimY: boss.y });
     const hits = events.filter((event) => event.type === 'enemy_damaged');
     expect(hits.length).toBeGreaterThan(0);
-    for (const hit of hits) if (hit.type === 'enemy_damaged') expect(hit.amount).toBeLessThanOrEqual(144);
+    // 850 x the 0.18 hit cap.
+    for (const hit of hits) if (hit.type === 'enemy_damaged') expect(hit.amount).toBeLessThanOrEqual(153);
     expect(GameSnapshotSchema.safeParse(sim.getSnapshot()).success).toBe(true);
   });
 

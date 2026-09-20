@@ -86,8 +86,8 @@ function burnSequence(subject: Parameters<typeof stepHazardTiles>[3], ms: number
 const onBand = { x: 5 * 32 + 16, y: 4 * 32 + 16, immune: false };
 
 describe('hazard tiles, as pure rules', () => {
-  it('ramps 3, 6, 9, 12, 15, 15 for a player and resets the moment they step off', () => {
-    expect(burnSequence({ ...onBand, kind: 'player' }, HAZARD_INTERVAL_MS * 6)).toEqual([3, 6, 9, 12, 15, 15]);
+  it('ramps 2, 4, 6, 8, 8, 8 for a player and resets the moment they step off', () => {
+    expect(burnSequence({ ...onBand, kind: 'player' }, HAZARD_INTERVAL_MS * 6)).toEqual([2, 4, 6, 8, 8, 8]);
 
     const tuning = terrainTuning();
     const room = hazardArena();
@@ -112,7 +112,7 @@ describe('hazard tiles, as pure rules', () => {
       .toBe(Math.round(HAZARD_BASE * ENEMY_HAZARD_MUL * TERRAIN_ELITE_DAMAGE_SCALE));
     expect(burnSequence({ ...onBand, kind: 'player', immune: true }, HAZARD_INTERVAL_MS * 8)).toEqual([]);
     expect(burnSequence({ ...onBand, kind: 'enemy', enemyId: 'husk' }, HAZARD_INTERVAL_MS * 5))
-      .toEqual([5, 10, 14, 19, 24]);
+      .toEqual([3, 6, 10, 13, 13]);
   });
 
   it('caps the ramp at the stack maximum', () => {
@@ -147,7 +147,7 @@ describe('hazard tiles in the simulation', () => {
       burns.push({ tick: sim.getTick(), damage: previous - hp(sim) });
       previous = hp(sim);
     }
-    expect(burns.map((b) => b.damage)).toEqual([3, 6, 9, 12]);
+    expect(burns.map((b) => b.damage)).toEqual([2, 4, 6, 8]);
     for (let i = 1; i < burns.length; i++) expect(burns[i]!.tick - burns[i - 1]!.tick).toBe(Math.round(HAZARD_INTERVAL_MS / TICK_MS));
   });
 
