@@ -63,7 +63,10 @@ describe('headquarters station UI', () => {
     expect(html).toContain('id="contribution"');
     expect(html).toContain('<details class="operative">');
     expect(html).toContain('armory stands');
-    expect(html).toContain('press F');
+    // U2a: the "walk up to a station and press F" paragraph was cut — the onboarding prompt
+    // and the station prompt over the canvas already say it. The rail keeps one lead line.
+    expect(html).toContain('Pick a weapon, add an idea for the next world, then take the gate.');
+    expect(html).not.toContain('press F');
   });
 
   it('keeps training solo-only and displays current class abilities at shrines', () => {

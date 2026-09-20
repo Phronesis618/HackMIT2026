@@ -339,13 +339,16 @@ export class RoomScene extends Phaser.Scene {
     }).setOrigin(0.5, 0).setDepth(DEPTH.overlay - 1).setVisible(false);
     layer.add(this.terrainHint);
     // A DM-style beat on arrival: the room's mood in its own words, then it fades out.
+    // U2a: it used to sit at 30% of the room's height — on top of the spawn, so it landed
+    // across the operative and their name label. It now hangs just inside the room's top
+    // edge, above everything that stands on the floor, with an opaque plane behind it.
     if (room.description && !opts.headquarters) {
       const descriptionCard = this
-        .text(roomW / 2, Math.min(96, roomH * 0.3), room.description, {
-          fontFamily: tokens.font.body, fontSize: '12px', color: p.text, align: 'center',
-          wordWrap: { width: Math.min(roomW - 40, 420) },
-          backgroundColor: 'rgba(7, 9, 15, 0.55)',
-          padding: { left: 10, right: 10, top: 8, bottom: 8 },
+        .text(roomW / 2, 14, room.description, {
+          fontFamily: tokens.font.body, fontSize: '11px', color: p.text, align: 'center',
+          wordWrap: { width: Math.min(roomW - 64, 460) },
+          backgroundColor: 'rgba(5, 7, 12, 0.88)',
+          padding: { left: 10, right: 10, top: 6, bottom: 6 },
         })
         .setOrigin(0.5, 0)
         .setAlpha(0)
@@ -670,18 +673,25 @@ export class RoomScene extends Phaser.Scene {
     bars.clear();
     const boss = snapshot.enemies.find((enemy) => enemy.enemyId === 'guardian' && enemy.hp > 0);
     if (boss && this.room) {
-      const width = Math.min(340, this.room.width * TILE_SIZE - 48);
+      // U2a: the climax's name was a 10 px stamp printed UNDER a 7 px bar in the black band
+      // below the room, where it read as a footnote. The name now sits above the bar, at the
+      // HUD's stamp size, and the bar is thicker with a hairline frame so it reads as a
+      // Custodian gauge rather than a stray line.
+      const width = Math.min(420, this.room.width * TILE_SIZE - 48);
       const x = (this.room.width * TILE_SIZE - width) / 2;
-      const y = this.room.height * TILE_SIZE + 9;
-      bars.fillStyle(0x000000, 0.8).fillRect(x, y, width, 7);
-      bars.fillStyle(hexToInt(tokens.color.danger), 0.95).fillRect(x, y, width * boss.hp / boss.maxHp, 7);
+      const y = this.room.height * TILE_SIZE + 22;
+      const h = 10;
+      bars.fillStyle(0x05070c, 0.92).fillRect(x, y, width, h);
+      bars.fillStyle(hexToInt(tokens.color.danger), 0.95).fillRect(x, y, width * boss.hp / boss.maxHp, h);
       for (const fraction of [1 / 3, 2 / 3]) {
-        bars.lineStyle(2, 0x080b15, 1).lineBetween(x + width * fraction, y, x + width * fraction, y + 7);
+        bars.lineStyle(2, 0x05070c, 1).lineBetween(x + width * fraction, y, x + width * fraction, y + h);
       }
+      bars.lineStyle(1, hexToInt(tokens.color.danger), 0.5).strokeRect(x, y, width, h);
       if (!this.bossLabel) {
-        this.bossLabel = this.text(this.room.width * TILE_SIZE / 2, y + 16, '', {
-          fontFamily: tokens.font.mono, fontSize: '10px', color: tokens.color.danger,
-        }).setOrigin(0.5).setDepth(DEPTH.overlay);
+        this.bossLabel = this.text(this.room.width * TILE_SIZE / 2, y - 6, '', {
+          fontFamily: tokens.font.mono, fontSize: '12px', color: tokens.color.danger,
+          letterSpacing: 2, stroke: '#05070c', strokeThickness: 3,
+        }).setOrigin(0.5, 1).setDepth(DEPTH.overlay);
         this.roomLayer?.add(this.bossLabel);
       }
       this.bossLabel.setVisible(true).setText(`${guardianTitle(boss)}${(boss.recoveryMs ?? 0) > 0 ? ' · EXPOSED' : ''}`);
@@ -727,15 +737,21 @@ export class RoomScene extends Phaser.Scene {
     const body = this.add.graphics();
     const facing = this.add.graphics();
     const hpBar = this.add.graphics();
+    // U2a: name labels used to sit 16 px up in plain text, so two hostiles standing together
+    // printed their names on top of each other and on the operative's. The operative's plate
+    // is lifted clear of the hostile band, and both carry a dark outline so an overlap is
+    // still readable against the floor.
     const label = this
-      .text(0, -radius - 16, name, {
+      .text(0, kind === 'player' ? -radius - 24 : -radius - 14, name, {
         fontFamily: tokens.font.body,
-        fontSize: '12px',
+        fontSize: kind === 'player' ? '12px' : '11px',
         color: kind === 'player' ? tokens.color.mist100 : tokens.color.mist300,
         fontStyle: kind === 'player' ? 'bold' : 'normal',
+        stroke: '#05070c',
+        strokeThickness: 3,
       })
       .setOrigin(0.5)
-      .setAlpha(kind === 'player' ? 0.95 : 0.7);
+      .setAlpha(kind === 'player' ? 0.95 : 0.6);
     container.add([shadow, facing, body, hpBar, label]);
     return { container, body, facing, label, hpBar, lastState: '', isLocal };
   }
@@ -847,17 +863,29 @@ export class RoomScene extends Phaser.Scene {
     const cx = Math.min(Math.max(spawn.col * TILE_SIZE + TILE_SIZE / 2, halfW + TILE_SIZE / 2), roomW - halfW - TILE_SIZE / 2);
     const cy = below ? (spawn.row + 2.6) * TILE_SIZE : (spawn.row - 2.2) * TILE_SIZE;
     const colors = stencilColors(palette);
-    const plate = this.add.graphics().setDepth(DEPTH.floorDecal + 2);
-    plate.fillStyle(hexToInt(palette.background), 0.22).fillRoundedRect(cx - halfW, cy - 24, halfW * 2, 46, 6);
-    plate.lineStyle(1, hexToInt(colors.glow), 0.35).strokeRoundedRect(cx - halfW, cy - 24, halfW * 2, 46, 6);
-    plate.lineStyle(1, hexToInt(colors.glow), 0.5).lineBetween(cx - halfW + 20, cy - 2, cx + halfW - 20, cy - 2);
-    layer.add(plate);
-    layer.add(this.text(cx, cy - 12, title, {
+    // U2a: the plate was a fixed 46 px tall, so a tagline that wrapped to two lines broke out
+    // of its bottom edge and ran over the props beneath. Lay the text out first, measure it,
+    // then draw the plate around what is actually there.
+    const titleText = this.text(cx, 0, title, {
       fontFamily: tokens.font.display, fontSize: `${fontSize}px`, color: colors.glow, letterSpacing,
-    }).setOrigin(0.5).setAlpha(0.8).setDepth(DEPTH.floorDecal + 3));
-    layer.add(this.text(cx, cy + 9, world.tagline, {
-      fontFamily: tokens.font.body, fontSize: '9px', color: palette.text, align: 'center', wordWrap: { width: halfW * 2 - 24 },
-    }).setOrigin(0.5).setAlpha(0.7).setDepth(DEPTH.floorDecal + 3));
+    }).setOrigin(0.5, 0).setAlpha(0.8).setDepth(DEPTH.floorDecal + 3);
+    const taglineText = this.text(cx, 0, world.tagline, {
+      fontFamily: tokens.font.body, fontSize: '10px', color: palette.text, align: 'center', wordWrap: { width: halfW * 2 - 28 },
+    }).setOrigin(0.5, 0).setAlpha(0.7).setDepth(DEPTH.floorDecal + 3);
+    const padY = 10;
+    const gap = 6;
+    const plateH = padY * 2 + titleText.height + gap + taglineText.height;
+    const top = cy - plateH / 2;
+    titleText.setY(top + padY);
+    taglineText.setY(top + padY + titleText.height + gap);
+    const plate = this.add.graphics().setDepth(DEPTH.floorDecal + 2);
+    plate.fillStyle(hexToInt(palette.background), 0.22).fillRoundedRect(cx - halfW, top, halfW * 2, plateH, 4);
+    plate.lineStyle(1, hexToInt(colors.glow), 0.35).strokeRoundedRect(cx - halfW, top, halfW * 2, plateH, 4);
+    plate.lineStyle(1, hexToInt(colors.glow), 0.5)
+      .lineBetween(cx - halfW + 20, top + padY + titleText.height + gap / 2, cx + halfW - 20, top + padY + titleText.height + gap / 2);
+    layer.add(plate);
+    layer.add(titleText);
+    layer.add(taglineText);
   }
 
   private clearEntities(): void {

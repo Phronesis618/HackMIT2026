@@ -811,12 +811,17 @@ button:focus-visible, summary:focus-visible, .stage:focus-visible {
   background: rgba(7, 9, 15, 0.72);
   backdrop-filter: blur(6px);
 }
+/* D7. A fixed 680 px frame both clipped the long pages (Operative's last button, the
+   right-hand column of the skill tree) and left ~320 px of dead ink under the short ones.
+   The frame now sizes to its page between a floor and the viewport. */
 .menu__frame {
   position: relative;
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  width: min(980px, 100%);
-  height: min(680px, 100%);
+  grid-template-columns: 188px minmax(0, 1fr);
+  width: min(1160px, 100%);
+  height: auto;
+  min-height: min(440px, 100%);
+  max-height: min(860px, 100%);
   background: rgba(11, 15, 26, 0.96);
   border: 1px solid rgba(124, 245, 255, 0.18);
   border-radius: var(--radius-lg);
@@ -1333,6 +1338,22 @@ body {
   background:
     linear-gradient(90deg, var(--hair) 1px, transparent 1px) 0 0 / 100% 100% no-repeat,
     transparent;
+  /* D8. A page taller than the frame used to be cut off with no sign it could scroll.
+     A fade at the foot says there is more, and the extra padding keeps the last control
+     clear of the frame edge. */
+  padding-bottom: var(--space-lg);
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ink500) transparent;
+}
+.menu__page::after {
+  content: '';
+  position: sticky;
+  bottom: calc(var(--space-lg) * -1);
+  display: block;
+  height: var(--space-lg);
+  margin-bottom: calc(var(--space-lg) * -1);
+  background: linear-gradient(transparent, rgba(7, 9, 15, 0.97));
+  pointer-events: none;
 }
 
 /* ---- memory wall / notices ---- */
@@ -1383,7 +1404,7 @@ body {
 }
 .skills__body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 240px;
+  grid-template-columns: minmax(0, 1fr) 224px;
   gap: var(--space-md);
   min-height: 0;
   flex: 1;
@@ -1965,7 +1986,10 @@ body { font-size: var(--fs-body); }
 .rail-label { margin: 0 0 var(--space-sm); }
 .rail-crew__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-xs); }
 .rail-crew__row { display: flex; align-items: center; gap: var(--space-sm); min-height: 24px; }
-.rail-crew__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-mist300); }
+/* D9. A 24-character name pushed the class stamp past the panel's edge, where it was cut
+   mid-word ("BASTION · Y"). Both halves now shrink and ellipsise instead. */
+.rail-crew__name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-mist300); }
+.rail-crew__class { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .rail-crew__row.is-local .rail-crew__name { color: var(--color-mist100); font-weight: 600; }
 .rail-crew__row.is-offline { opacity: 0.55; }
 
@@ -2003,13 +2027,17 @@ body { font-size: var(--fs-body); }
 .memory-brief__open { color: var(--color-neonCyanSoft); }
 .memory-brief__head { display: flex; align-items: center; justify-content: space-between; }
 .memory-brief__count { font: 600 var(--fs-lg) / 1 var(--font-mono); color: var(--color-warmLamp); }
+/* Two lines: the empty state ("Nothing yet. Memories are saved from real play.") lost its
+   last three words to a single-line ellipsis. A real memory title still clips at two. */
 .memory-brief__latest {
   font-family: var(--font-serif);
   font-size: var(--fs-body);
+  line-height: 1.35;
   color: var(--color-mist100);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .memory-brief__open { justify-content: flex-end; }
 
@@ -2079,58 +2107,138 @@ body { font-size: var(--fs-body); }
 }
 .rail-stat dd small { font-size: var(--fs-sm); font-weight: 400; color: var(--color-mist300); }
 
-/* ---- round 2 fixes ---- */
-.vitals { max-width: 360px; }
-@media (min-width: 1600px) { .vitals { max-width: 440px; } }
-.memory-brief__open { display: inline; margin: 0 0 0 var(--space-xs); }
-.world-brief .tagline { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.abilityslot__sweep { background: conic-gradient(transparent calc(360deg - var(--sweep, 0deg)), rgba(7, 9, 15, 0.62) 0); }
-.abilityslot--cooldown .abilityslot__frame > svg:first-child { opacity: 0.7; }
-.stage:focus-visible { outline: 1px solid var(--hair-strong); outline-offset: -1px; }
-.side__scroll { mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent); padding-bottom: var(--space-sm); }
-/* headquarters.css loads after this file, so HQ harmonisation needs the extra specificity */
-.panel--hq .hq-directory { padding: var(--space-sm) 0; gap: var(--space-xs); font-size: var(--fs-sm); }
-.stage-wrap .hq-wayfinder__hint { display: none; }
-.panel--hq .actions .btn { padding-inline: var(--space-sm); letter-spacing: 0.1em; white-space: nowrap; }
-.panel--hq .field .panel__row { flex-wrap: nowrap; align-items: center; }
-.panel--hq .field .panel__row .hint { margin: 0; }
-.panel--hq .training-entry .hint { font-size: var(--fs-sm); }
-@media (max-height: 840px) {
-  .panel--hq .hq-directory { display: none; }
-}
+/* =====================================================================================
+   Final audit (agent U2a, docs/design/UI_AUDIT_FINAL.md).
+   The three per-round override blocks that used to sit here have been folded into the
+   sections they belong to; what remains is grouped by region, not by round.
+   ===================================================================================== */
 
-/* ---- round 3: stage hugs its 16:9 canvas (no black bands), bar sits right under it ---- */
-:root { --top-h: 44px; }
-.stage-col { grid-template-rows: auto auto; align-content: start; justify-items: center; }
+/* ---- geometry: the stage hugs its 16:9 canvas, vertically centred in its column ---- */
 :root {
+  --top-h: 44px;
   --stage-max-h: calc(100vh - var(--top-h) - 2 * var(--space-md) - var(--bar-h) - var(--space-sm));
   --stage-w: min(100vw - var(--rail-w) - 3 * var(--space-md), var(--stage-max-h) * 16 / 9);
   --stage-h: calc(var(--stage-w) * 9 / 16);
 }
-.stage-wrap {
-  aspect-ratio: 16 / 9;
-  width: min(100%, var(--stage-w));
-}
-/* notice: inside the foot of the stage, never over the command bar or the rail */
-.notice {
-  top: calc(var(--top-h) + var(--space-md) + var(--stage-h) - var(--space-md));
-  bottom: auto;
-  position: fixed; /* the frame rule above resets .notice to relative, which put it in the app grid */
-  transform: translate(-50%, -100%);
-}
+/* D1. At 16:10 the width limit binds, so the column is shorter than its track. Centring it
+   splits the leftover above and below the stage instead of dropping ~100 px of dead ink
+   under the command bar. */
+.stage-col { grid-template-rows: auto auto; align-content: center; justify-items: center; }
+.stage-wrap { aspect-ratio: 16 / 9; width: min(100%, var(--stage-w)); }
 .commandbar { width: 100%; }
-.vitals__id { flex: 1 0 96px; }
-.vitals__class { display: none; }
-@media (min-width: 1600px) { .vitals__class { display: inline; } }
-.btn { white-space: nowrap; }
-.panel--hq .field .panel__row .btn { flex: none; }
+.stage:focus-visible { outline: 1px solid var(--hair-strong); outline-offset: -1px; }
+
+/* ---- top bar: one line, never wrapping into a second row ---- */
+.topbar { flex-wrap: nowrap; }
+.brand { min-width: 0; flex: 1 1 auto; }
+.topbar__status { flex-wrap: nowrap; flex: none; }
+.brand__tag,
+.brand__telemetry { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brand__telemetry { min-width: 0; flex: 0 1 auto; }
+@media (max-width: 1560px) { .brand__tag { display: none; } }
+
+/* ---- prompts over the stage ---- */
+.hud-strip { top: calc(var(--space-md) + 40px); }
+
+/* ---- notice: under the top bar, centred on the stage column ---- */
+.notice {
+  position: fixed; /* the frame rule above resets .notice to relative, which put it in the app grid */
+  top: calc(var(--top-h) + var(--space-md) + 56px);
+  bottom: auto;
+  transform: translate(-50%, 0);
+}
+
+/* ---- command bar ---- */
+.vitals { max-width: 360px; }
+@media (min-width: 1600px) { .vitals { max-width: 440px; } }
 /* vitals identity: class stamp when narrow, name from 1440, both from 1600 */
-.vitals__id { flex: initial; }
 .vitals__name { display: none; }
 .vitals__class { display: inline; }
 @media (min-width: 1440px) { .vitals__name { display: inline; } .vitals__class { display: none; } }
 @media (min-width: 1600px) { .vitals__class { display: inline; } }
-.notice { top: calc(var(--top-h) + 2 * var(--space-md)); transform: translate(-50%, 0); }
-.hud-strip { top: calc(var(--space-md) + 48px); }
-.notice { top: calc(var(--top-h) + var(--space-md) + 56px); }
-.hud-strip { top: calc(var(--space-md) + 40px); }
+.abilityslot__sweep { background: conic-gradient(transparent calc(360deg - var(--sweep, 0deg)), rgba(7, 9, 15, 0.62) 0); }
+.abilityslot--cooldown .abilityslot__frame > svg:first-child { opacity: 0.7; }
+/* D2. The ult's charge fill used the lamp at 22% over ink, which reads as mud. Keep the
+   uncharged part ink and let the charged part carry the lamp. */
+.abilityslot--charging .abilityslot__frame { background: color-mix(in srgb, var(--class-secondary, var(--color-warmLamp)) 26%, var(--color-ink900)); }
+.abilityslot__charge { background: rgba(5, 7, 12, 0.92); }
+.abilityslot__timer--charge { color: var(--color-mist100); }
+
+/* ---- run rail ---- */
+/* D3. Outside a floors world nothing mounts into the minimap slot, so a 180–220 px square
+   of "Map · no signal" sat at the top of the rail. Collapse it and run the stat tiles
+   across the full rail width instead. */
+.rail-top:not(:has(.hud-minimap-slot > :not(.hud-minimap-slot__placeholder))) { grid-template-columns: minmax(0, 1fr); }
+.rail-top:not(:has(.hud-minimap-slot > :not(.hud-minimap-slot__placeholder))) .hud-minimap-slot { display: none; }
+.rail-top:not(:has(.hud-minimap-slot > :not(.hud-minimap-slot__placeholder))) .rail-stats { grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+.side__scroll { mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent); padding-bottom: var(--space-sm); }
+.memory-brief__open { display: inline; margin: 0 0 0 var(--space-xs); }
+.world-brief .tagline { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* D4. The world brief's meta ran on and wrapped raggedly around the floated Codex link.
+   One row each: facts on the left clipped to a line, the Codex link held on the right. */
+.world-brief__foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-sm);
+  align-items: baseline;
+}
+.world-brief__facts { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.world-brief__laws {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  min-width: 0;
+  margin-top: var(--space-xs);
+  font: var(--fs-stamp) var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-warmLamp);
+}
+/* Two lines, not one: a world with three laws lost the third to an ellipsis. */
+.world-brief__laws > span:first-child {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+}
+/* D5. "engine-chosen" was only inside a collapsed provenance note. Wherever a derived law
+   name is shown, the stamp is shown beside it. */
+.derived-stamp {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--lamp-hair);
+  font: var(--fs-stamp) var(--font-mono);
+  font-style: normal;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-warmLamp);
+  white-space: nowrap;
+}
+
+/* ---- headquarters rail (headquarters.css loads later, so these need the extra specificity) ---- */
+.stage-wrap .hq-wayfinder__hint { display: none; }
+.panel--hq .hq-directory { padding: var(--space-sm) 0; gap: var(--space-xs); font-size: var(--fs-sm); }
+.panel--hq .actions .btn { padding-inline: var(--space-sm); letter-spacing: 0.1em; white-space: nowrap; }
+.panel--hq .field .panel__row { flex-wrap: nowrap; align-items: center; }
+.panel--hq .field .panel__row .hint { margin: 0; }
+.panel--hq .field .panel__row .btn { flex: none; }
+/* D6. The training entry was a 2-column squeeze: an 11-word line ragged to three words a
+   row beside a nowrap button. Stack it. */
+.training-entry { display: grid; gap: var(--space-sm); justify-items: start; }
+.panel--hq .training-entry .hint { font-size: var(--fs-sm); }
+/* D10. Opening a station panel pushed the hub panel down far enough that its primary action
+   left the fold. The directory is wayfinding the station panel makes redundant, so it steps
+   aside while one is open. */
+.side__scroll:has(.hq-station) .hq-directory { display: none; }
+.btn { white-space: nowrap; }
+@media (max-height: 840px) {
+  .panel--hq .hq-directory { display: none; }
+}
+
+/* ---- narrow (≤960): the rail stacks under the stage; the fixed menu chip has no home ---- */
+@media (max-width: 960px) {
+  .menu-hint { display: none; }
+  .stage-col { align-content: start; }
+}

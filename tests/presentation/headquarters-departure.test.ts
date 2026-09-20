@@ -180,7 +180,9 @@ describe('departure overlay and gate buttons', () => {
     expect(html).not.toContain('quick controls');
     expect(html).toContain('· name and weapon</summary>');
     expect(html).toContain('the same choice as the armory stands');
-    expect(html).toContain('Key bindings are in the menu under Controls.');
+    // U2a: the closing key-bindings paragraph was already hidden by CSS and duplicated the
+    // Controls menu page, so the markup went too. The rail no longer explains the controls.
+    expect(html).not.toContain('Key bindings are in the menu under Controls.');
     expect(html).not.toContain('Shift/Space to dash');
   });
 
