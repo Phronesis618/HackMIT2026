@@ -50,6 +50,7 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('enter_portal') }).strict(),
   z.object({ type: z.literal('return_to_hq') }).strict(),
   z.object({ type: z.literal('unlock_ability') }).strict(),
+  z.object({ type: z.literal('purchase_skill'), nodeId: z.string().min(1).max(64) }).strict(),
   /** Floors: vote for (host: decide) the next biome while `snapshot.floor.biomeChoice` is open. */
   z.object({ type: z.literal('choose_biome'), biomeId: IdString }).strict(),
 ]);

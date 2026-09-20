@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { WorldFixtureSchema } from '../../src/shared/contracts';
-import { CLASS_IDS } from '../../src/shared/registry';
-import { buildSkillTree } from '../../src/shared/skills';
+import { lintProse } from '../../src/shared/prose';
+import { ATTUNEMENT_EFFECT_IDS, ATTUNEMENT_EFFECT_INFO, CLASS_IDS, type AttunementEffectId } from '../../src/shared/registry';
+import { buildSkillTree, ownedSkillEffects } from '../../src/shared/skills';
 import fixtureData from '../../fixtures/worlds/vantage-spire.json';
 
 const fixture = WorldFixtureSchema.parse(fixtureData);
@@ -31,5 +32,31 @@ describe('skill tree', () => {
     expect(attuned.every((n) => n.lane === 2 && n.effectId)).toBe(true);
     expect(tree.subtitle).toContain(fixture.recipe.title);
     expect(buildSkillTree('shade', null).nodes.some((n) => n.kind === 'attunement')).toBe(false);
+  });
+
+  it('marks implemented only the nodes whose effect the sim actually applies', () => {
+    const tree = buildSkillTree('bastion', { title: fixture.recipe.title, attunements: fixture.recipe.attunements });
+    for (const node of tree.nodes) {
+      if (node.status === 'implemented' && node.cost > 0) expect(node.effectId, node.id).toBeDefined();
+      if (node.kind === 'attunement') expect(node.status).toBe(ATTUNEMENT_EFFECT_INFO[node.effectId as AttunementEffectId].status);
+      if (node.kind === 'class') expect(node.status).toBe('planned');
+    }
+    expect(tree.nodes.filter((n) => n.status === 'implemented').map((n) => n.id).sort())
+      .toEqual(['core.root', 'core.salvage', 'core.wind', ...fixture.recipe.attunements.map((a, i) => `attune.${i}.${a.effectId}`)].sort());
+    expect(ownedSkillEffects(tree, ['core.wind', 'core.plating', 'attune.0.' + fixture.recipe.attunements[0]!.effectId]))
+      .toEqual(['second_wind', fixture.recipe.attunements[0]!.effectId]);
+  });
+
+  it('player-facing skill and attunement text passes the prose lint', () => {
+    const tree = buildSkillTree('bastion', { title: fixture.recipe.title, attunements: fixture.recipe.attunements });
+    for (const node of tree.nodes.filter((n) => n.status === 'implemented')) {
+      const r = lintProse(node.description, { kind: 'skillNode' });
+      expect(r.hardFail, `${node.id}: ${JSON.stringify(r.issues)}`).toBe(false);
+    }
+    for (const id of ATTUNEMENT_EFFECT_IDS) {
+      const r = lintProse(ATTUNEMENT_EFFECT_INFO[id].summary, { kind: 'skillNode' });
+      expect(r.hardFail, `${id}: ${JSON.stringify(r.issues)}`).toBe(false);
+      expect(ATTUNEMENT_EFFECT_INFO[id].summary).toMatch(/\d|double|half/);
+    }
   });
 });

@@ -215,6 +215,12 @@ export class LocalSession implements GameSession {
     for (const listener of this.snapshotListeners) listener(this.snapshot);
   }
 
+  purchaseSkill(nodeId: string): void {
+    if (this.disposed || !this.sim.purchaseSkill(this.localPlayerId, nodeId)) return;
+    this.snapshot = this.sim.getSnapshot();
+    for (const listener of this.snapshotListeners) listener(this.snapshot);
+  }
+
   chooseBiome(biomeId: string): void {
     if (this.disposed) return;
     this.sim.chooseBiome(this.localPlayerId, biomeId); // resolves on the next tick

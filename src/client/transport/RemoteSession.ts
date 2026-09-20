@@ -237,6 +237,7 @@ export class RemoteSession implements GameSession {
   enterPortal(): void { this.sendAction({ type: 'enter_portal' }); }
   returnToHeadquarters(): void { this.sendAction({ type: 'return_to_hq' }); }
   unlockAbility(): void { this.sendAction({ type: 'unlock_ability' }); }
+  purchaseSkill(nodeId: string): void { this.sendAction({ type: 'purchase_skill', nodeId }); }
   /** Floors: everyone may vote; the server lets only the host's vote decide. */
   chooseBiome(biomeId: string): void { this.sendAction({ type: 'choose_biome', biomeId }); }
 

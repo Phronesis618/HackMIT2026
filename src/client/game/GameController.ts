@@ -191,6 +191,7 @@ export class GameController {
           prev.maxHp !== hud.maxHp ||
           prev.resources !== hud.resources ||
           prev.abilityEUnlocked !== hud.abilityEUnlocked ||
+          (prev.skillNodeIds?.length ?? 0) !== (hud.skillNodeIds?.length ?? 0) ||
           prev.abilityQCooldownMs !== hud.abilityQCooldownMs ||
           prev.abilityECooldownMs !== hud.abilityECooldownMs ||
           prev.reviveProgress !== hud.reviveProgress ||
@@ -461,6 +462,7 @@ export class GameController {
         store.set({ audioMuted: audio.isMuted() });
       },
       unlockAbility: () => session.unlockAbility?.(),
+      purchaseSkill: (nodeId) => session.purchaseSkill?.(nodeId),
       enterTraining: () => {
         const ok = session.enterTraining?.() ?? false;
         if (!ok) this.notice('info', 'The training range is available in solo play from headquarters.');
@@ -486,6 +488,7 @@ function hudFrom(me: PlayerState, snapshot: GameSnapshot): NonNullable<UiModel['
     enemiesRemaining: snapshot.enemies.filter((e) => e.state !== 'dead').length,
     resources: me.resources ?? 0,
     abilityEUnlocked: me.abilityEUnlocked ?? false,
+    ...(me.skillNodeIds ? { skillNodeIds: me.skillNodeIds } : {}),
     abilityQCooldownMs: Math.ceil((me.abilityQCooldownMs ?? 0) / 100) * 100,
     abilityECooldownMs: Math.ceil((me.abilityECooldownMs ?? 0) / 100) * 100,
     reviveProgress: me.reviveProgress ?? 0,
