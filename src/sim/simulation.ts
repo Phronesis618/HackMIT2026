@@ -18,6 +18,9 @@ import {
   nearestOpenPosition, type Point, type ProjectilePattern,
 } from './combat';
 import { headquartersRoom } from './headquarters';
+import { terrainSpeedMultiplier, type TerrainState } from '../shared/terrain';
+import { createTerrainState, strikeBreakableWalls } from './terrain';
+import { ANCHOR_DISCHARGE_MS, ANCHOR_PULSE_SPEED, ANCHOR_PULSE_WARNING_MS, guardianPhase, RELAY_ACTIVATION_RANGE } from '../shared/finale';
 import { TRAINING_REGEN_PER_TICK, TRAINING_RESPAWN_MS, TRAINING_WAKE_RANGE, trainingRoom } from './training';
 
 type LivePlayerState = PlayerState & Required<Pick<PlayerState,
@@ -34,6 +37,8 @@ interface PlayerRuntime {
   hitRemainingMs: number;
   onExit: boolean;
   interacting: boolean;
+  interactHeld: boolean;
+  interactPressed: boolean;
   damagedThisTick: boolean;
   history: Array<Point & { hp: number }>;
 }
@@ -75,6 +80,8 @@ interface RoomProgress {
   anchor: AnchorState | null;
   cleared: boolean;
   loreNodes: LoreNodeRuntime[];
+  pulseHitPlayers: Set<string>;
+  terrain: TerrainState;
 }
 
 export interface Simulation {
@@ -114,7 +121,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   let eventCounter = 0;
   const players = new Map<string, PlayerRuntime>();
   const rooms = new Map<number, RoomProgress>();
-  let progress: RoomProgress = { enemies: [], anchor: null, cleared: false, loreNodes: [] };
+  let progress: RoomProgress = { enemies: [], anchor: null, cleared: false, loreNodes: [], pulseHitPlayers: new Set(), terrain: createTerrainState() };
   /** Ephemeral bullet-hell bolts; never persisted across room switches (combat gates exits). */
   let projectiles: ProjectileRuntime[] = [];
   let projectileCounter = 0;
@@ -153,6 +160,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     p.attackRemainingMs = 0;
     p.hitRemainingMs = 0;
     p.interacting = false;
+    p.interactHeld = false;
+    p.interactPressed = false;
     p.damagedThisTick = false;
     p.history = [];
     p.onExit = false;
@@ -193,6 +202,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
             ...spawn,
             facing: Math.PI, hp: info.maxHp, maxHp: info.maxHp, state: 'idle',
             telegraph: null, slowMs: 0, stunMs: 0, markMs: 0,
+            ...(encounter.enemyId === 'guardian' ? { bossPhase: 1, recoveryMs: 0 } : {}),
           },
           cooldownMs: 500, hitMs: 0, attackCount: 0, spawn, respawnMs: 0,
           channelMsRemaining: 0, channelAngle: 0, channelTimerMs: 0,
@@ -224,8 +234,17 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const anchorPoint = room.isFinal ? findTile('A') : null;
     progress = saved ?? {
       enemies: nextPhase === 'expedition' || nextPhase === 'training' ? spawnEnemies() : [],
-      anchor: anchorPoint ? { ...anchorPoint, state: 'dormant', progress: 0 } : null,
+      anchor: anchorPoint ? {
+        ...anchorPoint, state: 'dormant', progress: 0,
+        ...(room.anchorRelays ? { ritual: {
+          stage: 'locked' as const,
+          relays: room.anchorRelays.map((relay) => ({ ...tileToWorld(relay.x, relay.y), activated: false })),
+          activeRelay: 0, pulseRadius: 0, pulseWarningMs: ANCHOR_PULSE_WARNING_MS, dischargeMs: 0,
+        } } : {}),
+      } : null,
       cleared: false,
+      pulseHitPlayers: new Set(),
+      terrain: createTerrainState(),
       loreNodes: nextPhase === 'expedition' ? room.relics.map((relic) => ({
         state: {
           id: relic.id, kind: 'relic', ...tileToWorld(relic.x, relic.y), fragmentIndex: relic.fragmentIndex,
@@ -235,6 +254,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       })) : [],
     };
     if (nextPhase === 'expedition') rooms.set(next.index, progress);
+    grid = buildSolidGrid(room, progress.terrain.brokenWalls);
     placePlayers();
   }
 
@@ -251,7 +271,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       },
       intent: null, unlockedClasses: new Set(), dashRemainingMs: 0,
       dashDirection: { x: 1, y: 0 }, attackRemainingMs: 0, hitRemainingMs: 0,
-      onExit: false, interacting: false, damagedThisTick: false, history: [],
+      onExit: false, interacting: false, interactHeld: false, interactPressed: false, damagedThisTick: false, history: [],
     };
   }
 
@@ -465,6 +485,11 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       damageEnemy(e, p, spec.damage + bonus, events);
       if (s.classId === 'weaver') e.state.slowMs = Math.max(e.state.slowMs ?? 0, 1000);
     }
+    const terrainStrike = strikeBreakableWalls(room, grid, progress.terrain, {
+      x: s.x, y: s.y, facing: s.facing, range: spec.range, arc: spec.arc, damage: spec.damage + bonus,
+    });
+    progress.terrain = terrainStrike.state;
+    if (terrainStrike.hits.some((hit) => hit.destroyed)) grid = buildSolidGrid(room, progress.terrain.brokenWalls);
   }
 
   /** Push an enemy away from (or toward, with negative distance) a point, respecting walls. */
@@ -636,6 +661,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const intent = p.intent;
     p.intent = null;
     p.interacting = intent?.interact === true && s.hp > 0;
+    p.interactPressed = p.interacting && !p.interactHeld;
+    if (intent) p.interactHeld = intent.interact === true;
     if (s.hp <= 0) {
       s.state = 'down';
       s.vx = s.vy = 0;
@@ -668,7 +695,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       s.vy = p.dashDirection.y * DASH_SPEED;
     } else {
       const speed = CLASS_COMBAT[s.classId].speed * (p.attackRemainingMs > 0 ? 0.35 : 1) *
-        (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1);
+        (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1) *
+        terrainSpeedMultiplier(room, s.x, s.y, progress.terrain.brokenWalls);
       s.vx = length > 0 ? moveX / length * speed : 0;
       s.vy = length > 0 ? moveY / length * speed : 0;
     }
@@ -684,10 +712,15 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (s.state === 'dashing' || s.state === 'attacking' || intent?.ability || length > 0) p.interacting = false;
   }
 
-  /** Picks the telegraph shape for an enemy's next attack. Guardian cycles four phases. */
   function attackKindFor(s: EnemyState, e: EnemyRuntime): { kind: EnemyTelegraph['kind']; range: number; arc: number } {
     const spec = ENEMY_COMBAT[s.enemyId];
     if (s.enemyId === 'guardian') {
+      if ((s.bossPhase ?? 1) >= 2) {
+        const pattern = (s.bossPhase === 3 ? ['charge', 'ring', 'beam', 'burst', 'ring'] : ['beam', 'charge', 'ring', 'burst']) as Array<EnemyTelegraph['kind']>;
+        const kind = pattern[e.attackCount % pattern.length]!;
+        return { kind, range: kind === 'charge' ? 220 : kind === 'beam' ? 340 : kind === 'ring' ? 260 : 125,
+          arc: kind === 'charge' ? 0.3 : kind === 'beam' ? 0.22 : Math.PI * 2 };
+      }
       const phase = e.attackCount % 4;
       if (phase === 0) return { kind: 'burst', range: spec.range, arc: spec.arc };
       if (phase === 1) return { kind: 'volley', range: spec.range, arc: 0.2 };
@@ -725,8 +758,12 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     } else if (telegraph.kind === 'volley' || telegraph.kind === 'spread' || telegraph.kind === 'ring' || telegraph.kind === 'homing') {
       if (s.enemyId === 'guardian') {
         const isVolleyPhase = telegraph.kind === 'volley';
-        firePattern(s.id, telegraph.x, telegraph.y, telegraph.facing, isVolleyPhase ? 'volley' : 'ring',
-          isVolleyPhase ? GUARDIAN_VOLLEY_PATTERN : GUARDIAN_RING_PATTERN,
+        const ringPattern = s.bossPhase === 3
+          ? { ...GUARDIAN_RING_PATTERN, count: 12, spacing: Math.PI / 6, speed: 240, life: 1600 }
+          : GUARDIAN_RING_PATTERN;
+        const angle = telegraph.facing + (isVolleyPhase ? 0 : (e.attackCount % 2) * ringPattern.spacing / 2);
+        firePattern(s.id, telegraph.x, telegraph.y, angle, isVolleyPhase ? 'volley' : 'ring',
+          isVolleyPhase ? GUARDIAN_VOLLEY_PATTERN : ringPattern,
           isVolleyPhase ? GUARDIAN_VOLLEY_DAMAGE : GUARDIAN_RING_DAMAGE);
       } else {
         const pattern = ENEMY_PROJECTILE_PATTERN[s.enemyId];
@@ -735,6 +772,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     }
     s.telegraph = null;
     e.cooldownMs = spec.cooldown;
+    if (s.enemyId === 'guardian') {
+      s.recoveryMs = telegraph.kind === 'charge' || telegraph.kind === 'burst' ? 1100 : 650;
+      e.cooldownMs = s.bossPhase === 3 ? 1200 : 1600;
+    }
     e.attackCount++;
   }
 
@@ -769,6 +810,18 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const s = e.state;
     if (s.hp <= 0) return;
     const spec = ENEMY_COMBAT[s.enemyId];
+    if (s.enemyId === 'guardian') {
+      const nextPhase = guardianPhase(s.hp, s.maxHp);
+      if (nextPhase !== s.bossPhase) {
+        s.bossPhase = nextPhase;
+        s.telegraph = null;
+        s.recoveryMs = 1400;
+        e.cooldownMs = 1500;
+        e.attackCount = 0;
+        projectiles = projectiles.filter((projectile) => projectile.ownerEnemyId !== s.id);
+      }
+      s.recoveryMs = decay(s.recoveryMs ?? 0);
+    }
     s.slowMs = decay(s.slowMs ?? 0);
     s.stunMs = decay(s.stunMs ?? 0);
     s.markMs = decay(s.markMs ?? 0);
@@ -777,6 +830,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (s.stunMs > 0) {
       s.telegraph = null;
       s.state = 'hit';
+      return;
+    }
+    if ((s.recoveryMs ?? 0) > 0) {
+      s.state = 'idle';
       return;
     }
     if (e.channelMsRemaining > 0) {
@@ -803,7 +860,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     s.facing = Math.atan2(target.state.y - s.y, target.state.x - s.x);
     const { kind, range, arc } = attackKindFor(s, e);
     if (e.cooldownMs === 0 && distance(s, target.state) <= range && clearPath(grid, s, target.state)) {
-      s.telegraph = { kind, x: s.x, y: s.y, facing: s.facing, range, arcRad: arc, remainingMs: spec.windup };
+      s.telegraph = { kind, x: s.x, y: s.y, facing: s.facing, range, arcRad: arc,
+        remainingMs: s.bossPhase === 3 ? 900 : spec.windup };
       s.state = 'attacking';
       events.push(emit({ type: 'enemy_telegraphed', enemyId: s.id, telegraph: { ...s.telegraph } }));
       return;
@@ -813,7 +871,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (distance(s, target.state) > stopRange || !clearPath(grid, s, target.state)) {
       const waypoint = chaseWaypoint(grid, s, target.state, ENEMY_INFO[s.enemyId].radius);
       const d = distance(s, waypoint);
-      const step = Math.min(d, spec.speed * (s.slowMs > 0 ? 0.35 : 1) * TICK_MS / 1000);
+      const step = Math.min(d, spec.speed * (s.slowMs > 0 ? 0.35 : 1) *
+        terrainSpeedMultiplier(room, s.x, s.y, progress.terrain.brokenWalls) * TICK_MS / 1000);
       if (d > 0) {
         const moved = moveCircle(grid, s.x, s.y, ENEMY_INFO[s.enemyId].radius,
           (waypoint.x - s.x) / d * step, (waypoint.y - s.y) / d * step);
@@ -868,6 +927,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     }
     const anchor = progress.anchor;
     if (!anchor || anchor.state === 'planted' || !progress.cleared) return;
+    if (anchor.ritual) {
+      updateAnchorRitual(anchor, living, busy, events);
+      return;
+    }
     const planters = living.filter((p) => p.interacting && !p.damagedThisTick && !busy.has(p.state.id) &&
       distance(p.state, anchor) <= ANCHOR_RANGE && clearPath(grid, p.state, anchor));
     if (planters.length === 0) {
@@ -883,6 +946,62 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       events.push(emit({ type: 'anchor_planted', worldId: world.worldId, roomIndex: room.index, playerIds: playerIds() }));
       finishRun('anchored', events);
     }
+  }
+
+  function updateAnchorRitual(anchor: AnchorState, living: PlayerRuntime[], busy: Set<string>, events: GameEvent[]): void {
+    const ritual = anchor.ritual;
+    if (!ritual || !world) return;
+    if (ritual.stage === 'locked') {
+      ritual.stage = 'relays';
+      projectiles = [];
+    }
+    if (ritual.stage === 'discharging') {
+      ritual.dischargeMs = Math.min(ANCHOR_DISCHARGE_MS, ritual.dischargeMs + TICK_MS);
+      anchor.progress = 0.75 + 0.25 * ritual.dischargeMs / ANCHOR_DISCHARGE_MS;
+      if (ritual.dischargeMs >= ANCHOR_DISCHARGE_MS - 1e-7) {
+        ritual.stage = 'complete';
+        anchor.state = 'planted';
+        anchor.progress = 1;
+        events.push(emit({ type: 'anchor_planted', worldId: world.worldId, roomIndex: room.index, playerIds: playerIds() }));
+        finishRun('anchored', events);
+      }
+      return;
+    }
+    if (ritual.activeRelay > 0) {
+      if (ritual.pulseWarningMs > 0) ritual.pulseWarningMs = decay(ritual.pulseWarningMs);
+      else {
+        const previousRadius = ritual.pulseRadius;
+        ritual.pulseRadius += ANCHOR_PULSE_SPEED * TICK_MS / 1000;
+        for (const p of living) {
+          const d = distance(p.state, anchor);
+          if (progress.pulseHitPlayers.has(p.state.id) || d < previousRadius - PLAYER_RADIUS - 5 ||
+            d > ritual.pulseRadius + PLAYER_RADIUS + 5) continue;
+          progress.pulseHitPlayers.add(p.state.id);
+          damagePlayer(p, 'anchor-pulse', 12, false, events);
+        }
+        if (ritual.pulseRadius > Math.hypot(room.width, room.height) * TILE_SIZE) {
+          ritual.pulseRadius = 0;
+          ritual.pulseWarningMs = ANCHOR_PULSE_WARNING_MS;
+          progress.pulseHitPlayers.clear();
+        }
+      }
+    }
+    const target = ritual.stage === 'core' ? anchor : ritual.relays[ritual.activeRelay];
+    if (!target) return;
+    const actor = living.find((p) => !busy.has(p.state.id) && p.state.hp > 0 && p.interactPressed && !p.damagedThisTick &&
+      distance(p.state, target) <= RELAY_ACTIVATION_RANGE && clearPath(grid, p.state, target));
+    if (!actor) return;
+    anchor.state = 'planting';
+    if (ritual.stage === 'core') {
+      ritual.stage = 'discharging';
+      ritual.pulseRadius = 0;
+      ritual.pulseWarningMs = 0;
+      return;
+    }
+    ritual.relays[ritual.activeRelay]!.activated = true;
+    ritual.activeRelay++;
+    anchor.progress = ritual.activeRelay / 4;
+    if (ritual.activeRelay === ritual.relays.length) ritual.stage = 'core';
   }
 
   function updateExits(events: GameEvent[]): void {
@@ -1010,8 +1129,11 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         })),
         loreNodes: progress.loreNodes.map((n) => ({ ...n.state })),
         discoveredLore: [...discoveredLore].sort((a, b) => a - b),
-        anchor: progress.anchor ? { ...progress.anchor } : null,
+        anchor: progress.anchor ? { ...progress.anchor,
+          ...(progress.anchor.ritual ? { ritual: { ...progress.anchor.ritual,
+            relays: progress.anchor.ritual.relays.map((relay) => ({ ...relay })) } } : {}) } : null,
         roomCleared: phase !== 'headquarters' && progress.cleared,
+        terrain: { brokenWalls: [...progress.terrain.brokenWalls], wallDamage: { ...progress.terrain.wallDamage } },
       };
     },
     getTick() { return tick; },

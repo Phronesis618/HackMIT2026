@@ -13,6 +13,7 @@ import { CLASS_INFO, CLASS_IDS, type ClassId } from '../../shared/registry';
 import type { WorldRenderer } from '../../shared/render';
 import type { GameSession } from '../../shared/session';
 import type { UiActions, UiModel } from '../../shared/ui';
+import { nearbyHeadquartersStation } from '../../shared/headquarters';
 import { headquartersArt, headquartersRoom, trainingArt, trainingRoom } from '../../sim';
 import type { AudioPort } from '../audio';
 import { cueForEvent } from '../audio';
@@ -53,6 +54,7 @@ export class GameController {
   private input: InputSampler | null = null;
   private rafHandle = 0;
   private latestSnapshot: GameSnapshot | null = null;
+  private interactHeld = false;
   private stageMounted = false;
   private disposers: Array<() => void> = [];
   private thumbnailTimers = new Set<ReturnType<typeof setTimeout>>();
@@ -79,6 +81,7 @@ export class GameController {
       classStatus: Object.fromEntries(CLASS_IDS.map((id) => [id, CLASS_INFO[id].status])) as UiModel['classStatus'],
       preview: { fixtureWorld: flags.fixtureWorld, startRoom: flags.startRoom },
       notice: null,
+      headquarters: { nearbyStationId: null, activeStationId: null },
     };
   }
 
@@ -148,7 +151,10 @@ export class GameController {
       const me = snapshot.players.find((p) => p.id === session.localPlayerId);
       const pointer = this.input.getPointer();
       const aim = pointer ? renderer.screenToWorld(pointer.x, pointer.y) : me ? { x: me.x + Math.cos(me.facing), y: me.y + Math.sin(me.facing) } : { x: 0, y: 0 };
-      session.setIntent(this.input.sample(aim));
+      const intent = this.input.sample(aim);
+      if (intent.interact && !this.interactHeld) this.activateHeadquartersStation();
+      this.interactHeld = intent.interact === true;
+      session.setIntent(intent);
       renderer.renderSnapshot(snapshot, session.localPlayerId);
 
       if (me) {
@@ -197,6 +203,12 @@ export class GameController {
   private handleSnapshot(snapshot: GameSnapshot): void {
     this.latestSnapshot = snapshot;
     const { session, store, renderer, audio } = this.deps;
+    const nearbyStationId = nearbyHeadquartersStation(snapshot, session.localPlayerId)?.id ?? null;
+    const headquarters = store.get().headquarters;
+    const activeStationId = headquarters?.activeStationId === nearbyStationId ? nearbyStationId : null;
+    if (headquarters?.nearbyStationId !== nearbyStationId || headquarters?.activeStationId !== activeStationId) {
+      store.set({ headquarters: { nearbyStationId, activeStationId } });
+    }
     const me = snapshot.players.find((p) => p.id === session.localPlayerId);
     audio.setScene?.(snapshot.phase);
     if (snapshot.phase === 'training') {
@@ -272,6 +284,7 @@ export class GameController {
   private handlePhase(phase: 'headquarters' | 'training' | 'expedition' | 'debrief'): void {
     const { renderer, store, audio } = this.deps;
     audio.setScene?.(phase);
+    store.set({ headquarters: { nearbyStationId: null, activeStationId: null } });
     if (phase === 'headquarters') {
       renderer.showHeadquarters(headquartersRoom, headquartersArt);
       store.set({ phase: 'headquarters', room: null, hud: null });
@@ -287,6 +300,25 @@ export class GameController {
     this.deps.store.set({ notice: { kind, text } });
   }
 
+  private canUseHeadquarters(): boolean {
+    const { session, store } = this.deps;
+    return session.getPhase() === 'headquarters'
+      && store.get().phase === 'headquarters'
+      && !['queued', 'generating', 'validating'].includes(store.get().generation.phase)
+      && session.getConnectionStatus() === 'connected';
+  }
+
+  private activateHeadquartersStation(): void {
+    if (!this.canUseHeadquarters()) return;
+    const { session, store, audio } = this.deps;
+    const snapshot = session.getSnapshot();
+    const station = snapshot ? nearbyHeadquartersStation(snapshot, session.localPlayerId) : null;
+    if (!station) return;
+    store.set({ headquarters: { nearbyStationId: station.id, activeStationId: station.id } });
+    if (station.classId) this.actions.selectClass(station.classId);
+    audio.play('ui_confirm');
+  }
+
   // ---- UiActions -------------------------------------------------------------------
 
   private createActions(): UiActions {
@@ -299,6 +331,7 @@ export class GameController {
         persistIdentity(me);
       },
       selectClass: (classId: ClassId) => {
+        if (!this.canUseHeadquarters()) return;
         session.setClass(classId);
         const me = session.getLocalPlayer();
         store.set({ localPlayer: { ...me, isLocal: true } });
@@ -342,6 +375,11 @@ export class GameController {
         const ok = session.enterTraining?.() ?? false;
         if (!ok) this.notice('info', 'The training range is available in solo play from headquarters.');
       },
+      activateHeadquartersStation: () => this.activateHeadquartersStation(),
+      closeHeadquartersStation: () => store.set((model) => ({
+        ...model,
+        headquarters: { nearbyStationId: model.headquarters?.nearbyStationId ?? null, activeStationId: null },
+      })),
     };
   }
 }

@@ -18,10 +18,13 @@ import {
   type RoomProp,
   type RoomRelic,
   type RoomSpec,
+  type RoomTerrain,
   type WorldRecipe,
 } from '../../shared/contracts';
+import { ANCHOR_RANGE, LORE_READ_RANGE, TILE_SIZE } from '../../shared/conventions';
 import { hashString } from '../../shared/ids';
-import { MOTIF_IDS, PROP_INFO, type MotifId } from '../../shared/registry';
+import { MOTIF_IDS, PROP_INFO, WALKABLE_TILES, type MotifId } from '../../shared/registry';
+import { buildSolidGrid, isSolidAt } from '../../sim/collision';
 
 export interface CompileWorldRecipeOptions {
   plannedRoomCount: number;
@@ -101,6 +104,7 @@ function compileRoom(
   const grid = createBorderedGrid(width, height);
 
   applyMotifStructure(grid, pathY, blueprint.motifIds[0] ?? recipe.motifIds[0], roomSeed);
+  applyTerrain(grid, pathY, blueprint, roomSeed);
   if (blueprint.hazards) applyHazards(grid, pathY, roomSeed);
 
   // Reserve and re-clear the critical route after all structural work.
@@ -132,8 +136,9 @@ function compileRoom(
     attributions,
     relics,
   });
+  if (isFinal) room.anchorRelays = placeAnchorRelays(room);
   if (!hasCriticalRoute(room)) throw new Error(`Room ${index + 1} has no safe route to its objective.`);
-  return room;
+  return RoomSpecSchema.parse(room);
 }
 
 function createBorderedGrid(width: number, height: number): Grid {
@@ -191,6 +196,85 @@ function applyHazards(grid: Grid, pathY: number, seed: number): void {
   const startX = 4 + pick(seed, 'hazard-x', Math.max(1, width - 11));
   for (let x = startX; x < Math.min(width - 2, startX + 4); x++) {
     if (grid[hazardY]![x] === '.') grid[hazardY]![x] = '~';
+  }
+}
+
+function defaultTerrain(motif: MotifId): RoomTerrain {
+  if (motif === 'roots' || motif === 'crystals') {
+    return { features: ['breakable_walls', 'rubble'], layout: 'scattered', density: 'balanced' };
+  }
+  if (motif === 'arches' || motif === 'monoliths' || motif === 'spires') {
+    return { features: ['breakable_walls', 'bridges'], layout: 'barricades', density: 'balanced' };
+  }
+  return { features: ['bridges', 'conduits'], layout: 'crossroads', density: 'balanced' };
+}
+
+function applyTerrain(grid: Grid, pathY: number, blueprint: RoomBlueprint, seed: number): void {
+  const terrain = blueprint.terrain ?? defaultTerrain(blueprint.motifIds[0]!);
+  const features = new Set(terrain.features);
+  const density = terrain.density === 'sparse' ? 1 : terrain.density === 'dense' ? 3 : 2;
+  const cells = floorCandidates(grid, pathY, seed);
+  const width = grid[0]!.length;
+  const height = grid.length;
+  if (features.has('bridges')) {
+    const halfLength = terrain.layout === 'barricades' ? 3 : 2;
+    let placed = 0;
+    for (const center of cells) {
+      const horizontal = terrain.layout === 'barricades' ? false
+        : terrain.layout === 'crossroads' ? placed % 2 === 0 : pick(seed, 'bridge-axis', 2) === 0;
+      let stamped = false;
+      for (const horizontalWall of [horizontal, !horizontal]) {
+        const footprint: Coord[] = [];
+        for (let along = -halfLength; along <= halfLength; along++) {
+          for (let across = -1; across <= 1; across++) {
+            footprint.push({
+              x: center.x + (horizontalWall ? along : across),
+              y: center.y + (horizontalWall ? across : along),
+            });
+          }
+        }
+        if (footprint.some(({ x, y }) => x < 2 || x >= width - 2 || y < 1 || y >= height - 1 ||
+          Math.abs(y - pathY) <= 1 || !['.', '#'].includes(grid[y]![x]!))) continue;
+        for (const { x, y } of footprint) grid[y]![x] = '.';
+        for (let along = -halfLength; along <= halfLength; along++) {
+          grid[center.y + (horizontalWall ? 0 : along)]![center.x + (horizontalWall ? along : 0)] = '#';
+        }
+        grid[center.y]![center.x] = '=';
+        for (const side of [-1, 1]) {
+          grid[center.y + (horizontalWall ? side : 0)]![center.x + (horizontalWall ? 0 : side)] = '>';
+        }
+        stamped = true;
+        break;
+      }
+      if (stamped && ++placed >= (density === 3 ? 2 : 1)) break;
+    }
+  }
+  if (features.has('breakable_walls')) {
+    const walls: Coord[] = [];
+    for (let y = 2; y < height - 2; y++) {
+      for (let x = 2; x < width - 2; x++) {
+        if (grid[y]![x] !== '#') continue;
+        if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => grid[y + dy!]![x + dx!] === '=')) continue;
+        walls.push({ x, y });
+      }
+    }
+    walls.sort((a, b) => hashString(`${seed}:wall:${a.x}:${a.y}`) - hashString(`${seed}:wall:${b.x}:${b.y}`));
+    for (const { x, y } of walls.slice(0, density * 2)) grid[y]![x] = 'B';
+  }
+  for (const feature of ['rubble', 'conduits'] as const) {
+    if (!features.has(feature)) continue;
+    let placed = 0;
+    for (const center of cells) {
+      const offsets = feature === 'rubble'
+        ? [[0, 0], [1, 0], [0, 1], [1, 1]]
+        : terrain.layout === 'crossroads'
+          ? [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]
+          : [[0, 0], [1, 0], [2, 0], [3, 0]];
+      const patch = offsets.map(([dx, dy]) => ({ x: center.x + dx!, y: center.y + dy! }));
+      if (patch.some(({ x, y }) => x < 2 || x >= width - 2 || Math.abs(y - pathY) <= 1 || grid[y]?.[x] !== '.')) continue;
+      for (const { x, y } of patch) grid[y]![x] = feature === 'rubble' ? ':' : '+';
+      if (++placed >= density) break;
+    }
   }
 }
 
@@ -309,6 +393,7 @@ function placeRelics(
     markOccupied(occupied, prop.x, prop.y, w, h);
   }
   for (const encounter of encounters) markOccupied(occupied, encounter.x - 1, encounter.y - 1, 3, 3);
+  const core = findTile(grid, 'A');
   const relics: RoomRelic[] = [];
   recipe.lore.forEach((fragment, fragmentIndex) => {
     if (fragment.kind !== 'relic' || fragment.roomIndex !== roomIndex) return;
@@ -316,7 +401,8 @@ function placeRelics(
       notes.push(`Room ${roomIndex + 1} kept only three relics.`);
       return;
     }
-    const coord = candidates.find(({ x, y }) => footprintFits(grid, occupied, x, y, 1, 1));
+    const coord = candidates.find(({ x, y }) => footprintFits(grid, occupied, x, y, 1, 1) &&
+      (!core || Math.hypot(x - core.x, y - core.y) * TILE_SIZE > LORE_READ_RANGE + ANCHOR_RANGE));
     if (!coord) {
       notes.push(`Room ${roomIndex + 1} omitted the relic "${fragment.title}"; no open floor remained.`);
       return;
@@ -383,12 +469,55 @@ function hasCriticalRoute(room: RoomSpec): boolean {
     const { x, y } = queue[i]!;
     const tile = grid[y]?.[x];
     const key = `${x},${y}`;
-    if (!tile || '# ~'.includes(tile) || blocked.has(key) || seen.has(key)) continue;
+    if (!tile || !WALKABLE_TILES.has(tile) || tile === '~' || blocked.has(key) || seen.has(key)) continue;
     if (tile === (room.isFinal ? 'A' : 'X')) return true;
     seen.add(key);
     queue.push({ x: x + 1, y }, { x: x - 1, y }, { x, y: y + 1 }, { x, y: y - 1 });
   }
   return false;
+}
+
+function placeAnchorRelays(room: RoomSpec): Coord[] {
+  const grid = buildSolidGrid(room);
+  const tiles = room.tiles.map((line) => line.split(''));
+  const spawn = findTile(tiles, 'P')!;
+  const core = findTile(tiles, 'A')!;
+  const queue = [spawn];
+  const seen = new Set<string>([`${spawn.x},${spawn.y}`]);
+  const occupied = new Set<string>();
+  for (const prop of room.props) {
+    const { w, h } = PROP_INFO[prop.propId].footprint;
+    markOccupied(occupied, prop.x, prop.y, w, h);
+  }
+  const candidates: Coord[] = [];
+  for (let i = 0; i < queue.length; i++) {
+    const point = queue[i]!;
+    const tile = room.tiles[point.y]![point.x]!;
+    if (tile === '.' && !occupied.has(`${point.x},${point.y}`) &&
+      room.relics.every((relic) =>
+        Math.hypot(point.x - relic.x, point.y - relic.y) * TILE_SIZE > LORE_READ_RANGE + ANCHOR_RANGE)) {
+      candidates.push(point);
+    }
+    for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]] as const) {
+      const x = point.x + dx;
+      const y = point.y + dy;
+      const key = `${x},${y}`;
+      if (seen.has(key) || isSolidAt(grid, x, y) || room.tiles[y]?.[x] === '~') continue;
+      seen.add(key);
+      queue.push({ x, y });
+    }
+  }
+  const relays: Coord[] = [];
+  for (let i = 0; i < 3; i++) {
+    const anchors = [core, spawn, ...relays];
+    const score = (candidate: Coord) => Math.min(...anchors.map((anchor) =>
+      Math.hypot(candidate.x - anchor.x, candidate.y - anchor.y)));
+    candidates.sort((a, b) => score(b) - score(a) || a.y - b.y || a.x - b.x);
+    const point = candidates.shift();
+    if (!point) throw new Error(`Room ${room.index + 1} has no safe space for three Anchor relays.`);
+    relays.push(point);
+  }
+  return relays;
 }
 
 function footprintFits(grid: Grid, occupied: Set<string>, x: number, y: number, width: number, height: number): boolean {

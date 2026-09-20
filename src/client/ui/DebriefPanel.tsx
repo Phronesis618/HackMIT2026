@@ -6,6 +6,7 @@ export function DebriefPanel({ model, actions }: { model: UiModel; actions: UiAc
   const summary = [...memories].reverse().find((m) => m.kind === 'run_summary');
   const highlights = memories.filter((m) => m.kind === 'milestone' || m.kind === 'anchor');
   const arrival = memories.find((m) => m.kind === 'arrival_keepsake');
+  const anchored = model.hud?.anchor?.state === 'planted';
 
   return (
     <section className="panel panel--debrief" aria-labelledby="debrief-title">
@@ -14,6 +15,18 @@ export function DebriefPanel({ model, actions }: { model: UiModel; actions: UiAc
       <p className="debrief__outcome">
         {summary?.summary ?? 'No expedition outcome has been recorded yet.'}
       </p>
+      {anchored && (
+        <div className="debrief__keepsake">
+          <div>
+            <p className="eyebrow">A signal that remains</p>
+            <h3 className="panel__subtitle">This world can hold itself now.</h3>
+            <p className="muted">
+              The Custodian falls silent. Your Anchor answers from the other side of the portal.
+              Return to the sanctuary; the Archive will keep what happened here.
+            </p>
+          </div>
+        </div>
+      )}
       {arrival && (
         <div className="debrief__keepsake">
           {arrival.thumbnailDataUrl && (

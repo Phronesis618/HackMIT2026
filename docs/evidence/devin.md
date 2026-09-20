@@ -2,6 +2,21 @@
 
 Agent C records only work and verification performed in this session.
 
+## Gameplay expansion — 2026-09-20
+
+On `devin/1789887155-terrain-boss-sanctuary`, Devin integrated tactical terrain, the phased
+Custodian and relay finale, and the Stillpoint headquarters. Two delegated Devin sessions
+implemented compiler/terrain helpers and sanctuary UI/layout; the parent implemented the
+boss/finale, authoritative terrain runtime, renderer integration, and runtime regression tests.
+Commits include `cae7051`, `d3227f7`, `8405164`, `dac0c50`, `ae2d6db`, and `e1e43c2`.
+
+Final `npm run check`: 288 tests / 30 files, typecheck and production build pass.
+The first integrated run had six failures from outdated fixtures and mocks. After approval
+in PR #16 comment 5748345520, Devin updated the HQ collision route and pillar coordinates,
+provided compact-room relay sites, and added two Phaser mock methods. The collision bounds
+retain their one-tile width; outer-wall assertions and all other assertions are unchanged.
+Browser testing and live generation were not performed; no screenshot or recording is claimed.
+
 ## Claude provider integration — 2026-09-20
 
 On `devin/1789878276-claude-provider`, Devin implemented the requested Claude/OpenAI

@@ -20,7 +20,12 @@ import {
   ENEMY_IDS,
   MOTIF_IDS,
   PROP_IDS,
+  PROP_INFO,
+  TERRAIN_DENSITIES,
+  TERRAIN_FEATURE_IDS,
+  TERRAIN_LAYOUT_IDS,
   TILE_CHARS,
+  WALKABLE_TILES,
 } from './registry';
 
 // ---------------------------------------------------------------------------
@@ -230,6 +235,7 @@ export const RoomSpecSchema = z
     isFinal: z.boolean(),
     attributions: z.array(AttributionSchema).max(24),
     relics: z.array(RoomRelicSchema).max(6).default([]),
+    anchorRelays: z.array(z.object({ x: TileCoord, y: TileCoord })).length(3).optional(),
   })
   .superRefine((room, ctx) => {
     if (room.tiles.length !== room.height) {
@@ -274,11 +280,22 @@ export const RoomSpecSchema = z
     const inBounds = (x: number, y: number) => x < room.width && y < room.height;
     const walkable = (x: number, y: number) => {
       const ch = room.tiles[y]?.[x];
-      return ch !== undefined && ch !== '#' && ch !== ' ';
+      return ch !== undefined && WALKABLE_TILES.has(ch);
     };
     for (const p of room.props) {
       if (!inBounds(p.x, p.y)) ctx.addIssue({ code: 'custom', message: `prop ${p.id} out of bounds` });
       else if (!walkable(p.x, p.y)) ctx.addIssue({ code: 'custom', message: `prop ${p.id} is placed on a wall/void tile` });
+      const info = PROP_INFO[p.propId];
+      if (info.blocksMovement) {
+        for (let dy = 0; dy < info.footprint.h; dy++) {
+          for (let dx = 0; dx < info.footprint.w; dx++) {
+            const tile = room.tiles[p.y + dy]?.[p.x + dx];
+            if (tile !== '.') {
+              ctx.addIssue({ code: 'custom', message: `blocking prop ${p.id} overlaps a solid, special tile or boundary` });
+            }
+          }
+        }
+      }
     }
     for (const e of room.encounters) {
       if (!inBounds(e.x, e.y)) ctx.addIssue({ code: 'custom', message: `encounter ${e.id} out of bounds` });
@@ -287,6 +304,15 @@ export const RoomSpecSchema = z
     for (const r of room.relics) {
       if (!inBounds(r.x, r.y)) ctx.addIssue({ code: 'custom', message: `relic ${r.id} out of bounds` });
       else if (!walkable(r.x, r.y)) ctx.addIssue({ code: 'custom', message: `relic ${r.id} is placed on a wall/void tile` });
+    }
+    if (room.anchorRelays) {
+      const unique = new Set(room.anchorRelays.map((relay) => `${relay.x},${relay.y}`));
+      if (!room.isFinal || unique.size !== 3) ctx.addIssue({ code: 'custom', message: 'Anchor relays require three distinct sites in the final room' });
+      for (const relay of room.anchorRelays) {
+        if (!inBounds(relay.x, relay.y) || !walkable(relay.x, relay.y) || room.tiles[relay.y]?.[relay.x] === '~') {
+          ctx.addIssue({ code: 'custom', message: 'Anchor relay must be on safe walkable ground' });
+        }
+      }
     }
   });
 export type RoomSpec = z.infer<typeof RoomSpecSchema>;
@@ -306,14 +332,24 @@ function refineRelicReferences(world: { recipe: WorldRecipe; rooms: RoomSpec[] }
 // World recipe (model-facing structured output) and prepared world (client-facing)
 // ---------------------------------------------------------------------------
 
-export const RoomBlueprintSchema = z.object({
+export const RoomTerrainSchema = z.object({
+  features: z.array(z.enum(TERRAIN_FEATURE_IDS)).max(4),
+  layout: z.enum(TERRAIN_LAYOUT_IDS),
+  density: z.enum(TERRAIN_DENSITIES),
+});
+export type RoomTerrain = z.infer<typeof RoomTerrainSchema>;
+
+const roomBlueprintShape = {
   name: ShortText,
   description: z.string().trim().max(300),
   motifIds: z.array(MotifIdSchema).min(1).max(3),
   propIds: z.array(PropIdSchema).max(6),
   enemyIds: z.array(EnemyIdSchema).max(3),
   hazards: z.boolean(),
-});
+  terrain: RoomTerrainSchema.nullable().optional(),
+};
+// Provider JSON requires nullable keys; local parsing also accepts legacy recipes.
+export const RoomBlueprintSchema = z.object(roomBlueprintShape).meta({ required: Object.keys(roomBlueprintShape) });
 export type RoomBlueprint = z.infer<typeof RoomBlueprintSchema>;
 
 export const ContributionMappingSchema = z.object({
@@ -536,6 +572,8 @@ export const EnemyStateSchema = z.object({
   slowMs: z.number().nonnegative().optional(),
   stunMs: z.number().nonnegative().optional(),
   markMs: z.number().nonnegative().optional(),
+  bossPhase: z.number().int().min(1).max(3).optional(),
+  recoveryMs: z.number().nonnegative().optional(),
 });
 export type EnemyState = z.infer<typeof EnemyStateSchema>;
 
@@ -559,6 +597,14 @@ export const AnchorStateSchema = z.object({
   y: z.number(),
   state: z.enum(['dormant', 'planting', 'planted']),
   progress: z.number().min(0).max(1),
+  ritual: z.object({
+    stage: z.enum(['locked', 'relays', 'core', 'discharging', 'complete']),
+    relays: z.array(z.object({ x: z.number(), y: z.number(), activated: z.boolean() })).length(3),
+    activeRelay: z.number().int().min(0).max(3),
+    pulseRadius: z.number().nonnegative(),
+    pulseWarningMs: z.number().nonnegative(),
+    dischargeMs: z.number().nonnegative(),
+  }).optional(),
 });
 export type AnchorState = z.infer<typeof AnchorStateSchema>;
 
@@ -581,6 +627,10 @@ export const GameSnapshotSchema = z.object({
   discoveredLore: z.array(z.number().int().min(0)).optional(),
   anchor: AnchorStateSchema.nullable(),
   roomCleared: z.boolean().optional(),
+  terrain: z.object({
+    brokenWalls: z.array(z.string().regex(/^\d+,\d+$/)).max(2048),
+    wallDamage: z.record(z.string().regex(/^\d+,\d+$/), z.number().nonnegative()),
+  }).optional(),
 });
 export type GameSnapshot = z.infer<typeof GameSnapshotSchema>;
 

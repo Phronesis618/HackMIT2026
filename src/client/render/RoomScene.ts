@@ -10,11 +10,15 @@ import Phaser from 'phaser';
 import type { ArtRecipe, EnemyState, GameEvent, GameSnapshot, PlayerState, ReceiptLine, RoomSpec } from '../../shared/contracts';
 import { ATTACK_ARC_RAD, ATTACK_RANGE, DEPTH, LORE_READ_RANGE, PLAYER_RADIUS, TILE_SIZE, tileToWorld } from '../../shared/conventions';
 import { hashString } from '../../shared/ids';
+import { guardianTitle } from '../../shared/finale';
 import { CLASS_THEME, ENEMY_INFO, type ClassId } from '../../shared/registry';
 import { hexToInt, tokens } from '../../shared/tokens';
 import { ENEMY_COMBAT } from '../../sim/combat';
 import { drawHostile, drawOperative } from './characters';
 import { hexInt } from './color';
+import { drawAnchorRitual } from './anchorRitual';
+import { collectTerrainTiles, drawTerrain, terrainCaption, type TerrainTile } from './terrain';
+import { drawHeadquartersStations, type HeadquartersStationView } from './headquarters';
 import { drawMotif, drawProp, drawSanctuary, drawVignette } from './drawing';
 import { drawBackdrop, drawFloor, drawLightPools, drawMotes, drawWalls, makeMotes, type Mote } from './environment';
 import { drawFloorDressing, drawOverhead, drawWallDressing, FLOOR_PATTERN, MOTE_STYLE, stencilColors, type MoteStyle } from './dressing';
@@ -62,6 +66,11 @@ export class RoomScene extends Phaser.Scene {
   private loreCaption: Phaser.GameObjects.Text | null = null;
   /** In-world Integrity/status strip above the room. */
   private statusView: Phaser.GameObjects.Graphics | null = null;
+  private bossLabel: Phaser.GameObjects.Text | null = null;
+  private terrainView: Phaser.GameObjects.Graphics | null = null;
+  private terrainHint: Phaser.GameObjects.Text | null = null;
+  private terrainTiles: TerrainTile[] = [];
+  private headquartersStations: HeadquartersStationView | null = null;
   private statusLabels = new Map<string, Phaser.GameObjects.Text>();
   private portalPulse = 0;
   private players = new Map<string, EntityView>();
@@ -125,6 +134,11 @@ export class RoomScene extends Phaser.Scene {
     this.loreCaption = null;
     this.loreMarkers = this.computeLoreMarkers(room, loreLines);
     this.statusView = null;
+    this.bossLabel = null;
+    this.terrainView = null;
+    this.terrainHint = null;
+    this.terrainTiles = collectTerrainTiles(room);
+    this.headquartersStations = null;
     this.statusLabels.clear();
     this.loreNodesView = null;
     this.loreHint = null;
@@ -182,10 +196,19 @@ export class RoomScene extends Phaser.Scene {
       }
     }
     layer.add(decals);
+    room.anchorRelays?.forEach((relay, index) => {
+      const point = tileToWorld(relay.x, relay.y);
+      layer.add(this.text(point.x, point.y + 24, `RELAY ${index + 1}`, {
+        fontFamily: tokens.font.mono, fontSize: '9px', color: p.accent,
+      }).setOrigin(0.5).setDepth(DEPTH.floorDecal));
+    });
 
     const walls = this.add.graphics().setDepth(DEPTH.propsBehind);
     drawWalls(walls, room, p, seed);
     layer.add(walls);
+    this.terrainView = this.add.graphics().setDepth(DEPTH.propsBehind + 0.5);
+    layer.add(this.terrainView);
+    drawTerrain(this.terrainView, room, this.terrainTiles, undefined, p, this.time.now);
     if (!opts.headquarters) {
       const dressing = this.add.graphics().setDepth(DEPTH.propsBehind);
       drawWallDressing(dressing, room, p, art.motifIds, seed);
@@ -197,19 +220,18 @@ export class RoomScene extends Phaser.Scene {
       const exit = room.exits[0];
       drawSanctuary(sanctuary, roomW, roomH, p, exit ? tileToWorld(exit.x, exit.y) : undefined);
       layer.add(sanctuary);
-      layer.add(this.text(roomW - 160, 17, 'CHRONICLE ARCHIVE', {
-        fontFamily: tokens.font.mono, fontSize: '10px', color: tokens.color.warmLamp,
-      }).setOrigin(0.5).setDepth(DEPTH.overlay));
+      this.headquartersStations = drawHeadquartersStations(this, layer, room, this.textResolution);
     }
 
     const props = this.add.graphics().setDepth(DEPTH.propsBehind + 1);
     for (const prop of room.props) {
+      if (opts.headquarters && prop.id.startsWith('hq-station-')) continue;
       const c = tileToWorld(prop.x, prop.y);
       drawProp(props, prop.propId, c.x, c.y, p, art.glowIntensity);
     }
     layer.add(props);
 
-    if (opts.headquarters) this.drawControlsFloorHint(layer, roomW / 2, 7 * TILE_SIZE, p);
+    if (opts.headquarters) this.drawControlsFloorHint(layer, roomW / 2, 11 * TILE_SIZE, p);
 
     this.portalGlow = this.add.graphics().setDepth(DEPTH.floorDecal + 3);
     layer.add(this.portalGlow);
@@ -244,6 +266,11 @@ export class RoomScene extends Phaser.Scene {
     // In-world Integrity strip; one row per crew member.
     this.statusView = this.add.graphics().setDepth(DEPTH.overlay - 1);
     layer.add(this.statusView);
+    this.terrainHint = this.text(0, 0, '', {
+      fontFamily: tokens.font.mono, fontSize: '9px', color: p.accent,
+      backgroundColor: 'rgba(7, 9, 15, 0.85)', padding: { left: 6, right: 6, top: 4, bottom: 4 },
+    }).setOrigin(0.5, 0).setDepth(DEPTH.overlay - 1).setVisible(false);
+    layer.add(this.terrainHint);
     // A DM-style beat on arrival: the room's mood in its own words, then it fades out.
     if (room.description && !opts.headquarters) {
       const descriptionCard = this
@@ -308,6 +335,7 @@ export class RoomScene extends Phaser.Scene {
     if (!this.art || snapshot.roomId !== this.room?.id) return;
     this.latestSnapshot = snapshot;
     this.localPlayerId = localPlayerId;
+    this.headquartersStations?.update(snapshot, localPlayerId);
 
     const seenPlayers = new Set<string>();
     for (const player of snapshot.players) {
@@ -373,6 +401,7 @@ export class RoomScene extends Phaser.Scene {
       const accent = hexToInt(this.art.palette.accent);
       const t = this.time.now / 1000;
       this.anchorView.clear();
+      drawAnchorRitual(this.anchorView, a, this.time.now, accent, Math.hypot(this.room.width, this.room.height) * TILE_SIZE);
       this.anchorView.fillStyle(accent, 0.15).fillCircle(a.x, a.y, 20 + Math.sin(t * 3.3) * 3);
       this.anchorView.fillStyle(accent, a.state === 'planted' ? 1 : 0.6).fillCircle(a.x, a.y, 6);
       this.anchorView.lineStyle(2, accent, 0.8).strokeTriangle(a.x, a.y - 17, a.x - 10, a.y + 7, a.x + 10, a.y + 7);
@@ -387,7 +416,11 @@ export class RoomScene extends Phaser.Scene {
       this.anchorLabel
         ?.setPosition(a.x, a.y - 42)
         .setVisible(true)
-        .setText(a.state === 'planted' ? 'ANCHOR PLANTED' : a.state === 'planting' ? `PLANTING · ${Math.floor(a.progress * 100)}%` : 'ANCHOR DORMANT');
+        .setText(a.ritual
+          ? a.ritual.stage === 'locked' ? 'CIRCUIT LOCKED'
+            : a.ritual.stage === 'relays' ? `${a.ritual.activeRelay}/3 RELAYS`
+              : a.ritual.stage === 'core' ? 'F · RELEASE THE SIGNAL' : 'WORLD SECURED'
+          : a.state === 'planted' ? 'ANCHOR PLANTED' : a.state === 'planting' ? `PLANTING · ${Math.floor(a.progress * 100)}%` : 'ANCHOR DORMANT');
     } else if (!snapshot.anchor) {
       this.anchorView?.clear();
       this.anchorLabel?.setVisible(false);
@@ -395,6 +428,13 @@ export class RoomScene extends Phaser.Scene {
 
     this.updateLoreCaption(snapshot, localPlayerId);
     this.updateLoreNodes(snapshot, localPlayerId);
+    if (this.terrainView) drawTerrain(this.terrainView, this.room, this.terrainTiles, snapshot.terrain, this.art.palette, this.time.now);
+    const local = snapshot.players.find((player) => player.id === localPlayerId);
+    const caption = local ? terrainCaption(this.room, this.terrainTiles, snapshot.terrain, local) : null;
+    if (caption && local && !this.loreCaption?.visible && !this.loreHint?.visible) {
+      this.terrainHint?.setPosition(local.x, local.y + 30).setText(caption).setVisible(true);
+    }
+    else this.terrainHint?.setVisible(false);
     if (!this.isHeadquarters) this.updateStatusStrip(snapshot, localPlayerId);
   }
 
@@ -529,6 +569,24 @@ export class RoomScene extends Phaser.Scene {
     const bars = this.statusView;
     if (!bars) return;
     bars.clear();
+    const boss = snapshot.enemies.find((enemy) => enemy.enemyId === 'guardian' && enemy.hp > 0);
+    if (boss && this.room) {
+      const width = Math.min(340, this.room.width * TILE_SIZE - 48);
+      const x = (this.room.width * TILE_SIZE - width) / 2;
+      const y = this.room.height * TILE_SIZE + 9;
+      bars.fillStyle(0x000000, 0.8).fillRect(x, y, width, 7);
+      bars.fillStyle(hexToInt(tokens.color.danger), 0.95).fillRect(x, y, width * boss.hp / boss.maxHp, 7);
+      for (const fraction of [1 / 3, 2 / 3]) {
+        bars.lineStyle(2, 0x080b15, 1).lineBetween(x + width * fraction, y, x + width * fraction, y + 7);
+      }
+      if (!this.bossLabel) {
+        this.bossLabel = this.text(this.room.width * TILE_SIZE / 2, y + 16, '', {
+          fontFamily: tokens.font.mono, fontSize: '10px', color: tokens.color.danger,
+        }).setOrigin(0.5).setDepth(DEPTH.overlay);
+        this.roomLayer?.add(this.bossLabel);
+      }
+      this.bossLabel.setVisible(true).setText(`${guardianTitle(boss)}${(boss.recoveryMs ?? 0) > 0 ? ' · EXPOSED' : ''}`);
+    } else this.bossLabel?.setVisible(false);
     const rowH = 15;
     const barX = 14;
     const barW = 108;
@@ -565,7 +623,7 @@ export class RoomScene extends Phaser.Scene {
   private drawTelegraph(g: Phaser.GameObjects.Graphics, enemy: EnemyState): void {
     const warning = enemy.telegraph;
     if (!warning) return;
-    const total = ENEMY_COMBAT[enemy.enemyId].windup;
+    const total = enemy.bossPhase === 3 ? 900 : ENEMY_COMBAT[enemy.enemyId].windup;
     const progress = total > 0 ? 1 - Math.min(1, warning.remainingMs / total) : 1;
     const color = fx.enemyAccent(enemy.enemyId);
     const hot = hexToInt(tokens.canvas.telegraph);
@@ -648,6 +706,13 @@ export class RoomScene extends Phaser.Scene {
       view.facing.lineStyle(2, hexToInt(tokens.canvas.telegraph), 0.9).beginPath().arc(0, 0, radius + 12, -Math.PI / 3, Math.PI / 3, false).strokePath();
     }
     if ((enemy.slowMs ?? 0) > 0) view.facing.lineStyle(1.5, 0x5ef0b0, 0.7).strokeCircle(0, 0, radius + 5);
+    if (enemy.enemyId === 'guardian' && enemy.hp > 0) {
+      for (let i = 0; i < (enemy.bossPhase ?? 1); i++) {
+        view.facing.lineStyle(1, hexToInt(tokens.color.danger), 0.45)
+          .beginPath().arc(0, 0, radius + 6 + i * 5, this.time.now / 700 + i * 2, this.time.now / 700 + i * 2 + 1.5, false).strokePath();
+      }
+      if ((enemy.recoveryMs ?? 0) > 0) view.facing.lineStyle(3, hexToInt(tokens.color.success), 0.85).strokeCircle(0, 0, radius + 3);
+    }
     view.facing.setRotation(enemy.facing);
     if (enemy.hp < enemy.maxHp && enemy.state !== 'dead') this.drawHpBar(view.hpBar, enemy.hp, enemy.maxHp, radius, fx.enemyAccent(enemy.enemyId));
     else view.hpBar.clear();

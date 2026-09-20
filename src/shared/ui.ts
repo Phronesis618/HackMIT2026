@@ -21,6 +21,7 @@ import type {
   PlayerActionState,
 } from './contracts';
 import type { ConnectionStatus, SessionMode } from './session';
+import type { HeadquartersStationId } from './headquarters';
 
 export type UiPhase = 'headquarters' | 'preparing' | 'training' | 'expedition' | 'debrief';
 
@@ -97,6 +98,7 @@ export interface UiModel {
   preview: { fixtureWorld: boolean; startRoom: number | null };
   /** Transient message from controllers (e.g. "prepare a world first"). */
   notice: { kind: 'info' | 'error'; text: string } | null;
+  headquarters?: { nearbyStationId: HeadquartersStationId | null; activeStationId: HeadquartersStationId | null };
 }
 
 export interface UiActions {
@@ -112,4 +114,6 @@ export interface UiActions {
   unlockAbility?(): void;
   /** Solo only: enter the HQ training range (respawning targets, every ability unlocked). */
   enterTraining?(): void;
+  activateHeadquartersStation?(): void;
+  closeHeadquartersStation?(): void;
 }
