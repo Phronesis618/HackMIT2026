@@ -9,7 +9,10 @@ import {
   type ChronicleContext, type ChronicleState, type ChronicleWorldContext,
 } from '../../chronicle';
 import { clearHubState, createHubState, hubStateBus, loadHubState, reduceHubState, saveHubState, type HubState, type HubStateBus } from './hubState';
-import { clearMemories, loadMemories, saveMemories, type KeyValueStorage } from './localStore';
+import {
+  clearChronicleProgress, clearMemories, loadChronicleProgress, loadMemories,
+  saveChronicleProgress, saveMemories, type KeyValueStorage,
+} from './localStore';
 import type { ClassId } from '../../shared/registry';
 
 export interface BrowserIngestContext extends Omit<ChronicleContext, 'now'> {
@@ -30,7 +33,7 @@ export interface BrowserChronicle {
 }
 
 export function createBrowserChronicle(storage: KeyValueStorage, now: () => number = Date.now, hub: HubStateBus = hubStateBus): BrowserChronicle {
-  let state: ChronicleState = createChronicleState(loadMemories(storage));
+  let state: ChronicleState = { ...createChronicleState(loadMemories(storage)), ...loadChronicleProgress(storage) };
   hub.set(loadHubState(storage));
   const listeners = new Set<(m: MemoryRecord[]) => void>();
   const notify = (): void => {
@@ -43,6 +46,11 @@ export function createBrowserChronicle(storage: KeyValueStorage, now: () => numb
     ingest(events, ctx) {
       const at = now();
       const result = reduceChronicle(state, events, { players: ctx.players, world: ctx.world, now: at });
+      const floorEvents = events.some((event) => event.type === 'biome_entered'
+        || event.type === 'biome_choice_offered' || (event.type === 'room_entered' && event.kind));
+      if (events.length > 0 && (state.floors || result.state.floors || floorEvents)) {
+        saveChronicleProgress(storage, result.state);
+      }
       state = result.state;
       if (result.created.length > 0) {
         saveMemories(storage, state.memories);
@@ -56,9 +64,7 @@ export function createBrowserChronicle(storage: KeyValueStorage, now: () => numb
         });
         if (after !== before) {
           hub.set(after);
-          // Persist on the durable transitions (run opened / run folded), not per in-flight event.
-          const runBoundary = after.lastRun !== before.lastRun || (after.current === null) !== (before.current === null) || after.current?.worldId !== before.current?.worldId;
-          if (runBoundary) saveHubState(storage, after);
+          saveHubState(storage, after);
         }
       }
       return result.created;
@@ -83,6 +89,7 @@ export function createBrowserChronicle(storage: KeyValueStorage, now: () => numb
     clear() {
       state = { ...state, memories: [] };
       clearMemories(storage);
+      clearChronicleProgress(storage);
       hub.set(createHubState());
       clearHubState(storage);
       notify();
