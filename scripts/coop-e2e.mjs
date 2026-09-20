@@ -888,8 +888,12 @@ async function groupReconnect(ctx) {
   const after2 = await alice.read();
   const bobs2 = after2.snap.players.filter((p) => p.displayName === 'bob');
   await shots([alice, bob], 's8-guest-new-context');
-  report.check('8b', 'guest closes browser, rejoins with same as= -> one bob, in the room', Boolean(bs2) && bobs2.length === 1 && bs2.ui.phase === 'expedition',
-    `while away host lobby="${names(gone)}"; before ${before2.length} bob(s); after rejoin host sees ${bobs2.length} "bob" operative(s) ${J(bobs2.map((p) => [p.id, Math.round(p.x), p.hp]))}; lobby="${names(after2)}"; bob ui.phase=${bs2?.ui.phase} (a new context has empty storage, so this is a NEW identity by design — it must still land in the running room)`);
+  // A brand-new browser profile has no stored identity, so this is a NEW operative by design; the
+  // old seat is a ghost until the server's 30 s grace expires. It must land in the running room.
+  const tGhost = Date.now();
+  const ghostGone = await waitFor(async () => ((await alice.read()).snap.players.filter((p) => p.displayName === 'bob').length === 1), { timeoutMs: 45000, intervalMs: 500, label: 'ghost pruned' }).then(() => true).catch(() => false);
+  report.check('8b', 'guest closes browser, rejoins with same as= -> lands in the running room; old seat expires', Boolean(bs2) && bs2.ui.phase === 'expedition' && Boolean(bs2.ui.world) && ghostGone,
+    `while away host lobby="${names(gone)}"; right after rejoin host sees ${bobs2.length} "bob" operative(s) ${J(bobs2.map((p) => [p.id, Math.round(p.x), p.hp]))} lobby="${names(after2)}"; bob ui.phase=${bs2?.ui.phase} world="${bs2?.ui.world?.title}"; ghost seat gone after ${((Date.now() - tGhost) / 1000).toFixed(0)} s=${ghostGone} (new browser profile = new identity by design)`);
 
   // --- 8c: HOST closes mid-room -> succession; remaining player keeps playing.
   await alice.close();
