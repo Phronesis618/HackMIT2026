@@ -828,6 +828,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     node.holdMs = 0;
     if (!fragment || discoveredLore.has(node.state.fragmentIndex)) return;
     discoveredLore.add(node.state.fragmentIndex);
+    if (node.state.kind === 'relic') by.state.hp = Math.min(by.state.maxHp, by.state.hp + relicMendHp(by.effects));
+    else by.state.ultCharge = Math.min(ULT_CHARGE_MAX, by.state.ultCharge + remainsCharge(by.effects));
     events.push(emit({
       type: 'lore_discovered', worldId: world.worldId, playerId: by.state.id, fragmentIndex: node.state.fragmentIndex, kind: fragment.kind,
       title: fragment.title, source: fragment.source, text: fragment.text, x: node.state.x, y: node.state.y,
