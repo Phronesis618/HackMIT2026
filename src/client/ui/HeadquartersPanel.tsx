@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { ABILITY_STATUS, CLASS_IDS, CLASS_INFO } from '../../shared/registry';
 import type { UiActions, UiModel } from '../../shared/ui';
+import { departureBus, isDeparting, useDeparture, type DepartureBus } from './HeadquartersDeparture';
 
 /**
  * Headquarters: identity, contributions, and the "open the portal" request.
  * Talks only to UiActions; reads only UiModel.
  */
-export function HeadquartersPanel({ model, actions }: { model: UiModel; actions: UiActions }) {
+export function HeadquartersPanel({ model, actions, departure = departureBus }: { model: UiModel; actions: UiActions; departure?: DepartureBus }) {
   const [draft, setDraft] = useState('');
   const [name, setName] = useState(model.localPlayer.displayName);
-  const busy = model.phase === 'preparing' || ['queued', 'generating', 'validating'].includes(model.generation.phase);
+  const departing = isDeparting(useDeparture(departure));
+  const busy = departing || model.phase === 'preparing' || ['queued', 'generating', 'validating'].includes(model.generation.phase);
   const connected = model.connection.status === 'connected';
   const host = model.connection.isHost !== false;
   const gen = model.generation;
@@ -47,7 +49,7 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
       {!connected && <p className="combat-status" role="status">Server {model.connection.status}. Rejoin co-op to reconnect; solo remains available.</p>}
 
       <details className="operative">
-        <summary>{model.localPlayer.displayName} · {selectedClass.name} · quick controls</summary>
+        <summary>{model.localPlayer.displayName} · {selectedClass.name} · name and weapon</summary>
       <label className="field">
         <span className="field__label">Operative</span>
         <input
@@ -62,7 +64,7 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
       </label>
 
       <div className="field">
-        <span className="field__label">Accessible class controls · also available at the armory stands</span>
+        <span className="field__label">Weapon · the same choice as the armory stands</span>
         <div className="chips">
           {CLASS_IDS.map((id) => (
             <button
@@ -124,8 +126,8 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
         <button type="button" className="btn btn--primary" onClick={actions.requestWorld} disabled={busy || !connected || !host}>
           {busy ? 'Preparing…' : worldReady ? 'Prepare another world' : 'Prepare world'}
         </button>
-        <button type="button" className="btn" onClick={actions.enterPortal} disabled={busy || !worldReady || !connected || !host}>
-          Enter portal
+        <button type="button" className="btn" onClick={() => departure.begin(actions.enterPortal)} disabled={busy || !worldReady || !connected || !host}>
+          {departing ? 'Departing…' : 'Enter portal'}
         </button>
       </div>
       {model.connection.mode === 'local' && actions.enterTraining && (
@@ -151,8 +153,7 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
         </p>
       )}
       <p className="hint">
-        Move with WASD / arrows. Walk onto the glowing portal at the bottom of the room to enter once a world is ready. Shift/Space to dash,
-        J or click to attack{ABILITY_STATUS.attack === 'partial' ? ' (damage is not implemented yet)' : ''}.
+        Walk onto the glowing gate at the bottom of the room to leave once a world is ready{ABILITY_STATUS.attack === 'partial' ? '. Attack damage is not implemented yet' : ''}. Key bindings are in the menu under Controls.
       </p>
     </div>
   );

@@ -210,32 +210,6 @@ describe('relay.hub.v1 storage', () => {
     expect(loaded.totals).toEqual({ runs: 2, anchors: 1, worldsVisited: 2, relics: 1 });
   });
 
-  it('loads old stored runs and records with floor fields omitted using defaults', () => {
-    const storage = memoryStorage();
-    const current = reduceHubState(createHubState(), collapsedRun(), ctx);
-    const old = JSON.parse(JSON.stringify(current)) as Record<string, unknown>;
-    const oldLastRun = old.lastRun as Record<string, unknown>;
-    delete oldLastRun.deepestTier;
-    delete oldLastRun.biomesCleared;
-    const oldRecords = old.records as Record<string, Record<string, unknown>>;
-    for (const record of Object.values(oldRecords)) {
-      delete record.deepestTier;
-      delete record.biomesCleared;
-    }
-    const oldCurrent = old.current as Record<string, unknown> | null;
-    if (oldCurrent) {
-      delete oldCurrent.deepestTier;
-      delete oldCurrent.biomesCleared;
-      delete oldCurrent.currentRoomKind;
-    }
-    storage.data.set(HUB_STORAGE_KEY, JSON.stringify(old));
-    const loaded = loadHubState(storage);
-    expect(loaded.lastRun?.deepestTier).toBe(-1);
-    expect(loaded.lastRun?.biomesCleared).toBe(0);
-    expect(loaded.records.shade.deepestTier).toBe(-1);
-    expect(loaded.records.shade.biomesCleared).toBe(0);
-  });
-
   it('preserves legacy run counts and replay protection without blocking a new world', () => {
     const storage = memoryStorage();
     const events = collapsedRun();
@@ -265,6 +239,32 @@ describe('relay.hub.v1 storage', () => {
     const finished = reduceHubState(loaded, events, ctx);
     expect(finished.lastRun).toMatchObject({ roomsEntered: 3, enemiesDefeated: 1, damageDealt: 12 });
     expect(finished.totals.runs).toBe(1);
+  });
+
+  it('loads old stored runs and records with floor fields omitted using defaults', () => {
+    const storage = memoryStorage();
+    const current = reduceHubState(createHubState(), collapsedRun(), ctx);
+    const old = JSON.parse(JSON.stringify(current)) as Record<string, unknown>;
+    const oldLastRun = old.lastRun as Record<string, unknown>;
+    delete oldLastRun.deepestTier;
+    delete oldLastRun.biomesCleared;
+    const oldRecords = old.records as Record<string, Record<string, unknown>>;
+    for (const record of Object.values(oldRecords)) {
+      delete record.deepestTier;
+      delete record.biomesCleared;
+    }
+    const oldCurrent = old.current as Record<string, unknown> | null;
+    if (oldCurrent) {
+      delete oldCurrent.deepestTier;
+      delete oldCurrent.biomesCleared;
+      delete oldCurrent.currentRoomKind;
+    }
+    storage.data.set(HUB_STORAGE_KEY, JSON.stringify(old));
+    const loaded = loadHubState(storage);
+    expect(loaded.lastRun?.deepestTier).toBe(-1);
+    expect(loaded.lastRun?.biomesCleared).toBe(0);
+    expect(loaded.records.shade.deepestTier).toBe(-1);
+    expect(loaded.records.shade.biomesCleared).toBe(0);
   });
 });
 
