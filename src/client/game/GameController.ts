@@ -273,6 +273,8 @@ export class GameController {
     const snapshot = this.latestSnapshot ?? session.getSnapshot();
     const created = chronicle.ingest(events, {
       players: (snapshot?.players ?? []).map((p) => ({ id: p.id, displayName: p.displayName })),
+      localPlayerId: session.localPlayerId,
+      classByPlayerId: Object.fromEntries((snapshot?.players ?? []).map((p) => [p.id, p.classId])),
       world: world
         ? { worldId: world.worldId, title: world.recipe.title, provenanceSource: world.provenance.source, receipt: world.receipt }
         : null,

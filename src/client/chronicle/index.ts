@@ -5,19 +5,29 @@
  */
 import { MemoryRecordSchema, type GameEvent, type MemoryRecord } from '../../shared/contracts';
 import { createChronicleState, reduceChronicle, type ChronicleContext, type ChronicleState } from '../../chronicle';
+import { clearHubState, createHubState, hubStateBus, loadHubState, reduceHubState, saveHubState, type HubState, type HubStateBus } from './hubState';
 import { clearMemories, loadMemories, saveMemories, type KeyValueStorage } from './localStore';
+import type { ClassId } from '../../shared/registry';
+
+export interface BrowserIngestContext extends Omit<ChronicleContext, 'now'> {
+  /** Hub state (relay.hub.v1) is only reduced when the local player and live classes are known. */
+  localPlayerId?: string;
+  classByPlayerId?: Readonly<Partial<Record<string, ClassId>>>;
+}
 
 export interface BrowserChronicle {
   getMemories(): MemoryRecord[];
-  /** Reduce events into memories, persist, return the newly created ones. */
-  ingest(events: GameEvent[], ctx: Omit<ChronicleContext, 'now'>): MemoryRecord[];
+  getHubState(): HubState;
+  /** Reduce events into memories (and hub state), persist, return the newly created memories. */
+  ingest(events: GameEvent[], ctx: BrowserIngestContext): MemoryRecord[];
   attachThumbnail(memoryId: string, dataUrl: string): void;
   clear(): void;
   subscribe(listener: (memories: MemoryRecord[]) => void): () => void;
 }
 
-export function createBrowserChronicle(storage: KeyValueStorage, now: () => number = Date.now): BrowserChronicle {
+export function createBrowserChronicle(storage: KeyValueStorage, now: () => number = Date.now, hub: HubStateBus = hubStateBus): BrowserChronicle {
   let state: ChronicleState = createChronicleState(loadMemories(storage));
+  hub.set(loadHubState(storage));
   const listeners = new Set<(m: MemoryRecord[]) => void>();
   const notify = (): void => {
     for (const l of listeners) l(state.memories);
@@ -25,12 +35,27 @@ export function createBrowserChronicle(storage: KeyValueStorage, now: () => numb
 
   return {
     getMemories: () => state.memories,
+    getHubState: () => hub.get(),
     ingest(events, ctx) {
-      const result = reduceChronicle(state, events, { ...ctx, now: now() });
+      const at = now();
+      const result = reduceChronicle(state, events, { players: ctx.players, world: ctx.world, now: at });
       state = result.state;
       if (result.created.length > 0) {
         saveMemories(storage, state.memories);
         notify();
+      }
+      if (ctx.localPlayerId) {
+        const before = hub.get();
+        const after = reduceHubState(before, events, {
+          now: at, localPlayerId: ctx.localPlayerId, players: ctx.players, classByPlayerId: ctx.classByPlayerId ?? {},
+          world: ctx.world ? { worldId: ctx.world.worldId, title: ctx.world.title, provenanceSource: ctx.world.provenanceSource } : null,
+        });
+        if (after !== before) {
+          hub.set(after);
+          // Persist on the durable transitions (run opened / run folded), not per in-flight event.
+          const runBoundary = after.lastRun !== before.lastRun || (after.current === null) !== (before.current === null) || after.current?.worldId !== before.current?.worldId;
+          if (runBoundary) saveHubState(storage, after);
+        }
       }
       return result.created;
     },
@@ -47,6 +72,8 @@ export function createBrowserChronicle(storage: KeyValueStorage, now: () => numb
     clear() {
       state = { ...state, memories: [] };
       clearMemories(storage);
+      hub.set(createHubState());
+      clearHubState(storage);
       notify();
     },
     subscribe(listener) {
@@ -58,3 +85,5 @@ export function createBrowserChronicle(storage: KeyValueStorage, now: () => numb
 
 export { MEMORIES_STORAGE_KEY, loadMemories, saveMemories, clearMemories } from './localStore';
 export type { KeyValueStorage } from './localStore';
+export { HUB_STORAGE_KEY, hubStateBus, loadHubState, saveHubState, clearHubState } from './hubState';
+export type { HubState, HubStateBus } from './hubState';

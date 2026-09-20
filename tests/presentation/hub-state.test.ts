@@ -1,0 +1,206 @@
+/**
+ * Hub state (relay.hub.v1): a pure reducer over real GameEvents plus device-local storage.
+ * Every number asserted here is a count over the scripted events below — nothing is invented.
+ */
+import { describe, expect, it } from 'vitest';
+import type { GameEvent } from '../../src/shared/contracts';
+import { createBrowserChronicle, type KeyValueStorage } from '../../src/client/chronicle';
+import {
+  HUB_MAX_STORED_RELICS, HUB_STORAGE_KEY, createHubState, createHubStateBus, HubStateSchema, loadHubState, reduceHubState, saveHubState,
+  shelfRelics, type HubIngestContext,
+} from '../../src/client/chronicle/hubState';
+
+const LOCAL = 'local-1';
+const ALLY = 'ally-1';
+const WORLD = 'world-a';
+
+const ctx: HubIngestContext = {
+  now: 1_758_300_100_000,
+  localPlayerId: LOCAL,
+  players: [{ id: LOCAL, displayName: 'Jon' }, { id: ALLY, displayName: 'Priya' }],
+  classByPlayerId: { [LOCAL]: 'shade', [ALLY]: 'beacon' },
+  world: { worldId: WORLD, title: 'Vantage Spire', provenanceSource: 'fixture' },
+};
+
+let seq = 0;
+function ev<T extends GameEvent['type']>(type: T, fields: Omit<Extract<GameEvent, { type: T }>, 'id' | 'tick' | 'timeMs' | 'type'>, timeMs = seq * 1000): GameEvent {
+  seq += 1;
+  return { id: `${seq}:0`, tick: seq, timeMs, type, ...fields } as unknown as GameEvent;
+}
+
+/** A scripted run: local Shade, downed twice (last hit by a warden), collapsed in room 3. */
+function collapsedRun(worldId = WORLD, title = 'Vantage Spire'): GameEvent[] {
+  return [
+    ev('world_prepared', { worldId, worldTitle: title, source: 'fixture', playerIds: [LOCAL, ALLY] }),
+    ev('room_entered', { worldId, roomIndex: 0, roomId: 'r0', roomName: 'Gate', playerIds: [LOCAL, ALLY] }),
+    ev('enemy_damaged', { enemyId: 'husk', byPlayerId: LOCAL, amount: 12, remainingHp: 18 }),
+    ev('enemy_defeated', { enemyId: 'husk', byPlayerId: LOCAL }),
+    ev('room_cleared', { worldId, roomIndex: 0, roomId: 'r0', playerIds: [LOCAL, ALLY], reward: 1 }),
+    ev('room_entered', { worldId, roomIndex: 1, roomId: 'r1', roomName: 'Hall', playerIds: [LOCAL, ALLY] }),
+    ev('player_damaged', { playerId: LOCAL, amount: 30, remainingHp: 0, sourceEnemyId: 'sentinel' }),
+    ev('player_downed', { playerId: LOCAL }),
+    ev('player_revived', { playerId: LOCAL, byPlayerId: ALLY, hp: 40 }),
+    ev('lore_discovered', { playerId: LOCAL, fragmentIndex: 2, kind: 'relic', title: 'Red wrench', source: 'Tarn, deck 4', text: 'A wrench.', x: 0, y: 0 }),
+    ev('room_entered', { worldId, roomIndex: 2, roomId: 'r2', roomName: 'Deep', playerIds: [LOCAL, ALLY] }),
+    ev('player_damaged', { playerId: LOCAL, amount: 40, remainingHp: 0, sourceEnemyId: 'warden' }),
+    ev('player_downed', { playerId: LOCAL }),
+    ev('player_downed', { playerId: ALLY }),
+    ev('run_ended', { worldId, outcome: 'collapsed', playerIds: [LOCAL, ALLY] }),
+  ];
+}
+
+function anchoredRun(worldId = 'world-b', title = 'Bramble Deck'): GameEvent[] {
+  return [
+    ev('world_prepared', { worldId, worldTitle: title, source: 'live', playerIds: [LOCAL] }),
+    ev('room_entered', { worldId, roomIndex: 0, roomId: 'r0', roomName: 'Gate', playerIds: [LOCAL] }),
+    ev('lore_discovered', { playerId: LOCAL, fragmentIndex: 0, kind: 'remains', title: 'Bones', source: 'nobody', text: 'x', x: 0, y: 0 }),
+    ev('lore_discovered', { playerId: LOCAL, fragmentIndex: 1, kind: 'relic', title: 'Brass key', source: 'Oda Brandt, stores', text: 'A key.', x: 0, y: 0 }),
+    ev('player_damaged', { playerId: LOCAL, amount: 7, remainingHp: 90, sourceEnemyId: null }),
+    ev('room_cleared', { worldId, roomIndex: 0, roomId: 'r0', playerIds: [LOCAL], reward: 2 }),
+    ev('anchor_planted', { worldId, roomIndex: 0, playerIds: [LOCAL] }),
+    ev('run_ended', { worldId, outcome: 'anchored', playerIds: [LOCAL] }),
+  ];
+}
+
+function memoryStorage(): KeyValueStorage & { data: Map<string, string> } {
+  const data = new Map<string, string>();
+  return { data, getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v), removeItem: (k) => void data.delete(k) };
+}
+
+describe('reduceHubState', () => {
+  it('folds a collapsed run into LastRun with the stamped class and the attributed last down', () => {
+    const state = reduceHubState(createHubState(), collapsedRun(), ctx);
+    const run = state.lastRun!;
+    expect(run.outcome).toBe('collapsed');
+    expect(run.classId).toBe('shade');
+    expect(run.worldTitle).toBe('Vantage Spire');
+    expect(run.downs).toBe(2);
+    expect(run.lastDownedByEnemyId).toBe('warden');
+    expect(run.deepestRoomIndex).toBe(2);
+    expect(run.roomsEntered).toBe(3);
+    expect(run.roomsCleared).toBe(1);
+    expect(run.enemiesDefeated).toBe(1);
+    expect(run.damageDealt).toBe(12);
+    expect(run.damageTaken).toBe(70);
+    expect(run.revivesReceived).toBe(1);
+    expect(run.revivesGiven).toBe(0);
+    expect(run.loreRead).toBe(1);
+    expect(run.crew.map((p) => p.displayName)).toEqual(['Jon', 'Priya']);
+    expect(run.worldSource).toBe('fixture');
+    expect(run.sourceEventIds.length).toBeGreaterThan(10);
+    expect(state.current).toBeNull();
+    expect(state.totals).toEqual({ runs: 1, anchors: 0, worldsVisited: 1, relics: 0 });
+    expect(HubStateSchema.safeParse(state).success).toBe(true);
+  });
+
+  it('records per class only for the stamped class; unplayed classes stay at zero', () => {
+    const state = reduceHubState(createHubState(), collapsedRun(), ctx);
+    expect(state.records.shade.runs).toBe(1);
+    expect(state.records.shade.collapses).toBe(1);
+    expect(state.records.shade.timesDowned).toBe(2);
+    expect(state.records.shade.nemesisCounts).toEqual({ warden: 1 });
+    expect(state.records.shade.deepestRoomIndex).toBe(2);
+    expect(state.records.bastion.runs).toBe(0);
+    expect(state.records.beacon.runs).toBe(0);
+    expect(state.records.weaver.runs).toBe(0);
+  });
+
+  it('shelves a relic only from an anchored run, one per world, newest-left on the shelf', () => {
+    let state = reduceHubState(createHubState(), collapsedRun(), ctx);
+    expect(state.relics).toEqual([]);
+    state = reduceHubState(state, anchoredRun(), ctx);
+    expect(state.relics).toHaveLength(1);
+    expect(state.relics[0]).toMatchObject({ id: 'relic-world-b-1', worldTitle: 'Bramble Deck', title: 'Brass key', recoveredBy: [{ id: LOCAL, displayName: 'Jon' }] });
+    expect(state.totals).toEqual({ runs: 2, anchors: 1, worldsVisited: 2, relics: 1 });
+    state = reduceHubState(state, anchoredRun('world-c', 'Cold Yard'), ctx);
+    expect(shelfRelics(state).map((r) => r.worldTitle)).toEqual(['Cold Yard', 'Bramble Deck']);
+    // Same world again replaces rather than duplicates.
+    state = reduceHubState(state, anchoredRun('world-c', 'Cold Yard'), ctx);
+    expect(state.relics).toHaveLength(2);
+  });
+
+  it('keeps at most 24 relics in the store and shows five on the shelf', () => {
+    let state = createHubState();
+    for (let n = 0; n < 30; n++) state = reduceHubState(state, anchoredRun(`w-${n}`, `World ${n}`), ctx);
+    expect(state.relics).toHaveLength(HUB_MAX_STORED_RELICS);
+    expect(shelfRelics(state).map((r) => r.worldTitle)).toEqual(['World 29', 'World 28', 'World 27', 'World 26', 'World 25']);
+  });
+
+  it('ignores already-seen event ids and returns the same object when nothing changes', () => {
+    const events = collapsedRun();
+    const once = reduceHubState(createHubState(), events, ctx);
+    const twice = reduceHubState(once, events, ctx);
+    expect(twice).toBe(once);
+    expect(reduceHubState(once, [], ctx)).toBe(once);
+  });
+
+  it('records nothing when the run ended without a known class or without the local player', () => {
+    const noClass = reduceHubState(createHubState(), collapsedRun(), { ...ctx, classByPlayerId: {} });
+    expect(noClass.lastRun).toBeNull();
+    expect(noClass.totals.runs).toBe(0);
+    const absent = reduceHubState(createHubState(), collapsedRun(), { ...ctx, localPlayerId: 'someone-else' });
+    expect(absent.lastRun).toBeNull();
+  });
+});
+
+describe('relay.hub.v1 storage', () => {
+  it('round-trips through storage', () => {
+    const storage = memoryStorage();
+    const state = reduceHubState(createHubState(), collapsedRun(), ctx);
+    saveHubState(storage, state);
+    expect(storage.data.has(HUB_STORAGE_KEY)).toBe(true);
+    expect(loadHubState(storage)).toEqual(state);
+  });
+
+  it('loads corrupt JSON as empty state', () => {
+    const storage = memoryStorage();
+    storage.data.set(HUB_STORAGE_KEY, '{not json');
+    expect(loadHubState(storage)).toEqual(createHubState());
+    storage.data.set(HUB_STORAGE_KEY, '[1,2,3]');
+    expect(loadHubState(storage)).toEqual(createHubState());
+  });
+
+  it('salvages valid records and relics from a partially broken store', () => {
+    const storage = memoryStorage();
+    const good = reduceHubState(createHubState(), [...collapsedRun(), ...anchoredRun()], ctx);
+    const broken = {
+      ...good,
+      version: 1,
+      lastRun: { outcome: 'won' },
+      relics: [good.relics[0], { id: 'bad' }],
+      records: { ...good.records, bastion: 'nope' },
+      totals: 'nope',
+    };
+    storage.data.set(HUB_STORAGE_KEY, JSON.stringify(broken));
+    const loaded = loadHubState(storage);
+    expect(loaded.lastRun).toBeNull();
+    expect(loaded.relics).toEqual([good.relics[0]]);
+    expect(loaded.records.shade).toEqual(good.records.shade);
+    expect(loaded.records.bastion.runs).toBe(0);
+    expect(loaded.totals).toEqual({ runs: 2, anchors: 1, worldsVisited: 2, relics: 1 });
+  });
+});
+
+describe('createBrowserChronicle hub integration', () => {
+  it('reduces hub state from ingested events, persists at run boundaries, and clears with the memories', () => {
+    const storage = memoryStorage();
+    const bus = createHubStateBus();
+    const chronicle = createBrowserChronicle(storage, () => ctx.now, bus);
+    const events = collapsedRun();
+    chronicle.ingest(events.slice(0, 6), { players: [...ctx.players], world: null, localPlayerId: LOCAL, classByPlayerId: ctx.classByPlayerId });
+    expect(bus.get().current?.roomsEntered).toBe(2);
+    chronicle.ingest(events.slice(6), { players: [...ctx.players], world: null, localPlayerId: LOCAL, classByPlayerId: ctx.classByPlayerId });
+    expect(chronicle.getHubState().lastRun?.outcome).toBe('collapsed');
+    expect(loadHubState(storage).lastRun?.outcome).toBe('collapsed');
+    chronicle.clear();
+    expect(chronicle.getHubState()).toEqual(createHubState());
+    expect(storage.data.has(HUB_STORAGE_KEY)).toBe(false);
+  });
+
+  it('does not touch hub state when the caller gives no local player id', () => {
+    const bus = createHubStateBus();
+    const chronicle = createBrowserChronicle(memoryStorage(), () => ctx.now, bus);
+    chronicle.ingest(collapsedRun(), { players: [...ctx.players], world: null });
+    expect(bus.get().totals.runs).toBe(0);
+  });
+});
