@@ -1,5 +1,6 @@
 import { ENEMY_INFO } from '../../shared/registry';
 import type { UiWorldSummary } from '../../shared/ui';
+import { openMenu } from './MemoryWall';
 import { ProvenanceBadge } from './ProvenanceBadge';
 
 /**
@@ -36,8 +37,22 @@ export function Codex({ world, discovered }: { world: UiWorldSummary; discovered
 }
 
 /** Creation receipt: shown immediately after a world is prepared. Honest by construction. */
-export function WorldPanel({ world, discoveredLore = [] }: { world: UiWorldSummary; discoveredLore?: number[] }) {
+export function WorldPanel({ world, discoveredLore = [], compact = false }: { world: UiWorldSummary; discoveredLore?: number[]; compact?: boolean }) {
   const r = world.receipt;
+  // In a run the rail only identifies the world; the Codex and receipt are one Tab away.
+  if (compact) {
+    return (
+      <button type="button" className="panel panel--world world-brief" onClick={() => openMenu('codex')} aria-label={`${world.title}. Open codex.`}>
+        <span className="eyebrow">World</span>
+        <span className="world-brief__title">{world.title}</span>
+        <span className="tagline">{world.tagline}</span>
+        <span className="world-brief__foot">
+          <span>{world.committedRoomCount}/{world.plannedRoomCount} rooms</span>
+          <span className="world-brief__codex">Codex {new Set(discoveredLore).size}/{world.lore.length} ›</span>
+        </span>
+      </button>
+    );
+  }
   return (
     <div className="panel panel--world">
       <p className="eyebrow">World dossier · {world.committedRoomCount}/{world.plannedRoomCount} rooms ready</p>
@@ -46,21 +61,14 @@ export function WorldPanel({ world, discoveredLore = [] }: { world: UiWorldSumma
         <ProvenanceBadge provenance={world.provenance} />
       </div>
       <p className="tagline">{world.tagline}</p>
-      <Codex world={world} discovered={discoveredLore} />
-      {world.provenance.source !== 'live' && (
-        <p className="receipt__disclosure">
-          {world.provenance.source === 'fixture' ? 'Offline fixture.' : 'Live generation failed; using an offline fixture.'}
-          {' '}Your ideas are recorded, but did not shape this world.
-        </p>
-      )}
-      {/* Player-contributed lore that actually shaped a room surfaces in-world instead, near
-          the prop/encounter it shaped (RoomScene lore markers). This stays as the full record. */}
-      <details className="notes">
-        <summary>Full dossier · {r.lines.length} contribution{r.lines.length === 1 ? '' : 's'} recorded</summary>
-        <p className="muted">{world.themeSummary}</p>
-        <p className="muted">
-          Prepared in {Math.round(world.provenance.durationMs)} ms · {world.provenance.attempts} model call{world.provenance.attempts === 1 ? '' : 's'}
-        </p>
+      <section aria-label="Creation receipt" aria-live="polite">
+        <p className="eyebrow">Creation receipt · {r.lines.length} contribution{r.lines.length === 1 ? '' : 's'} recorded</p>
+        {world.provenance.source !== 'live' && (
+          <p className="receipt__disclosure">
+            {world.provenance.source === 'fixture' ? 'Offline fixture.' : 'Live generation failed; using an offline fixture.'}
+            {' '}Your ideas are recorded, but did not shape this world.
+          </p>
+        )}
         <p className="receipt__headline">{r.headline}</p>
         {r.lines.length > 0 && (
           <ul className="list">
@@ -73,6 +81,14 @@ export function WorldPanel({ world, discoveredLore = [] }: { world: UiWorldSumma
           </ul>
         )}
         {r.lines.length === 0 && <p className="muted">No contributions were submitted for this world.</p>}
+      </section>
+      <Codex world={world} discovered={discoveredLore} />
+      <details className="notes">
+        <summary>World dossier · generation details</summary>
+        <p className="muted">{world.themeSummary}</p>
+        <p className="muted">
+          Prepared in {Math.round(world.provenance.durationMs)} ms · {world.provenance.attempts} model call{world.provenance.attempts === 1 ? '' : 's'}
+        </p>
         {world.provenance.notes.length > 0 && (
           <details className="notes">
             <summary>Provenance notes</summary>

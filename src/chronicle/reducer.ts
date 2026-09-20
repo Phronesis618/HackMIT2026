@@ -14,7 +14,7 @@
  *  - every event id is processed at most once (network retries / replays are safe)
  * Never invents participants: names come from the event's playerIds + known players.
  */
-import { MemoryRecordSchema, type CreationReceipt, type GameEvent, type GenerationSource, type MemoryRecord } from '../shared/contracts';
+import { CreationReceiptSchema, MemoryRecordSchema, type CreationReceipt, type GameEvent, type GenerationSource, type MemoryRecord } from '../shared/contracts';
 
 export interface ChronicleParticipant {
   id: string;
@@ -56,12 +56,14 @@ export function reduceChronicle(state: ChronicleState, events: GameEvent[], ctx:
   const seen = new Set(state.seenEventIds);
   const memories = [...state.memories];
   const created: MemoryRecord[] = [];
+  const legacyWorldId = legacyOrigin(events, state, ctx);
 
   const hasMemory = (kind: MemoryRecord['kind'], worldId: string) =>
     memories.some((m) => m.kind === kind && m.worldId === worldId);
 
   for (const event of events) {
-    const worldId = 'worldId' in event ? event.worldId : ctx.world?.worldId;
+    const origin = 'worldId' in event ? event.worldId : undefined;
+    const worldId = origin === undefined ? legacyWorldId : origin;
     const eventKey = JSON.stringify([worldId, event.id]);
     if (seen.has(eventKey)) continue;
     seen.add(eventKey);
@@ -98,6 +100,34 @@ export function reduceChronicle(state: ChronicleState, events: GameEvent[], ctx:
   };
 }
 
+function legacyOrigin(events: GameEvent[], state: ChronicleState, ctx: ChronicleContext): string | null {
+  const origins = new Set(events.flatMap((event) =>
+    'worldId' in event && event.worldId !== undefined ? [event.worldId] : [],
+  ));
+  if (origins.size === 0) {
+    for (const memory of state.memories) origins.add(memory.worldId);
+    if (ctx.world) origins.add(ctx.world.worldId);
+  }
+  return origins.size === 1 ? [...origins][0]! : null;
+}
+
+export function refreshChronicleReceipt(state: ChronicleState, world: ChronicleWorldContext): ChronicleState {
+  const receipt = CreationReceiptSchema.safeParse(world.receipt);
+  if (!receipt.success || receipt.data.source !== world.provenanceSource || receipt.data.worldTitle !== world.title) return state;
+  const index = state.memories.findIndex((memory) =>
+    memory.kind === 'creation_receipt' && memory.worldId === world.worldId
+    && memory.provenanceSource === world.provenanceSource && memory.worldTitle === world.title
+    && memory.sourceEventIds.length > 0,
+  );
+  if (index < 0) return state;
+  const memory = state.memories[index]!;
+  const summary = clip(receiptSummary(memory.provenanceSource, receipt.data, memory.participants), 400);
+  if (memory.summary === summary) return state;
+  const memories = [...state.memories];
+  memories[index] = { ...memory, summary };
+  return { ...state, memories };
+}
+
 function memoryFromEvent(
   event: GameEvent,
   ctx: ChronicleContext,
@@ -107,7 +137,8 @@ function memoryFromEvent(
     case 'world_prepared': {
       if (hasMemory('creation_receipt', event.worldId)) return null;
       const participants = resolveParticipants(event.playerIds, ctx.players);
-      const receipt = ctx.world?.worldId === event.worldId ? ctx.world.receipt : null;
+      const receipt = ctx.world?.worldId === event.worldId && ctx.world.receipt?.source === event.source
+        && ctx.world.receipt.worldTitle === event.worldTitle ? ctx.world.receipt : null;
       return {
         id: memoryId('creation_receipt', event),
         kind: 'creation_receipt',

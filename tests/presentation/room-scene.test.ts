@@ -4,6 +4,8 @@ import { RoomSpecSchema, WorldFixtureSchema, type GameSnapshot, type ReceiptLine
 import { ATTACK_ARC_RAD, ATTACK_RANGE, DEPTH, tileToWorld } from '../../src/shared/conventions';
 import { sampleEvents, sampleSnapshot } from '../../src/shared/samples';
 import { headquartersArt, headquartersRoom } from '../../src/sim/headquarters';
+import { floorsFixture } from './floorsFixture';
+import { tokens } from '../../src/shared/tokens';
 import fixtureData from '../../fixtures/worlds/vantage-spire.json';
 
 const stage = vi.hoisted(() => {
@@ -209,24 +211,47 @@ describe('room presentation against authoritative contracts', () => {
     expect(label.visible).toBe(false);
   });
 
-  it('draws a crude controls hint on the headquarters floor instead of repeating the HUD instructions', () => {
+  it('no longer stencils the controls into the headquarters floor (they live in the menu)', () => {
     const scene = new RoomScene();
     scene.buildRoom(headquartersRoom, headquartersArt, { headquarters: true });
     const labels = stage.nodes.map((n) => n.text);
-    for (const key of ['W', 'A', 'S', 'D', 'J', 'SHIFT', 'Q', 'E', 'F']) expect(labels).toContain(key);
+    for (const key of ['W', 'A', 'S', 'D', 'SHIFT', 'MOVE', 'AIM', 'ATTACK']) expect(labels).not.toContain(key);
   });
 
-  it('draws an in-world Integrity strip above the room during an expedition, but not in headquarters', () => {
-    setup();
-    const expeditionBars = stage.nodes.find((n) => n.depth === DEPTH.overlay - 1)!;
-    expect(expeditionBars.fillRoundedRect).toHaveBeenCalled();
+  it('draws floors doorways instead of legacy exit pads, and seals them while the sim locks the doors', () => {
+    const { world, runtime, entrance: room } = floorsFixture('door-test');
+    const scene = new RoomScene();
+    scene.buildRoom(room, world.art, { headquarters: false });
+    const doors = stage.nodes.find((n) => n.depth === DEPTH.propsBehind + 0.6)!;
+    expect(doors).toBeDefined();
+    const floor = {
+      biomeId: room.biomeId!, roomId: room.roomId!, tier: 0, path: [room.biomeId!],
+      map: runtime.mapRooms(room.biomeId!, [room.roomId!]), doorsLocked: true, biomeChoice: null,
+    };
+    scene.renderSnapshot({ ...sampleSnapshot, roomId: room.id, floor }, localId);
+    const danger = parseInt(tokens.color.danger.slice(1), 16);
+    for (let i = 0; i < 20; i++) scene.update(0, 16);
+    expect(doors.fillStyle).toHaveBeenCalledWith(danger, 0.95);
+    // unlocked: after the shutter has eased open the red bars are gone
+    scene.renderSnapshot({ ...sampleSnapshot, roomId: room.id, floor: { ...floor, doorsLocked: false } }, localId);
+    for (let i = 0; i < 20; i++) scene.update(0, 16);
+    doors.fillStyle.mockClear();
+    scene.update(0, 16);
+    expect(doors.fillStyle).not.toHaveBeenCalledWith(danger, 0.95);
 
+    // legacy rooms keep their exit chevrons and get no doorway layer
     stage.nodes.length = 0;
-    const hq = new RoomScene();
-    hq.buildRoom(headquartersRoom, headquartersArt, { headquarters: true });
-    hq.renderSnapshot({ ...sampleSnapshot, roomId: headquartersRoom.id }, localId);
-    const hqBars = stage.nodes.find((n) => n.depth === DEPTH.overlay - 1)!;
-    expect(hqBars.fillRoundedRect).not.toHaveBeenCalled();
+    setup();
+    expect(stage.nodes.find((n) => n.depth === DEPTH.propsBehind + 0.6)).toBeUndefined();
+  });
+
+  it('leaves crew Integrity and the room title to the React HUD: no in-canvas strip, no title text', () => {
+    setup();
+    const bars = stage.nodes.find((n) => n.depth === DEPTH.overlay - 1 && n.fillRoundedRect.mock.calls.length > 0);
+    expect(bars).toBeUndefined();
+    const labels = stage.nodes.map((n) => n.text);
+    expect(labels).not.toContain(`${firstRoom.index + 1} · ${firstRoom.name.toUpperCase()}`);
+    expect(labels).not.toContain(sampleSnapshot.players[0]!.displayName + ' · down');
   });
 
   it('draws relics and remains from the snapshot, prompts to read nearby relics and plays the reveal on discovery', () => {

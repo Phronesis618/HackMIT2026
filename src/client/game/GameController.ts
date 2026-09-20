@@ -8,7 +8,7 @@
  *   input (per frame)  -> session.setIntent
  *   UiActions          -> session methods (UI never touches the session directly)
  */
-import type { GameEvent, GameSnapshot, PlayerState, PreparedWorld, RoomSpec } from '../../shared/contracts';
+import type { GameEvent, GameSnapshot, PlayerIdentity, PlayerState, PreparedWorld, RoomSpec } from '../../shared/contracts';
 import { CLASS_INFO, CLASS_IDS, type ClassId } from '../../shared/registry';
 import type { WorldRenderer } from '../../shared/render';
 import type { GameSession } from '../../shared/session';
@@ -20,6 +20,7 @@ import { cueForEvent } from '../audio';
 import type { BrowserChronicle } from '../chronicle';
 import type { LocalSession } from '../transport/LocalSession';
 import { createKeyboardMouseInput, type InputSampler } from './input';
+import { stageOwnsInput } from './keyboardFocus';
 import type { UiStore } from './uiStore';
 
 export interface PreviewFlags {
@@ -47,6 +48,7 @@ export interface GameControllerDeps {
   store: UiStore;
   flags: PreviewFlags;
   liveGenerationAvailable: boolean;
+  persistIdentity?: (identity: PlayerIdentity) => void;
 }
 
 export class GameController {
@@ -60,7 +62,8 @@ export class GameController {
   private thumbnailTimers = new Set<ReturnType<typeof setTimeout>>();
   /** Floors worlds: rooms are compiled here from `world.floors`, the snapshot only names them. */
   private floorRooms: { worldId: string; provider: RoomProvider } | null = null;
-  private shownFloorRoomId: string | null = null;
+  private shownWorldId: string | null = null;
+  private shownRoomId: string | null = null;
 
   constructor(private readonly deps: GameControllerDeps) {
     this.actions = this.createActions();
@@ -109,7 +112,7 @@ export class GameController {
     if (session.onError) this.disposers.push(session.onError((message) => this.notice('error', message)));
     // Floors stopgap until the biome-choice panel (agent F3) lands: 1 / 2 pick an offered biome.
     const pickBiome = (event: KeyboardEvent): void => {
-      if (event.target instanceof HTMLElement && /^(INPUT|TEXTAREA)$/.test(event.target.tagName)) return;
+      if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey || !stageOwnsInput(event.target, stage)) return;
       const choice = this.latestSnapshot?.floor?.biomeChoice;
       const biomeId = choice?.options[event.code === 'Digit1' ? 0 : event.code === 'Digit2' ? 1 : -1];
       if (biomeId !== undefined) session.chooseBiome?.(biomeId);
@@ -156,10 +159,7 @@ export class GameController {
     if (previous.connection.status !== connection.status || previous.connection.isHost !== connection.isHost) store.set({ connection });
     const contributions = session.getContributions();
     if (previous.contributions.length !== contributions.length || previous.contributions.some((c, index) => c.id !== contributions[index]?.id)) store.set({ contributions });
-    const identity = session.getLocalPlayer();
-    if (previous.localPlayer.id !== identity.id || previous.localPlayer.classId !== identity.classId || previous.localPlayer.displayName !== identity.displayName) {
-      store.set({ localPlayer: { ...identity, isLocal: true } });
-    }
+    this.syncIdentity();
     const snapshot = this.latestSnapshot;
     if (snapshot && this.input) {
       const me = snapshot.players.find((p) => p.id === session.localPlayerId);
@@ -227,17 +227,23 @@ export class GameController {
     audio.setScene?.(snapshot.phase);
     if (snapshot.phase === 'training') {
       if (store.get().phase !== 'training') {
+        this.shownWorldId = null;
+        this.shownRoomId = trainingRoom.id;
         renderer.showRoom(trainingRoom, trainingArt);
         store.set({ phase: 'training', room: { index: 0, name: trainingRoom.name, description: trainingRoom.description, isFinal: false }, hud: me ? hudFrom(me, snapshot) : null });
       }
       return;
     }
+    if (snapshot.phase !== 'headquarters' && store.get().phase !== snapshot.phase) {
+      store.set({ phase: snapshot.phase });
+    }
     const world = session.getWorld();
     const room = snapshot.floor && world ? this.floorRoom(world, snapshot.floor)
       : snapshot.roomIndex === null ? null : world?.rooms[snapshot.roomIndex];
-    const roomChanged = snapshot.floor ? this.shownFloorRoomId !== room?.id : store.get().room?.index !== room?.index;
-    if (world && room && snapshot.phase !== 'headquarters' && (roomChanged || store.get().phase === 'headquarters' || store.get().phase === 'training')) {
-      this.shownFloorRoomId = snapshot.floor ? room.id : null;
+    const roomChanged = this.shownWorldId !== world?.worldId || this.shownRoomId !== room?.id;
+    if (world && room && snapshot.worldId === world.worldId && snapshot.roomId === room.id && snapshot.phase !== 'headquarters' && roomChanged) {
+      this.shownWorldId = world.worldId;
+      this.shownRoomId = room.id;
       renderer.showRoom(room, world.art, world.receipt.lines, { title: world.recipe.title, tagline: world.recipe.tagline });
       store.set({ room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal }, phase: snapshot.phase, hud: me ? hudFrom(me, snapshot) : store.get().hud });
     }
@@ -273,6 +279,8 @@ export class GameController {
     const snapshot = this.latestSnapshot ?? session.getSnapshot();
     const created = chronicle.ingest(events, {
       players: (snapshot?.players ?? []).map((p) => ({ id: p.id, displayName: p.displayName })),
+      localPlayerId: session.localPlayerId,
+      classByPlayerId: Object.fromEntries((snapshot?.players ?? []).map((p) => [p.id, p.classId])),
       world: world
         ? { worldId: world.worldId, title: world.recipe.title, provenanceSource: world.provenance.source, receipt: world.receipt }
         : null,
@@ -298,6 +306,12 @@ export class GameController {
 
   private handleWorld(world: PreparedWorld): void {
     this.deps.audio.setWorld?.(world.art);
+    this.deps.chronicle.refreshReceipt({
+      worldId: world.worldId,
+      title: world.recipe.title,
+      provenanceSource: world.provenance.source,
+      receipt: world.receipt,
+    });
     this.deps.store.set({
       world: {
         worldId: world.worldId,
@@ -320,10 +334,14 @@ export class GameController {
     audio.setScene?.(phase);
     store.set({ headquarters: { nearbyStationId: null, activeStationId: null } });
     if (phase === 'headquarters') {
+      this.shownWorldId = null;
+      this.shownRoomId = headquartersRoom.id;
       renderer.showHeadquarters(headquartersRoom, headquartersArt);
       store.set({ phase: 'headquarters', room: null, hud: null });
     } else if (phase === 'training') {
-      renderer.showRoom(trainingRoom, trainingArt);
+      if (this.shownWorldId !== null || this.shownRoomId !== trainingRoom.id) renderer.showRoom(trainingRoom, trainingArt);
+      this.shownWorldId = null;
+      this.shownRoomId = trainingRoom.id;
       store.set({ phase: 'training', room: { index: 0, name: trainingRoom.name, description: trainingRoom.description, isFinal: false } });
     } else if (phase === 'debrief') {
       store.set({ phase: 'debrief' });
@@ -332,6 +350,16 @@ export class GameController {
 
   private notice(kind: 'info' | 'error', text: string): void {
     this.deps.store.set({ notice: { kind, text } });
+  }
+
+  private syncIdentity(): void {
+    const { session, store, persistIdentity } = this.deps;
+    if (session.mode === 'remote' && session.getConnectionStatus() !== 'connected') return;
+    const identity = session.getLocalPlayer();
+    const previous = store.get().localPlayer;
+    if (previous.id === identity.id && previous.classId === identity.classId && previous.displayName === identity.displayName) return;
+    store.set({ localPlayer: { ...identity, isLocal: true } });
+    persistIdentity?.(identity);
   }
 
   private canUseHeadquarters(): boolean {
@@ -360,16 +388,12 @@ export class GameController {
     return {
       setDisplayName: (name) => {
         session.setDisplayName(name);
-        const me = session.getLocalPlayer();
-        store.set({ localPlayer: { ...me, isLocal: true } });
-        persistIdentity(me);
+        this.syncIdentity();
       },
       selectClass: (classId: ClassId) => {
         if (!this.canUseHeadquarters()) return;
         session.setClass(classId);
-        const me = session.getLocalPlayer();
-        store.set({ localPlayer: { ...me, isLocal: true } });
-        persistIdentity(me);
+        this.syncIdentity();
       },
       submitContribution: (text) => {
         const c = session.submitContribution(text);
@@ -415,18 +439,6 @@ export class GameController {
         headquarters: { nearbyStationId: model.headquarters?.nearbyStationId ?? null, activeStationId: null },
       })),
     };
-  }
-}
-
-// ---- identity persistence (device-local) --------------------------------------------
-
-export const IDENTITY_STORAGE_KEY = 'relay.identity.v1';
-
-export function persistIdentity(identity: { id: string; displayName: string; classId: ClassId }): void {
-  try {
-    localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(identity));
-  } catch {
-    /* ignore */
   }
 }
 

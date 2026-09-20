@@ -300,7 +300,8 @@ export function drawFloorDressing(g: G, room: RoomSpec, palette: Palette, motifs
         g.lineStyle(1, accent, 0.55).lineBetween(cx - 5, cy, cx + 5, cy);
         break;
       case 'lanterns':
-        glow(g, cx, cy, 22, soft, 0.7);
+        // floor candles: a point of light, not a pool — pools of warm glow hid hazards and floor edges
+        glow(g, cx, cy, 9, soft, 0.35);
         g.fillStyle(soft, 0.85).fillCircle(cx, cy, 1.4);
         break;
       case 'ruined_machinery':
@@ -328,6 +329,14 @@ export function drawOverhead(g: G, room: RoomSpec, palette: Palette, motifs: Mot
   const ink = darken(palette.wall, 0.6);
   const accent = hexInt(palette.accent);
   const soft = hexInt(palette.accentSoft);
+  // Rooms are not always rectangles: hang things from the room's real top edge in that
+  // column, and never light anything over the void.
+  const topOf = (px: number): number | null => {
+    const col = Math.floor(px / T);
+    for (let row = 0; row < room.height; row++) if ((room.tiles[row]?.[col] ?? ' ') !== ' ') return row * T;
+    return null;
+  };
+  const inRoom = (px: number, py: number): boolean => (room.tiles[Math.floor(py / T)]?.[Math.floor(px / T)] ?? ' ') !== ' ';
   const seen = new Set<MotifId>();
   for (const motif of motifs.slice(0, 2)) {
     if (seen.has(motif)) continue;
@@ -344,6 +353,7 @@ export function drawOverhead(g: G, room: RoomSpec, palette: Palette, motifs: Mot
             const t = 0.15 + rand() * 0.7;
             const px = t * roomW;
             const py = y0 + Math.sin(t * Math.PI) * sag;
+            if (!inRoom(px, py + 11)) continue;
             g.lineStyle(1, ink, 0.32).lineBetween(px, py, px, py + 10);
             g.fillStyle(soft, 0.75).fillCircle(px, py + 11, 1.8);
             glow(g, px, py + 11, 12, soft, 0.35);
@@ -355,7 +365,15 @@ export function drawOverhead(g: G, room: RoomSpec, palette: Palette, motifs: Mot
           const cx = roomW * (0.2 + i * 0.3);
           const r = roomH * 0.75;
           g.lineStyle(3, ink, 0.14).beginPath().arc(cx, roomH * 0.95, r, Math.PI * 1.08, Math.PI * 1.92, false).strokePath();
-          g.lineStyle(1, accent, 0.12).beginPath().arc(cx, roomH * 0.95, r - 6, Math.PI * 1.08, Math.PI * 1.92, false).strokePath();
+          // Light only the part of the rib that is over the room: a full arc would sail out into the void.
+          g.lineStyle(1, accent, 0.12);
+          for (let a = Math.PI * 1.08; a < Math.PI * 1.92; a += 0.06) {
+            const ax = cx + Math.cos(a) * (r - 6);
+            const ay = roomH * 0.95 + Math.sin(a) * (r - 6);
+            const bx = cx + Math.cos(a + 0.06) * (r - 6);
+            const by = roomH * 0.95 + Math.sin(a + 0.06) * (r - 6);
+            if (inRoom(ax, ay) && inRoom(bx, by)) g.lineBetween(ax, ay, bx, by);
+          }
         }
         break;
       case 'lanterns':
@@ -368,21 +386,24 @@ export function drawOverhead(g: G, room: RoomSpec, palette: Palette, motifs: Mot
           for (let t = 0.08 + rand() * 0.08; t < 1; t += 0.14 + rand() * 0.08) {
             const px = t * roomW;
             const py = y0 + Math.sin(t * Math.PI) * sag + 6;
+            if (!inRoom(px, py)) continue;
             g.fillStyle(ink, 0.7).fillRect(px - 3, py - 4, 6, 8);
             g.fillStyle(soft, 0.9).fillRect(px - 1.5, py - 2.5, 3, 5);
-            glow(g, px, py, 20, soft, 0.6);
+            glow(g, px, py, 11, soft, 0.4);
           }
         }
         break;
       case 'roots':
         for (let i = 0; i < 6; i++) {
           const x0 = rand() * roomW;
-          const pts: Array<[number, number]> = [[x0, -6]];
+          const top = topOf(x0);
+          const pts: Array<[number, number]> = [[x0, (top ?? 0) - 6]];
           let px = x0;
           for (let k = 1; k <= 4; k++) {
             px += (rand() - 0.5) * 60;
-            pts.push([px, k * (roomH * 0.06)]);
+            pts.push([px, (top ?? 0) + k * (roomH * 0.06)]);
           }
+          if (top === null) continue;
           polyline(g, pts, 5, ink, 0.35);
           polyline(g, pts.slice(1, 3).map(([x, y]) => [x + 14, y + 6] as [number, number]), 2, ink, 0.3);
         }
@@ -393,15 +414,19 @@ export function drawOverhead(g: G, room: RoomSpec, palette: Palette, motifs: Mot
           const h = 14 + rand() * 26;
           const w = 5 + rand() * 6;
           const tint = i % 3 === 0 ? shiftHue(palette.accent, 120, 0, -0.05) : accent;
-          poly(g, [[x - w, -4], [x, h], [x + w, -4]], tint, 0.3);
-          poly(g, [[x - w * 0.3, -4], [x, h], [x + w * 0.5, -4]], lighten(intToHex(tint), 0.3), 0.3);
+          const top = topOf(x);
+          if (top === null) continue;
+          poly(g, [[x - w, top + 2], [x, top + h], [x + w, top + 2]], tint, 0.3);
+          poly(g, [[x - w * 0.3, top + 2], [x, top + h], [x + w * 0.5, top + 2]], lighten(intToHex(tint), 0.3), 0.3);
         }
         break;
       case 'ruined_machinery':
         for (let i = 0; i < 3; i++) {
           const x = roomW * (0.15 + rand() * 0.7);
-          const len = roomH * (0.1 + rand() * 0.2);
-          for (let y = -4; y < len; y += 6) g.fillStyle(ink, 0.35).fillRect(x - 1, y, 2, 4);
+          const top = topOf(x);
+          const len = (top ?? 0) + roomH * (0.1 + rand() * 0.2);
+          if (top === null) continue;
+          for (let y = top + 2; y < len; y += 6) g.fillStyle(ink, 0.35).fillRect(x - 1, y, 2, 4);
           g.lineStyle(2.5, ink, 0.35).strokeCircle(x, len + 7, 7);
           for (let k = 0; k < 6; k++) {
             const a = (k / 6) * TAU;
@@ -413,7 +438,9 @@ export function drawOverhead(g: G, room: RoomSpec, palette: Palette, motifs: Mot
         for (let i = 0; i < 3; i++) {
           const x = roomW * (0.15 + rand() * 0.7);
           const w = 26 + rand() * 30;
-          for (let k = 0; k < 5; k++) g.fillStyle(accent, 0.02).fillRect(x - w / 2 - k * 6, -6, w + k * 12, roomH * 0.55);
+          const top = topOf(x);
+          if (top === null) continue;
+          for (let k = 0; k < 5; k++) g.fillStyle(accent, 0.02).fillRect(x - w / 2 - k * 6, top, w + k * 12, roomH * 0.55 - top);
         }
         break;
       case 'monoliths':
