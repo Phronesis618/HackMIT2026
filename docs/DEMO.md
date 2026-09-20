@@ -1,5 +1,8 @@
 # RELAY demo runbook
 
+The pitch, the pre-demo checklist, the fallback ladder and the judge Q&A are in
+[`docs/PRESENTATION.md`](PRESENTATION.md). This file is the operating manual.
+
 Public solo fixture build: https://phronesis618.github.io/HackMIT2026/ (GitHub Pages, redeployed
 from `main` by `pages.yml`; older mirror: https://client-gzffunxf.devinapps.com/). A static host
 has no generation API or co-op server; its explicit offline notice and **OFFLINE FIXTURE**
@@ -25,6 +28,16 @@ For a container host, use the production-container commands in the README.
 
 ## Presentation sequence
 
+Two world shapes exist. With `RELAY_FLOORS` unset the server serves the legacy three-room
+world described in steps 7–8. With `RELAY_FLOORS=1` (and `RELAY_LAWS=1` for engine-derived
+laws when the recipe has none) a prepared world is five biomes of 10/15/20/25/30 rooms with
+sealed doors, a fog-of-war minimap (hold **M**), a host-only biome choice after each exit
+(**1** / **2** or click a door) and the Custodian in the tier-4 exit room. Both flags are read
+by the server and reported on `GET /api/config`; every browser adopts them, so no URL flag is
+needed (`?floors=1&laws=1` only matters when no server answered). Onboarding prompts appear
+once per device; open `/?hints=reset` before each new judge so they show, or `/?hints=off`
+for a clean capture. The exact clicks for the floors flow are in `PRESENTATION.md` §3.1.
+
 1. Start at the Stillpoint sanctuary. Walk northwest to the Armory and tap F at a class
    shrine to attune. The northeast Echo Archive shows device-local records; the southwest
    Proving Chamber opens solo training; the southeast Observatory focuses the contribution
@@ -37,10 +50,15 @@ For a container host, use the production-container commands in the README.
 4. Enter the portal together. Pause briefly for the first-room reveal and arrival keepsake.
 5. Show movement, a directional attack, a dash through danger and the class's Q ability.
 6. Clear a room, spend the earned resource on the E unlock and demonstrate its effect.
-7. Continue through three rooms. Break amber cracked barriers with normal attacks; ramps
-   cross wall runs, rubble slows walking, and cyan conduits accelerate walking. Dashes keep
-   their normal speed.
-8. Defeat the three-phase Custodian. Follow the numbered relays and tap F at each lit one.
+7. Legacy world: continue through three rooms. Floors world: doors seal until the room is
+   clear; hold **M** for the floor map; step into a rest room (heals 40% once per run),
+   a lore room (hold F on the relic) or the elite room, clear the exit's gatekeeper, tap F at
+   the focus and pick a biome. Break amber cracked barriers with normal attacks; ramps
+   cross wall runs, rubble slows walking, cyan conduits accelerate walking, and `~` hazard
+   floor burns on a ramp while you stand in it (enemies burn harder). Dashes keep their
+   normal speed.
+8. Defeat the three-phase Custodian (five biomes deep in floors mode; there is no save or
+   deep link to it). Follow the numbered relays and tap F at each lit one.
    Once the first relay is active, the Anchor warns in red before emitting a widening pulse;
    dash through it. Activated relays stay charged. Return to the core and tap F to release
    the signal, watch the discharge, then return to the sanctuary and its Archive.
@@ -58,8 +76,12 @@ For a container host, use the production-container commands in the README.
 | Dash | Shift or Space |
 | Class ability | Q |
 | Unlocked ability | E |
-| Relays / Anchor release / HQ stations | Tap F nearby |
+| Ultimate (when charged) | R |
+| Relays / Anchor release / HQ stations / biome-exit choice site | Tap F nearby |
 | Read a relic / revive | Hold F nearby |
+| Floor map (floors mode) | Hold M, or click the minimap to pin |
+| Biome choice (host) | 1 / 2 or click a door |
+| Menu (Controls, Operative, Field Notes) | Tab |
 | Sound | Sound on/off in the top bar |
 
 Attacks and abilities are presses, not automatic repeats. Release movement before typing an
@@ -69,7 +91,10 @@ idea. Sound starts after a user gesture.
 
 Default mode uses validated fixtures and makes no paid requests. To enable live generation,
 set `RELAY_GENERATION_MODE=live`, `RELAY_AI_PROVIDER=anthropic`, and `ANTHROPIC_API_KEY`
-on the server, then restart it. Claude defaults to `claude-sonnet-4-6`; override with
+on the server, then restart it. Add `RELAY_FLOORS=1` and `RELAY_LAWS=1` for the five-biome
+world (`RELAY_LAWS` is not in `.env.example`; add it by hand). Measured on 8 live worlds
+(`docs/design/WORLDGEN_EVAL.md`): first room p50 47 s, max 50 s, about $0.31 per world; the
+budget is 75 s, after which the labelled fallback is served. Claude defaults to `claude-sonnet-4-6`; override with
 `ANTHROPIC_MODEL` if needed. To switch to GPT, set `RELAY_AI_PROVIDER=openai` and
 `OPENAI_API_KEY` (`OPENAI_MODEL` defaults to `gpt-5-mini`), then restart. Both keys may
 remain configured; only the selected provider is called. Never expose keys through a
@@ -113,6 +138,10 @@ the receipt already say what it is.
 - Do not clear the memory wall while demonstrating persistence.
 - For an offline solo rehearsal, use `/?world=fixture`. Preview room jumps
   (`&room=1` or `&room=2`) are inspection aids, not evidence of completing an expedition.
+  `/?world=fixture&floors=1` upgrades the bundled fixture to a floors world whose biome
+  briefs are engine-derived, not model-written; say so.
+- Restart the server before judging: a run outlives its players and ideas accumulate for the
+  life of the process (`docs/QA_COOP.md`). Serve with `npm start`, not `npm run dev`.
 
 ## Public hosts
 
