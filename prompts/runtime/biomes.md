@@ -7,6 +7,8 @@ are found there) and a `position`: the "opener" is the first floor the crew walk
 few elites, and it teaches this world's cast; "middle" floors are offered to the crew two at a time as a
 choice of doors, so each must differ from the others in shape and enemies; the "finale" is
 where the collapse happened and where the guardian is.
-Other floors are being written at the same time from other settings: stay on your slot's
-setting so no two floors share a name.
+Other floors are being written at the same time from the settings in `namesTaken`: name your
+floor after your slot's setting (a part of it, a room off it, the area around the object)
+and never after anything in `namesTaken`. Build the floor's taglines and room lines from
+your slot's focusEvent and setting, not from the collapse everyone else will reach for.
 {{briefRules}}

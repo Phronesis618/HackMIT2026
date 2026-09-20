@@ -13,7 +13,7 @@ import {
 } from '../../shared/contracts';
 import { BIOME_LINE_KINDS, WorldBibleSchema, clampLoreRefs, type BiomeRoomLines, type WorldBible } from '../../shared/bible';
 import { BIOME_BRIEF_COUNT, BiomeBriefSchema, BiomeTerrainSchema, ROOM_KINDS, type BiomeBrief } from '../../shared/floors';
-import { hashString } from '../../shared/ids';
+import { seededInt } from './exemplars';
 import {
   CustodianSchema, TerrainSkinSchema, WorldLawSchema, WorldLookSchema, sanitizeCustodian, sanitizeLaws, sanitizeTerrainSkins,
   type Custodian, type TerrainSkin, type WorldLaw, type WorldLook,
@@ -74,6 +74,11 @@ export const ModelBibleSchema = z.object({
   events: z.array(z.object({ date: tight(20), fact: tight(120) })).min(5).max(6),
   authors: z.array(z.object({ name: tight(32), document: tight(36), register: tight(130), never: tight(56) })).length(3),
   enemies: z.array(z.object({ enemyId: z.enum(ENEMY_IDS), formerJob: tight(48) })).min(3).max(5),
+});
+
+/** Parsing accepts a missing or null room line (seen live: `rest: null` for a floor with no rest room). */
+const LenientBriefSchema = ModelBriefSchema.extend({
+  roomLines: z.object(Object.fromEntries(Object.keys(ModelRoomLinesSchema.shape).map((key) => [key, roomLineText.nullish().catch(undefined)])) as unknown as Record<keyof typeof ModelRoomLinesSchema.shape, z.ZodType<string | null | undefined>>).nullish(),
 });
 
 const foundationShape = {
@@ -137,7 +142,9 @@ export function fitText(text: string, max: number): string {
   if (trimmed.length <= max) return trimmed;
   const head = trimmed.slice(0, max + 1);
   const sentence = Math.max(head.lastIndexOf('. '), head.lastIndexOf('! '), head.lastIndexOf('? '));
-  if (sentence >= max * 0.5) return head.slice(0, sentence + 1);
+  if (sentence >= max * 0.3) return head.slice(0, sentence + 1);
+  const clause = Math.max(head.lastIndexOf(', '), head.lastIndexOf('; '), head.lastIndexOf(': '), head.lastIndexOf(' · '), head.lastIndexOf(' ('));
+  if (clause >= max * 0.5) return head.slice(0, clause).replace(/[\s,;:·-]+$/, '');
   const word = head.lastIndexOf(' ');
   return (word > 0 ? head.slice(0, word) : trimmed.slice(0, max)).replace(/[\s,;:·-]+$/, '');
 }
@@ -177,21 +184,80 @@ export function parseWithFit<T extends z.ZodType>(schema: T, raw: unknown): Retu
   return schema.safeParse(value) as ReturnType<T['safeParse']>;
 }
 
+/**
+ * Tool input sometimes arrives with a nested object or list serialised as a JSON string
+ * (seen live: `bible` as a string). Parse such values back, one level deep, and clone the rest.
+ */
+/** Models sometimes mark emphasis with Markdown; the game renders plain text. */
+const stripMarkdown = (text: string): string => text.replace(/\*\*|__|`/g, '').replace(/(^|\s)\*(\S[^*]*\S)\*(?=\s|[.,;:!?]|$)/g, '$1$2');
+function plainStrings(value: unknown): unknown {
+  if (typeof value === 'string') return stripMarkdown(value);
+  if (Array.isArray(value)) return value.map(plainStrings);
+  if (typeof value === 'object' && value !== null) return Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, plainStrings(inner)]));
+  return value;
+}
+
+export function coerceJson(input: unknown): unknown {
+  const raw = plainStrings(input);
+  if (typeof raw === 'string' && /^\s*[[{]/.test(raw)) {
+    try {
+      return coerceJson(JSON.parse(raw) as unknown);
+    } catch {
+      return raw;
+    }
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw;
+  return Object.fromEntries(Object.entries(raw as Record<string, unknown>).map(([key, value]) => {
+    if (typeof value === 'string' && /^\s*[[{]/.test(value)) {
+      const open = value.trimStart()[0] === '{' ? ['{', '}'] : ['[', ']'];
+      for (const candidate of [value, value.slice(value.indexOf(open[0]!), value.lastIndexOf(open[1]!) + 1)]) {
+        try {
+          return [key, JSON.parse(candidate) as unknown];
+        } catch {
+          // try the next candidate
+        }
+      }
+    }
+    return [key, value];
+  }));
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export interface ParsedBrief { brief: BiomeBrief; lines: BiomeRoomLines['lines'] }
 
 const slug = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'biome';
 
-/** Validates one model brief against the real BiomeBriefSchema; the id is assigned by trusted code. */
+/** Why the last `parseBrief` call per index failed; read by the pipeline for an honest provenance note. */
+export const briefRejections = new Map<number, string>();
+
+/**
+ * Validates one model brief against the real BiomeBriefSchema; the id is assigned by trusted
+ * code. Pools are tidied first (duplicates, director-only ids) so a slip there costs an entry,
+ * not the whole brief.
+ */
 export function parseBrief(raw: unknown, index: number): ParsedBrief | undefined {
-  const model = parseWithFit(ModelBriefSchema, raw);
-  if (!model.success) return undefined;
+  briefRejections.delete(index);
+  const value = coerceJson(raw);
+  if (isRecord(value)) {
+    for (const key of ['motifIds', 'enemyPool', 'propPool'] as const) {
+      if (Array.isArray(value[key])) value[key] = [...new Set(value[key] as unknown[])];
+    }
+    if (Array.isArray(value.propPool)) value.propPool = (value.propPool as unknown[]).filter((id) => id !== 'anchor_pedestal');
+  }
+  const model = parseWithFit(LenientBriefSchema, value);
+  if (!model.success) {
+    briefRejections.set(index, issuesText(model.error));
+    return undefined;
+  }
   const { roomLines, terrain, ...rest } = model.data;
   const brief = BiomeBriefSchema.safeParse({ ...rest, ...(terrain ? { terrain } : {}), id: `b${index}-${slug(rest.name)}` });
-  if (!brief.success) return undefined;
+  if (!brief.success) {
+    briefRejections.set(index, issuesText(brief.error));
+    return undefined;
+  }
   const lines = BIOME_LINE_KINDS.flatMap((kind) => {
-    const text = roomLines[kind as keyof typeof roomLines];
+    const text = roomLines?.[kind as keyof typeof roomLines];
     return text ? [{ kind, text }] : [];
   });
   return { brief: brief.data, lines };
@@ -217,21 +283,24 @@ export interface LawsPart {
 }
 
 /** `legacy` = a complete pre-bible recipe (old model output): accepted as-is, no second call. */
-export function parseFoundation(raw: unknown): { legacy: z.infer<typeof WorldRecipeSchema> } | { foundation: Foundation } {
+export function parseFoundation(input: unknown): { legacy: z.infer<typeof WorldRecipeSchema> } | { foundation: Foundation } {
+  const raw = coerceJson(input);
   if (!isRecord(raw)) throw new StageParseError('Recipe failed schema validation at (root): expected an object.');
   if (raw.bible == null) {
     const legacy = WorldRecipeSchema.safeParse(raw);
     if (!legacy.success) throw new StageParseError(`Recipe failed schema validation at ${issuesText(legacy.error)}.`);
     return { legacy: legacy.data };
   }
-  const core = parseWithFit(z.object({ bible: WorldBibleSchema, title: foundationShape.title, tagline: foundationShape.tagline }), raw);
+  // Over-long header lines are kept here and sent to the polish call (see `headerOverflow`); `fitHeader` is the last resort.
+  const core = parseWithFit(z.object({ bible: WorldBibleSchema, title: z.string().trim().min(1).max(120), tagline: z.string().trim().min(1).max(240) }), raw);
   if (!core.success) throw new StageParseError(`Recipe failed schema validation at ${issuesText(core.error)}.`);
   const { bible, ...header } = core.data;
   return { foundation: { bible, header } };
 }
 
 /** Rooms are load-bearing: a failure here is a failed world. */
-export function parseRooms(raw: unknown): RoomsPart {
+export function parseRooms(input: unknown): RoomsPart {
+  const raw = coerceJson(input);
   if (!isRecord(raw)) throw new StageParseError('Recipe failed schema validation at (root): expected an object.');
   const core = parseWithFit(z.object({
     themeSummary: WorldRecipeSchema.shape.themeSummary, motifIds: roomsShape.motifIds, palette: roomsShape.palette,
@@ -242,7 +311,8 @@ export function parseRooms(raw: unknown): RoomsPart {
 }
 
 /** Look, laws, terrain skins and the Custodian are flavour: they degrade item by item and never fail a world. */
-export function parseLaws(raw: unknown, bible: WorldBible): LawsPart {
+export function parseLaws(input: unknown, bible: WorldBible): LawsPart {
+  const raw = coerceJson(input);
   const record = isRecord(raw) ? raw : {};
   const notes: string[] = [];
   const look = WorldLookSchema.safeParse(record.look);
@@ -259,7 +329,8 @@ export function parseLaws(raw: unknown, bible: WorldBible): LawsPart {
   };
 }
 
-export function parseLore(raw: unknown, bible: WorldBible, expected: { kind: 'relic' | 'remains'; count: number }): { lore: WorldRecipe['lore']; dropped: number } {
+export function parseLore(input: unknown, bible: WorldBible, expected: { kind: 'relic' | 'remains'; count: number }): { lore: WorldRecipe['lore']; dropped: number } {
+  const raw = coerceJson(input);
   const items = isRecord(raw) && Array.isArray(raw.lore) ? raw.lore : undefined;
   if (!items) throw new StageParseError('Recipe failed schema validation at lore: expected an array.');
   const lore: WorldRecipe['lore'] = [];
@@ -273,7 +344,8 @@ export function parseLore(raw: unknown, bible: WorldBible, expected: { kind: 're
   return { lore, dropped: items.length - lore.length };
 }
 
-export function parseAttunements(raw: unknown): WorldRecipe['attunements'] {
+export function parseAttunements(input: unknown): WorldRecipe['attunements'] {
+  const raw = coerceJson(input);
   const items = isRecord(raw) && Array.isArray(raw.attunements) ? raw.attunements : [];
   const seen = new Set<string>();
   return items.map((item) => parseWithFit(AttunementSchema, item)).flatMap((r) => (r.success ? [r.data] : []))
@@ -290,7 +362,8 @@ export function parseCustodian(raw: unknown, nonBossEnemyKinds: number): { custo
   return { custodian: result.custodian, notes: result.substituted ? [`Replaced ${result.substituted} Custodian move(s) that broke the move-set rules with defaults.`] : [] };
 }
 
-export function parseBiomes(raw: unknown, firstIndex: number, count: number): Array<ParsedBrief | undefined> {
+export function parseBiomes(input: unknown, firstIndex: number, count: number): Array<ParsedBrief | undefined> {
+  const raw = coerceJson(input);
   const items = isRecord(raw) && Array.isArray(raw.biomes) ? raw.biomes : [];
   return Array.from({ length: count }, (_, offset) => parseBrief(items[offset], firstIndex + offset));
 }
@@ -314,6 +387,17 @@ export function parseFullRecipe(raw: unknown): { recipe: WorldRecipe; notes: str
   };
 }
 
+const HEADER_MAX = { title: 40, tagline: 80 } as const;
+export function headerOverflow(header: Foundation['header']): LintFailure[] {
+  return (['title', 'tagline'] as const).filter((key) => header[key].length > HEADER_MAX[key]).map((key) => ({
+    path: key, kind: key === 'title' ? 'worldTitle' as const : 'tagline' as const, maxChars: HEADER_MAX[key], text: header[key],
+    notes: [`${header[key].length} characters; the hard limit is ${HEADER_MAX[key]}. Keep the one fact that matters and end on it.`],
+  }));
+}
+export function fitHeader(header: Foundation['header']): Foundation['header'] {
+  return { title: fitText(header.title, HEADER_MAX.title), tagline: fitText(header.tagline, HEADER_MAX.tagline) };
+}
+
 export const nonBossKinds = (bible: WorldBible): number => new Set(bible.enemies.map((enemy) => enemy.enemyId).filter((id) => id !== 'guardian')).size;
 
 // ---------------------------------------------------------------------------
@@ -321,40 +405,63 @@ export const nonBossKinds = (bible: WorldBible): number => new Set(bible.enemies
 // ---------------------------------------------------------------------------
 
 function shuffled<T>(items: readonly T[], seed: string): T[] {
-  return items.map((item, index) => ({ item, key: hashString(`${seed}:${index}`) })).sort((a, b) => a.key - b.key).map((entry) => entry.item);
+  return items.map((item, index) => ({ item, key: seededInt(0, `${seed}:${index}`) })).sort((a, b) => a.key - b.key).map((entry) => entry.item);
 }
 
-export interface RelicSlot { roomIndex: number; authorIndex: number; length: 'short' | 'medium' | 'long' }
-/** Two relics per legacy room; authors rotate and lengths are mixed so no two worlds share a rhythm. */
-export function planRelicSlots(plannedRoomCount: number, seed: number): RelicSlot[] {
+export interface RelicSlot { roomIndex: number; authorIndex: number; eventIndex: number; length: 'short' | 'medium' | 'long' }
+/**
+ * Two relics per legacy room. Trusted code deals the author, the event and the length of each,
+ * so the six fragments cover the whole chain of events in three voices and no two worlds
+ * share a rhythm. An author who was not present reports the event as it reached them.
+ */
+export function planRelicSlots(plannedRoomCount: number, seed: number, eventCount = 6): RelicSlot[] {
   const count = Math.min(6, plannedRoomCount * 2);
-  const lengths = shuffled(['short', 'medium', 'long', 'medium', 'short', 'long'] as const, `${seed}:relic-length`);
+  const lengths = shuffled(['short', 'medium', 'long', 'medium', 'short', 'medium'] as const, `${seed}:relic-length`);
   const authors = shuffled([0, 1, 2, 0, 1, 2], `${seed}:relic-author`);
-  return Array.from({ length: count }, (_, index) => ({
-    roomIndex: Math.min(plannedRoomCount - 1, Math.floor(index / 2)), authorIndex: authors[index]!, length: lengths[index]!,
+  const events = shuffled(Array.from({ length: Math.max(1, eventCount) }, (_, index) => index), `${seed}:relic-event`);
+  const slots = Array.from({ length: count }, (_, index) => ({ authorIndex: authors[index]!, eventIndex: events[index % events.length]!, length: lengths[index]! }));
+  // found in roughly the order things happened: early events lie near the entrance
+  return slots.sort((a, b) => a.eventIndex - b.eventIndex).map((slot, index) => ({ roomIndex: Math.min(plannedRoomCount - 1, Math.floor(index / 2)), ...slot }));
+}
+
+export interface RemainsSlot { enemyId: EnemyId; formerJob: string; eventIndex: number; shape: string }
+const REMAINS_SHAPES = [
+  'one sentence: the object and the mark on it',
+  'what is printed or written on it, quoted, then who it belonged to',
+  'the object, its wear, then the dated bible fact',
+  'a short list of what was in the pockets or on the belt',
+  'the object and a note one of the authors left on it',
+];
+/** One remains fragment per enemy kind the bible casts, each dated by a different event and given a different shape. */
+export function planRemainsSlots(bible: WorldBible, relicCount: number, seed: number): RemainsSlot[] {
+  const ids = new Set<EnemyId>(bible.enemies.map((enemy) => enemy.enemyId));
+  ids.add('guardian');
+  const events = shuffled(bible.events.map((_, index) => index), `${seed}:remains-event`);
+  const shapes = shuffled(REMAINS_SHAPES, `${seed}:remains-shape`);
+  return [...ids].slice(0, Math.max(1, 12 - relicCount)).map((enemyId, index) => ({
+    enemyId,
+    formerJob: bible.enemies.find((enemy) => enemy.enemyId === enemyId)?.formerJob ?? 'the person responsible',
+    eventIndex: enemyId === 'guardian' ? bible.events.length - 1 : events[index % events.length]!,
+    shape: shapes[index % shapes.length]!,
   }));
 }
 
-/** One remains fragment per enemy kind the bible casts (the rooms and biomes draw from the same cast). */
-export function planRemainsEnemies(bible: WorldBible, relicCount: number): EnemyId[] {
-  const ids = new Set<EnemyId>(bible.enemies.map((enemy) => enemy.enemyId));
-  ids.add('guardian');
-  return [...ids].slice(0, Math.max(1, 12 - relicCount));
-}
-
-export interface BiomeSlot { index: number; position: 'opener' | 'middle' | 'finale'; setting: string; focusEvent: string }
+export interface BiomeSlot { index: number; position: 'opener' | 'middle' | 'finale'; setting: string; focusEvent: string; focusDate: string; namesTaken: string[] }
 const SLOT_TIERS = [0, 1, 1, 2, 2, 3, 3, 4] as const;
 /**
- * Slots 0..7. Each gets a bible place and event so parallel calls do not name the same biome
- * twice. The six middle briefs are dealt onto tiers 1-3 by the route seed (FLOORS.md section 12),
- * so the model is told only opener / middle / finale.
+ * Slots 0..7. The calls that write briefs run in parallel and cannot see each other, so
+ * trusted code deals each slot a different bible place (then objects) and a different
+ * event, and tells it which settings the other floors took. The six middle briefs are dealt
+ * onto tiers 1-3 by the route seed (FLOORS.md section 12), so the model is told only
+ * opener / middle / finale.
  */
 export function planBiomeSlots(bible: WorldBible, seed: number): BiomeSlot[] {
-  const places = shuffled([...bible.places, ...bible.objects], `${seed}:biome-place`);
+  const settings = [...shuffled(bible.places, `${seed}:biome-place`), ...shuffled(bible.objects, `${seed}:biome-object`)];
   return SLOT_TIERS.map((tier, index) => {
     const position = tier === 0 ? 'opener' as const : tier === 4 ? 'finale' as const : 'middle' as const;
     const event = bible.events[Math.min(bible.events.length - 1, Math.round((index / 7) * (bible.events.length - 1)))]!;
-    return { index, position, setting: places[index % places.length]!, focusEvent: `${event.date}: ${event.fact}` };
+    const setting = settings[index % settings.length]!;
+    return { index, position, setting, focusEvent: `${event.date}: ${event.fact}`, focusDate: event.date, namesTaken: settings.filter((other) => other !== setting) };
   });
 }
 
@@ -393,6 +500,8 @@ export function assembleRecipe(parts: {
   attunements: WorldRecipe['attunements'];
   /** Present only in floors mode: 8 entries, undefined where the model's brief was missing or invalid. */
   briefs?: Array<ParsedBrief | undefined>;
+  /** In-world date of each slot's focus event, used to tell apart two briefs the model gave one name. */
+  briefDates?: string[];
   deriveBriefs?: (recipe: WorldRecipe) => BiomeBrief[];
   onDerived?: (indices: number[]) => void;
 }): WorldRecipe {
@@ -420,7 +529,12 @@ export function assembleRecipe(parts: {
   const names = new Set<string>();
   const briefs = Array.from({ length: BIOME_BRIEF_COUNT }, (_, index) => {
     let parsed = parts.briefs![index];
-    if (parsed && names.has(parsed.brief.name.toLowerCase())) parsed = undefined; // a duplicate door name is a useless choice
+    if (parsed && names.has(parsed.brief.name.toLowerCase())) {
+      // Two doors with one name is no choice. Parallel calls can collide: date the later one, else derive it.
+      const dated = `${parsed.brief.name}, ${parts.briefDates?.[index] ?? ''}`;
+      parsed = parts.briefDates?.[index] && dated.length <= 40 && !names.has(dated.toLowerCase())
+        ? { ...parsed, brief: { ...parsed.brief, name: dated } } : undefined;
+    }
     if (parsed) {
       names.add(parsed.brief.name.toLowerCase());
       return parsed;
@@ -479,6 +593,11 @@ export function lintWorld(parts: Lintable, bible: WorldBible | undefined): World
   let weight = 0;
   let total = 0;
   const failures: LintFailure[] = [];
+  const engineWords: Array<{ path: string; kind: ProseKind; text: string; word: string }> = [];
+  for (const field of fields) {
+    const word = ENGINE_WORDS.exec(field.text)?.[0];
+    if (word && !field.result.hardFail) engineWords.push({ path: field.path, kind: field.kind, text: field.text, word });
+  }
   const rules = new Set<string>();
   for (const field of fields) {
     const words = Math.max(field.result.words, 3);
@@ -492,6 +611,13 @@ export function lintWorld(parts: Lintable, bible: WorldBible | undefined): World
       maxChars: Math.min(POLISH_MAX[field.kind] ?? Infinity, KIND_SPECS[field.kind].max),
     });
   }
+  for (const hit of engineWords) {
+    rules.add('engine-word');
+    failures.push({
+      path: hit.path, kind: hit.kind, text: hit.text, maxChars: Math.min(POLISH_MAX[hit.kind] ?? Infinity, KIND_SPECS[hit.kind].max),
+      notes: [`Rule engine-word: "${hit.word}" is the engine's id for that enemy and players never see it. Call the creature by its former job from the bible.`],
+    });
+  }
   return {
     score: weight ? Math.round((total / weight) * 10) / 10 : 0,
     hardFail: failures.length > 0, failedFields: failures.length, fieldCount: fields.length, rules: [...rules],
@@ -499,6 +625,8 @@ export function lintWorld(parts: Lintable, bible: WorldBible | undefined): World
   };
 }
 
+/** Registry enemy ids that are not ordinary job words (`warden`, `guardian` and `sentinel` can be real titles). */
+const ENGINE_WORDS = /\b(?:husks?|lurkers?|spewers?|swarmlings?|channell?ers?)\b/i;
 const UNSAFE_TEXT = /[<>]|```|(?:https?:\/\/|www\.|data:|javascript:)|\b(?:eval|function)\s*\(/i;
 export const isUnsafeText = (value: string): boolean => UNSAFE_TEXT.test(value);
 
@@ -538,15 +666,31 @@ export function applyFixes(parts: Lintable, bible: WorldBible | undefined, failu
     const failure = failures.find((candidate) => candidate.path === fix.path);
     const field = failure && access(parts, fix.path);
     const text = fix.text.trim();
-    if (!failure || !field || !text || isUnsafeText(text) || text.length > KIND_SPECS[failure.kind].max) continue;
+    if (!failure || !field || !text || isUnsafeText(text) || text.length > Math.max(failure.maxChars, KIND_SPECS[failure.kind].max)) continue;
     const before = lintProse(failure.text, { kind: failure.kind, ...(bible ? { bible } : {}) });
     const after = lintProse(text, { kind: failure.kind, ...(bible ? { bible } : {}) });
-    const better = (before.hardFail && !after.hardFail) || (before.hardFail === after.hardFail && after.score < before.score);
+    // Failures raised outside prose.ts (an engine word, a header over its hard limit) are fixed when the cause is gone.
+    const causeFixed = !before.hardFail && !after.hardFail && !ENGINE_WORDS.test(text) && text.length <= Math.max(failure.maxChars, Math.min(failure.text.length, KIND_SPECS[failure.kind].max));
+    const better = causeFixed || (before.hardFail && !after.hardFail && !ENGINE_WORDS.test(text)) || (before.hardFail === after.hardFail && after.score < before.score);
     if (!better) continue;
     field.set(text);
     applied++;
   }
   return applied;
+}
+
+/** Last resort after polish: a line whose only remaining fault is length is cut at a sentence or word end. */
+export function fitOverlong(parts: Lintable, bible: WorldBible | undefined): number {
+  let cut = 0;
+  for (const failure of lintWorld(parts, bible).failures) {
+    if (!failure.notes.some((note) => note.startsWith('Rule too-long'))) continue;
+    const field = access(parts, failure.path);
+    const limit = Math.min(failure.maxChars, KIND_SPECS[failure.kind].max);
+    if (!field || failure.text.length <= limit) continue;
+    field.set(fitText(failure.text, limit));
+    cut++;
+  }
+  return cut;
 }
 
 export function displayTexts(recipe: Lintable & Partial<Pick<WorldRecipe, 'contributionMappings'>>): string[] {

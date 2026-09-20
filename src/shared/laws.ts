@@ -211,6 +211,12 @@ export const CUSTODIAN_PATTERN_INFO: Record<CustodianPatternId, { class: Pattern
   overload_vent: { class: 'arena', summary: 'every vent in the room fires three times while the boss stands still and takes 30% more damage' },
 };
 export const DEFAULT_CUSTODIAN_MOVES = ['ring_bloom', 'siege_charge', 'arena_flood'] as const;
+/** Engine-owned plain text for a substituted move (the model's own name and tell described another attack). */
+const DEFAULT_MOVE_TEXT: Record<(typeof DEFAULT_CUSTODIAN_MOVES)[number], { name: string; tell: string }> = {
+  ring_bloom: { name: 'Bolt rings', tell: 'TWO RINGS OF BOLTS. DASH THROUGH A GAP.' },
+  siege_charge: { name: 'Charge', tell: 'IT BACKS UP TO CHARGE. STEP ONE TILE ASIDE.' },
+  arena_flood: { name: 'Marked floor', tell: 'MARKED FLOOR GOES LIVE. FOLLOW THE CLEAR LANE.' },
+};
 
 export const CustodianMoveSchema = z.object({
   patternId: z.enum(CUSTODIAN_PATTERN_IDS),
@@ -245,11 +251,11 @@ export function sanitizeCustodian(custodian: Custodian, nonBossPoolSize: number)
   let substituted = 0;
   for (let index = moves.length - 1; index >= 0 && !custodianMovesValid(moves.map((move) => move.patternId), nonBossPoolSize); index--) {
     const replacement = DEFAULT_CUSTODIAN_MOVES.find((id) => !moves.some((move, other) => other !== index && move.patternId === id))!;
-    moves[index] = { patternId: replacement, name: replacement.replace('_', ' ').toUpperCase(), tell: CUSTODIAN_PATTERN_INFO[replacement].summary.slice(0, 80) };
+    moves[index] = { patternId: replacement, ...DEFAULT_MOVE_TEXT[replacement] };
     substituted++;
   }
   if (!custodianMovesValid(moves.map((move) => move.patternId), nonBossPoolSize)) {
-    DEFAULT_CUSTODIAN_MOVES.forEach((id, index) => { moves[index] = { patternId: id, name: id.replace('_', ' ').toUpperCase(), tell: CUSTODIAN_PATTERN_INFO[id].summary.slice(0, 80) }; });
+    DEFAULT_CUSTODIAN_MOVES.forEach((id, index) => { moves[index] = { patternId: id, ...DEFAULT_MOVE_TEXT[id] }; });
     substituted = 3;
   }
   return { custodian: { ...custodian, moves }, substituted };

@@ -13,6 +13,18 @@ import fs from 'node:fs';
 import { z } from 'zod';
 import { hashString } from '../../shared/ids';
 
+/**
+ * Well-mixed 32-bit value for (seed, salt). `hashString` alone (FNV-1a) keeps the low bits of
+ * similar strings correlated, so `hash % smallNumber` picked the same items for different
+ * worlds (seen live: three worlds were offered the same document kinds).
+ */
+export function seededInt(seed: number, salt: string): number {
+  let h = (seed ^ Math.imul(hashString(salt), 0x9e3779b1)) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
 const ExemplarSchema = z.object({
   id: z.string(),
   kind: z.string(),
@@ -100,12 +112,12 @@ export function selectExemplars(options: {
 }): ExemplarSelection[] {
   const bank = options.bank ?? loadExemplarBank();
   const ranked = bank
-    .map((world) => ({ world, overlap: ideaOverlap(world, options.ideas), tie: hashString(`${options.seed}:${world.world}`) }))
+    .map((world) => ({ world, overlap: ideaOverlap(world, options.ideas), tie: seededInt(options.seed, world.world) }))
     .sort((a, b) => a.overlap - b.overlap || a.tie - b.tie);
   const worlds = (ranked.length >= 3 ? ranked.slice(0, -1) : ranked).map((entry) => entry.world);
   const pools = worlds.map((world) => {
     const all = world.exemplars.filter((exemplar) => exemplar.kind === options.kind);
-    const start = all.length ? hashString(`${options.seed}:${options.kind}:${world.world}`) % all.length : 0;
+    const start = all.length ? seededInt(options.seed, `${options.kind}:${world.world}`) % all.length : 0;
     const rotated = all.map((_, index) => all[(start + index) % all.length]!);
     if (options.kind === 'relic' || options.kind === 'remains') {
       // keep a length spread: alternate shortest / longest of the rotated window
@@ -178,10 +190,10 @@ export function exemplarSection(options: { kinds: ExemplarKind[]; count?: number
 /** One whole bible from the exemplar world least like the ideas, as a model of flatness and brevity. */
 export function exemplarBible(seed: number, ideas: readonly string[], bank: ExemplarWorld[] = loadExemplarBank()): string {
   const ranked = bank
-    .map((world) => ({ world, overlap: ideaOverlap(world, ideas), tie: hashString(`${seed}:bible:${world.world}`) }))
+    .map((world) => ({ world, overlap: ideaOverlap(world, ideas), tie: seededInt(seed, `bible:${world.world}`) }))
     .sort((a, b) => a.overlap - b.overlap || a.tie - b.tie);
   const candidates = ranked.length >= 3 ? ranked.slice(0, -1) : ranked;
-  const pick = candidates[seed % Math.max(1, candidates.length)]?.world;
+  const pick = candidates[seededInt(seed, 'bible-pick') % Math.max(1, candidates.length)]?.world;
   if (!pick) return '';
   const { premise, collapse, people, places, objects, events, authors, enemies } = pick.bible;
   const bible = {

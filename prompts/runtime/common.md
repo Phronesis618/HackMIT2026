@@ -30,8 +30,15 @@ from which facts you pick. A reader should believe a working game writer wrote e
 8. Humour is welcome and dry: a working person's irritation or understatement, stated flat.
    A silly idea gets a straight face: treat it as somebody's workplace with stock, shifts and rules.
 9. Contradictory ideas are both true: find the institution that had both.
-10. Vary the shape. Texts of one type must differ from each other in length, opening
+10. Registry ids (husk, lurker, spewer, channeler and the rest) are engine words. Players
+    never see them. Call every creature by its former job from the bible.
+11. Spread the facts. Other writers are covering the same bible in parallel, and each reaches
+    first for its most striking fact. Inside one call, no event, object or number carries
+    more than two texts; use the smaller people, places and objects as well.
+12. Vary the shape. Texts of one type must differ from each other in length, opening
     and sentence count. Some open on a date, some on an object, some on a name, some mid-task.
     Use lists of two or four, seldom three.
 
 Every maxLength in the schema counts characters, not words. Stay comfortably under each.
+Plain text only: no Markdown, no asterisks, no emphasis marks. A register that says
+"underlined" or "in bold" is a fact about the paper; describe it, do not typeset it.

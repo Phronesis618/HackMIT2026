@@ -1,7 +1,8 @@
+import https from 'node:https';
 import { z } from 'zod';
 import type { GenerationRequest, WorldRecipe } from '../../shared/contracts';
 import { hashString } from '../../shared/ids';
-import { buildSystemPrompt, namePool } from './prompt';
+import { buildSystemPrompt, namePool, worldSeeds } from './prompt';
 import { FullRecipeToolSchema, StageParseError, displayTexts, isUnsafeText, jsonSchema, parseFullRecipe } from './stages';
 
 const responseSchema = z.object({
@@ -82,11 +83,42 @@ export function createAnthropicProvider(options: ProviderOptions): RecipeProvide
 }
 
 export const TOOL_NAME = 'world_recipe';
+
+const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+const builtInFetch = globalThis.fetch;
+/**
+ * Default transport: one HTTP/1.1 TLS connection per model call (`agent: false`).
+ * Measured on Node 26 (undici 8): after a first call, global `fetch` reuses one multiplexed
+ * connection to the provider and concurrent calls complete strictly one after another (four
+ * 300-token calls: 7 s, 14 s, 21 s, 28 s), which turns the parallel call-2 stages into a queue.
+ * Separate connections run them side by side at full token rate. Tests inject `options.fetch`.
+ */
+const isolatedFetch: typeof fetch = (input, init) => new Promise<Response>((resolve, reject) => {
+  const signal = init?.signal ?? undefined;
+  const request = https.request(String(input), {
+    method: init?.method ?? 'GET', headers: init?.headers as Record<string, string>, agent: false, ...(signal ? { signal } : {}),
+  }, (response) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    response.on('data', (chunk: Buffer) => {
+      size += chunk.byteLength;
+      if (size > MAX_RESPONSE_BYTES) request.destroy(new Error('Provider response too large.'));
+      else chunks.push(chunk);
+    });
+    response.on('error', reject);
+    response.on('end', () => resolve(new Response(Buffer.concat(chunks), {
+      status: response.statusCode ?? 502, headers: { 'content-type': String(response.headers['content-type'] ?? '') },
+    })));
+  });
+  request.on('error', reject);
+  request.end(typeof init?.body === 'string' ? init.body : undefined);
+});
 /** Hard ceilings for any single model call (main raised Claude's to 55 s after measuring). */
 export const MAX_CALL_TIMEOUT_MS = { anthropic: 55_000, openai: 25_000 } as const;
 
 function createRecipeProvider(options: ProviderOptions, provider: 'openai' | 'anthropic'): Required<RecipeProvider> {
-  const fetchResponse = options.fetch ?? fetch;
+  // An injected fetch wins; so does a replaced global fetch (test stubs, instrumentation).
+  const fetchResponse: typeof fetch = options.fetch ?? ((input, init) => (globalThis.fetch === builtInFetch ? isolatedFetch : globalThis.fetch)(input, init));
   const maxTimeoutMs = MAX_CALL_TIMEOUT_MS[provider];
   const timeoutMs = Math.min(maxTimeoutMs, Math.max(1, options.timeoutMs ?? maxTimeoutMs));
 
@@ -177,6 +209,7 @@ function createRecipeProvider(options: ProviderOptions, provider: 'openai' | 'an
           floors: request.floors === true,
           contributions: request.contributions.map(({ id, text }) => ({ id, text })),
           namePool: namePool(seed),
+          ...worldSeeds(seed),
           ...(repair ? { repair } : {}),
         },
         schema: jsonSchema(FullRecipeToolSchema),

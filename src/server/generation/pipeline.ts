@@ -25,12 +25,12 @@
 import type { GenerationRequest, GenerationStatus, WorldRecipe } from '../../shared/contracts';
 import { deriveBiomeBriefs } from '../../shared/floorgen';
 import { BIOME_BRIEF_COUNT } from '../../shared/floors';
-import { buildSystemPrompt, namePool, type PromptStage } from './prompt';
+import { buildSystemPrompt, namePool, worldSeeds, type PromptStage } from './prompt';
 import { GenerationFailure, assertDisplayText, type ProviderUsage, type RecipeProvider } from './provider';
 import {
   BiomesToolSchema, FoundationToolSchema, PolishToolSchema, RelicsToolSchema, LawsToolSchema, RemainsToolSchema, RoomsToolSchema, StageParseError,
-  applyFixes, assembleRecipe, displayTexts, isUnsafeText, jsonSchema, lintWorld, parseAttunements, parseBiomes,
-  parseFoundation, parseLaws, parseLore, parseRooms, planBiomeSlots, planRelicSlots, planRemainsEnemies,
+  applyFixes, assembleRecipe, briefRejections, displayTexts, fitOverlong, isUnsafeText, jsonSchema, lintWorld, parseAttunements, parseBiomes,
+  fitHeader, headerOverflow, parseFoundation, parseLaws, parseLore, parseRooms, planBiomeSlots, planRelicSlots, planRemainsSlots,
   type Foundation, type LawsPart, type ParsedBrief, type RoomsPart, type WorldLint,
 } from './stages';
 import type { z } from 'zod';
@@ -159,16 +159,22 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
     }
   }
 
-  /** One polish call for the lines the linter rejected; replacements are kept only where they lint better. */
-  async function polish(label: string, parts: Parameters<typeof lintWorld>[0], bible: Foundation['bible'], lint: WorldLint): Promise<void> {
-    if (!lint.hardFail) return;
-    const failures = lint.failures.slice(0, 12);
-    const raw = await call('polish', `polish:${label}`, {
-      bible,
-      fixes: failures.map(({ path, kind, maxChars, text, notes: editorNotes }) => ({ path, kind, maxChars, text, editorNotes })),
-    }, PolishToolSchema, 2_000);
-    const parsed = PolishToolSchema.safeParse(raw);
-    if (parsed.success) applyFixes(parts, bible, failures, parsed.data.fixes);
+  /**
+   * Polish: the lines the linter rejected go back with the editor's notes; a replacement is kept
+   * only where it lints better. At most two rounds per stage (a round is ~2 s and ~100 tokens).
+   */
+  async function polish(label: string, parts: Parameters<typeof lintWorld>[0], bible: Foundation['bible'], lint: WorldLint, extra: WorldLint['failures'] = []): Promise<void> {
+    let failures = [...extra, ...lint.failures].slice(0, 12);
+    for (let round = 1; round <= 2 && failures.length > 0; round++) {
+      const raw = await call('polish', `polish:${label}`, {
+        bible,
+        fixes: failures.map(({ path, kind, maxChars, text, notes: editorNotes }) => ({ path, kind, maxChars, text, editorNotes })),
+      }, PolishToolSchema, 2_000);
+      const parsed = PolishToolSchema.safeParse(raw);
+      if (parsed.success) applyFixes(parts, bible, failures, parsed.data.fixes);
+      failures = [...(label === 'header' ? headerOverflow(parts as Foundation['header']) : []), ...lintWorld(parts, bible).failures].slice(0, 12);
+    }
+    fitOverlong(parts, bible);
   }
 
   try {
@@ -179,7 +185,7 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
     let repair: string | undefined;
     for (let attempt = 1; attempt <= 2 && !parsedFoundation; attempt++) {
       try {
-        const raw = await call('foundation', 'foundation', { contributions, namePool: namePool(seed), ...(repair ? { repair } : {}) }, FoundationToolSchema, 2_500);
+        const raw = await call('foundation', 'foundation', { contributions, namePool: namePool(seed), ...worldSeeds(seed), ...(repair ? { repair } : {}) }, FoundationToolSchema, 2_500);
         signal?.throwIfAborted();
         const candidate = parseFoundation(raw);
         assertDisplayText('legacy' in candidate ? candidate.legacy : { ...candidate.foundation.header, bible: candidate.foundation.bible });
@@ -234,8 +240,9 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
       if (displayTexts(parts).some(isUnsafeText)) throw new StageParseError('Recipe text contained markup, a URL, or code.');
     };
 
-    const relicSlots = planRelicSlots(request.plannedRoomCount, seed);
-    const remainsEnemies = planRemainsEnemies(bible, relicSlots.length);
+    const relicSlots = planRelicSlots(request.plannedRoomCount, seed, bible.events.length);
+    const remainsSlots = planRemainsSlots(bible, relicSlots.length, seed);
+    const remainsEnemies = remainsSlots.map((slot) => slot.enemyId);
     const biomeSlots = options.floors ? planBiomeSlots(bible, seed) : [];
     const world = { title: header.title, tagline: header.tagline };
 
@@ -243,7 +250,7 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
       ['header polish', async () => {
         const lint = lintWorld(header, bible);
         before.push(lint);
-        await polish('header', header, bible, lint);
+        await polish('header', header, bible, lint, headerOverflow(header));
       }],
       ['rooms', async () => {
         const part = await withRetry(async (repairNote) => {
@@ -274,7 +281,7 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
           const raw = await call('relics', 'relics', { bible, slots: relicSlots, ...(repairNote ? { repair: repairNote } : {}) }, RelicsToolSchema, 3_000);
           const parsed = parseLore(raw, bible, { kind: 'relic', count: relicSlots.length });
           guard({ lore: parsed.lore });
-          return parsed.lore.slice(0, relicSlots.length).map((fragment) => ({ ...fragment, enemyId: null, roomIndex: Math.min(fragment.roomIndex, request.plannedRoomCount - 1) }));
+          return parsed.lore.slice(0, relicSlots.length).map((fragment, index) => ({ ...fragment, enemyId: null, roomIndex: relicSlots[index]!.roomIndex }));
         });
         if (closed) return;
         state.relics = lore;
@@ -284,7 +291,7 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
       }],
       ['remains and attunements', async () => {
         const parts = await withRetry(async (repairNote) => {
-          const raw = await call('remains', 'remains', { bible, world, enemyIds: remainsEnemies, ...(repairNote ? { repair: repairNote } : {}) }, RemainsToolSchema, 3_000);
+          const raw = await call('remains', 'remains', { bible, world, slots: remainsSlots, attunementOwners: bible.people.map((person) => person.name), ...(repairNote ? { repair: repairNote } : {}) }, RemainsToolSchema, 3_000);
           const parsed = parseLore(raw, bible, { kind: 'remains', count: remainsEnemies.length });
           const seen = new Set<string>();
           const lore = parsed.lore.filter((fragment) => fragment.enemyId !== null && remainsEnemies.includes(fragment.enemyId) && !seen.has(fragment.enemyId) && Boolean(seen.add(fragment.enemyId)))
@@ -302,8 +309,12 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
         await polish('remains', parts, bible, lint);
       }],
       ...[biomeSlots.slice(0, 2), biomeSlots.slice(2, 4), biomeSlots.slice(4, 6), biomeSlots.slice(6)].filter((slots) => slots.length > 0).map((slots, part): [string, () => Promise<void>] => [`biome briefs ${slots[0]!.index + 1}-${slots.at(-1)!.index + 1}`, async () => {
-        const raw = await call('biomes', `biomes:${part + 1}`, { bible, world, slots: slots.map(({ position, setting, focusEvent }) => ({ position, setting, focusEvent })) }, BiomesToolSchema, 3_000);
+        const raw = await call('biomes', `biomes:${part + 1}`, { bible, world, slots: slots.map(({ position, setting, focusEvent, namesTaken }) => ({ position, setting, focusEvent, namesTaken })) }, BiomesToolSchema, 3_000);
         const parsed = parseBiomes(raw, slots[0]!.index, slots.length);
+        parsed.forEach((entry, offset) => {
+          const reason = briefRejections.get(slots[0]!.index + offset);
+          if (!entry && reason) notes.push(clipNote(`Biome brief ${slots[0]!.index + offset + 1} was rejected: ${reason}`));
+        });
         const valid = parsed.filter((entry): entry is ParsedBrief => entry !== undefined && !displayTexts({ biomes: [entry.brief], biomeRoomLines: [{ biomeId: entry.brief.id, lines: entry.lines }] }).some(isUnsafeText));
         if (closed) return;
         parsed.forEach((entry, offset) => { state.briefs[slots[0]!.index + offset] = entry && valid.includes(entry) ? entry : undefined; });
@@ -339,13 +350,14 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
     // ---- assemble ---------------------------------------------------------
     const derivedBriefs: number[] = [];
     const recipe = assembleRecipe({
-      foundation: { bible, header },
+      foundation: { bible, header: fitHeader(header) },
       roomsPart: state.rooms,
       lawsPart: state.laws,
       lore: [...(state.relics ?? []), ...(state.remains ?? [])],
       attunements: state.attunements ?? [],
       ...(options.floors ? {
         briefs: state.briefs,
+        briefDates: biomeSlots.map((slot) => slot.focusDate),
         deriveBriefs: (partial: WorldRecipe) => deriveBiomeBriefs(partial, options.floorsSeed),
         onDerived: (indices: number[]) => derivedBriefs.push(...indices),
       } : {}),

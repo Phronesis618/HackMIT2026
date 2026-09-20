@@ -21,7 +21,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import type { GenerationRequest } from '../../shared/contracts';
 import { hashString } from '../../shared/ids';
 import { ENEMY_IDS, MOTIF_IDS, PROP_IDS } from '../../shared/registry';
-import { buildSystemPrompt, namePool, registryText } from '../generation/prompt';
+import { buildSystemPrompt, namePool, registryText, worldSeeds } from '../generation/prompt';
 import { GenerationFailure, assertDisplayText, type RecipeProvider } from '../generation/provider';
 import { FullRecipeToolSchema, StageParseError, jsonSchema, parseFullRecipe } from '../generation/stages';
 
@@ -161,6 +161,7 @@ export function createOperatorProvider(options: OperatorProviderOptions): Operat
           repair: feedback,
           floors: request.floors === true,
           namePool: namePool(seed),
+          ...worldSeeds(seed),
           registry: { motifIds: [...MOTIF_IDS], propIds: [...PROP_IDS], enemyIds: [...ENEMY_IDS], full: JSON.parse(registryText('full')) as unknown },
           instructions,
           reply: {

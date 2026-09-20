@@ -6,18 +6,25 @@ Other writers are waiting on this call, so be brief: every field has a tight cha
 limit, and a flat short fact is worth more than a long one.
 
 ## bible
-- premise (max 120 chars): one flat sentence, what this place was for. A real institution
+- Take every idea literally and build it into the premise, the people, the places or the
+  cast. A strange idea stays strange and is treated as routine by the people who worked
+  there: if geese run quality control, the quality inspectors are geese, with names, a shift
+  pattern and a line in the budget. No idea is quietly replaced by something more sensible.
+- premise (max 120 chars): one flat sentence, what this place was for. A working place
   with a purpose, staff and a budget. Build it from the players' ideas.
-- collapse (max 240): one cause. A named person made a decision on a date; give the number
-  that went wrong and how many people were caught by it. No unknown forces.
+- collapse (max 240): one cause. A named person did something on a date; give the number
+  that went wrong and how many people were caught by it. No unknown forces. The data
+  carries a `collapseKind`: build the cause on it unless the ideas clearly point elsewhere.
+  Paperwork (a form nobody signed, an order countersigned unread) is the cause only if the
+  collapseKind says so.
 - people: 3 or 4. name, job (max 36), want (max 64). The want is small and concrete: a transfer, a count that
   balances, a letter answered. Names are ordinary, the kind found on a payroll: mix origins,
   given name plus surname; the data includes a `namePool` you may draw from when the ideas do
   not imply a culture. Include the person responsible for the collapse.
 - places: 3 or 4, objects: 3 or 4 (max 28 chars each). Named, physical, reusable:
-  "Pump 6", "Stores Cage B", "Tarn's red wrench". These are the nouns all later text reuses.
-- events: 5 or 6 in date order. date (max 20; the world's own calendar: "Day 11",
-  "14 March, 22:10", "Shift 212") and fact (max 120): one flat past-tense sentence naming a person and
+  a numbered machine, a room with a letter on the door, one person's marked tool. These are the nouns all later text reuses.
+- events: 5 or 6 in date order. date (max 20) is in the world's own calendar: the data
+  carries a `calendar` style to use, with numbers of your own. fact (max 120): one flat past-tense sentence naming a person and
   carrying a number. Events form a chain of cause: each makes the next one possible. If a
   fact could be moved to another world unchanged, make it specific.
 - authors: exactly 3 of the people, the ones who wrote things down. document is the physical
@@ -25,9 +32,14 @@ limit, and a flat short fact is worth more than a long one.
   count, how long their sentences run, a verbal habit. never (max 56) is what they would not write.
   The three must differ sharply in sentence length and in what they count: a quartermaster
   counts stock, a child counts days, an engineer counts readings. At most one of them is sad.
+  At most ONE document is a log, ledger or register with dated entries. The data carries
+  two `documentKinds`: those are the other two documents (adapt them to the place), so the
+  world is read through letters, labels, notes to a colleague, a menu board, not three logs.
+  At least one author writes to somebody: a person with a name who is expected to answer.
 - enemies: the cast of this world: 4 or 5 registry enemy ids, guardian included, chosen so
   the way each kind fights suits its job. formerJob (max 48) says what those creatures were
-  before the collapse, as a job at a named place. The guardian is the person responsible,
+  before the collapse: a group of workers in the plural with their place ("Deck 4 loaders"),
+  never a named individual, because the crew meets many of each kind. The guardian is the person responsible,
   or the machine they left running. Rooms and floors written later use only this cast.
 
 ## title, tagline
