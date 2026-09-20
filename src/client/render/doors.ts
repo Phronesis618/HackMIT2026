@@ -42,7 +42,7 @@ export function selectDoorViews(room: Pick<RoomSpec, 'exits'>, floor: FloorRunSt
       y: exit.y,
       direction: exit.direction,
       toRoomId,
-      state: floor?.doorsLocked ? 'sealed' : 'open',
+      state: floor?.doorsLocked || (toRoomId && floor?.blockedDoorRoomIds?.includes(toRoomId)) ? 'sealed' : 'open',
       destination: seen?.state === 'visited' ? 'visited' : 'unvisited',
       kind: seen?.kind ?? null,
     };

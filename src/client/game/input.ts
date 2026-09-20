@@ -13,7 +13,7 @@ export interface InputSampler {
   dispose(): void;
 }
 
-export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
+export function createKeyboardMouseInput(stage: HTMLElement, onRelease?: () => void): InputSampler {
   const down = new Set<string>();
   let attackPressed = false;
   let attackHeld = false;
@@ -37,7 +37,7 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
     if (matches(e.code, INPUT_BINDINGS.abilityR)) abilityPressed = 'r';
   };
   const onKeyUp = (e: KeyboardEvent): void => {
-    down.delete(e.code);
+    if (down.delete(e.code)) onRelease?.();
   };
   const onBlur = (): void => {
     down.clear();
@@ -45,6 +45,7 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
     attackHeld = false;
     dashPressed = false;
     abilityPressed = null;
+    onRelease?.();
   };
   const onFocus = (event: FocusEvent): void => {
     if (!stageOwnsInput(event.target, stage)) onBlur();
@@ -63,9 +64,15 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
     }
   };
   const onPointerUp = (e: PointerEvent): void => {
-    if (e.button === 0) attackHeld = false;
+    if (e.button === 0) {
+      attackHeld = false;
+      onRelease?.();
+    }
   };
-  const onPointerCancel = (): void => { attackHeld = false; };
+  const onPointerCancel = (): void => {
+    attackHeld = false;
+    onRelease?.();
+  };
   const onContextMenu = (e: Event): void => e.preventDefault();
 
   window.addEventListener('keydown', onKeyDown);

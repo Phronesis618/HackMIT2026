@@ -79,6 +79,8 @@ export class GameController {
   private shownWorldId: string | null = null;
   private shownRoomId: string | null = null;
   private viewVersion = 0;
+  private worldRequestVersion = 0;
+  private disposed = false;
 
   constructor(private readonly deps: GameControllerDeps) {
     this.actions = this.createActions();
@@ -108,13 +110,14 @@ export class GameController {
 
   /** Called once React has rendered the stage element. Mounts Phaser and starts the loop. */
   async attachStage(stage: HTMLElement): Promise<void> {
-    if (this.stageMounted) return;
+    if (this.stageMounted || this.disposed) return;
     this.stageMounted = true;
     const { session, renderer, store, chronicle, flags } = this.deps;
 
     await renderer.mount(stage);
+    if (this.disposed) return;
     renderer.showHeadquarters(headquartersRoom, headquartersArt);
-    this.input = createKeyboardMouseInput(stage);
+    this.input = createKeyboardMouseInput(stage, () => this.submitInput());
 
     this.disposers.push(
       session.onSnapshot((snapshot) => this.handleSnapshot(snapshot)),
@@ -136,6 +139,7 @@ export class GameController {
 
     this.loop();
     await session.start();
+    if (this.disposed) return;
     // Mirror connection state eagerly (and on a timer) so a tab whose animation frames are
     // throttled or paused never shows "offline" for a session that is actually running.
     const syncConnection = (): void => {
@@ -151,16 +155,19 @@ export class GameController {
       // Preview path for Agent C: skip the HQ flow, land straight in a room.
       try {
         await session.requestWorld();
+        if (this.disposed) return;
         const local = session as LocalSession;
         if (flags.startRoom !== null && typeof local.enterRoomIndex === 'function') local.enterRoomIndex(flags.startRoom);
         else session.enterPortal();
       } catch (err) {
-        this.notice('error', err instanceof Error ? err.message : String(err));
+        if (!this.disposed) this.notice('error', err instanceof Error ? err.message : String(err));
       }
     }
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     this.viewVersion++;
     cancelAnimationFrame(this.rafHandle);
     for (const d of this.disposers) d();
@@ -175,6 +182,20 @@ export class GameController {
 
   // ---- frame loop ----------------------------------------------------------------
 
+  private submitInput(): void {
+    if (this.disposed || !this.input || !this.latestSnapshot) return;
+    const { session, renderer } = this.deps;
+    const me = this.latestSnapshot.players.find((p) => p.id === session.localPlayerId);
+    const pointer = this.input.getPointer();
+    const aim = pointer ? renderer.screenToWorld(pointer.x, pointer.y) : me ? { x: me.x + Math.cos(me.facing), y: me.y + Math.sin(me.facing) } : { x: 0, y: 0 };
+    const sampled = this.input.sample(aim);
+    // Departure ritual (HUB.md §8): inputs lock while the gate opens; F / Escape only skip the wait.
+    const intent = isDeparting(departureBus.get()) ? { ...sampled, moveX: 0, moveY: 0, attack: false, dash: false, ability: null, interact: false } : sampled;
+    if (intent.interact && !this.interactHeld) this.activateHeadquartersStation();
+    this.interactHeld = intent.interact === true;
+    session.setIntent(intent);
+  }
+
   private loop = (): void => {
     const { session, renderer, store } = this.deps;
     const connection = { mode: session.mode, status: session.getConnectionStatus(), isHost: session.getIsHost?.() ?? session.mode === 'local' };
@@ -186,14 +207,7 @@ export class GameController {
     const snapshot = this.latestSnapshot;
     if (snapshot && this.input) {
       const me = snapshot.players.find((p) => p.id === session.localPlayerId);
-      const pointer = this.input.getPointer();
-      const aim = pointer ? renderer.screenToWorld(pointer.x, pointer.y) : me ? { x: me.x + Math.cos(me.facing), y: me.y + Math.sin(me.facing) } : { x: 0, y: 0 };
-      const sampled = this.input.sample(aim);
-      // Departure ritual (HUB.md §8): inputs lock while the gate opens; F / Escape only skip the wait.
-      const intent = isDeparting(departureBus.get()) ? { ...sampled, moveX: 0, moveY: 0, attack: false, dash: false, ability: null, interact: false } : sampled;
-      if (intent.interact && !this.interactHeld) this.activateHeadquartersStation();
-      this.interactHeld = intent.interact === true;
-      session.setIntent(intent);
+      this.submitInput();
       renderer.renderSnapshot(snapshot, session.localPlayerId);
 
       if (me) {
@@ -506,12 +520,18 @@ export class GameController {
         }
       },
       requestWorld: () => {
+        if (this.disposed) return;
+        const version = ++this.worldRequestVersion;
+        const current = () => !this.disposed && version === this.worldRequestVersion;
         store.set({ phase: 'preparing', notice: null });
         session
           .requestWorld()
-          .then(() => store.set({ phase: session.getPhase() === 'expedition' ? 'expedition' : 'headquarters' }))
+          .then(() => {
+            if (current()) store.set({ phase: session.getPhase() });
+          })
           .catch((err: unknown) => {
-            store.set({ phase: 'headquarters' });
+            if (!current()) return;
+            store.set({ phase: session.getPhase() });
             this.notice('error', err instanceof Error ? err.message : String(err));
           });
       },

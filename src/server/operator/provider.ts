@@ -146,7 +146,7 @@ export function createOperatorProvider(options: OperatorProviderOptions): Operat
       while (true) {
         const attempt = (attempts.get(request.requestId) ?? 0) + 1;
         attempts.set(request.requestId, attempt);
-        const name = `${request.requestId.replace(/[^A-Za-z0-9_-]/g, '_')}-${attempt}.json`;
+        const name = `${encodeURIComponent(request.requestId)}-${attempt}.json`;
         const inboxPath = path.join(inboxDir, name);
         const outboxPath = path.join(outboxDir, name);
         const file: OperatorRequestFile = {

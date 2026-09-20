@@ -450,6 +450,8 @@ export function loadHubState(storage: KeyValueStorage, key = HUB_STORAGE_KEY): H
       ? partial.relics.flatMap((item) => { const one = HubRelicSchema.safeParse(item); return one.success ? [one.data] : []; })
       : [];
     const lastRun = LastRunSchema.safeParse(partial.lastRun);
+    const current = RunAccumulatorSchema.safeParse(partial.current);
+    const seenEventIds = HubStateSchema.shape.seenEventIds.safeParse(partial.seenEventIds);
     const totals = HubTotalsSchema.safeParse(partial.totals);
     const worldIdsVisited = z.array(z.string()).safeParse(partial.worldIdsVisited);
     const runs = Object.values(records).reduce((sum, record) => sum + record.runs, 0);
@@ -457,6 +459,8 @@ export function loadHubState(storage: KeyValueStorage, key = HUB_STORAGE_KEY): H
     return {
       ...empty,
       lastRun: lastRun.success ? lastRun.data : null,
+      current: current.success ? current.data : null,
+      seenEventIds: seenEventIds.success ? seenEventIds.data : [],
       records,
       relics: relics.slice(-HUB_MAX_STORED_RELICS),
       worldIdsVisited: worldIdsVisited.success ? worldIdsVisited.data : [],
