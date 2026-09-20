@@ -89,11 +89,15 @@ export function inArc(origin: Point, target: Point, facing: number, range: numbe
   return difference <= arc / 2 + Math.asin(Math.min(1, radius / d));
 }
 
+/**
+ * Line of fire, not line of walking: it reads the grid's `shots` layer, so a bolt or a beam
+ * crosses a pit and is stopped by low cover (docs/design/TILES.md T2/T4).
+ */
 export function clearPath(grid: SolidGrid, from: Point, to: Point, radius = 1): boolean {
   const steps = Math.max(1, Math.ceil(distance(from, to) / 8));
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
-    if (circleHitsSolid(grid, from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t, radius)) return false;
+    if (circleHitsSolid(grid, from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t, radius, 'shots')) return false;
   }
   return true;
 }

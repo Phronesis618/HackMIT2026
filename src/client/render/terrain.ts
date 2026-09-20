@@ -11,7 +11,7 @@ export interface TerrainTile { x: number; y: number }
  * Tiles this layer draws or captions. '~' is painted by the floor pass in environment.ts; it is
  * listed here so a player standing beside scalding floor still gets told what it is.
  */
-const CAPTIONED_TILES = 'B=>:+~*';
+const CAPTIONED_TILES = 'B=>:+~*o';
 
 export function collectTerrainTiles(room: RoomSpec): TerrainTile[] {
   const tiles: TerrainTile[] = [];
@@ -38,6 +38,7 @@ export function terrainCaption(
     case '+': return TERRAIN_CAPTION.conduits;
     case '~': return TERRAIN_CAPTION.hazard_floor;
     case '*': return TERRAIN_CAPTION.canisters;
+    case 'o': return TERRAIN_CAPTION.pits;
     case '>':
     case '=': return TERRAIN_CAPTION.bridges;
     default: return null;
@@ -84,6 +85,23 @@ export function drawTerrain(
         .lineBetween(x + 10, y + 13, x + 21, y + 19)
         .lineBetween(x + 21, y + 19, x + 14, y + 30);
       if (damaged) g.lineBetween(x + 10, y + 13, x + 2, y + 19).lineBetween(x + 21, y + 19, x + 30, y + 13);
+    } else if (type === 'o') {
+      // A hole, so it is drawn as an absence: black interior, a lit inner rim, and a shadow
+      // under the north edge. Nothing here is raised — the silhouette must read as "down".
+      const open = (dx: number, dy: number) => (room.tiles[tile.y + dy]?.[tile.x + dx] ?? ' ') !== 'o';
+      g.fillStyle(0x05070c, 1).fillRect(x, y, T, T);
+      if (open(0, -1)) g.fillStyle(0x000000, 0.55).fillRect(x, y, T, 6);
+      g.lineStyle(3, accent, 0.35);
+      if (open(0, -1)) g.lineBetween(x, y + 1.5, x + T, y + 1.5);
+      if (open(0, 1)) g.lineBetween(x, y + T - 1.5, x + T, y + T - 1.5);
+      if (open(-1, 0)) g.lineBetween(x + 1.5, y, x + 1.5, y + T);
+      if (open(1, 0)) g.lineBetween(x + T - 1.5, y, x + T - 1.5, y + T);
+      // Slow motes falling in, so a still frame still reads as depth rather than as a black tile.
+      for (let i = 0; i < 3; i++) {
+        const seed = (tile.x * 7 + tile.y * 13 + i * 29) % 23;
+        const fall = ((timeMs / 22 + seed * 40) % (T * 1.6)) / 1.6;
+        g.fillStyle(accent, 0.22).fillRect(x + 5 + seed % (T - 12), y + 4 + fall * 0.6, 1.5, 3);
+      }
     } else if (type === '*') {
       // Solid, so it speaks the same language as 'B': cast shadow, lit cap, dark front face.
       // What makes it a canister is the hazard chevron, and once armed the whole tile flashes,

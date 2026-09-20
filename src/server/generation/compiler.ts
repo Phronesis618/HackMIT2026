@@ -274,6 +274,28 @@ function applyTerrain(grid: Grid, pathY: number, blueprint: RoomBlueprint, seed:
     walls.sort((a, b) => hashString(`${seed}:wall:${a.x}:${a.y}`) - hashString(`${seed}:wall:${b.x}:${b.y}`));
     for (const { x, y } of walls.slice(0, density * 2)) grid[y]![x] = 'B';
   }
+  if (features.has('pits')) {
+    // Blobs of 2-6 tiles, at most two, never touching the guaranteed path row. Pits block
+    // walking, so a blob is only kept when the room's spawn still reaches its objective.
+    let blobs = 0;
+    for (const centre of cells) {
+      if (blobs >= Math.min(2, density === 1 ? 1 : 2)) break;
+      // Two blobs that touch read as one big one: keep a clear tile between them.
+      const clear = (x: number, y: number) => grid[y]?.[x] === '.' && Math.abs(y - pathY) > 1 &&
+        !nearKeyPoint(keyPoints, x, y) &&
+        ![-1, 0, 1].some((dy) => [-1, 0, 1].some((dx) => grid[y + dy]?.[x + dx] === 'o'));
+      if (!clear(centre.x, centre.y)) continue;
+      const blob: Coord[] = [centre];
+      for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]] as const) { // 4-connected, or it reads as two pits
+        if (blob.length >= 2 + (hashString(`${seed}:pit:${centre.x}:${centre.y}`) % 5)) break;
+        const cell = { x: centre.x + dx, y: centre.y + dy };
+        if (clear(cell.x, cell.y)) blob.push(cell);
+      }
+      if (blob.length < 2) continue;
+      for (const cell of blob) grid[cell.y]![cell.x] = 'o';
+      blobs++;
+    }
+  }
   if (features.has('canisters')) {
     // Solid until something shoots them, so they only sit in open floor (>= 6 of 8 neighbours
     // walkable) and never within two tiles of each other. See TILES.md T1's generator rules.

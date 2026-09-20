@@ -20,7 +20,8 @@ import {
 import { headquartersRoom } from './headquarters';
 import {
   CANISTER_ENEMY_DAMAGE, CANISTER_KNOCKBACK, CANISTER_PLAYER_DAMAGE, CANISTER_RADIUS,
-  ENV_KILL_CREDIT, isTerrainDamageSource, roomTerrainTuning, terrainSpeedMultiplier,
+  ENV_KILL_CREDIT, isTerrainDamageSource, PIT_FALL_DAMAGE, PIT_RECOVERY_INVULNERABLE_MS,
+  roomTerrainTuning, terrainSpeedMultiplier, terrainTileAt,
   TERRAIN_DAMAGE_SOURCE, type TerrainDamageSource, type TerrainState,
 } from '../shared/terrain';
 import {
@@ -640,7 +641,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       }
       const nx = pr.x + pr.vx * TICK_MS / 1000;
       const ny = pr.y + pr.vy * TICK_MS / 1000;
-      if (circleHitsSolid(grid, nx, ny, pr.radius)) {
+      if (circleHitsSolid(grid, nx, ny, pr.radius, 'shots')) {
         // A bolt that ends on a canister lights it: enemy fire is a detonator too (T1).
         progress.terrain = armCanistersInCircle(room, progress.terrain, nx, ny, pr.radius,
           roomTerrainTuning(room).canisterFuseMs).state;
@@ -692,12 +693,58 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   }
 
   /** Push an enemy away from (or toward, with negative distance) a point, respecting walls. */
-  function shove(e: EnemyRuntime, from: Point, distancePx: number): void {
+  /**
+   * Push an enemy away from (or toward, with negative distance) a point, respecting walls.
+   *
+   * Displacement resolves on the `dash` layer, where pits are open: a body that is thrown or
+   * dragged does not stop politely at the ledge. If it lands over a pit it is gone — dropped at
+   * the rim first so `dropRemains` never leaves lore down a hole, then killed and credited to
+   * whoever displaced it (TILES.md T2). That is the whole reason Bastion's knockback matters.
+   */
+  function shove(e: EnemyRuntime, from: Point, distancePx: number, by: PlayerRuntime | null = null, events?: GameEvent[]): void {
+    const radius = ENEMY_INFO[e.state.enemyId].radius;
     const d = distance(from, e.state) || 1;
-    const moved = moveCircle(grid, e.state.x, e.state.y, ENEMY_INFO[e.state.enemyId].radius,
-      ((e.state.x - from.x) / d) * distancePx, ((e.state.y - from.y) / d) * distancePx);
+    const moved = moveCircle(grid, e.state.x, e.state.y, radius,
+      ((e.state.x - from.x) / d) * distancePx, ((e.state.y - from.y) / d) * distancePx, 'dash');
     e.state.x = moved.x;
     e.state.y = moved.y;
+    if (!events || e.state.hp <= 0 || !overPit(moved)) return;
+    const rim = nearestOpenPosition(grid, moved, radius);
+    e.state.x = rim.x;
+    e.state.y = rim.y;
+    damageEnemyFrom(e, { kind: 'displaced', by }, e.state.hp, events);
+  }
+
+  /** Is this point's centre over an open pit? */
+  function overPit(at: Point): boolean {
+    const { col, row } = worldToTile(at.x, at.y);
+    return terrainTileAt(room, col, row, progress.terrain.brokenWalls) === 'o';
+  }
+
+  /**
+   * A dash that ends over a pit: the player is fished out at the nearest ledge for
+   * `PIT_FALL_DAMAGE` and a moment of grace. Players never die to a pit — a mistake, not a
+   * run-ender — so the fall can never take the last point of health.
+   */
+  function resolvePlayerPitFall(p: PlayerRuntime, events: GameEvent[]): void {
+    const s = p.state;
+    const landing = nearestOpenPosition(grid, s, PLAYER_RADIUS);
+    s.x = landing.x;
+    s.y = landing.y;
+    p.hazard = createHazardClock();
+    // Applied directly rather than through damagePlayer: you cannot i-frame or shield a hole,
+    // and the fall must never take the last point of health.
+    const amount = Math.min(PIT_FALL_DAMAGE, Math.max(0, s.hp - 1));
+    if (amount > 0) {
+      s.hp -= amount;
+      s.reviveProgress = 0;
+      p.damagedThisTick = true;
+      p.hitRemainingMs = 160;
+      s.state = 'hit';
+      events.push(emit({ type: 'player_damaged', playerId: s.id, amount, remainingHp: s.hp,
+        sourceEnemyId: TERRAIN_DAMAGE_SOURCE.pit }));
+    }
+    s.invulnerableMs = Math.max(s.invulnerableMs, PIT_RECOVERY_INVULNERABLE_MS);
   }
 
   function useAbility(p: PlayerRuntime, slot: 'q' | 'e' | 'r', intent: PlayerIntent, events: GameEvent[]): void {
@@ -733,7 +780,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
           if (e.state.hp <= 0) continue;
           e.state.stunMs = 2000;
           e.state.telegraph = null;
-          shove(e, s, 110);
+          shove(e, s, 110, p, events);
         }
         break;
       case 'shade.r.blade_storm':
@@ -762,7 +809,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         for (const e of livingEnemies()) {
           if (distance(centre, e.state) > 200 + ENEMY_INFO[e.state.enemyId].radius) continue;
           const d = distance(centre, e.state);
-          shove(e, centre, -Math.max(0, d - 30)); // drag toward the singularity
+          shove(e, centre, -Math.max(0, d - 30), p, events); // drag toward the singularity
           strike(e, 45);
           if (e.state.hp <= 0) continue;
           e.state.stunMs = 1200;
@@ -780,11 +827,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
           if (e.state.hp <= 0) continue;
           e.state.stunMs = 1500;
           e.state.telegraph = null;
-          const d = distance(s, e.state) || 1;
-          const moved = moveCircle(grid, e.state.x, e.state.y, ENEMY_INFO[e.state.enemyId].radius,
-            (e.state.x - s.x) / d * 70, (e.state.y - s.y) / d * 70);
-          e.state.x = moved.x;
-          e.state.y = moved.y;
+          shove(e, s, 70, p, events);
         }
         break;
       case 'shade.q.blink_strike': {
@@ -834,12 +877,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         e.state.slowMs = 3000;
         e.state.telegraph = null;
         e.cooldownMs = Math.max(e.cooldownMs, 600);
-        const d = distance(s, e.state) || 1;
-        const pull = Math.max(0, d - 55);
-        const moved = moveCircle(grid, e.state.x, e.state.y, ENEMY_INFO[e.state.enemyId].radius,
-          (s.x - e.state.x) / d * pull, (s.y - e.state.y) / d * pull);
-        e.state.x = moved.x;
-        e.state.y = moved.y;
+        // Dragged toward the caster: past a ledge, the tether is a deletion tool.
+        shove(e, s, -Math.max(0, distance(s, e.state) - 55), p, events);
         break;
       }
       case 'weaver.e.rewind': {
@@ -902,7 +941,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       s.vx = length > 0 ? moveX / length * speed : 0;
       s.vy = length > 0 ? moveY / length * speed : 0;
     }
-    const moved = moveCircle(grid, s.x, s.y, PLAYER_RADIUS, s.vx * TICK_MS / 1000, s.vy * TICK_MS / 1000);
+    // A dash crosses pits (96 px clears a two-tile gap with margin); walking does not.
+    const moved = moveCircle(grid, s.x, s.y, PLAYER_RADIUS, s.vx * TICK_MS / 1000, s.vy * TICK_MS / 1000,
+      p.dashRemainingMs > 0 ? 'dash' : 'solid');
     s.x = moved.x;
     s.y = moved.y;
     if (moved.blockedX) s.vx = 0;
@@ -911,6 +952,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       p.hitRemainingMs > 0 ? 'hit' : s.vx !== 0 || s.vy !== 0 ? 'moving' : 'idle';
     p.dashRemainingMs = decay(p.dashRemainingMs);
     p.attackRemainingMs = decay(p.attackRemainingMs);
+    if (p.dashRemainingMs === 0 && overPit(s)) resolvePlayerPitFall(p, events);
     if (s.state === 'dashing' || s.state === 'attacking' || intent?.ability || length > 0) p.interacting = false;
   }
 
@@ -1263,7 +1305,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         if (falloff <= 0 || !clearPath(grid, blast, e.state)) continue;
         hitEnemyIds.push(e.state.id);
         // Knocked outward, then damaged: a shove into a pit should kill before the blast does.
-        shove(e, blast, CANISTER_KNOCKBACK * falloff);
+        shove(e, blast, CANISTER_KNOCKBACK * falloff, null, events);
         damageEnemyFrom(e, { kind: 'terrain', tile: TERRAIN_DAMAGE_SOURCE.canister },
           CANISTER_ENEMY_DAMAGE * falloff, events);
       }

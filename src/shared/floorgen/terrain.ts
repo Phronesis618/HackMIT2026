@@ -31,9 +31,12 @@ const MAX_BRIDGE_TRIES = 48;
  * count. This is TILES.md R4 — the room must be beatable by a crew that refuses to touch any
  * of it — and the reason terrain can only ever be an additive layer over floorgen's guarantee.
  */
-const safeGround = (ch: string) => ch !== '~' && ch !== 'B' && ch !== '*';
-/** Per-room cap from TILES.md S8. */
+const safeGround = (ch: string) => ch !== '~' && ch !== 'B' && ch !== '*' && ch !== 'o';
+/** Per-room caps from TILES.md S8. */
 const MAX_CANISTERS = 3;
+const MAX_PIT_BLOBS = 2;
+const PIT_BLOB_MIN = 2;
+const PIT_BLOB_MAX = 6;
 
 /** Returns the room's tile rows with terrain applied. `room` is not mutated. */
 export function applyBiomeTerrain(room: BuiltRoom, terrain: BiomeTerrain, seed: string): string[] {
@@ -64,10 +67,9 @@ export function applyBiomeTerrain(room: BuiltRoom, terrain: BiomeTerrain, seed: 
 
   if (features.has('bridges')) stampBridges(grid, order, free, terrain, density, room.spawn, blocked, rng);
   if (features.has('breakable_walls')) stampBreakableWalls(grid, density, rng);
-  if (features.has('canisters')) {
-    stampCanisters(grid, order, free, density, room.spawn,
-      [...keyPoints, ...room.encounters.map((e) => ({ x: e.x, y: e.y }))], blocked);
-  }
+  const reachPoints = [...keyPoints, ...room.encounters.map((e) => ({ x: e.x, y: e.y }))];
+  if (features.has('pits')) stampPits(grid, order, free, density, room.spawn, reachPoints, blocked, rng);
+  if (features.has('canisters')) stampCanisters(grid, order, free, density, room.spawn, reachPoints, blocked);
   for (const feature of ['rubble', 'conduits'] as const) {
     if (!features.has(feature)) continue;
     const offsets = feature === 'rubble'
@@ -133,6 +135,55 @@ function stampBridges(
       break;
     }
     if (placed >= wanted) return;
+  }
+}
+
+/**
+ * Pits are carved as blobs of 2-6 tiles, never a one-tile dot (reads as a bug) and never a
+ * full-width band (reads as a wall). A pit is solid to boots, so every blob is checked the same
+ * way a bridge is: place it, and if any key point or encounter lost its route — with or without
+ * stepping on a hazard — put the floor back. TILES.md T2 and S8.
+ */
+function stampPits(
+  grid: Grid, order: readonly Coord[], free: (x: number, y: number) => boolean, density: number,
+  spawn: Coord, reachPoints: readonly Coord[], blocked: ReadonlySet<string>, rng: Rng,
+): void {
+  const dryGround = (ch: string) => safeGround(ch) && ch !== '~';
+  const keeps = (after: Set<string>, before: Set<string>) =>
+    reachPoints.every((point) => !before.has(key(point.x, point.y)) || after.has(key(point.x, point.y)));
+  const wanted = Math.min(MAX_PIT_BLOBS, density === 1 ? 1 : 2);
+  // Two blobs that touch read as one big one, and S8 counts them as one: keep them apart.
+  const clear = (x: number, y: number) => free(x, y) &&
+    ![-1, 0, 1].some((dy) => [-1, 0, 1].some((dx) => grid[y + dy]?.[x + dx] === 'o'));
+  let placed = 0;
+  for (const centre of order) {
+    if (placed >= wanted) return;
+    if (!clear(centre.x, centre.y)) continue;
+    // Grow a 4-connected blob outward from the centre; the shuffle keeps its shape ragged.
+    // 4-connected matters: a diagonal-only neighbour would read (and validate) as a second pit.
+    const size = PIT_BLOB_MIN + rng.range(0, PIT_BLOB_MAX - PIT_BLOB_MIN);
+    const blob: Coord[] = [centre];
+    const frontier: Coord[] = [centre];
+    while (blob.length < size && frontier.length > 0) {
+      const from = frontier.shift()!;
+      for (const [dx, dy] of rng.shuffle([[1, 0], [0, 1], [-1, 0], [0, -1]])) {
+        if (blob.length >= size) break;
+        const cell = { x: from.x + dx!, y: from.y + dy! };
+        if (blob.some((b) => b.x === cell.x && b.y === cell.y) || !clear(cell.x, cell.y)) continue;
+        blob.push(cell);
+        frontier.push(cell);
+      }
+    }
+    if (blob.length < PIT_BLOB_MIN) continue;
+    const before = flood(grid, spawn, safeGround, blocked);
+    const beforeDry = flood(grid, spawn, dryGround, blocked);
+    for (const cell of blob) grid[cell.y]![cell.x] = 'o';
+    if (!keeps(flood(grid, spawn, safeGround, blocked), before) ||
+        !keeps(flood(grid, spawn, dryGround, blocked), beforeDry)) {
+      for (const cell of blob) grid[cell.y]![cell.x] = '.';
+      continue;
+    }
+    placed++;
   }
 }
 
