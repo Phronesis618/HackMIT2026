@@ -1,5 +1,26 @@
 # Handoff — Agent C (Devin)
 
+## Parallel bug hunt and browser verification — 2026-09-20
+
+- Branch: `devin/1789914742-game-bugfixes`, code through `acd9b38`, PR #48.
+- **Implemented:** six subsystem agents and an integration agent fixed 15 reproduced
+  simulation, networking, generation, input, presentation and persistence defects, with
+  58 regression cases. Browser testing found and fixed two additional CSS defects:
+  overlapping compact HUD labels and expedition layout exceeding the viewport.
+- **Verified:** `npm run check` passed **1159 tests / 102 files**, typecheck and production
+  build; whitespace and CI passed. Browser testing verified genuine contributions,
+  honest fixture receipts, physical portal entry, room-two combat clear, Q/dash/E use,
+  earned memories after HQ return/reload, and consecutive co-op name/class changes plus
+  guest reload without duplicate seats. At 1024 CSSpx, main/document width is 1024 and
+  the rail ends at 1008. The HUD also passed at 819 and 1400 CSSpx.
+- **Mocked:** fixture worlds and provider/renderer/storage adapters in automated tests.
+  No browser gameplay state or memory events were injected; local WebSocket tests are real.
+- **Unverified:** full five-biome/finale completion, exact ability mitigation, co-op combat
+  and adversarial disconnects, physical LAN and live providers. Menu wheel scrolling and
+  one automated uppercase-name entry were inconclusive; keyboard navigation and lowercase
+  entry worked. Coverage stopped at the user's deadline. Software rendering was slow.
+- Merge remains for a repository owner: this session's merge command was denied.
+
 ## Production AI prompt packaging — 2026-09-20
 
 - Branch: `devin/1789914107-fix-generation-image`, based on `aaf9fdf`.

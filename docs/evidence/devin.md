@@ -2,6 +2,28 @@
 
 Agent C records only work and verification performed in this session.
 
+## Parallel bug hunt — 2026-09-20
+
+Six isolated specialists plus an integration agent produced PR #48. Fifteen reproduced
+defects received 58 regression cases. Browser testing additionally reproduced compact
+HUD overlap and a 1079px expedition layout at a 1024px viewport; commits `6e476cc` and
+`acd9b38` correct these. The final full check passed **1159 tests / 102 files**, TypeScript
+and Vite build; whitespace and GitHub CI passed.
+
+Delegated testing used genuine held movement through the physical portal and into room
+two. Four enemies were defeated, resources rose 3→10, Q/dash activated, and unlocking E
+spent 3 resources before activation. HQ return/reload retained event-derived memories,
+including an honest aborted two-room expedition. Two co-op tabs retained consecutive
+name/class edits; guest reload preserved identity, position and exactly two seats.
+The repaired expedition fits 1024px, with the rail ending at 1008px. HUD checks also
+passed at 819 and 1400 CSSpx. The recording is delivered in the Devin session, with
+screenshots embedded in the PR. No synthetic gameplay events, paid providers or fabricated history.
+
+The deadline limited full-route/finale, adversarial disconnect and exact lifecycle-race
+browser coverage; automated regressions cover relevant code paths. Menu wheel scrolling
+and one automated uppercase-name attempt remain inconclusive. Merge was denied by the
+session's command policy, so PR #48 is left for a repository owner.
+
 ## Production AI prompt packaging — 2026-09-20
 
 A fresh request to `https://relay-a3yv.onrender.com/api/world` returned
