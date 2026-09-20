@@ -97,7 +97,7 @@ async function setup(initialWorld: PreparedWorld | null) {
     await connected;
     frame();
   };
-  return { session, store, renderer, accepted, reconnect, socket: sockets[0]!, persistIdentity, actions: controller.actions };
+  return { session, store, renderer, chronicle, accepted, reconnect, socket: sockets[0]!, persistIdentity, actions: controller.actions };
 }
 
 beforeEach(() => {
@@ -155,6 +155,30 @@ afterEach(() => {
 });
 
 describe('controller room identity on remote welcome', () => {
+  it('refreshes an existing receipt when later world prefixes attribute a submitted idea', async () => {
+    const complete = await world('readiness-receipt-stream');
+    complete.provenance = { ...complete.provenance, source: 'live', label: 'LIVE', attempts: 1 };
+    complete.receipt = {
+      source: 'live', worldTitle: complete.recipe.title, headline: 'One recorded idea',
+      lines: [{ contributionId: 'idea-late', playerId: identity.id, playerName: identity.displayName,
+        text: 'A final-room sanctuary', used: false, featureDescription: null }],
+    };
+    const prefix = structuredClone({ ...complete, rooms: complete.rooms.slice(0, 1) });
+    const { chronicle, socket } = await setup(prefix);
+    socket.receive({ type: 'events', eventSequence: 1, events: [{
+      id: 'readiness-prepared', tick: 0, timeMs: 0, type: 'world_prepared',
+      worldId: complete.worldId, worldTitle: complete.recipe.title, source: 'live', playerIds: [identity.id],
+    }] });
+    const original = structuredClone(chronicle.getMemories()[0]!);
+    expect(original.summary).toContain('1 idea; 0 shaped');
+    complete.receipt.lines[0]!.used = true;
+    complete.receipt.lines[0]!.featureDescription = 'A sanctuary in the final chamber';
+    socket.receive({ type: 'world', world: complete, requestId: 'readiness-receipt-stream' });
+    expect(chronicle.getMemories()).toEqual([{
+      ...original, summary: `${identity.displayName} contributed 1 idea; 1 shaped observable features of this world.`,
+    }]);
+  });
+
   it('rebuilds another world at the same room index with no intervening HQ snapshot', async () => {
     const first = await world('readiness-first');
     const second = await world('readiness-second');

@@ -2,6 +2,22 @@
 
 Agent C records only work and verification performed in this session.
 
+## Whole-project readiness — 2026-09-20
+
+At jonapplehe's request, Devin reviewed gameplay, generation, network sessions,
+presentation and Chronicle/product coverage in five isolated read-only agents, then
+implemented confirmed defects in five scoped fix agents. Gameplay event origins fed
+the Chronicle corrections. Parent integration retained main's floors traversal and UI
+redesign at `6b31828`, reconciled adjacent layout/focus edits, and wired receipt refresh.
+
+Combined `npm run check` passed **623 tests / 54 files**, TypeScript and production build.
+Regressions include the reported compiler seeds, a Bastion clearing required encounters,
+fallback before any invalid prefix, delayed solo portals/exits, training projectiles,
+cross-world event replay, streamed receipts after reload, reconnect room identity,
+storage isolation and UI keyboard handlers. Existing tests were not weakened.
+`git diff --check` passed. No paid model calls, public deployment or credentials were used.
+Browser/physical-LAN/live-provider claims remain pending separate evidence.
+
 ## Render hosting setup — 2026-09-20
 
 On `devin/1789889059-render-deploy` (`4c70ab3`, PR #17), Devin added a Render Blueprint and

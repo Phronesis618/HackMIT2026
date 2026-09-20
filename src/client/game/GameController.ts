@@ -304,6 +304,12 @@ export class GameController {
 
   private handleWorld(world: PreparedWorld): void {
     this.deps.audio.setWorld?.(world.art);
+    this.deps.chronicle.refreshReceipt({
+      worldId: world.worldId,
+      title: world.recipe.title,
+      provenanceSource: world.provenance.source,
+      receipt: world.receipt,
+    });
     this.deps.store.set({
       world: {
         worldId: world.worldId,
