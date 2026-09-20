@@ -116,6 +116,17 @@ replay), and silently joins fresh if the credential is stale or in use.
 Test: `realtime.test.ts` "returns a reloaded tab to the same operative…". Browser: 8a PASS
 (same id, same x, one `bob`).
 
+Follow-up on main: Devin's PR #26 ("Preserve co-op seats across named and ordinary tab
+reloads") builds on this fix — the credential is validated with zod and keyed by a stable
+per-tab `resumeScope` instead of the (server-reassignable) player id. **It holds up in the real
+two-browser test:** after merging `origin/main` (92d1393+) the lobby and reconnect groups were
+re-run (`/tmp/relay-shots/coop-final3`): 1a–1e and 8a–8d all PASS — reload returns the same
+operative (same id, x, HP 100, resources 6; exactly one `bob`), new browser profile lands in the
+running room and the old seat expires after 30 s, host succession and the old host's return as
+crew work, and the ghost-seat eviction (B2) is intact. Their *ordinary-tab* (no `?as=`) reload
+path is unit-tested-only (`realtime.test.ts` "resumes both ordinary tabs…"); the script only
+drives `?as=` identities.
+
 ### B2 — A lobby of ghost seats locked the returning host out (fixed, `1d79074`)
 
 Repro (before): guest reloads once, closes and reopens once (two ghost seats), then the host's
