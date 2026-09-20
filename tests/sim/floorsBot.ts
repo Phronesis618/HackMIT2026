@@ -48,6 +48,42 @@ export function planPath(plan: FloorPlan, from: string, to: string): string[] {
   return path;
 }
 
+type Operative = GameSnapshot['players'][number];
+
+/** One BFS waypoint toward `target` on the room's solid grid (`sealed`: treat doors as walls). */
+export function steerIntent(room: RoomSpec, snapshot: GameSnapshot, player: { x: number; y: number }, target: { x: number; y: number }, sealed: boolean): { moveX: number; moveY: number } {
+  const grid = buildSolidGrid(room, snapshot.terrain?.brokenWalls ?? [], sealed);
+  const waypoint = chaseWaypoint(grid, player, target, PLAYER_RADIUS);
+  const d = Math.hypot(waypoint.x - player.x, waypoint.y - player.y);
+  return d < 1 ? { moveX: 0, moveY: 0 } : { moveX: (waypoint.x - player.x) / d, moveY: (waypoint.y - player.y) / d };
+}
+
+/** Ranged kiting: close to sight range, back off when crowded, strafe otherwise; revive when it is quiet. */
+export function fightIntent(room: RoomSpec, snapshot: GameSnapshot, player: Operative): Partial<PlayerIntent> {
+  if (player.hp <= 0) return {};
+  const living = snapshot.enemies.filter((enemy) => enemy.hp > 0);
+  const grid = buildSolidGrid(room, snapshot.terrain?.brokenWalls ?? [], true);
+  const downed = snapshot.players.find((other) => other.hp <= 0);
+  if (downed && living.every((enemy) => Math.hypot(enemy.x - player.x, enemy.y - player.y) > 160)) {
+    const d = Math.hypot(downed.x - player.x, downed.y - player.y);
+    return d > 30 ? steerIntent(room, snapshot, player, downed, true) : { interact: true };
+  }
+  const target = [...living].sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0];
+  if (!target) return {};
+  const d = Math.hypot(target.x - player.x, target.y - player.y) || 1;
+  const sight = clearPath(grid, player, target);
+  let move = { moveX: 0, moveY: 0 };
+  if (!sight || d > 200) move = steerIntent(room, snapshot, player, target, true);
+  else if (d < 130) move = { moveX: (player.x - target.x) / d, moveY: (player.y - target.y) / d };
+  else move = { moveX: -(target.y - player.y) / d, moveY: (target.x - player.x) / d }; // strafe
+  const hurt = player.hp < player.maxHp * 0.6;
+  return {
+    ...move, aimX: target.x, aimY: target.y, attack: sight,
+    ability: hurt && player.abilityEUnlocked && (player.abilityECooldownMs ?? 0) === 0 ? 'e'
+      : (player.ultCharge ?? 0) >= 100 && sight ? 'r' : (player.abilityQCooldownMs ?? 0) === 0 && sight ? 'q' : null,
+  };
+}
+
 export class FloorsBot {
   readonly events: GameEvent[] = [];
   private seq = 0;
@@ -82,10 +118,7 @@ export class FloorsBot {
   }
 
   private steer(player: { x: number; y: number }, target: { x: number; y: number }, sealed: boolean): { moveX: number; moveY: number } {
-    const grid = buildSolidGrid(this.room(), this.snapshot().terrain?.brokenWalls ?? [], sealed);
-    const waypoint = chaseWaypoint(grid, player, target, PLAYER_RADIUS);
-    const d = Math.hypot(waypoint.x - player.x, waypoint.y - player.y);
-    return d < 1 ? { moveX: 0, moveY: 0 } : { moveX: (waypoint.x - player.x) / d, moveY: (waypoint.y - player.y) / d };
+    return steerIntent(this.room(), this.snapshot(), player, target, sealed);
   }
 
   /** Fight until the room is clear. Throws if the crew wipes or the fight stalls. */
@@ -95,31 +128,8 @@ export class FloorsBot {
       if (snapshot.phase !== 'expedition') throw new Error(`fight ended in phase ${snapshot.phase}`);
       const living = snapshot.enemies.filter((enemy) => enemy.hp > 0);
       if (living.length === 0 && snapshot.roomCleared) return;
-      const grid = buildSolidGrid(this.room(), snapshot.terrain?.brokenWalls ?? [], true);
-      this.tick((player) => {
-        if (player.hp <= 0) {
-          return {};
-        }
-        const downed = snapshot.players.find((other) => other.hp <= 0);
-        if (downed && living.every((enemy) => Math.hypot(enemy.x - player.x, enemy.y - player.y) > 160)) {
-          const d = Math.hypot(downed.x - player.x, downed.y - player.y);
-          return d > 30 ? this.steer(player, downed, true) : { interact: true };
-        }
-        const target = [...living].sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0];
-        if (!target) return {};
-        const d = Math.hypot(target.x - player.x, target.y - player.y);
-        const sight = clearPath(grid, player, target);
-        let move = { moveX: 0, moveY: 0 };
-        if (!sight || d > 200) move = this.steer(player, target, true);
-        else if (d < 130) move = { moveX: (player.x - target.x) / d, moveY: (player.y - target.y) / d };
-        else move = { moveX: -(target.y - player.y) / d, moveY: (target.x - player.x) / d }; // strafe
-        const hurt = player.hp < player.maxHp * 0.6;
-        return {
-          ...move, aimX: target.x, aimY: target.y, attack: sight,
-          ability: hurt && player.abilityEUnlocked && player.abilityECooldownMs === 0 ? 'e'
-            : (player.ultCharge ?? 0) >= 100 && sight ? 'r' : player.abilityQCooldownMs === 0 && sight ? 'q' : null,
-        };
-      });
+      const room = this.room();
+      this.tick((player) => fightIntent(room, snapshot, player));
     }
     throw new Error(`fight in ${this.room().id} did not finish`);
   }

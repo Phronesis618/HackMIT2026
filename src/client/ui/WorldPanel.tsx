@@ -1,5 +1,6 @@
 import { ENEMY_INFO } from '../../shared/registry';
 import type { UiWorldSummary } from '../../shared/ui';
+import { openMenu } from './MemoryWall';
 import { ProvenanceBadge } from './ProvenanceBadge';
 
 /**
@@ -36,8 +37,22 @@ export function Codex({ world, discovered }: { world: UiWorldSummary; discovered
 }
 
 /** Creation receipt: shown immediately after a world is prepared. Honest by construction. */
-export function WorldPanel({ world, discoveredLore = [] }: { world: UiWorldSummary; discoveredLore?: number[] }) {
+export function WorldPanel({ world, discoveredLore = [], compact = false }: { world: UiWorldSummary; discoveredLore?: number[]; compact?: boolean }) {
   const r = world.receipt;
+  // In a run the rail only identifies the world; the Codex and receipt are one Tab away.
+  if (compact) {
+    return (
+      <button type="button" className="panel panel--world world-brief" onClick={() => openMenu('codex')} aria-label={`${world.title}. Open codex.`}>
+        <span className="eyebrow">World</span>
+        <span className="world-brief__title">{world.title}</span>
+        <span className="tagline">{world.tagline}</span>
+        <span className="world-brief__foot">
+          <span>{world.committedRoomCount}/{world.plannedRoomCount} rooms</span>
+          <span className="world-brief__codex">Codex {new Set(discoveredLore).size}/{world.lore.length} ›</span>
+        </span>
+      </button>
+    );
+  }
   return (
     <div className="panel panel--world">
       <p className="eyebrow">World dossier · {world.committedRoomCount}/{world.plannedRoomCount} rooms ready</p>
