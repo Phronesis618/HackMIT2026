@@ -191,6 +191,15 @@ describe('rules', () => {
     expect(hard('They left in a hurry.', 'relic')).not.toContain('needs-bible-noun');
   });
 
+  it('counts a shortened bible name: two adjacent words of it, never one generic word', () => {
+    // Measured live: a law that named "Berth Row 7" was failed for naming nothing, because
+    // every indexable word of "Chapel Berth Row 7" was either generic or under four letters.
+    const bible = { places: ['Chapel Berth Row 7', 'Stores Cage B'], people: [{ name: 'Oda Brandt' }] };
+    expect(hard('Six staff filed refusals. Berth Row 7 holds 4 beds.', 'relic', bible)).toEqual([]);
+    expect(hard('Cage B was locked with 40 kits inside it.', 'relic', bible)).toEqual([]);
+    expect(hard('The berth was cold and the row of 12 beds was empty.', 'relic', bible)).toContain('needs-bible-noun');
+  });
+
   it('abstract-heavy compares abstractions with objects, numbers and names', () => {
     expect(issueRules('Hope and memory are the price of silence here.', 'relic')).toContain('abstract-heavy');
     expect(issueRules('Hope is 40 gasket kits in a locked cage.', 'relic')).not.toContain('abstract-heavy');

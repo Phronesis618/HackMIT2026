@@ -155,17 +155,27 @@ function issuesText(error: z.ZodError, prefix = ''): string {
   }).join('; ');
 }
 
-/** Cuts at the last sentence end inside the limit, else at the last word; never mid-word, never an ellipsis. */
+/**
+ * A word that was leading somewhere. A cut that ends on one reads as a truncation even
+ * though it is a whole word: "Dalgaard's desk faces the photocopier that" (seen live).
+ */
+const DANGLING_WORD = /[\s,;:·-]+(?:an?|the|and|or|but|of|to|in|on|at|by|for|from|with|into|onto|over|under|through|that|which|who|whose|while|when|as|is|was|were|are|has|had|its|his|her|their|this|these|those|one|two|three|four|no|not|still|then|after|before|since)$/i;
+
+/** Cuts at the last sentence end inside the limit, else at a clause or word end; never mid-word, never an ellipsis. */
 export function fitText(text: string, max: number): string {
   const trimmed = text.trim();
   if (trimmed.length <= max) return trimmed;
   const head = trimmed.slice(0, max + 1);
   const sentence = Math.max(head.lastIndexOf('. '), head.lastIndexOf('! '), head.lastIndexOf('? '));
   if (sentence >= max * 0.3) return head.slice(0, sentence + 1);
+  const tidy = (value: string): string => value.replace(/[\s,;:·-]+$/, '');
   const clause = Math.max(head.lastIndexOf(', '), head.lastIndexOf('; '), head.lastIndexOf(': '), head.lastIndexOf(' · '), head.lastIndexOf(' ('));
-  if (clause >= max * 0.5) return head.slice(0, clause).replace(/[\s,;:·-]+$/, '');
+  if (clause >= max * 0.5) return tidy(head.slice(0, clause));
   const word = head.lastIndexOf(' ');
-  return (word > 0 ? head.slice(0, word) : trimmed.slice(0, max)).replace(/[\s,;:·-]+$/, '');
+  let byWord = tidy(word > 0 ? head.slice(0, word) : trimmed.slice(0, max));
+  // A clause end too early to use still beats stopping on a word that led somewhere.
+  while (byWord.length > max * 0.3 && DANGLING_WORD.test(byWord)) byWord = tidy(byWord.replace(DANGLING_WORD, ''));
+  return clause > 0 && byWord.length <= max * 0.3 ? tidy(head.slice(0, clause)) : byWord;
 }
 
 /**

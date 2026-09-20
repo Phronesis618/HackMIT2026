@@ -405,6 +405,9 @@ describe('lenient parsing and transport helpers', () => {
   it('fits over-long strings and lists and drops unknown ids inside lists, but still fails on real errors', () => {
     expect(fitText('One fact here. A second sentence that runs on past the limit of the field.', 40)).toBe('One fact here.');
     expect(fitText('NAME · break with attacks, the seam opens into rubble that slows', 45)).toBe('NAME · break with attacks');
+    // never stop on a word that was leading somewhere ("...faces the photocopier that")
+    expect(fitText("Eighty toner units ordered on Day 4; Dalgaard's desk faces the photocopier that jammed.", 80))
+      .toBe("Eighty toner units ordered on Day 4; Dalgaard's desk faces the photocopier");
     const long = { ...briefRaw('Bay C'), tagline: `${'Beds bolted down. '.repeat(12)}`.trim(), motifIds: ['cables', 'velvet', 'arches'], propPool: ['crate', 'crate', 'anchor_pedestal'] };
     const parsed = parseBrief(long, 2)!;
     expect(parsed.brief.tagline.length).toBeLessThanOrEqual(140);

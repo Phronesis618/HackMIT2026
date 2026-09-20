@@ -284,9 +284,23 @@ function bibleRegex(bible: ProseBible): RegExp | null {
   const parts = new Set<string>();
   for (const name of collectBibleNames(bible)) {
     parts.add(name.toLowerCase());
-    for (const p of name.split(/[\s-]+/)) {
-      const t = p.toLowerCase().replace(/[^a-z0-9']/g, '');
+    const words = name.split(/[\s-]+/).map((p) => p.toLowerCase().replace(/[^a-z0-9']/g, '')).filter(Boolean);
+    for (const t of words) {
       if (t.length >= 4 && !STOP_NAME_PARTS.has(t) && !CONCRETE.has(t) && !NUMBERS.has(t)) parts.add(t);
+    }
+    /**
+     * People shorten the names of places they work in: "Berth Row 7" for "Chapel Berth Row 7",
+     * "Cage B" for "Stores Cage B". A single generic word ("berth", "cage") is not evidence
+     * that a text named anything, which is why the loop above drops it — but two adjacent
+     * words of a bible name in one short line are not a coincidence. Windows of two words or
+     * more count, as long as one word carries meaning and the window is long enough to be a name.
+     */
+    for (let start = 0; start < words.length; start++) {
+      for (let length = 2; start + length <= words.length; length++) {
+        const window = words.slice(start, start + length);
+        const phrase = window.join(' ');
+        if (phrase.length >= 7 && window.some((word) => !STOP_NAME_PARTS.has(word))) parts.add(phrase);
+      }
     }
   }
   const re = parts.size
