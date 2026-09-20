@@ -19,7 +19,7 @@ by default.**
 | Change | Files | Verified |
 | --- | --- | --- |
 | The demo tuning preset, merged | `src/sim/tuning.ts`, `docs/TUNING.md`, 4 test files | `npm run check` green |
-| Crystal Tide laws softened so the fixture is demo-viable | `fixtures/worlds/crystal-tide.json` | `npm run check` green + difficulty report |
+| Crystal Tide laws softened so the fixture is demo-viable | `fixtures/worlds/crystal-tide.json` | `npm run check` green, difficulty report, co-op e2e 28/28 |
 | The evidence for both | `docs/TUNING_DEMO_PRESET.md` §5 | — |
 | This document | `docs/RELEASE_FLOORS_DEFAULT.md` | — |
 
@@ -73,13 +73,30 @@ Every one of those needs the flags set **OFF explicitly** rather than relying on
 new tests are owed for the new defaults and for the off switches. That work plus the step-4 release
 verification did not fit in the time box.
 
-### Step 4 — release verification — **NOT RUN**
+### Step 4 — release verification — **partly run, against what this branch actually ships**
 
-Because step 3 is not in the branch, none of it was run: co-op e2e with defaults and with
-`RELAY_FLOORS=0 RELAY_LAWS=0`, solo e2e default groups, cold-profile onboarding to first combat
-≤ 45 s, the static Pages-style build booting offline into a floors world, the production bundle, and
-one live generation in a two-context co-op session. **All of this is still owed before the flip can
-ship.** The live co-op generation in particular has never been observed.
+Because the flip is not in the branch, the floors-on half of the matrix could not be run. What was
+run is the verification of the change that *is* shipping — the preset plus the Crystal Tide laws —
+on the legacy path that `main` serves today:
+
+| Check | Result |
+| --- | --- |
+| `npm run check` after the preset merge | **PASS** |
+| `npm run check` after the Crystal Tide change | **PASS** — 89 files, 1080 tests |
+| `npm run check` after merging `origin/main` | **PASS** — 89 files, 1080 tests |
+| `node scripts/coop-e2e.mjs` default groups (lobby, demo, reconnect) | **PASS — 28/28 checkpoints, 0 skipped, exit 0** |
+
+The co-op run covers the lobby (4-player cap and refusal), class pick, shared idea board, the
+host-only Prepare and portal gate, the 2/2 READY gate, position sync (median 56 ms), damage/HP
+agreement, room clear and rewards, per-player E unlock, downed/revive (2049 ms against a 2000 ms
+design), the collapse debrief, host-only Return, and all four reconnect cases including host
+migration. Screenshots and `results.json` in `/tmp/relay-shots/r1/coop-default`.
+
+**Still owed before the flip can ship** (all of it needs step 3 present): co-op e2e with floors on,
+co-op e2e with `RELAY_FLOORS=0 RELAY_LAWS=0`, solo e2e default groups with floors on, cold-profile
+onboarding to first combat ≤ 45 s, the static Pages-style build booting offline into a floors world
+with the OFFLINE FIXTURE label, the production bundle booting with floors on, and one live
+generation in a two-context co-op session. **The live co-op generation has never been observed.**
 
 ### Step 5 — the stale Render deploy — diagnosed, fix on **`fix/docker-context`**
 
