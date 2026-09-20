@@ -181,3 +181,72 @@ recorded and sent back to the writer as a `cut-short` failure instead of being s
 - **The detector is a model.** None of this says a person would be fooled, and the one thing
   every human reader of this project has said about the text — that it is relentlessly
   specific — is not something either detector commented on.
+
+## Editor pass, 20 Sept 2026 (late)
+
+A judgement pass over the residual tells above, read by eye, with four live Sonnet worlds
+(runs `editor-1`, idea sets 0 to 2, and `editor-2`, idea set 4; about $1.50). No detector
+this time: one reader, reading as a player would.
+
+**What changed.**
+- The cause of "every world is an institution with forms" was us. All three exemplar worlds
+  and all three fixtures were told through logs, receipts, orders and slips, and `laws.md`
+  itself offered "GET BEHIND THE CASING" as the model callout. A fourth exemplar world,
+  `prompts/exemplars/swan-lock.json`, has no paperwork in it: a child's letters to her mum,
+  a landlady's slate of tabs and bets, a skipper's rhymed verses painted on her cabin, and a
+  canal drained over a 3-pint bet.
+- `foundation.md`: at least one author who is not writing for the institution in any sense,
+  at most one dated log-style document (none is welcome), at most one author who opens on a
+  date, the premise may be as small as a pub, and the cause is as often private as
+  professional. `names.json`: document kinds reweighted toward letters, verses, graffiti,
+  recipes and score books; six human-scale collapse kinds added.
+- `relics.md` says what a fragment IS varies (a letter asks for something, a verse rhymes,
+  graffiti is answered) and caps log-shaped fragments at a third. `remains.md`: fewer than
+  half of the objects are issued items.
+- `laws.md`: four callout shapes, three different ones per fight, no "GET BEHIND". New lint
+  rule `callout-formula` (a warning, because `WRITING.md` 5.10 still carries the old example).
+- Fixtures: Okonkwo's tide-gauge log in Crystal Tide is now unposted postcards to his sister;
+  Farrow's delivery slips in Root Archive are notes to Mbeki folded into the empty cans.
+  Vantage Spire stays the ledger world on purpose.
+- After reading `editor-1`, one further adjustment: `remains.md` rejects pocket inventories
+  and "a different hand"; `laws.md` says a tell that is all attitude is no use in a fight.
+
+**Six lines from the new runs.**
+1. Tagline: "A rabbit chewed through one cable. 240 forms never left floor 3."
+2. Cat instructions, tax office: "3. Do not leave cables loose on the floor near her area.
+   (She is thorough.)"
+3. Recipe card: "take it off the heat before Gallo says it is overreduced, because she will.
+   Coyle refused it. Gallo asked for the recipe."
+4. Bet slip: "14 castles, one lump, 3.2 tonnes. Cap's number: 200. Final count: 1. House wins."
+5. Graffiti, answered: "A bet. One week's wages. Rack 7, all 22 excluders out for a day.
+   Someone wrote the odds below in red: 3 to 1 against. Someone else added: paid out early."
+6. Callout: "DRUM ARM SPINNING. GRATING STRIP DOWN THE MIDDLE IS CLEAR."
+
+**Verified from round 2.** Taglines: three of four are no longer three beats (the fourth,
+"140 hives, one pulled excluder set, 38 workers locked in by dusk.", is). No invented
+reference code turned up more than once per world. No thermos; `stock-prop` still fired once
+on "half-eaten". Law second sentences were instructions in three worlds of four; the tax
+office wrote three laws with no instruction at all. "GET BEHIND": 0 of 12 tells.
+
+**What still reads as machine-written, honestly.**
+- **The seeded document kind is taken literally.** "instructions left for whoever feeds the
+  cat" arrived in the tax office word for word, cat included. It is funny once. The pool is
+  22 entries, so a player will meet the cat again by the tenth world.
+- **The belt-kit inventory.** "One door-cycle key on a numbered fob. One blank form. One pen,
+  uncapped, lid lost." Two worlds in `editor-1`, and again in `editor-2` after the prompt
+  told it not to ("One pouch: a flat key... Other pouch: a folded card"). The remains slot
+  `shape` list in code probably asks for it; that file was outside this pass.
+- **"A second hand" / "in a different hand".** Three uses in four worlds. Asking for graffiti
+  that is answered made this worse, not better.
+- **Humour that winks.** "showed no remorse", "she has opinions about paper". The house style
+  wants irritation, and the model drifts to whimsy when given a cat.
+- **Callouts in briefing-room words**: "COYLE'S LINE ON THE REARMOST OPERATIVE", "BREAK HIS
+  SIGHTLINE BEFORE THE HAUL LANDS". The formula went; engine vocabulary came in behind it.
+  "KADER: JUST LET IT RUN." is a good line and tells nobody where to stand.
+- **Em dashes inside quoted signage** in remains ("PHARMACY HOLD — AUTHORISED ENTRY ONLY").
+- **The non-institutional author can drift off the story.** Two recipe cards about a rabbit in
+  a cat bowl are charming and carry almost none of the chain of events.
+- The bet in `editor-2` (week's wages, odds chalked up) is close enough to the Swan Lock
+  exemplar that it may be imitation of the bank and not the collapse seed. One world is not
+  evidence either way; watch it.
+- n=4, one reader, who also wrote the exemplars.
