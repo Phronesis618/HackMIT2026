@@ -50,7 +50,15 @@ export const HUB_CUES: readonly HubCue[] = [
     id: 'collapsed', priority: 60, slots: 2, vars: ['worldTitle', 'deepestRoomIndex', 'roomsCleared'],
     when: (ctx) => ctx.lastRun?.outcome === 'collapsed',
   },
+  {
+    id: 'floors_collapsed', priority: 62, slots: 2, vars: ['worldTitle', 'deepestTier', 'biomesCleared'],
+    when: (ctx) => ctx.lastRun?.outcome === 'collapsed' && ctx.lastRun.deepestTier >= 0,
+  },
   { id: 'aborted', priority: 55, slots: 1, vars: ['worldTitle', 'deepestRoomIndex'], when: (ctx) => ctx.lastRun?.outcome === 'aborted' },
+  {
+    id: 'floors_aborted', priority: 57, slots: 1, vars: ['worldTitle', 'deepestTier'],
+    when: (ctx) => ctx.lastRun?.outcome === 'aborted' && ctx.lastRun.deepestTier >= 0,
+  },
   { id: 'fallback_idle', priority: 0, slots: 1, vars: [], when: () => true },
 ];
 
@@ -86,10 +94,20 @@ export const HUB_CUE_LINES: Readonly<Record<string, readonly string[]>> = {
     '{roomsCleared} rooms cleared before it folded. The record stands.',
     '{worldTitle} collapsed. The log did not.',
   ],
+  floors_collapsed: [
+    '{worldTitle} went down at tier {deepestTier}. {biomesCleared} gates cleared before it.',
+    'Tier {deepestTier} of {worldTitle}. The sheet says {biomesCleared} gatekeepers down.',
+    '{worldTitle} folded. You were {biomesCleared} gates in.',
+  ],
   aborted: [
     'You came back early from {worldTitle}. No anchor, no penalty either.',
     'Pulled out at room {deepestRoomIndex}. The gate does not mind.',
     'Aborted at room {deepestRoomIndex} of {worldTitle}. Logged as such.',
+  ],
+  floors_aborted: [
+    'Pulled out of {worldTitle} at tier {deepestTier}. Logged.',
+    'Tier {deepestTier}, then home. The gate does not mind.',
+    'Aborted at tier {deepestTier} of {worldTitle}. No penalty for it.',
   ],
   fallback_idle: [
     'Rack is open. Gate is behind me.',
@@ -128,6 +146,8 @@ export function cueVariables(ctx: HubCueContext): Record<string, string> {
     damageTaken: String(Math.round(run.damageTaken)),
     revivesReceived: String(run.revivesReceived),
     roomsCleared: String(run.roomsCleared),
+    deepestTier: String(run.deepestTier + 1),
+    biomesCleared: String(run.biomesCleared),
   };
 }
 
@@ -165,6 +185,8 @@ export function cueEvidence(cue: HubCue, ctx: HubCueContext): string {
   if (cue.id === 'downed_unattributed') parts.push('player_damaged.sourceEnemyId = null');
   if (cue.vars.includes('deepestRoomIndex')) parts.push(`room_entered.roomIndex max ${run.deepestRoomIndex}`);
   if (cue.vars.includes('roomsCleared')) parts.push(`room_cleared ×${run.roomsCleared}`);
+  if (cue.vars.includes('deepestTier')) parts.push(`biome_entered.tier max ${run.deepestTier}`);
+  if (cue.vars.includes('biomesCleared')) parts.push(`room_cleared (exit rooms) ×${run.biomesCleared}`);
   if (cue.vars.includes('revivesReceived')) parts.push(`player_revived ×${run.revivesReceived}`);
   if (cue.vars.includes('damageTaken')) parts.push(`Σ player_damaged.amount = ${Math.round(run.damageTaken)}`);
   if (cue.vars.includes('durationMin')) parts.push(`timeMs span ${Math.round(run.durationMs / 1000)} s`);

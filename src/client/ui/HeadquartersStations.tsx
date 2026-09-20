@@ -158,6 +158,8 @@ function QuartermasterPanel({ model, hub }: { model: UiModel; hub: HubState }) {
             ['Outcome', run.outcome],
             ['Weapon', CLASS_THEME[run.classId].weapon],
             ['Deepest room', String(run.deepestRoomIndex + 1)],
+            ['Deepest tier', run.deepestTier >= 0 ? String(run.deepestTier + 1) : '—'],
+            ['Biomes cleared', String(run.biomesCleared)],
             ['Times downed', String(run.downs)],
             ['Crew', run.crew.map((member) => member.displayName).join(', ') || '—'],
           ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
@@ -178,6 +180,8 @@ function RecordsPanel({ hub, tab, onTab }: { hub: HubState; tab: ClassId; onTab:
     ['Anchored', String(record.anchors)],
     ['Collapsed', String(record.collapses)],
     ['Deepest room', record.runs > 0 ? String(record.deepestRoomIndex + 1) : '—'],
+    ['Deepest tier', record.deepestTier >= 0 ? String(record.deepestTier + 1) : '—'],
+    ['Biomes cleared', String(record.biomesCleared)],
     ['Rooms cleared', String(record.roomsCleared)],
     ['Hostiles down', String(record.enemiesDefeated)],
     ['Damage dealt', String(Math.round(record.damageDealt))],

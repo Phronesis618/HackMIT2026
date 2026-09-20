@@ -264,6 +264,15 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
       historyTruncated = lastSequence < (history[0]?.sequence ?? eventSequence + 1) - 1;
     } else {
       if (members.size >= 4) {
+        // A full lobby of ghosts must not lock the living out: the longest-gone seat is given up first.
+        const ghost = [...members.values()].filter((candidate) => !candidate.client)
+          .sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))[0];
+        if (ghost) {
+          members.delete(ghost.identity.id);
+          sim.removePlayer(ghost.identity.id);
+        }
+      }
+      if (members.size >= 4) {
         error(client, 'The lobby is full (maximum four players).', 'hello');
         client.socket.close(1008, 'Lobby full');
         return;

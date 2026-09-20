@@ -30,6 +30,8 @@ export const LastRunSchema = z.object({
   durationMs: z.number().nonnegative(),
   roomsEntered: z.number().int().nonnegative(),
   deepestRoomIndex: z.number().int(),
+  deepestTier: z.number().int().default(-1),
+  biomesCleared: z.number().int().nonnegative().default(0),
   roomsCleared: z.number().int().nonnegative(),
   enemiesDefeated: z.number().int().nonnegative(),
   damageDealt: z.number().nonnegative(),
@@ -52,6 +54,8 @@ export const ClassRecordSchema = z.object({
   collapses: z.number().int().nonnegative(),
   aborts: z.number().int().nonnegative(),
   deepestRoomIndex: z.number().int(),
+  deepestTier: z.number().int().default(-1),
+  biomesCleared: z.number().int().nonnegative().default(0),
   roomsCleared: z.number().int().nonnegative(),
   enemiesDefeated: z.number().int().nonnegative(),
   damageDealt: z.number().nonnegative(),
@@ -99,6 +103,9 @@ const RunAccumulatorSchema = z.object({
   lastTimeMs: z.number().nullable(),
   roomsEntered: z.number().int().nonnegative(),
   deepestRoomIndex: z.number().int(),
+  deepestTier: z.number().int().default(-1),
+  biomesCleared: z.number().int().nonnegative().default(0),
+  currentRoomKind: z.string().nullable().default(null),
   roomsCleared: z.number().int().nonnegative(),
   enemiesDefeated: z.number().int().nonnegative(),
   damageDealt: z.number().nonnegative(),
@@ -135,7 +142,7 @@ export type HubState = z.infer<typeof HubStateSchema>;
 
 export function emptyClassRecord(): ClassRecord {
   return {
-    runs: 0, anchors: 0, collapses: 0, aborts: 0, deepestRoomIndex: -1, roomsCleared: 0, enemiesDefeated: 0,
+    runs: 0, anchors: 0, collapses: 0, aborts: 0, deepestRoomIndex: -1, deepestTier: -1, biomesCleared: 0, roomsCleared: 0, enemiesDefeated: 0,
     damageDealt: 0, damageTaken: 0, timesDowned: 0, revivesGiven: 0, revivesReceived: 0, loreRead: 0,
     abilityUseCounts: {}, nemesisCounts: {}, longestRunMs: 0,
   };
@@ -165,7 +172,7 @@ export interface HubIngestContext {
 function startRun(worldId: string, worldTitle: string, worldSource: GenerationSource, ctx: HubIngestContext): RunAccumulator {
   return {
     worldId, worldTitle, worldSource, classId: ctx.classByPlayerId[ctx.localPlayerId] ?? null, startedAt: ctx.now,
-    startTimeMs: null, lastTimeMs: null, roomsEntered: 0, deepestRoomIndex: -1, roomsCleared: 0, enemiesDefeated: 0,
+    startTimeMs: null, lastTimeMs: null, roomsEntered: 0, deepestRoomIndex: -1, deepestTier: -1, biomesCleared: 0, currentRoomKind: null, roomsCleared: 0, enemiesDefeated: 0,
     damageDealt: 0, damageTaken: 0, downs: 0, lastDamageSourceEnemyId: null, lastDownedByEnemyId: null,
     revivesGiven: 0, revivesReceived: 0, loreRead: 0, abilityUnlocked: null, abilityUseCounts: {}, anchors: 0,
     lastRelic: null, sourceEventIds: [],
@@ -219,13 +226,20 @@ export function reduceHubState(state: HubState, events: readonly GameEvent[], ct
 
     switch (event.type) {
       case 'room_entered':
+        run.currentRoomKind = event.kind ?? null;
         if (event.playerIds.includes(local)) {
           run.roomsEntered += 1;
           run.deepestRoomIndex = Math.max(run.deepestRoomIndex, event.roomIndex);
         }
         break;
+      case 'biome_entered':
+        if (event.playerIds.includes(local)) run.deepestTier = Math.max(run.deepestTier, event.tier);
+        break;
       case 'room_cleared':
-        if (event.playerIds.includes(local)) run.roomsCleared += 1;
+        if (event.playerIds.includes(local)) {
+          run.roomsCleared += 1;
+          if (run.currentRoomKind === 'exit') run.biomesCleared += 1;
+        }
         break;
       case 'enemy_damaged':
         if (event.byPlayerId === local) run.damageDealt += event.amount;
@@ -304,6 +318,7 @@ function finishRun(
   const lastRun: LastRun = {
     worldId: run.worldId, worldTitle: run.worldTitle, outcome: event.outcome, classId, endedAt: ctx.now, durationMs,
     roomsEntered: run.roomsEntered, deepestRoomIndex: run.deepestRoomIndex, roomsCleared: run.roomsCleared,
+    deepestTier: run.deepestTier, biomesCleared: run.biomesCleared,
     enemiesDefeated: run.enemiesDefeated, damageDealt: run.damageDealt, damageTaken: run.damageTaken, downs: run.downs,
     lastDownedByEnemyId: isEnemyId(run.lastDownedByEnemyId) ? run.lastDownedByEnemyId : null,
     revivesGiven: run.revivesGiven, revivesReceived: run.revivesReceived, loreRead: run.loreRead,
@@ -322,6 +337,8 @@ function finishRun(
     collapses: prev.collapses + (event.outcome === 'collapsed' ? 1 : 0),
     aborts: prev.aborts + (event.outcome === 'aborted' ? 1 : 0),
     deepestRoomIndex: Math.max(prev.deepestRoomIndex, run.deepestRoomIndex),
+    deepestTier: Math.max(prev.deepestTier, run.deepestTier),
+    biomesCleared: prev.biomesCleared + run.biomesCleared,
     roomsCleared: prev.roomsCleared + run.roomsCleared,
     enemiesDefeated: prev.enemiesDefeated + run.enemiesDefeated,
     damageDealt: prev.damageDealt + run.damageDealt,
