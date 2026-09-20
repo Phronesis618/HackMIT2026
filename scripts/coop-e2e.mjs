@@ -18,6 +18,7 @@
  *   node scripts/coop-e2e.mjs --base http://192.168.1.20:8080 --only lobby,demo   # against a running server (LAN check)
  */
 import { spawn } from 'node:child_process';
+import http from 'node:http';
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -116,12 +117,13 @@ async function ensurePlaywright(depsDir) {
 // Dev server management (vite on --port, API/WS server restartable between scenario groups)
 // ---------------------------------------------------------------------------------------------
 
-async function isReachable(url) {
-  try {
-    return (await fetch(url, { signal: AbortSignal.timeout(1500) })).status < 500;
-  } catch {
-    return false;
-  }
+/** node:http rather than fetch: Node 26's undici can throw an uncatchable `setTypeOfService EINVAL` while a server is going down. */
+function isReachable(url) {
+  return new Promise((resolve) => {
+    const req = http.get(url, { timeout: 1500 }, (res) => { res.resume(); resolve((res.statusCode ?? 500) < 500); });
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+    req.on('error', () => resolve(false));
+  });
 }
 
 async function waitFor(fn, { timeoutMs = 15000, intervalMs = 100, label = 'condition' } = {}) {
@@ -867,7 +869,9 @@ async function groupReconnect(ctx) {
   await ensurePair(ctx);
   let { alice, bob } = ctx;
   await startRun(ctx, 'reconnect');
-  // Give bob recognisable state: walk a little, remember HP/position.
+  // Clear room 1 first: idle operatives in a live room get killed while we wait out the 30 s seat grace.
+  await Promise.all([alice, bob].map((p) => fightUntil(p, { timeoutMs: 90000 })));
+  // Give bob recognisable state: walk a little, remember HP/resources/position.
   await bob.focusStage();
   await bob.page.keyboard.down('d'); await sleep(500); await bob.page.keyboard.up('d');
   await sleep(300);
@@ -881,8 +885,8 @@ async function groupReconnect(ctx) {
   const bobs = afterReload.snap.players.filter((p) => p.displayName === 'bob');
   const me = bs ? (await bob.read()).snap.players.find((p) => p.id === (bs.id)) : null;
   await shots([alice, bob], 's8-guest-reload');
-  report.check('8a', 'guest reloads mid-room -> same operative, state restored', Boolean(bs) && bobs.length === 1 && bobs[0].id === before.id && Math.abs(bobs[0].x - before.x) < 40 && bs.ui.phase === 'expedition',
-    `before: id=${before.id} x=${Math.round(before.x)} hp=${before.hp}; after reload host sees ${bobs.length} "bob" operative(s) ${J(bobs.map((p) => [p.id, Math.round(p.x), p.hp]))}; lobby="${names(afterReload)}"; bob's own id=${bs?.id} ui.phase=${bs?.ui.phase} sees self at ${me ? Math.round(me.x) : 'n/a'}`);
+  report.check('8a', 'guest reloads mid-room -> same operative, state restored', Boolean(bs) && bobs.length === 1 && bobs[0].id === before.id && Math.abs(bobs[0].x - before.x) < 40 && bobs[0].hp === before.hp && bobs[0].resources === before.resources && bs.ui.phase === 'expedition',
+    `before: id=${before.id} x=${Math.round(before.x)} hp=${before.hp} resources=${before.resources}; after reload host sees ${bobs.length} "bob" operative(s) ${J(bobs.map((p) => [p.id, Math.round(p.x), p.hp, p.resources]))}; lobby="${names(afterReload)}"; bob's own id=${bs?.id} ui.phase=${bs?.ui.phase} sees self at ${me ? Math.round(me.x) : 'n/a'}`);
 
   // --- 8b: guest's browser is closed entirely and a NEW context rejoins with the same as= name.
   const before2 = (await alice.read()).snap.players.filter((p) => p.displayName === 'bob');
