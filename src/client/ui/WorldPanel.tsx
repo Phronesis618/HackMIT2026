@@ -63,7 +63,8 @@ export function WorldLaws({ world }: { world: UiWorldSummary }) {
       <ul className="list">
         {laws.map((law) => (
           <li key={law.lawId} className="list__item list__item--used">
-            <span className="list__who">{law.name}</span> {law.effect}
+            <span className="list__who">{law.name}</span>
+            {world.lawsDerived && <em className="derived-stamp">Engine-chosen</em>}{' '}{law.effect}
             <div className="list__meta">{law.description}</div>
           </li>
         ))}
@@ -94,8 +95,17 @@ export function WorldPanel(
         <span className="world-brief__title">{world.title}</span>
         <span className="tagline">{world.tagline}</span>
         <span className="world-brief__foot">
-          <span>{rooms}{activeLawNames(world).length > 0 ? ` · ${activeLawNames(world).join(' · ')}` : ''}</span>
+          <span className="world-brief__facts">{rooms}</span>
           <span className="world-brief__codex">Codex {new Set(discoveredLore).size}/{world.lore.length} ›</span>
+          {/* The law names get their own row: run together with the room count they wrapped
+              into three ragged lines around the Codex link. A derived name carries the
+              engine-chosen stamp here too, not only inside the dossier's note. */}
+          {activeLawNames(world).length > 0 && (
+            <span className="world-brief__laws">
+              <span>{activeLawNames(world).join(' · ')}</span>
+              {world.lawsDerived && <em className="derived-stamp">Engine-chosen</em>}
+            </span>
+          )}
         </span>
       </button>
     );

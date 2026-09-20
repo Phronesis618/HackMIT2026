@@ -10,12 +10,14 @@ import {
   type GameEvent,
   type GameEventInput,
   type GenerationRequest,
+  type GameSnapshot,
   type GenerationStatus,
   type PlayerIdentity,
   type PlayerIntent,
   type PreparedWorld,
 } from '../../shared/contracts';
-import { TICK_MS } from '../../shared/conventions';
+import { TICK_MS, worldToTile } from '../../shared/conventions';
+import { crewReadiness, GATE_FORCE_START_MS, isAtDepartureGate, type CrewReadiness } from '../../shared/headquarters';
 import { randomId } from '../../shared/ids';
 import { PROTOCOL_VERSION, decodeClientMessage, encodeMessage, type ClientMessage, type Lobby, type ServerMessage } from '../../shared/protocol';
 import { createSimulation, type Simulation } from '../../sim';
@@ -28,6 +30,8 @@ export interface RealtimeHandle {
 export interface RealtimeOptions {
   path?: string;
   log?: (message: string) => void;
+  /** How long a closed gate holds the host before they may depart without the missing seats (tests shorten it). */
+  gateForceStartMs?: number;
   generation?: {
     prepareWorld: (request: GenerationRequest, onStatus?: (status: GenerationStatus) => void, signal?: AbortSignal) => Promise<PreparedWorld>;
     prepareWorldStream?: (request: GenerationRequest, onStatus?: (status: GenerationStatus) => void, signal?: AbortSignal) => AsyncGenerator<PreparedWorld>;
@@ -42,6 +46,8 @@ interface Member {
   intent: PlayerIntent | null;
   lastIntentAt: number;
   lastSequence: number;
+  /** HUB.md §7: standing at the departure gate. Derived from the seat's position every tick; false while disconnected. */
+  ready: boolean;
 }
 
 interface ClientRecord {
@@ -77,6 +83,10 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
   let eventSequence = 0;
   let metaCounter = 0;
   let pendingExit: { roomId: string; target: number } | null = null;
+  /** The host stepped onto the gate before the crew was ready; the step counts once they are (§7). */
+  let hostHoldingGate = false;
+  /** When the gate first closed on a prepared world; null whenever the crew is ready or there is no world. */
+  let gateBlockedSince: number | null = null;
   let lastTime = performance.now();
   let accumulator = 0;
 
@@ -101,8 +111,58 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
     };
   }
 
+  /** The sim knows nothing about readiness; the seat table does. Stamped onto every headquarters snapshot. */
+  function snapshotWithReadiness(): GameSnapshot {
+    const snapshot = sim.getSnapshot();
+    if (snapshot.phase !== 'headquarters') return snapshot;
+    return {
+      ...snapshot,
+      players: snapshot.players.map((player) => ({ ...player, ready: members.get(player.id)?.ready === true })),
+    };
+  }
+
   function publishSnapshot(): void {
-    broadcast({ type: 'snapshot', snapshot: sim.getSnapshot() });
+    broadcast({ type: 'snapshot', snapshot: snapshotWithReadiness() });
+  }
+
+  function gateReadiness(): CrewReadiness {
+    return crewReadiness(snapshotWithReadiness().players);
+  }
+
+  function gateClosedMessage(gate: CrewReadiness): string {
+    return `The crew departs together: ${gate.ready} / ${gate.total} at the gate.`;
+  }
+
+  /**
+   * How long the gate has been closed on a ready world. A seat that is connected but never walks
+   * to the gate must not strand the crew, so past GATE_FORCE_START_MS the host may depart anyway.
+   */
+  function trackGateHold(gate: CrewReadiness): void {
+    const blocked = sim.getPhase() === 'headquarters' && Boolean(world) && !gate.all;
+    gateBlockedSince = blocked ? gateBlockedSince ?? Date.now() : null;
+  }
+
+  function gateOverrideReady(): boolean {
+    return gateBlockedSince !== null && Date.now() - gateBlockedSince >= (options.gateForceStartMs ?? GATE_FORCE_START_MS);
+  }
+
+  /** Readiness is position, not a promise: at the gate you are ready, walk off and you are not. Runs every tick. */
+  function reconcileReadiness(member?: Member): boolean {
+    if (sim.getPhase() !== 'headquarters') return false;
+    const snapshot = sim.getSnapshot();
+    let changed = false;
+    for (const seat of member ? [member] : members.values()) {
+      const ready = seat.client !== null && isAtDepartureGate(snapshot, seat.identity.id);
+      if (seat.ready !== ready) {
+        seat.ready = ready;
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  function clearReadiness(): void {
+    for (const member of members.values()) member.ready = false;
   }
 
   function publishEvents(events: GameEvent[]): void {
@@ -137,9 +197,31 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
     for (const member of members.values()) member.intent = null;
   }
 
+  /** A host standing on the gate tile launches the crew the moment the last seat arrives. */
+  function releaseHeldGate(): GameEvent[] {
+    if (!hostHoldingGate) return [];
+    if (sim.getPhase() !== 'headquarters' || !hostPlayerId) {
+      hostHoldingGate = false;
+      return [];
+    }
+    const snapshot = sim.getSnapshot();
+    const host = snapshot.players.find((player) => player.id === hostPlayerId);
+    const exit = sim.getRoom().exits[0];
+    const tile = host ? worldToTile(host.x, host.y) : null;
+    if (!host || !exit || !tile || tile.col !== exit.x || tile.row !== exit.y) {
+      hostHoldingGate = false;
+      return [];
+    }
+    if (!world || (generating && !generationHasPrefix) || !gateReadiness().all) return [];
+    return enterRoom(0);
+  }
+
   function enterRoom(index: number): GameEvent[] {
     pendingExit = null;
+    hostHoldingGate = false;
+    gateBlockedSince = null;
     clearIntents();
+    clearReadiness();
     return sim.enterRoom(index);
   }
 
@@ -161,7 +243,17 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
       && event.roomIndex === sim.getRoom().index
       && (phase !== 'headquarters' || event.playerId === hostPlayerId));
     if (!exit || exit.type !== 'exit_reached') return [];
-    if (phase === 'headquarters') return world && (!generating || generationHasPrefix) ? enterRoom(0) : [];
+    if (phase === 'headquarters') {
+      if (!world || (generating && !generationHasPrefix)) return [];
+      const gate = gateReadiness();
+      if (!gate.all) {
+        hostHoldingGate = true;
+        const host = hostPlayerId ? members.get(hostPlayerId)?.client : null;
+        if (host) error(host, gateClosedMessage(gate), 'enter_portal');
+        return [];
+      }
+      return enterRoom(0);
+    }
     if (world?.rooms[exit.toRoomIndex]) return enterRoom(exit.toRoomIndex);
     pendingExit = { roomId: sim.getRoom().id, target: exit.toRoomIndex };
     setGeneration({ ...generation, message: `Waiting for room ${exit.toRoomIndex + 1} to be committed.` });
@@ -282,7 +374,7 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
       member = {
         identity: { id, displayName: message.displayName, classId: message.classId },
         resumeToken: randomUUID(), client: null, disconnectedAt: null,
-        intent: null, lastIntentAt: 0, lastSequence: -1,
+        intent: null, lastIntentAt: 0, lastSequence: -1, ready: false,
       };
       members.set(id, member);
       sim.addPlayer(member.identity);
@@ -293,12 +385,13 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
     sim.setPlayerConnected(member.identity.id, true);
     member.intent = null;
     member.lastSequence = -1;
+    member.ready = false;
     client.member = member;
     electHost();
     send(client.socket, {
       type: 'welcome', protocolVersion: PROTOCOL_VERSION, playerId: member.identity.id,
       serverTimeMs: Date.now(), isHost: hostPlayerId === member.identity.id, resumeToken: member.resumeToken,
-      lobby: lobby(), snapshot: sim.getSnapshot(), world, contributions, generation,
+      lobby: lobby(), snapshot: snapshotWithReadiness(), world, contributions, generation,
       eventSequence, events: replay, historyTruncated,
     });
     broadcast({ type: 'lobby', lobby: lobby() }, client);
@@ -375,11 +468,24 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
           error(client, 'Prepare a world at headquarters before entering.', 'enter_portal');
           return;
         }
+        const gate = gateReadiness();
+        // The host's word opens the gate once the crew is at it, or once the wait has run long
+        // enough that a seat standing somewhere else cannot keep the crew at headquarters.
+        if (!gate.all && !gateOverrideReady()) {
+          error(client, gateClosedMessage(gate), 'enter_portal');
+          return;
+        }
         const events = enterRoom(0);
         publishSnapshot();
         publishEvents(events);
         break;
       }
+      case 'ready':
+        // A nudge, never a claim: `message.ready` is ignored, the seat is re-read from its own
+        // position, and the crew is told only when that reading actually changed. A client that
+        // repeats the message cannot make the server broadcast a snapshot per message.
+        if (reconcileReadiness(member)) publishSnapshot();
+        break;
       case 'return_to_hq': {
         if (sim.getPhase() === 'headquarters') return;
         pendingExit = null;
@@ -456,6 +562,7 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
         // The seat is held for the grace period, but nobody is behind it: mark it on every screen.
         sim.setPlayerConnected(client.member.identity.id, false);
         client.member.intent = null;
+        client.member.ready = false;
         electHost();
         broadcast({ type: 'lobby', lobby: lobby() });
       }
@@ -480,7 +587,9 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
       }
       const phase = sim.getPhase();
       const events = sim.step();
-      const extra = handleExits(events);
+      reconcileReadiness();
+      trackGateHold(gateReadiness());
+      const extra = [...handleExits(events), ...releaseHeldGate()];
       if (phase !== sim.getPhase() || extra.length
         || events.some((event) => event.type === 'run_ended' || event.type === 'room_entered')) publishSnapshot();
       publishEvents([...events, ...extra]);

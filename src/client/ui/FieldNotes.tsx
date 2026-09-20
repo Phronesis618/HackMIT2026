@@ -42,7 +42,9 @@ export function FieldNotesPage({ bus = onboardingBus }: { bus?: typeof onboardin
         >
           {view.hintsOff ? FIELD_NOTES_TEXT.hintsOff : FIELD_NOTES_TEXT.hintsOn}
         </button>
-        <button type="button" className="btn btn--ghost" onClick={() => bus.reset()}>
+        {/* Same treatment as the toggle beside it: a ghost button read as a third kind of
+            control in a row that already had three weights. */}
+        <button type="button" className="btn" onClick={() => bus.reset()}>
           {FIELD_NOTES_TEXT.reset}
         </button>
         <span className="hint">{FIELD_NOTES_TEXT.footer}</span>

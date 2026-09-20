@@ -57,7 +57,9 @@ export function App({ store, actions, onStageReady }: AppProps) {
           <button className="btn btn--ghost" type="button" onClick={actions.toggleAudio} aria-pressed={!model.audioMuted}>
             Sound {model.audioMuted ? 'off' : 'on'}
           </button>
-          {model.preview.fixtureWorld && <span className="badge badge--preview">PREVIEW · client fixture</span>}
+          {/* The world's own provenance badge already says "offline fixture" once a world is
+              loaded; showing both read as two labels for one fact. */}
+          {model.preview.fixtureWorld && !model.world && <span className="badge badge--preview">PREVIEW · client fixture</span>}
           {model.world && <ProvenanceBadge provenance={model.world.provenance} compact />}
           <span className={`badge badge--conn badge--conn-${model.connection.status}`}>
             {model.connection.mode === 'remote' ? `co-op · ${model.connection.isHost ? 'host' : 'crew'}` : 'solo'} · {model.connection.status}
