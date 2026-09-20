@@ -38,7 +38,6 @@ export function HeadquartersPanel({ model, actions, departure = departureBus }: 
         <span><strong>Southeast · Observatory</strong> — shape the next world</span>
         <span><strong>South · Departure gate</strong> — enter your expedition</span>
       </div>
-      <p className="hint">Walk up to a station and press F. Take a weapon from its stand to change class; the ability bar explains your current kit.</p>
       {model.connection.mode === 'remote' && (
         <div className="generation">
           <p className="eyebrow">Shared crew · {model.players.length}/4</p>
@@ -152,9 +151,7 @@ export function HeadquartersPanel({ model, actions, departure = departureBus }: 
           labelled as such.
         </p>
       )}
-      <p className="hint">
-        Walk onto the gate at the south end of the room to leave once a world is ready{ABILITY_STATUS.attack === 'partial' ? '. Attack damage is not implemented yet' : ''}. Key bindings are in the menu under Controls.
-      </p>
+      {ABILITY_STATUS.attack === 'partial' && <p className="hint">Attack damage is not implemented yet.</p>}
     </div>
   );
 }

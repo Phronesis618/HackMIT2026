@@ -1,3 +1,10 @@
+/*
+ * The memory archive: the expanded wall, its filters, and the seed composer.
+ *
+ * Brought onto the shared spacing grid and type scale by agent U2a
+ * (docs/design/UI_AUDIT_FINAL.md). Values are tokens; nothing here sets a colour of its own.
+ */
+
 .wall.wall--expanded {
   max-height: 65vh;
 }
@@ -6,13 +13,13 @@
   display: flex;
   flex-wrap: wrap;
   align-items: end;
-  gap: 12px;
+  gap: var(--space-sm) 12px;
   padding: 12px 0;
 }
 
 .memory-archive__tools label {
   display: grid;
-  gap: 4px;
+  gap: var(--space-xs);
   flex: 1 1 180px;
   min-width: 0;
 }
@@ -23,7 +30,7 @@
 }
 
 .memory-archive__status {
-  margin: 6px 0;
+  margin: var(--space-sm) 0;
 }
 
 .wall--expanded .wall__cards {
@@ -32,15 +39,21 @@
   overflow-x: visible;
 }
 
+/* Every card ends on the same baseline, so the "use for next world" buttons line up. */
+.wall--expanded .card,
+.menu .card { align-content: start; }
+
 .memory-archive__world {
-  margin: 5px 0;
+  margin: var(--space-xs) 0;
   color: var(--color-warmLamp);
-  font: 11px var(--font-mono);
+  font: var(--fs-stamp) var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .memory-archive__evidence {
-  margin-top: 8px;
-  font: 11px var(--font-mono);
+  margin-top: var(--space-sm);
+  font: var(--fs-stamp) var(--font-mono);
   color: var(--color-mist300);
 }
 
@@ -53,7 +66,7 @@
 }
 
 .memory-archive__card-actions {
-  margin-top: 10px;
+  margin-top: var(--space-sm);
 }
 
 .memory-archive__more {
@@ -62,24 +75,25 @@
 
 .memory-seed {
   margin: 12px 0;
-  padding: 16px;
-  border: 1px solid var(--color-warmLamp);
-  background: var(--color-ink800);
+  padding: var(--space-md);
+  border: 1px solid var(--lamp-hair);
+  background: var(--plane);
   max-width: 780px;
   overflow-wrap: anywhere;
 }
 
 .memory-seed__source {
-  margin: 10px 0;
+  margin: var(--space-sm) 0;
   padding-left: 12px;
   border-left: 2px solid var(--color-warmLamp);
   color: var(--color-mist100);
+  font-family: var(--font-serif);
 }
 
 .memory-seed__directions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-sm);
   margin: 12px 0;
 }
 
@@ -92,6 +106,6 @@
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
 }

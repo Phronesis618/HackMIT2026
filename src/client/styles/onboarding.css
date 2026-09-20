@@ -28,11 +28,11 @@
   align-items: center;
   gap: var(--space-sm);
   margin: 0;
-  padding: 10px var(--space-md);
-  border: 1px solid var(--hair-strong, rgba(255, 255, 255, 0.24));
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--hair-strong, rgba(124, 245, 255, 0.34));
   border-left: 3px solid var(--color-neonCyan, #6fe3ff);
-  border-radius: 2px;
-  background: rgba(8, 11, 16, 0.86);
+  border-radius: var(--radius-sm);
+  background: var(--plane, rgba(9, 13, 22, 0.86));
   backdrop-filter: blur(3px);
   color: var(--color-mist100, #e8eef5);
   font-size: var(--fs-body, 14px);
@@ -47,7 +47,7 @@
 .coach__line--terrain,
 .coach__line--rooms { border-left-color: var(--color-warmLamp, #f2b45c); }
 .coach__line--laws { border-left-color: var(--color-mist300, #8ea2b5); }
-.coach__line--finale { border-left-color: var(--color-alarm, #ff6b5e); }
+.coach__line--finale { border-left-color: var(--color-danger, #ff5c7a); }
 
 .coach__key { flex: 0 0 auto; }
 .coach__text { flex: 1 1 auto; }
@@ -88,8 +88,8 @@
   display: flex;
   align-items: baseline;
   gap: var(--space-sm);
-  padding: 6px var(--space-sm);
-  border-left: 2px solid var(--hair, rgba(255, 255, 255, 0.12));
+  padding: var(--space-xs) var(--space-sm);
+  border-left: 2px solid var(--hair, rgba(124, 245, 255, 0.16));
   font-size: var(--fs-sm, 13px);
 }
 
