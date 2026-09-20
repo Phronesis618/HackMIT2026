@@ -187,6 +187,16 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
     generationHasPrefix = false;
     const startedAt = Date.now();
     let committed: PreparedWorld | null = null;
+    // Receipt memories are written once the receipt is final (all rooms committed).
+    let announced = false;
+    const announceWorld = (next: PreparedWorld): void => {
+      if (announced || closed) return;
+      announced = true;
+      publishEvents([metaEvent({
+        type: 'world_prepared', worldId: next.worldId, worldTitle: next.recipe.title,
+        source: next.provenance.source, playerIds: sim.getPlayerIds(),
+      })]);
+    };
     setGeneration({ phase: 'queued', message: 'Preparing a shared world…', requestId, startedAt, elapsedMs: 0 });
     try {
       for await (const candidate of generate({
@@ -204,7 +214,6 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
           || committed.rooms.some((room, index) => JSON.stringify(room) !== JSON.stringify(next.rooms[index])))) {
           throw new Error('Generation attempted to replace committed rooms.');
         }
-        const first = committed === null;
         committed = next;
         generationHasPrefix = true;
         world = next;
@@ -215,19 +224,18 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
           message: `${next.provenance.label}: ${next.rooms.length}/${next.plannedRoomCount} rooms committed.`.slice(0, 200),
           requestId, startedAt, elapsedMs: Date.now() - startedAt,
         });
-        if (first) publishEvents([metaEvent({
-          type: 'world_prepared', worldId: next.worldId, worldTitle: next.recipe.title,
-          source: next.provenance.source, playerIds: sim.getPlayerIds(),
-        })]);
+        if (next.rooms.length >= next.plannedRoomCount) announceWorld(next);
         const events = finishPendingExit();
         publishSnapshot();
         publishEvents(events);
       }
       if (!closed && !committed) throw new Error('Generation returned no committed rooms.');
+      if (!closed && committed) announceWorld(committed);
       if (!closed && committed && committed.rooms.length < committed.plannedRoomCount) {
         throw new Error('Generation ended before all planned rooms were committed.');
       }
     } catch (cause) {
+      if (!closed && committed) announceWorld(committed);
       if (!closed) {
         const message = cause instanceof Error ? cause.message.slice(0, 200) : 'World generation failed.';
         setGeneration({ phase: 'failed', message, requestId, startedAt, elapsedMs: Date.now() - startedAt });

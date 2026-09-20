@@ -254,6 +254,19 @@ export class LocalSession implements GameSession {
       const provider = this.provider;
       const consume = async () => {
         let previous: PreparedWorld | undefined;
+        // The receipt memory is written once the receipt is final (every room committed), so
+        // it never records fewer shaped features than the finished world actually has.
+        let announced = false;
+        const announce = (world: PreparedWorld): void => {
+          if (announced) return;
+          announced = true;
+          this.emitEvents([
+            this.metaEvent({
+              type: 'world_prepared', worldId: world.worldId, worldTitle: world.recipe.title,
+              source: world.provenance.source, playerIds: this.sim.getPlayerIds(),
+            }),
+          ]);
+        };
         try {
           const worlds = provider.prepareWorldStream
             ? provider.prepareWorldStream(request, options)
@@ -273,22 +286,17 @@ export class LocalSession implements GameSession {
             if (!current()) return;
             for (const l of this.worldListeners) l(world);
             if (!current()) return;
-            if (first) {
-              this.emitEvents([
-                this.metaEvent({
-                  type: 'world_prepared', worldId: world.worldId, worldTitle: world.recipe.title,
-                  source: world.provenance.source, playerIds: this.sim.getPlayerIds(),
-                }),
-              ]);
-              resolve(world);
-            }
+            if (world.rooms.length >= world.plannedRoomCount) announce(world);
+            if (first) resolve(world);
           }
+          if (current() && previous && !announced) announce(previous);
           if (current() && (!previous || previous.rooms.length < previous.plannedRoomCount)) {
             throw new Error('World stream ended before all rooms were committed.');
           }
         } catch (error) {
           if (current()) {
             const detail = error instanceof Error ? error.message : 'World generation failed.';
+            if (previous && !announced) announce(previous);
             const message = previous ? `Committed rooms remain playable. ${detail}` : detail;
             this.setGeneration({ phase: 'failed', message: message.slice(0, 200), requestId, startedAt, elapsedMs: Date.now() - startedAt });
             reject(error);
