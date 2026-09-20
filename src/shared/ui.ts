@@ -22,6 +22,7 @@ import type {
 } from './contracts';
 import type { ConnectionStatus, SessionMode } from './session';
 import type { HeadquartersStationId } from './headquarters';
+import type { FloorRunState } from './floors';
 
 export type UiPhase = 'headquarters' | 'preparing' | 'training' | 'expedition' | 'debrief';
 
@@ -76,6 +77,47 @@ export interface UiHud {
   training?: { awakeEnemyIds: string[] } | null;
 }
 
+/** One biome offered on the choice screen (agent F3). Every field is plain, checkable fact. */
+export interface UiBiomeOption {
+  biomeId: string;
+  name: string;
+  tagline: string;
+  /** 1-based depth of this biome in the run, and the run length (5). */
+  depth: number;
+  depthCount: number;
+  roomCount: number;
+  /** Layout personality in plain words, e.g. "Long and direct. Few side rooms." */
+  layout: string;
+  enemies: string[];
+  motifs: string[];
+  hazards: boolean;
+}
+
+export interface UiBiomeChoice {
+  options: UiBiomeOption[];
+  /** One option = the finale: a confirm, not a choice. */
+  confirmOnly: boolean;
+  votes: Array<{ playerId: string; displayName: string; biomeId: string }>;
+  hostPlayerId: string | null;
+  hostName: string | null;
+  /** Solo, or the co-op host. Everyone else watches. */
+  canPick: boolean;
+}
+
+/** Floors run state for React (minimap, biome header, choice screen). Absent in legacy worlds. */
+export interface UiFloor {
+  run: FloorRunState;
+  biomeName: string;
+  biomeTagline: string;
+  /** Names of the biomes entered so far, current one last. */
+  pathNames: string[];
+  depth: number;
+  depthCount: number;
+  /** Rooms in the current biome (its budget; shown on the choice card before entering, so not a spoiler). */
+  roomCount: number;
+  choice: UiBiomeChoice | null;
+}
+
 export interface UiModel {
   phase: UiPhase;
   connection: { mode: SessionMode; status: ConnectionStatus; isHost?: boolean };
@@ -99,6 +141,8 @@ export interface UiModel {
   /** Transient message from controllers (e.g. "prepare a world first"). */
   notice: { kind: 'info' | 'error'; text: string } | null;
   headquarters?: { nearbyStationId: HeadquartersStationId | null; activeStationId: HeadquartersStationId | null };
+  /** Floors worlds only (agent F3): filled by `connectFloorsUi`, null/absent otherwise. */
+  floor?: UiFloor | null;
 }
 
 export interface UiActions {
@@ -116,4 +160,6 @@ export interface UiActions {
   enterTraining?(): void;
   activateHeadquartersStation?(): void;
   closeHeadquartersStation?(): void;
+  /** Floors: pick the next biome (solo, or the co-op host). */
+  chooseBiome?(biomeId: string): void;
 }

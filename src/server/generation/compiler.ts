@@ -21,10 +21,11 @@ import {
   type RoomTerrain,
   type WorldRecipe,
 } from '../../shared/contracts';
-import { ANCHOR_RANGE, LORE_READ_RANGE, TILE_SIZE } from '../../shared/conventions';
+import { ANCHOR_RANGE, LORE_READ_RANGE, PLAYER_RADIUS, TILE_SIZE, tileToWorld } from '../../shared/conventions';
 import { hashString } from '../../shared/ids';
-import { DANGEROUS_TILES, MOTIF_IDS, PROP_INFO, WALKABLE_TILES, type MotifId } from '../../shared/registry';
-import { buildSolidGrid, isSolidAt } from '../../sim/collision';
+import { DANGEROUS_TILES, ENEMY_INFO, MOTIF_IDS, PROP_INFO, WALKABLE_TILES, type MotifId } from '../../shared/registry';
+import { buildSolidGrid, circleHitsSolid, isSolidAt, type SolidGrid } from '../../sim/collision';
+import { clearPath } from '../../sim/combat';
 
 export interface CompileWorldRecipeOptions {
   plannedRoomCount: number;
@@ -119,11 +120,6 @@ function compileRoom(
   const candidates = floorCandidates(grid, pathY, roomSeed);
   const mappings = recipe.contributionMappings.filter((mapping) => mapping.roomIndex === index);
   const props = placeProps(grid, blueprint, index, candidates, mappings, notes);
-  const encounters = placeEncounters(grid, blueprint, index, candidates, mappings, props, isFinal, notes);
-  const attributions = buildAttributions(grid, blueprint, index, pathY, mappings, props, encounters);
-  if (attributions.length < mappings.length) notes.push(`Room ${index + 1} omitted mappings without an observable target.`);
-  const relics = placeRelics(grid, recipe, index, candidates, props, encounters, notes);
-
   const room = RoomSpecSchema.parse({
     id: `generated-room-${roomSeed.toString(36)}-${index}`,
     index,
@@ -133,14 +129,28 @@ function compileRoom(
     height,
     tiles: grid.map((row) => row.join('')),
     props,
-    encounters,
+    encounters: [],
     exits: isFinal ? [] : [{ x: width - 1, y: pathY, toRoomIndex: index + 1, direction: 'east' }],
     isFinal,
-    attributions,
-    relics,
+    attributions: [],
+    relics: [],
   });
+  room.encounters = placeEncounters(room, grid, blueprint, candidates, mappings, notes);
+  room.attributions = buildAttributions(grid, blueprint, index, pathY, mappings, room.props, room.encounters);
+  if (room.attributions.length < mappings.length) notes.push(`Room ${index + 1} omitted mappings without an observable target.`);
+  room.relics = placeRelics(grid, recipe, index, candidates, room.props, room.encounters, notes);
   if (isFinal) room.anchorRelays = placeAnchorRelays(room);
-  if (!hasCriticalRoute(room)) throw new Error(`Room ${index + 1} has no safe route to its objective.`);
+  const reached = reachableTiles(room);
+  const objective = findTile(grid, isFinal ? 'A' : 'X')!;
+  if (!reached.has(`${objective.x},${objective.y}`)) throw new Error(`Room ${index + 1} has no safe route to its objective.`);
+  const solid = buildSolidGrid(room);
+  for (const encounter of room.encounters) {
+    const center = tileToWorld(encounter.x, encounter.y);
+    if (!reached.has(`${encounter.x},${encounter.y}`) ||
+      circleHitsSolid(solid, center.x, center.y, ENEMY_INFO[encounter.enemyId].radius)) {
+      throw new Error(`Room ${index + 1} has an inaccessible ${encounter.enemyId} encounter.`);
+    }
+  }
   return RoomSpecSchema.parse(room);
 }
 
@@ -359,31 +369,41 @@ function placeProps(
 }
 
 function placeEncounters(
+  room: RoomSpec,
   grid: Grid,
   blueprint: RoomBlueprint,
-  roomIndex: number,
   candidates: Coord[],
   mappings: ContributionMapping[],
-  props: RoomProp[],
-  isFinal: boolean,
   notes: string[],
 ): RoomEncounter[] {
+  const roomIndex = room.index;
   const enemyIds = [...blueprint.enemyIds];
-  if (isFinal && !enemyIds.includes('guardian')) {
+  if (room.isFinal && !enemyIds.includes('guardian')) {
     enemyIds.push('guardian');
     notes.push(`Room ${roomIndex + 1} added the required Guardian encounter.`);
   }
   const encounterMappings = mappings.filter((mapping) => mapping.kind === 'encounter');
   const occupied = new Set<string>();
-  for (const prop of props) {
-    const { w, h } = PROP_INFO[prop.propId].footprint;
-    markOccupied(occupied, prop.x, prop.y, w, h);
-  }
   return enemyIds.slice(0, 4).flatMap((enemyId, encounterIndex) => {
+    const solid = buildSolidGrid(room);
+    const reached = reachableTiles(room, solid);
+    const unavailable = new Set(occupied);
+    for (const prop of room.props) {
+      const { w, h } = PROP_INFO[prop.propId].footprint;
+      markOccupied(unavailable, prop.x, prop.y, w, h);
+    }
     const padding = enemyId === 'guardian' ? 1 : 0;
     const size = padding * 2 + 1;
-    const coord = candidates.find(({ x, y }) =>
-      footprintFits(grid, occupied, x - padding, y - padding, size, size));
+    let coord = candidates.find(({ x, y }) => {
+      const center = tileToWorld(x, y);
+      return reached.has(`${x},${y}`) &&
+        !circleHitsSolid(solid, center.x, center.y, ENEMY_INFO[enemyId].radius) &&
+        footprintFits(grid, unavailable, x - padding, y - padding, size, size);
+    });
+    if (!coord) {
+      coord = repairEncounterSpace(room, grid, occupied);
+      if (coord) notes.push(`Room ${roomIndex + 1} cleared optional decoration for ${enemyId} encounter clearance.`);
+    }
     if (!coord) throw new Error(`Room ${roomIndex + 1} has no safe spawn for ${enemyId}.`);
     markOccupied(occupied, coord.x - padding, coord.y - padding, size, size);
     const mapping = encounterMappings[encounterIndex];
@@ -396,6 +416,39 @@ function placeEncounters(
       ...(mapping ? { attributionId: mapping.contributionId } : {}),
     }];
   });
+}
+
+function repairEncounterSpace(room: RoomSpec, grid: Grid, occupied: Set<string>): Coord | undefined {
+  const pathY = findTile(grid, 'P')!.y;
+  const candidates: Array<Coord & { cost: number; props: RoomProp[] }> = [];
+  for (const y of [pathY - 2, pathY + 2]) {
+    for (let x = 2; x < room.width - 2; x++) {
+      const patch = new Set<string>();
+      markOccupied(patch, x - 1, y - 1, 3, 3);
+      if ([...patch].some((key) => occupied.has(key))) continue;
+      const props = room.props.filter((prop) => {
+        const { w, h } = PROP_INFO[prop.propId].footprint;
+        for (let dy = 0; dy < h; dy++) {
+          for (let dx = 0; dx < w; dx++) if (patch.has(`${prop.x + dx},${prop.y + dy}`)) return true;
+        }
+        return false;
+      });
+      let cost = props.reduce((sum, prop) => sum + PROP_INFO[prop.propId].footprint.w * PROP_INFO[prop.propId].footprint.h, 0);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) if (grid[y + dy]![x + dx] !== '.') cost++;
+      }
+      candidates.push({ x, y, cost, props });
+    }
+  }
+  candidates.sort((a, b) => a.cost - b.cost || a.y - b.y || a.x - b.x);
+  const target = candidates[0];
+  if (!target) return undefined;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) grid[target.y + dy]![target.x + dx] = '.';
+  }
+  room.props = room.props.filter((prop) => !target.props.includes(prop));
+  room.tiles = grid.map((row) => row.join(''));
+  return { x: target.x, y: target.y };
 }
 
 /**
@@ -480,12 +533,7 @@ function buildAttributions(
   });
 }
 
-function hasCriticalRoute(room: RoomSpec): boolean {
-  const blocked = new Set<string>();
-  for (const prop of room.props) {
-    const info = PROP_INFO[prop.propId];
-    if (info.blocksMovement) markOccupied(blocked, prop.x, prop.y, info.footprint.w, info.footprint.h);
-  }
+function reachableTiles(room: RoomSpec, solid: SolidGrid = buildSolidGrid(room)): Set<string> {
   const grid = room.tiles.map((row) => row.split(''));
   const start = findTile(grid, 'P')!;
   const queue = [start];
@@ -494,21 +542,24 @@ function hasCriticalRoute(room: RoomSpec): boolean {
     const { x, y } = queue[i]!;
     const tile = grid[y]?.[x];
     const key = `${x},${y}`;
-    if (!tile || !WALKABLE_TILES.has(tile) || tile === '~' || blocked.has(key) || seen.has(key)) continue;
-    if (tile === (room.isFinal ? 'A' : 'X')) return true;
+    const center = tileToWorld(x, y);
+    if (!tile || !WALKABLE_TILES.has(tile) || tile === '~' || seen.has(key) ||
+      circleHitsSolid(solid, center.x, center.y, PLAYER_RADIUS)) continue;
     seen.add(key);
-    queue.push({ x: x + 1, y }, { x: x - 1, y }, { x, y: y + 1 }, { x, y: y - 1 });
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      if (clearPath(solid, center, tileToWorld(x + dx, y + dy), PLAYER_RADIUS)) queue.push({ x: x + dx, y: y + dy });
+    }
   }
-  return false;
+  return seen;
 }
 
 function placeAnchorRelays(room: RoomSpec): Coord[] {
-  const grid = buildSolidGrid(room);
   const tiles = room.tiles.map((line) => line.split(''));
   const spawn = findTile(tiles, 'P')!;
   const core = findTile(tiles, 'A')!;
   const queue = [spawn];
   const seen = new Set<string>([`${spawn.x},${spawn.y}`]);
+  const reached = reachableTiles(room);
   const occupied = new Set<string>();
   for (const prop of room.props) {
     const { w, h } = PROP_INFO[prop.propId].footprint;
@@ -527,7 +578,7 @@ function placeAnchorRelays(room: RoomSpec): Coord[] {
       const x = point.x + dx;
       const y = point.y + dy;
       const key = `${x},${y}`;
-      if (seen.has(key) || isSolidAt(grid, x, y) || room.tiles[y]?.[x] === '~') continue;
+      if (seen.has(key) || !reached.has(key)) continue;
       seen.add(key);
       queue.push({ x, y });
     }
@@ -535,15 +586,18 @@ function placeAnchorRelays(room: RoomSpec): Coord[] {
   // TILES.md S4: a relay is a place the crew has to stand still on, so keep two clear tiles
   // between it and anything that damages. Preference, not a filter — a cramped room must still
   // produce three relays rather than fail to compile.
-  const safeFromHazards = (candidate: Coord) => !tiles.some((row, y) =>
-    row.some((ch, x) => DANGEROUS_TILES.has(ch) &&
-      Math.max(Math.abs(candidate.x - x), Math.abs(candidate.y - y)) <= 2));
+  const dangerous: Coord[] = [];
+  tiles.forEach((row, y) => row.forEach((ch, x) => { if (DANGEROUS_TILES.has(ch)) dangerous.push({ x, y }); }));
+  const safeFromHazards = (candidate: Coord) => !dangerous.some((d) =>
+    Math.max(Math.abs(candidate.x - d.x), Math.abs(candidate.y - d.y)) <= 2);
   const relays: Coord[] = [];
+  // Precomputed once: the check walks every dangerous tile, and a comparator must stay cheap.
+  const safe = new Map(candidates.map((candidate) => [candidate, safeFromHazards(candidate)]));
   for (let i = 0; i < 3; i++) {
     const anchors = [core, spawn, ...relays];
     const score = (candidate: Coord) => Math.min(...anchors.map((anchor) =>
       Math.hypot(candidate.x - anchor.x, candidate.y - anchor.y)));
-    candidates.sort((a, b) => Number(safeFromHazards(b)) - Number(safeFromHazards(a)) ||
+    candidates.sort((a, b) => Number(safe.get(b)) - Number(safe.get(a)) ||
       score(b) - score(a) || a.y - b.y || a.x - b.x);
     const point = candidates.shift();
     if (!point) throw new Error(`Room ${room.index + 1} has no safe space for three Anchor relays.`);

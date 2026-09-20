@@ -4,7 +4,9 @@
  * (src/client/render); Agent A owns this layout because the simulation walks it.
  */
 import { type ArtRecipe, type RoomSpec, RoomSpecSchema } from '../shared/contracts';
-import { HEADQUARTERS_ID, HEADQUARTERS_STATIONS } from '../shared/headquarters';
+import {
+  HEADQUARTERS_ID, HEADQUARTERS_PROPLESS_STATIONS, HEADQUARTERS_RELIC_BRACKETS, HEADQUARTERS_STATIONS,
+} from '../shared/headquarters';
 
 export const HEADQUARTERS_ROOM_ID = HEADQUARTERS_ID;
 
@@ -26,13 +28,16 @@ export const headquartersRoom: RoomSpec = RoomSpecSchema.parse({
   id: HEADQUARTERS_ROOM_ID,
   index: 0,
   name: 'The Stillpoint',
-  description: 'The sanctuary between worlds. Attune in the armory, read the archive, or chart an expedition.',
+  description: 'The sanctuary between worlds. Take a weapon from the armory, read the archive, or chart an expedition.',
   width,
   height,
   tiles,
   props: [
-    ...HEADQUARTERS_STATIONS.filter((station) => station.id !== 'portal').map((station) => ({
+    ...HEADQUARTERS_STATIONS.filter((station) => !HEADQUARTERS_PROPLESS_STATIONS.has(station.id)).map((station) => ({
       id: `hq-station-${station.id}`, propId: 'terminal' as const, x: station.x, y: station.y,
+    })),
+    ...HEADQUARTERS_RELIC_BRACKETS.map((bracket, index) => ({
+      id: `hq-relic-bracket-${index}`, propId: 'monolith_shard' as const, x: bracket.x, y: bracket.y,
     })),
     { id: 'hq-lantern-a', propId: 'lantern', x: 12, y: 8 },
     { id: 'hq-lantern-b', propId: 'lantern', x: 18, y: 8 },

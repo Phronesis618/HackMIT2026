@@ -1,0 +1,256 @@
+/*
+ * Floors UI (agent F3): minimap, full-map overlay, biome choice screen.
+ * Everything floors-related lives here; app.css is not touched. Colours come from the
+ * design tokens already on :root; the room-kind colours match src/client/render/doors.ts.
+ */
+:root {
+  --floor-kind-exit: #ffffff;
+  --floor-kind-elite: var(--color-danger, #ff5c7a);
+  --floor-kind-treasure: #f2c14e;
+  --floor-kind-rest: var(--color-success, #5ef0b0);
+  --floor-kind-lore: #b79cff;
+  --floor-hair: var(--hair, rgba(124, 245, 255, 0.16));
+  --floor-plane: rgba(6, 8, 14, 0.86);
+}
+
+/* ---- fallback mount (used only while `.hud-minimap-slot` is not on the page) ---- */
+.floors-hud {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 6;
+  border: 1px solid var(--floor-hair);
+  border-radius: var(--radius-sm, 4px);
+  background:
+    radial-gradient(circle at 1px 1px, rgba(138, 155, 191, 0.13) 1px, transparent 1.5px) 0 0 / 14px 14px,
+    var(--floor-plane);
+  backdrop-filter: blur(3px);
+}
+.hud-minimap-slot > .fmini-button { position: absolute; inset: 0; display: grid; place-items: center; }
+
+.fmini-button { display: block; cursor: pointer; color: inherit; }
+.fmini-button:hover .fmini__foot span:last-child { color: var(--color-mist100, #e8eefc); }
+
+/* ---- minimap ---- */
+.fmini { display: grid; grid-template-rows: auto 1fr auto; max-width: 100%; }
+.fmap-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+  padding: 6px 8px 4px;
+  border-bottom: 1px solid var(--floor-hair);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.fmap-head__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--color-mist100, #e8eefc);
+}
+.fmap-head__depth { display: inline-flex; align-items: center; gap: 6px; flex: none; font-size: 9px; color: var(--color-mist300, #9fb0d0); }
+.fmap-head__pips { display: inline-flex; gap: 2px; }
+.fmap-head__pips i { width: 5px; height: 5px; border: 1px solid var(--color-mist300, #9fb0d0); opacity: 0.55; }
+.fmap-head__pips i.is-done { background: var(--color-mist300, #9fb0d0); opacity: 0.9; }
+.fmap-head__pips i.is-here { background: var(--color-neonCyan, #7cf5ff); border-color: var(--color-neonCyan, #7cf5ff); opacity: 1; }
+
+.fmini__grid { display: grid; place-items: center; overflow: hidden; }
+.fullmap__panel .fmap-head { grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; }
+.fmini__foot {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 8px 5px;
+  border-top: 1px solid var(--floor-hair);
+  font: 9px var(--font-mono, ui-monospace, monospace);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-mist300, #9fb0d0);
+}
+.fmini.is-locked .fmini__foot span:last-child { color: var(--color-danger, #ff5c7a); }
+.fmini.is-locked .fmap__room--current .fmap__halo { stroke: var(--color-danger, #ff5c7a); }
+
+/* ---- the grid itself (shared by minimap and full map) ---- */
+.fmap { display: block; overflow: visible; }
+.fmap__link { stroke: rgba(159, 176, 208, 0.55); stroke-linecap: butt; }
+.fmap__link--stub { stroke: rgba(159, 176, 208, 0.3); stroke-dasharray: 2 2; }
+
+.fmap__box { stroke-width: 1.25; }
+.fmap__room--visited .fmap__box { fill: #8f9db8; stroke: #c9d4ea; }
+.fmap__room--visited:not(.is-cleared) .fmap__box { fill: #5b6781; }
+.fmap__room--seen .fmap__box { fill: #0a0d16; stroke: rgba(159, 176, 208, 0.6); stroke-dasharray: 3 2; }
+.fmap__room--current .fmap__box { fill: var(--color-neonCyan, #7cf5ff); stroke: #ffffff; }
+.fmap__halo { fill: none; stroke: var(--color-neonCyan, #7cf5ff); stroke-width: 1.25; opacity: 0.8; animation: fmap-pulse 1.6s ease-in-out infinite; }
+@keyframes fmap-pulse { 50% { opacity: 0.2; } }
+@media (prefers-reduced-motion: reduce) { .fmap__halo { animation: none; } }
+
+.fmap__icon { fill: #0a0d16; stroke: #0a0d16; stroke-linejoin: round; stroke-linecap: round; }
+.fmap__room--seen .fmap__icon--exit { fill: none; stroke: var(--floor-kind-exit); }
+.fmap__room--seen .fmap__icon--treasure { fill: var(--floor-kind-treasure); }
+.fmap__room--seen .fmap__icon--rest { fill: var(--floor-kind-rest); }
+.fmap__room--seen .fmap__icon--lore { fill: none; stroke: var(--floor-kind-lore); }
+.fmap__room--seen .fmap__icon--elite { fill: var(--floor-kind-elite); }
+.fmap__room--seen .fmap__icon--shop { fill: none; stroke: var(--floor-kind-treasure); }
+/* visited special rooms keep their colour as the box fill so they stay findable */
+.fmap__room--visited.fmap__room--exit .fmap__box { fill: #e9eefb; }
+.fmap__room--visited.fmap__room--treasure .fmap__box { fill: var(--floor-kind-treasure); }
+.fmap__room--visited.fmap__room--rest .fmap__box { fill: var(--floor-kind-rest); }
+.fmap__room--visited.fmap__room--lore .fmap__box { fill: var(--floor-kind-lore); }
+.fmap__room--visited.fmap__room--elite .fmap__box { fill: var(--floor-kind-elite); }
+.fmap__icon--exit, .fmap__icon--lore, .fmap__icon--shop { fill: none; }
+
+/* ---- full map overlay ---- */
+.fullmap {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 4, 8, 0.72);
+  backdrop-filter: blur(2px);
+}
+.fullmap__panel {
+  width: min(560px, calc(100% - 32px));
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  border: 1px solid var(--hair-strong, rgba(124, 245, 255, 0.34));
+  border-radius: var(--radius-sm, 4px);
+  background:
+    radial-gradient(circle at 1px 1px, rgba(138, 155, 191, 0.12) 1px, transparent 1.5px) 0 0 / 18px 18px,
+    rgba(6, 8, 14, 0.95);
+}
+.fullmap__panel .fmap-head { padding: 10px 14px 8px; }
+.fullmap__panel .fmap-head__name { font-size: 13px; }
+.fullmap__panel .fmap-head__depth { font-size: 11px; }
+.fullmap__panel .fmap-head__pips i { width: 7px; height: 7px; }
+.fullmap__route {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  margin: 0;
+  padding: 8px 14px 0;
+  font: 10px var(--font-mono, ui-monospace, monospace);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-mist300, #9fb0d0);
+}
+.fullmap__route span + span::before { content: '→'; margin: 0 8px; color: var(--color-ink500, #66728f); }
+.fullmap__route .is-here { color: var(--color-neonCyan, #7cf5ff); }
+.fullmap__grid { display: grid; place-items: center; min-height: 200px; padding: 4px 8px; }
+.fullmap__count { margin: 0; padding: 0 14px 8px; font: 12px var(--font-body, system-ui, sans-serif); color: var(--color-mist300, #9fb0d0); text-align: center; }
+.fullmap__legend {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px 10px;
+  margin: 0;
+  padding: 10px 14px;
+  list-style: none;
+  border-top: 1px solid var(--floor-hair);
+  font: 10px var(--font-mono, ui-monospace, monospace);
+  color: var(--color-mist300, #9fb0d0);
+}
+.fullmap__legend li { display: flex; align-items: center; gap: 6px; }
+.fmap-key { flex: none; width: 10px; height: 10px; border: 1px solid #c9d4ea; border-radius: 2px; background: #8f9db8; }
+.fmap-key--current { background: var(--color-neonCyan, #7cf5ff); border-color: #fff; }
+.fmap-key--seen { background: transparent; border-style: dashed; border-color: rgba(159, 176, 208, 0.8); }
+.fmap-key--exit { background: #e9eefb; }
+.fmap-key--elite { background: var(--floor-kind-elite); }
+.fmap-key--treasure { background: var(--floor-kind-treasure); }
+.fmap-key--rest { background: var(--floor-kind-rest); }
+.fmap-key--lore { background: var(--floor-kind-lore); }
+.fullmap__hint { margin: 0; padding: 0 14px 10px; font: 9px var(--font-mono, ui-monospace, monospace); letter-spacing: 0.12em; text-transform: uppercase; text-align: center; color: var(--color-ink500, #66728f); }
+
+/* ---- biome choice ---- */
+.biome-choice {
+  position: absolute;
+  inset: 0;
+  z-index: 32;
+  display: grid;
+  grid-template-rows: auto minmax(0, auto) auto;
+  align-content: center;
+  justify-items: center;
+  gap: 14px;
+  padding: 16px;
+  overflow: auto;
+  background: radial-gradient(ellipse at 50% 45%, rgba(3, 4, 8, 0.78), rgba(3, 4, 8, 0.94));
+  animation: biome-choice-in 260ms ease-out;
+}
+@keyframes biome-choice-in { from { opacity: 0; } }
+.biome-choice__head { text-align: center; }
+.biome-choice__from { margin: 0 0 4px; font: 10px var(--font-mono, ui-monospace, monospace); letter-spacing: 0.16em; text-transform: uppercase; color: var(--color-success, #5ef0b0); }
+.biome-choice__head h2 { margin: 0; font: 600 20px var(--font-display, system-ui, sans-serif); letter-spacing: 0.06em; color: var(--color-mist100, #e8eefc); }
+.biome-choice__doors { display: grid; grid-template-columns: repeat(2, minmax(0, 300px)); gap: 28px; align-items: stretch; }
+.biome-choice__doors.is-single { grid-template-columns: minmax(0, 320px); }
+.biome-choice__foot { margin: 0; max-width: 60ch; text-align: center; font: 12px var(--font-body, system-ui, sans-serif); color: var(--color-mist300, #9fb0d0); }
+
+.biome-door {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 16px 16px;
+  text-align: left;
+  color: var(--color-mist100, #e8eefc);
+  background: linear-gradient(180deg, rgba(14, 18, 30, 0.96), rgba(7, 9, 15, 0.98));
+  border: 2px solid rgba(159, 176, 208, 0.35);
+  border-radius: 150px 150px 4px 4px / 96px 96px 4px 4px;
+  cursor: pointer;
+  transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+  font: inherit;
+}
+.biome-door:disabled { cursor: default; opacity: 1; }
+.biome-door.is-locked { border-style: dashed; }
+.biome-door.is-highlighted,
+.biome-door:not(:disabled):hover {
+  border-color: var(--color-neonCyan, #7cf5ff);
+  box-shadow: 0 0 0 1px rgba(124, 245, 255, 0.35), 0 0 34px rgba(124, 245, 255, 0.16);
+  transform: translateY(-3px);
+}
+.biome-door.is-host-pick { border-color: var(--color-warmLamp, #ffcf8a); border-style: solid; box-shadow: 0 0 30px rgba(255, 207, 138, 0.18); }
+.biome-door__arch {
+  display: grid;
+  place-items: center;
+  height: 84px;
+  margin: 0 -16px 4px;
+  border-bottom: 1px solid rgba(159, 176, 208, 0.22);
+  border-radius: 150px 150px 0 0 / 96px 96px 0 0;
+  background: radial-gradient(ellipse at 50% 120%, rgba(124, 245, 255, 0.2), transparent 70%);
+}
+.biome-door.is-host-pick .biome-door__arch { background: radial-gradient(ellipse at 50% 120%, rgba(255, 207, 138, 0.26), transparent 70%); }
+.biome-door__key {
+  margin-top: 26px;
+  min-width: 30px;
+  padding: 4px 9px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font: 600 14px var(--font-mono, ui-monospace, monospace);
+  text-align: center;
+  color: var(--color-neonCyan, #7cf5ff);
+  background: rgba(3, 4, 8, 0.7);
+}
+.biome-door.is-locked .biome-door__key { color: var(--color-ink500, #66728f); }
+.biome-door__depth { font: 10px var(--font-mono, ui-monospace, monospace); letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-mist300, #9fb0d0); }
+.biome-door__name { font: 600 18px var(--font-display, system-ui, sans-serif); letter-spacing: 0.04em; line-height: 1.15; }
+.biome-door__tagline { font: 13px/1.4 var(--font-body, system-ui, sans-serif); color: var(--color-mist300, #9fb0d0); min-height: 2.8em; }
+.biome-door__facts { display: grid; gap: 0; margin: 6px 0 0; }
+.biome-door__facts > div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px; padding: 5px 0; border-top: 1px solid rgba(159, 176, 208, 0.14); }
+.biome-door__facts dt { font: 9px var(--font-mono, ui-monospace, monospace); letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-mist300, #9fb0d0); padding-top: 2px; }
+.biome-door__facts dd { margin: 0; font: 12px/1.35 var(--font-body, system-ui, sans-serif); color: var(--color-mist100, #e8eefc); }
+.biome-door__facts dd.is-warn { color: var(--color-warmLamp, #ffcf8a); }
+.biome-door__votes { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.biome-door__votes span { padding: 2px 7px; border: 1px solid rgba(159, 176, 208, 0.4); border-radius: 999px; font: 10px var(--font-mono, ui-monospace, monospace); color: var(--color-mist300, #9fb0d0); }
+.biome-door__votes .is-host { border-color: var(--color-warmLamp, #ffcf8a); color: var(--color-warmLamp, #ffcf8a); }
+
+@media (max-width: 720px) {
+  .biome-choice__doors { grid-template-columns: minmax(0, 320px); gap: 12px; }
+  .biome-door { border-radius: 4px; }
+  .biome-door__arch { height: 48px; border-radius: 0; }
+  .biome-door__key { margin-top: 0; }
+  .fullmap__legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .biome-choice { animation: none; }
+  .biome-door { transition: none; }
+}

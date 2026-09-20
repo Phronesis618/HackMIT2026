@@ -63,7 +63,7 @@
   background: linear-gradient(150deg, #1a2738f5, #0d1625fa);
 }
 .hq-station .panel__row .eyebrow { margin: 0; color: var(--station-color); }
-.hq-attunement { color: var(--station-color); font: 12px var(--font-mono); padding: 10px 0; border-bottom: 1px solid #ffffff12; }
+.hq-status { color: var(--station-color); font: 12px var(--font-mono); padding: 10px 0; border-bottom: 1px solid #ffffff12; }
 .hq-abilities, .hq-records { margin: 14px 0; }
 .hq-abilities > div { margin-top: 14px; }
 .hq-abilities dt { color: #eee5d4; font-size: 12px; }
@@ -85,3 +85,15 @@
   .hq-wayfinder__hint { font-size: 9px; max-width: 190px; }
   .hq-prompt { padding: 6px 9px; font-size: 11px; }
 }
+
+/* Returns hall: quartermaster speech + evidence footer, records tabs, relic shelf */
+.hq-speech { margin: 12px 0; padding: 12px 14px; border-left: 3px solid #ffcf8a; background: #0a1220a6; border-radius: 0 6px 6px 0; }
+.hq-speech p { margin: 0; color: #f4e6c8; font-size: 13px; line-height: 1.6; }
+.hq-speech p + p { margin-top: 6px; }
+.hq-evidence { font: 10px var(--font-mono); color: #9fb0c4; word-break: break-word; border-top: 1px solid #ffffff12; padding-top: 8px; }
+.hq-records--compact dd { font-size: 15px; }
+.hq-tabs { display: flex; gap: 6px; margin: 12px 0 4px; }
+.hq-tab { flex: 1; padding: 7px 4px; border-radius: 6px; border: 1px solid #ffffff1a; background: #080f194d; color: #c0cbd9; font: 11px var(--font-mono); cursor: pointer; }
+.hq-tab--active { border-color: var(--station-color); color: var(--station-color); box-shadow: inset 0 -2px 0 var(--station-color); }
+.hq-tab--unlit { opacity: .45; }
+.hq-shelf li strong { color: #ffcf8a; }
