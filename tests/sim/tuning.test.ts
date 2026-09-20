@@ -16,6 +16,7 @@ import {
 import {
   ENEMY_HAZARD_MUL, ENV_KILL_CREDIT, HAZARD_BASE, HAZARD_INTERVAL_MS, HAZARD_STACK_MAX,
 } from '../../src/shared/terrain';
+import { OPENING_STRIKE_MAX_MUL } from '../../src/sim/effects';
 import { FLOOR_TUNING, tierMultiplier } from '../../src/sim/floors';
 import { DEMO_TUNING } from '../../src/sim/tuning';
 
@@ -34,6 +35,7 @@ describe('DEMO_TUNING', () => {
       hazardStackMax: 5,
       enemyHazardMul: 1.6,
       envKillCredit: 0.5,
+      openingStrikeMaxMul: 3,
       tierScalePerTier: 0.18,
       restHealFraction: 0.4,
     });
@@ -50,6 +52,7 @@ describe('DEMO_TUNING', () => {
     expect(HAZARD_STACK_MAX).toBe(DEMO_TUNING.hazardStackMax);
     expect(ENEMY_HAZARD_MUL).toBe(DEMO_TUNING.enemyHazardMul);
     expect(ENV_KILL_CREDIT).toBe(DEMO_TUNING.envKillCredit);
+    expect(OPENING_STRIKE_MAX_MUL).toBe(DEMO_TUNING.openingStrikeMaxMul);
     expect(FLOOR_TUNING.tierScalePerTier).toBe(DEMO_TUNING.tierScalePerTier);
     expect(FLOOR_TUNING.restHealFraction).toBe(DEMO_TUNING.restHealFraction);
 

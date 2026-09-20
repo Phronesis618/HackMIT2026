@@ -1,14 +1,15 @@
 import { ATTRIBUTING_SOURCES } from '../../shared/contracts';
 import { ENEMY_INFO } from '../../shared/registry';
-import type { UiWorldSummary } from '../../shared/ui';
+import type { UiFloor, UiWorldSummary } from '../../shared/ui';
+import { floorLocationLabel } from './Hud';
 import { openMenu } from './MemoryWall';
 import { ProvenanceBadge } from './ProvenanceBadge';
 
 /**
  * Codex: what the crew has actually found, nothing more. Fragments are authored by the
  * world and only unlock through play — reading a relic in a room, or defeating an enemy
- * kind for the first time. Undiscovered entries stay ??? so the sidebar never tells what
- * the rooms are meant to show.
+ * kind for the first time. An undiscovered entry says so in plain words and names its kind,
+ * so the row reads as a locked slot rather than a riddle, and never tells what the rooms hold.
  */
 export function Codex({ world, discovered }: { world: UiWorldSummary; discovered: number[] }) {
   if (world.lore.length === 0) return null;
@@ -17,12 +18,13 @@ export function Codex({ world, discovered }: { world: UiWorldSummary; discovered
   const remains = world.lore.map((f, i) => ({ f, i })).filter(({ f }) => f.kind === 'remains');
   const entry = ({ f, i }: { f: UiWorldSummary['lore'][number]; i: number }) => {
     const known = found.has(i);
+    // The title already says the row is locked, so the second line only says where to look.
     const hint = f.kind === 'relic'
-      ? `Unread · room ${f.roomIndex + 1}`
-      : `Unknown · ${f.enemyId ? ENEMY_INFO[f.enemyId].name : 'hostile'} remains`;
+      ? `Room ${f.roomIndex + 1}`
+      : `${f.enemyId ? ENEMY_INFO[f.enemyId].name : 'A hostile'} drops it`;
     return (
       <li key={i} className={`codex__entry ${known ? 'codex__entry--found' : ''}`}>
-        <span className="codex__title">{known ? f.title : '???'}</span>
+        <span className="codex__title">{known ? f.title : `Not found yet · ${f.kind === 'relic' ? 'relic' : 'remains'}`}</span>
         {known && <span className="codex__source">{f.source}</span>}
         <span className="codex__text">{known ? f.text : hint}</span>
       </li>
@@ -63,7 +65,8 @@ export function WorldLaws({ world }: { world: UiWorldSummary }) {
       <ul className="list">
         {laws.map((law) => (
           <li key={law.lawId} className="list__item list__item--used">
-            <span className="list__who">{law.name}</span> {law.effect}
+            <span className="list__who">{law.name}</span>
+            {world.lawsDerived && <em className="derived-stamp">Engine-chosen</em>}{' '}{law.effect}
             <div className="list__meta">{law.description}</div>
           </li>
         ))}
@@ -78,8 +81,14 @@ function activeLawNames(world: UiWorldSummary): string[] {
 }
 
 /** Creation receipt: shown immediately after a world is prepared. Honest by construction. */
-export function WorldPanel({ world, discoveredLore = [], compact = false }: { world: UiWorldSummary; discoveredLore?: number[]; compact?: boolean }) {
+export function WorldPanel(
+  { world, discoveredLore = [], compact = false, floor = null }:
+  { world: UiWorldSummary; discoveredLore?: number[]; compact?: boolean; floor?: UiFloor | null },
+) {
   const r = world.receipt;
+  // A25. A floors world commits one room list per biome, so `plannedRoomCount` is 1 there and
+  // "1/1 rooms" said nothing. Count the current biome's rooms instead; legacy worlds unchanged.
+  const rooms = floor ? floorLocationLabel(floor) : `${world.committedRoomCount}/${world.plannedRoomCount} rooms`;
   // In a run the rail only identifies the world; the Codex and receipt are one Tab away.
   if (compact) {
     return (
@@ -88,15 +97,34 @@ export function WorldPanel({ world, discoveredLore = [], compact = false }: { wo
         <span className="world-brief__title">{world.title}</span>
         <span className="tagline">{world.tagline}</span>
         <span className="world-brief__foot">
-          <span>{world.committedRoomCount}/{world.plannedRoomCount} rooms{activeLawNames(world).length > 0 ? ` · ${activeLawNames(world).join(' · ')}` : ''}</span>
+          {/* Sign-off: the full "biome 1/5 · room 1 of 10" never fit beside the Codex link and
+              ended in an ellipsis. The room count is on the tile above; keep the short half. */}
+          <span className="world-brief__facts">{floor ? `biome ${floor.depth} of ${floor.depthCount}` : rooms}</span>
           <span className="world-brief__codex">Codex {new Set(discoveredLore).size}/{world.lore.length} ›</span>
+          {/* The law names get their own row: run together with the room count they wrapped
+              into three ragged lines around the Codex link. A derived name carries the
+              engine-chosen stamp here too, not only inside the dossier's note. */}
+          {activeLawNames(world).length > 0 && (
+            <span className="world-brief__laws">
+              {/* Each name is unbreakable and carries its own trailing dot, so a wrapped row
+                  never opens on a separator or splits a law's name in two. */}
+              <span>
+                {activeLawNames(world).map((name, i, all) => (
+                  <span key={name} className="world-brief__law">{name}{i < all.length - 1 ? ' · ' : ''}</span>
+                ))}
+              </span>
+              {world.lawsDerived && <em className="derived-stamp">Engine-chosen</em>}
+            </span>
+          )}
         </span>
       </button>
     );
   }
   return (
     <div className="panel panel--world">
-      <p className="eyebrow">World dossier · {world.committedRoomCount}/{world.plannedRoomCount} rooms ready</p>
+      {/* Sign-off: "… rooms ready" ran the eyebrow onto a second line in the 294 px debrief
+          rail, which left the stamp's marker floating between the two. The count says it. */}
+      <p className="eyebrow">World dossier · {rooms}</p>
       <div className="panel__row">
         <h2 className="panel__title">{world.title}</h2>
         <ProvenanceBadge provenance={world.provenance} />

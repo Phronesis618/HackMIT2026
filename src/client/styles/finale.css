@@ -1,16 +1,19 @@
 /*
  * The finale (agent B1): the collapse clock and the three pedestals at the extraction.
- * app.css is not touched; colours come from the design tokens already on :root.
+ *
+ * Brought onto the shared system by agent U2a (docs/design/UI_AUDIT_FINAL.md): token colours
+ * instead of white/alpha literals, 2 px radii instead of 8/10/12, the 4/8 spacing grid, and
+ * the one type scale. The clock itself stays oversized on purpose — it is the one number the
+ * crew must read across the room.
  */
 :root {
-  --finale-plane: rgba(6, 8, 14, 0.82);
-  --finale-warn: var(--color-danger, #ff5c7a);
-  --finale-calm: var(--color-accent, #7cf5ff);
+  --finale-warn: var(--color-danger);
+  --finale-calm: var(--color-neonCyan);
 }
 
 .escape {
   position: absolute;
-  top: 10px;
+  top: var(--space-sm);
   left: 50%;
   transform: translateX(-50%);
   z-index: 6;
@@ -18,38 +21,36 @@
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 8px 18px;
-  border: 1px solid rgba(255, 92, 122, 0.4);
-  border-radius: 10px;
-  background: var(--finale-plane);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 40%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--plane);
   pointer-events: none;
   text-align: center;
 }
 
 .escape__label {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-stamp);
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--color-mist300);
 }
 
 .escape__clock {
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono);
   font-size: 34px;
   line-height: 1.05;
   font-variant-numeric: tabular-nums;
-  color: #fff;
+  color: var(--color-mist100);
 }
 
 .escape__line {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.62);
+  font-size: var(--fs-sm);
+  color: var(--color-mist300);
 }
 
-.escape--urgent {
-  border-color: var(--finale-warn);
-}
+.escape--urgent { border-color: var(--finale-warn); }
 
 .escape--urgent .escape__clock {
   color: var(--finale-warn);
@@ -57,13 +58,9 @@
 }
 
 .escape--clear,
-.escape--stranded {
-  border-color: rgba(124, 245, 255, 0.4);
-}
+.escape--stranded { border-color: color-mix(in srgb, var(--color-neonCyan) 40%, transparent); }
 
-.escape--clear .escape__label {
-  color: var(--finale-calm);
-}
+.escape--clear .escape__label { color: var(--finale-calm); }
 
 @keyframes escape-tick {
   0%, 60% { opacity: 1; }
@@ -74,32 +71,35 @@
   .escape--urgent .escape__clock { animation: none; }
 }
 
+/* ---- the extraction: three pedestals, one thing carried out ---- */
 .relic-choice {
   position: absolute;
   bottom: 96px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 6;
-  width: min(640px, calc(100% - 32px));
-  padding: 12px 14px;
-  border: 1px solid rgba(124, 245, 255, 0.3);
-  border-radius: 12px;
-  background: var(--finale-plane);
+  width: min(640px, calc(100% - 2 * var(--space-md)));
+  padding: 12px var(--space-md);
+  border: 1px solid var(--hair-strong);
+  border-radius: var(--radius-sm);
+  background: var(--plane);
   pointer-events: none;
   text-align: center;
 }
 
 .relic-choice__head {
-  margin: 0 0 8px;
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  color: rgba(255, 255, 255, 0.72);
+  margin: 0 0 var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: var(--fs-stamp);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-mist300);
 }
 
 .relic-choice__list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 8px;
+  gap: var(--space-sm);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -108,37 +108,40 @@
 .relic-card {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  gap: var(--space-xs);
+  padding: var(--space-sm) 12px;
+  border: 1px solid var(--hair);
+  border-radius: var(--radius-sm);
+  background: rgba(5, 7, 12, 0.6);
+  text-align: left;
 }
 
 .relic-card--held {
-  border-color: rgba(124, 245, 255, 0.6);
-  background: rgba(124, 245, 255, 0.08);
+  border-color: var(--hair-strong);
+  background: color-mix(in srgb, var(--color-neonCyan) 8%, transparent);
 }
 
 .relic-card--chosen {
-  border-color: var(--color-success, #5ef0b0);
-  background: rgba(94, 240, 176, 0.12);
+  border-color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
 }
 
 .relic-card__title {
-  font-size: 14px;
-  color: #fff;
+  font-size: var(--fs-body);
+  line-height: 1.3;
+  color: var(--color-mist100);
 }
 
 .relic-card__kind {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 10px;
-  letter-spacing: 0.1em;
+  font-family: var(--font-mono);
+  font-size: var(--fs-stamp);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--color-mist300);
 }
 
 .relic-card__votes {
-  font-size: 11px;
+  font-size: var(--fs-stamp);
+  font-family: var(--font-mono);
   color: var(--finale-calm);
 }

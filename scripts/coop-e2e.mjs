@@ -27,6 +27,8 @@ import { fileURLToPath } from 'node:url';
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..');
 const PLAYWRIGHT_SPEC = 'playwright@1.61';
+/** A Chromium already on the machine (boxes that cannot reach the Playwright CDN); skips `playwright install`. */
+const CHROMIUM_PATH = process.env.RELAY_CHROMIUM_PATH || null;
 // Co-op needs real frame rates: the client drops input when a frame takes > 250 ms, and N software-GL
 // (SwiftShader) pages on a busy machine run at 2–6 fps. On macOS headless Chromium can use the real GPU
 // through ANGLE/Metal (~40+ fps); elsewhere fall back to shot.mjs's SwiftShader flags (--gl swiftshader).
@@ -57,6 +59,8 @@ function parseArgs(argv) {
       case '--only': args.only = argv[++i].split(',').map((s) => s.trim()).filter(Boolean); break;
       case '--floors': args.floors = true; break;
       case '--gl': args.gl = argv[++i]; break;
+      case '--width': args.width = Number(argv[++i]); break;
+      case '--height': args.height = Number(argv[++i]); break;
       case '--full-run-minutes': args.fullRunMinutes = Number(argv[++i]); break;
       case '--env': {
         const pair = argv[++i] ?? '';
@@ -82,6 +86,7 @@ const HELP = `coop-e2e.mjs — scripted two/four-browser co-op verification (rea
   --server-port <n>        API/WS port. Default port + 3614
   --base <url>             Use an already-running server (no spawn, no restarts), e.g. a LAN production build
   --gl metal|swiftshader   GL backend for headless Chromium. Default: metal on macOS, swiftshader elsewhere
+  --width <n> --height <n> Viewport per player. Default 1280x800
   --out-dir <dir>          Screenshots + results.json. Default /tmp/relay-shots/coop
   --full-run-minutes <n>   Time budget for the three-room + boss attempt. Default 8
 `;
@@ -106,7 +111,7 @@ async function ensurePlaywright(depsDir) {
     await execInherit('npm', ['install', PLAYWRIGHT_SPEC, '--no-audit', '--no-fund'], { cwd: depsDir });
   }
   const marker = path.join(depsDir, '.chromium-installed');
-  if (!fs.existsSync(marker)) {
+  if (!CHROMIUM_PATH && !fs.existsSync(marker)) {
     await execInherit('npx', ['-y', PLAYWRIGHT_SPEC, 'install', 'chromium'], { cwd: depsDir });
     await fs.promises.writeFile(marker, new Date().toISOString());
   }
@@ -225,7 +230,7 @@ function readRelay() {
     ui: {
       phase: ui.phase, notice: ui.notice, memories: ui.memories.length, room: ui.room,
       players: ui.players, contributions: ui.contributions.map((c) => `${c.playerName}: ${c.text}`),
-      world: ui.world && { title: ui.world.title, label: ui.world.provenance.label, source: ui.world.provenance.source, receipt: ui.world.receipt.lines.map((l) => `${l.playerName}: ${l.text}`) },
+      world: ui.world && { title: ui.world.title, label: ui.world.provenance.label, source: ui.world.provenance.source, receipt: ui.world.receipt.lines.map((l) => `${l.playerName}: ${l.text}`), laws: ui.world.laws ?? null, lawsDerived: ui.world.lawsDerived ?? null },
     },
   };
 }
@@ -251,6 +256,8 @@ function readDom() {
     notice: text('.notice span'),
     telemetry: text('.brand__telemetry'),
     caption: text('.rail-status .panel__title'),
+    gate: text('.hq-crew__gate'),
+    crewChips: all('.hq-crew__chip'),
     runCrew: all('.rail-crew__row'),
     memoryCount: text('.memory-brief__count'),
     bodyText: document.body.innerText.slice(0, 4000),
@@ -276,7 +283,10 @@ class Player {
       this.page.on('console', (msg) => { if (msg.type() === 'error') this.errors.push(`console: ${msg.text().slice(0, 200)}`); });
     }
     this.held.clear();
-    await this.page.goto(`${this.base}/?mode=coop&as=${this.name}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    // `window.relay` — the read-only handle this script reads state from — is DEV-only unless
+    // `?debug` is present, so a production bundle (`npm start`) needs the flag. Against the Vite
+    // dev server it changes nothing.
+    await this.page.goto(`${this.base}/?mode=coop&as=${this.name}&debug=1`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     this.canvasMounted = await this.page.waitForSelector('.stage canvas', { state: 'attached', timeout: 60000 }).then(() => true).catch(() => false);
     if (!this.canvasMounted) console.log(`[coop] WARNING ${this.name}: no canvas after 60 s; errors=${JSON.stringify(this.errors.slice(0, 4))}`);
     return this;
@@ -363,8 +373,17 @@ function headquartersRoom() {
     if ((x === 11 || x === 19) && y > 13 && y !== 15 && y !== 16) return '#';
     return '.';
   }).join(''));
-  const stations = [[4, 3], [8, 3], [4, 7], [8, 7], [24, 4], [24, 16], [5, 16]];
-  const props = [...stations.map(([x, y]) => ({ propId: 'terminal', x, y })), { propId: 'pillar', x: 13, y: 3 }, { propId: 'pillar', x: 17, y: 3 }, { propId: 'monolith_shard', x: 27, y: 6 }];
+  // Keep these in step with src/shared/headquarters.ts and src/sim/headquarters.ts — every
+  // station that is not in HEADQUARTERS_PROPLESS_STATIONS (portal, relics, quartermaster) puts a
+  // blocking `terminal` on its tile, and the relic shelf's five brackets are 1x2 `monolith_shard`.
+  // tests/presentation/coop-harness-hub.test.ts fails if this list drifts from the real room.
+  const stations = [[4, 3], [8, 3], [4, 7], [8, 7], [24, 4], [24, 8], [24, 16], [5, 16]];
+  const relicBrackets = [[12, 1], [13, 1], [14, 1], [16, 1], [17, 1]];
+  const props = [
+    ...stations.map(([x, y]) => ({ propId: 'terminal', x, y })),
+    ...relicBrackets.map(([x, y]) => ({ propId: 'monolith_shard', x, y })),
+    { propId: 'pillar', x: 13, y: 3 }, { propId: 'pillar', x: 17, y: 3 }, { propId: 'monolith_shard', x: 27, y: 6 },
+  ];
   return { width, height, tiles, props, exits: [{ x: 15, y: 18 }] };
 }
 const HQ_SHRINES = { bastion: [4, 3], shade: [8, 3], beacon: [4, 7], weaver: [8, 7] };
@@ -504,7 +523,15 @@ async function prepareWorld(host, everyone) {
   }, { timeoutMs: 30000, label: `${p.name} sees world` })));
 }
 
+/** HUB.md §7: the gate opens only once every connected operative stands at it, so the crew gathers first. */
+async function gatherAtGate(players) {
+  await Promise.all(players.map((p) => walkTo(p, centre({ col: 15, row: 17 }), {
+    hq: true, arriveDist: 12, timeoutMs: 15000, until: (s) => s.snap.players.find((q) => q.id === s.id)?.ready === true,
+  })));
+}
+
 async function enterByWalkingOntoPortal(host, everyone) {
+  await gatherAtGate(everyone.filter((p) => p !== host));
   await walkTo(host, centre({ col: 15, row: 18 }), { hq: true, arriveDist: 4, timeoutMs: 15000, until: (s) => s.snap.phase === 'expedition' });
   return Promise.all(everyone.map((p) => waitFor(async () => {
     const s = await p.read();
@@ -667,7 +694,23 @@ async function groupDemo(ctx) {
   report.check('3c', 'host prepares; same title, provenance label, receipt on both', world.ok && JSON.parse(world.values[0]).title && JSON.parse(world.values[0]).receipt.length === 2,
     `${((Date.now() - t0) / 1000).toFixed(1)} s; both screens: ${world.values[0]}`);
 
-  // --- 4: host walks onto the portal, the crew lands together, movement syncs.
+  // --- 4: ready-up at the gate, then the host walks onto the portal and the crew lands together.
+  await gatherAtGate([bob]);
+  await sleep(500);
+  const half = await agree(pair, (s, d) => ({ gate: d.gate, ready: s.snap.players.map((p) => `${p.displayName}:${p.ready === true}`).sort() }));
+  const halfHost = await alice.dom();
+  await shots(pair, 's4-gate-1of2');
+  report.check('4c', 'guest at the gate: both screens read 1 / 2 READY and the host cannot enter yet',
+    half.ok && /1 \/ 2 READY/.test(JSON.parse(half.values[0]).gate ?? '') && halfHost.enterDisabled === true,
+    `both screens: ${half.values[0]}; host Enter portal disabled=${halfHost.enterDisabled}`);
+  await gatherAtGate([alice]);
+  await sleep(500);
+  const full = await agree(pair, (s, d) => ({ gate: d.gate, ready: s.snap.players.map((p) => `${p.displayName}:${p.ready === true}`).sort() }));
+  const fullHost = await alice.dom();
+  await shots(pair, 's4-gate-2of2');
+  report.check('4d', 'whole crew at the gate: both screens read 2 / 2 READY and the host may enter',
+    full.ok && /2 \/ 2 READY/.test(JSON.parse(full.values[0]).gate ?? '') && fullHost.enterDisabled === false,
+    `both screens: ${full.values[0]}; host Enter portal disabled=${fullHost.enterDisabled}`);
   const entered = await enterByWalkingOntoPortal(alice, pair).catch(() => null);
   await sleep(1200);
   const where = await agree(pair, (s, d) => ({ phase: s.snap.phase, roomIndex: s.snap.roomIndex, roomId: s.snap.roomId, telemetry: d.telemetry, caption: d.caption }));
@@ -849,6 +892,24 @@ async function groupDemo(ctx) {
   await shots(pair, 's6-back-in-hq');
   report.check('6e', 'host returns crew -> both back in HQ; memories on each device', home.ok && JSON.parse(home.values[0]).phase === 'headquarters' && mem.every((n) => n > 0),
     `both screens: ${home.values[0]}; memory records alice=${mem[0]} bob=${mem[1]} (each browser context has its own localStorage)`);
+
+  // --- 6f: the gate must never strand the host. A seat nobody is behind is marked offline, not
+  // counted and not waited for, so the run still starts with the crew one short.
+  await bob.close();
+  const offlineSeat = await waitFor(async () => {
+    const s = await alice.read();
+    return s.snap.players.some((p) => p.connected === false) ? await alice.dom() : null;
+  }, { timeoutMs: 20000, label: 'alice sees bob offline' }).catch(() => null);
+  await alice.shot('s6-guest-offline');
+  await prepareWorld(alice, [alice]);
+  await sleep(500);
+  const aloneDom = await alice.dom();
+  await alice.page.getByRole('button', { name: /^Enter portal/ }).first().click();
+  await alice.focusStage();
+  const startedAlone = await waitFor(async () => ((await alice.read()).snap.phase === 'expedition'), { timeoutMs: 20000, label: 'host starts without the offline seat' }).catch(() => false);
+  await alice.shot('s6-offline-start');
+  report.check('6f', 'guest offline -> the host can still start the run', startedAlone === true && aloneDom.enterDisabled === false,
+    `crew strip read ${J(offlineSeat?.crewChips ?? null)} / gate "${offlineSeat?.gate ?? null}" with bob gone; host Enter portal disabled=${aloneDom.enterDisabled}; phase after the click=${(await alice.read()).snap.phase}`);
 }
 
 async function startRun(ctx, tag) {
@@ -858,7 +919,9 @@ async function startRun(ctx, tag) {
   if (s.snap.phase !== 'headquarters') throw new Error(`startRun: expected headquarters, got ${s.snap.phase}`);
   await prepareWorld(alice, pair);
   await sleep(400);
-  await alice.page.getByRole('button', { name: /^Enter portal/ }).click();
+  await gatherAtGate(pair);
+  // A host already standing on the gate tile departs the moment the last seat arrives (§7).
+  if ((await alice.read()).snap.phase === 'headquarters') await alice.page.getByRole('button', { name: /^Enter portal/ }).first().click();
   await alice.focusStage();
   await Promise.all(pair.map((p) => waitFor(async () => ((await p.read()).ui.phase === 'expedition'), { timeoutMs: 8000, label: `${p.name} expedition (${tag})` })));
   await sleep(1000);
@@ -1031,6 +1094,17 @@ async function groupFloors(ctx) {
   await startRun(ctx, 'floors');
   const first = await agree(pair, (s) => ({ floor: s.snap.floor ?? null, roomId: s.snap.roomId }));
   await shots(pair, 's9-floors-entrance');
+  // Q1: the whole point of server-authoritative flags — both machines must be playing the same
+  // game AND drawing the same world. Laws carry their resolved numbers; the look drives the render.
+  const r2look = (s) => s.ui.world?.lookDerived ?? null;
+  const rules = await agree(pair, (s, d) => ({
+    laws: (s.ui.world?.laws ?? []).map((l) => `${l.lawId}:${l.active}:${l.effect}`),
+    lawsDerived: s.ui.world?.lawsDerived ?? null,
+    look: r2look(s),
+    onScreen: (d.bodyText.match(/Enemy groups[^\n]*|Movement at[^\n]*|Dash goes[^\n]*|Light[^\n]*/g) ?? []).slice(0, 4),
+  }));
+  report.check('9e', 'laws and the look are identical on both clients', rules.ok && JSON.parse(rules.values[0]).laws.length > 0,
+    `both screens: ${rules.values[0].slice(0, 500)}${rules.ok ? '' : ` || DIVERGED: ${rules.values[1].slice(0, 500)}`}`);
   const hasFloor = Boolean(JSON.parse(first.values[0]).floor);
   report.check('9a', 'floors run: snapshot.floor present and identical on both screens', first.ok && hasFloor, `both screens: ${first.values[0].slice(0, 400)}`);
   if (!hasFloor) return;
@@ -1142,7 +1216,9 @@ async function main() {
 
   await servers.start();
   const playwright = await ensurePlaywright(args.depsDir);
-  const browser = await playwright.chromium.launch({ headless: true, args: GL_ARGS[args.gl] ?? GL_ARGS.swiftshader });
+  const browser = await playwright.chromium.launch({
+    headless: true, args: GL_ARGS[args.gl] ?? GL_ARGS.swiftshader, ...(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {}),
+  });
   const report = new Report(args.outDir);
   const all = [];
   const ctx = {

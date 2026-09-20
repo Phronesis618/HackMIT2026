@@ -83,7 +83,9 @@ export function MemoryWall({ memories, actions, context }: { memories: MemoryRec
               <span className="hint">Erase memories on this device?</span>
               <button type="button" className="btn" onClick={() => { actions.clearMemories(); setConfirmClear(false); closeComposer(); }}>Erase memories</button>
               <button type="button" className="btn btn--ghost" onClick={() => { setConfirmClear(false); archiveRef.current?.focus(); }}>Cancel</button>
-            </> : <button type="button" className="btn btn--ghost" onClick={() => setConfirmClear(true)}>Clear</button>}
+            {/* Not a ghost: it sat next to a bordered "Browse archive" as the lightest thing
+                in the row, which read as the least consequential of the two. */}
+            </> : <button type="button" className="btn" onClick={() => setConfirmClear(true)}>Clear</button>}
           </div>
         )}
       </div>

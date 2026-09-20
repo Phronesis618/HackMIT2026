@@ -342,6 +342,19 @@ export class LocalSession implements GameSession {
     for (const l of this.snapshotListeners) l(this.snapshot);
   }
 
+  /**
+   * DEV/QA helper: skip a floors run forward to tier `tier` (used by `?tier=N`, which the
+   * controller only honours in a dev build). Everything after the jump is played normally.
+   */
+  devJumpToTier(tier: number, at?: 'entrance' | 'exit'): void {
+    if (this.disposed || !this.world) return;
+    const events = this.sim.devJumpToTier(tier, at);
+    if (!events.length) return;
+    this.snapshot = this.sim.getSnapshot();
+    this.emitEvents(events);
+    for (const l of this.snapshotListeners) l(this.snapshot);
+  }
+
   /** Preview helper: jump straight to a committed room index (used by ?room=N). */
   enterRoomIndex(index: number): void {
     if (this.disposed || !this.world || !Number.isInteger(index) || index < 0 || index >= this.world.rooms.length) return;

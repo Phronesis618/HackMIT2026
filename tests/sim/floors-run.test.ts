@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GameSnapshotSchema } from '../../src/shared/contracts';
 import { FLOOR_ENTRANCE_ROOM_ID } from '../../src/shared/floors';
 import { createSimulation } from '../../src/sim';
+import { planEscape } from '../../src/sim/escape';
 import { FloorsBot, floorsWorld, makeProvider } from './floorsBot';
 
 const CREW = ['op-a', 'op-b', 'op-c'];
@@ -87,4 +88,76 @@ describe('floors: a whole run', () => {
     expect(a.snapshots).toEqual(b.snapshots);
     expect(a.bot.events).toEqual(b.bot.events);
   }, 240_000);
+});
+
+describe('floors: the DEV tier deep link', () => {
+  /**
+   * `devJumpToTier` exists so QA can *play* the tier-4 ending in a browser without walking five
+   * biomes. It must land on a real route (not an arbitrary biome), on that biome's entrance, and
+   * it must refuse to do anything outside a floors expedition or backwards.
+   */
+  const start = () => {
+    const world = floorsWorld('devjump');
+    const sim = createSimulation();
+    sim.addPlayer({ id: 'op-a', displayName: 'op-a', classId: 'bastion' });
+    sim.setHostPlayerId('op-a');
+    sim.setWorld(world);
+    return { sim, world };
+  };
+
+  it('skips a floors run to tier 4 along the route and drops the crew on that biome entrance', () => {
+    const { sim, world } = start();
+    sim.enterRoom(0);
+    const before = sim.getSnapshot().floor!;
+    expect(before.tier).toBe(0);
+
+    const events = sim.devJumpToTier(4);
+    const snap = GameSnapshotSchema.parse(sim.getSnapshot());
+    expect(snap.floor!.tier).toBe(4);
+    expect(snap.floor!.roomId).toBe(FLOOR_ENTRANCE_ROOM_ID);
+    expect(snap.phase).toBe('expedition');
+    // Every biome it passed through is a real edge of the world's own route.
+    expect(snap.floor!.path).toHaveLength(5);
+    snap.floor!.path.forEach((biomeId, tier) => {
+      expect(world.floors!.route.tiers[tier]).toContain(biomeId);
+    });
+    expect(events.filter((e) => e.type === 'biome_entered')).toHaveLength(4);
+    // And the tier-4 biome's exit is the Anchor room, i.e. the ending is reachable from here.
+    const provider = makeProvider(world);
+    expect(provider.isFinalRoom(provider.exitRef(snap.floor!.biomeId))).toBe(true);
+  });
+
+  it("at: 'exit' lands on the Anchor room itself, with a walk home the collapse can plan", () => {
+    const { sim, world } = start();
+    sim.enterRoom(0);
+    sim.devJumpToTier(4, 'exit');
+    const snap = sim.getSnapshot();
+    const provider = makeProvider(world);
+    expect(snap.floor!.tier).toBe(4);
+    expect(snap.floor!.roomId).toBe(provider.exitRef(snap.floor!.biomeId).roomId);
+    expect(sim.getRoom().isFinal).toBe(true);
+    expect(sim.getRoom().feature).toBe('anchor');
+    // The escape is planned from the biome's floor plan, not from the rooms the crew walked,
+    // so arriving by deep link still leaves a real route back to r00.
+    const plan = provider.plan(snap.floor!.biomeId);
+    const neighbours = (id: string) => {
+      const node = plan.rooms.find((r) => r.id === id);
+      return node ? (['n', 's', 'e', 'w'] as const).map((side) => node.doors[side]).filter((x): x is string => x !== undefined) : [];
+    };
+    expect(planEscape(snap.floor!.roomId, FLOOR_ENTRANCE_ROOM_ID, neighbours)!.length).toBeGreaterThan(1);
+  });
+
+  it('is a no-op in headquarters, for a tier that is not deeper, and for a non-integer', () => {
+    const { sim } = start();
+    expect(sim.devJumpToTier(4)).toEqual([]); // still in HQ
+    sim.enterRoom(0);
+    expect(sim.devJumpToTier(0)).toEqual([]);
+    expect(sim.devJumpToTier(-1)).toEqual([]);
+    expect(sim.devJumpToTier(2.5)).toEqual([]);
+    expect(sim.getSnapshot().floor!.tier).toBe(0);
+    // Jumping twice cannot go past the last tier.
+    sim.devJumpToTier(4);
+    expect(sim.devJumpToTier(4)).toEqual([]);
+    expect(sim.getSnapshot().floor!.tier).toBe(4);
+  });
 });

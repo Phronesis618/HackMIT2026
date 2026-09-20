@@ -48,6 +48,9 @@ export const DEFAULT_LIGHTING: LightingSpec = LIGHTING.overhead;
 /** `shafts`: three slanted bands of light over the whole room, static. */
 export function drawLightShafts(g: G, roomW: number, roomH: number, color: number): void {
   const slant = roomH * 0.2;
+  // U2a: the slant pushed the top of the right-hand shafts past the room's edge, so a band of
+  // light hung in the void outside the floor. Every corner is clamped into the room instead.
+  const clamp = (x: number): number => Math.max(0, Math.min(roomW, x));
   [0.1, 0.38, 0.64].forEach((u, i) => {
     const x = roomW * u;
     const w = roomW * (0.09 + i * 0.015);
@@ -55,8 +58,8 @@ export function drawLightShafts(g: G, roomW: number, roomH: number, color: numbe
       const inset = k * w * 0.16;
       g.fillStyle(color, 0.06);
       g.fillPoints([
-        { x: x + inset + slant, y: 0 }, { x: x + w - inset + slant, y: 0 },
-        { x: x + w - inset, y: roomH }, { x: x + inset, y: roomH },
+        { x: clamp(x + inset + slant), y: 0 }, { x: clamp(x + w - inset + slant), y: 0 },
+        { x: clamp(x + w - inset), y: roomH }, { x: clamp(x + inset), y: roomH },
       ], true);
     }
   });

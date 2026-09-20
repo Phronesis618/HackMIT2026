@@ -572,11 +572,11 @@ export const FloorsWorldRecipeSchema = WorldRecipeSchema.extend({
   lore: z.array(LoreFragmentSchema.extend(LoreRefsShape)).max(12),
   /** One room line per room kind per biome. Read by src/shared/floorgen/runtime.ts: it becomes that room's description, with the engine's derived line as the fallback. */
   biomeRoomLines: BiomeRoomLinesListSchema.optional(),
-  /** 2–3 world laws from the closed registry in laws.ts. NOT yet implemented by the sim. */
+  /** 2–3 world laws from the closed registry in laws.ts. Applied by src/sim/laws.ts; a law the sim does not implement is filtered out before the crew is told about it. */
   laws: WorldLawListSchema.optional(),
-  /** Bounded renderer parameters beyond the palette. NOT yet implemented by the renderer. */
+  /** Bounded renderer parameters beyond the palette. Read by src/client/render/lookOverrides.ts. */
   look: WorldLookSchema.optional(),
-  /** The world's names for the terrain mechanics it uses (TILES.md 4.1). NOT yet read by the renderer. */
+  /** The world's names for the terrain mechanics it uses (TILES.md 4.1). Read by RoomScene for the terrain caption. */
   terrainSkins: TerrainSkinListSchema.optional(),
   /** Final-boss title, phase titles and three named moves from the closed registry (BOSS_FINALE.md 2). Read by src/sim/boss.ts; absent = derived from the world seed. */
   custodian: CustodianSchema.nullable().optional(),
@@ -734,6 +734,11 @@ export const PlayerStateSchema = z.object({
   rallyMs: z.number().nonnegative().optional(),
   /** Hauled or mired: movement runs at 60% while this is above zero. */
   slowMs: z.number().nonnegative().optional(),
+  /**
+   * Quickened by `clear_surge`: movement 30% faster and attacks 20% sooner while above zero
+   * (`src/sim/effects.ts`). Absent when there is no haste, so no snapshot grows without one.
+   */
+  hasteMs: z.number().nonnegative().optional(),
   reviveProgress: z.number().min(0).max(1).optional(),
   /** Ultimate charge 0..100; R fires at 100 and resets to 0. */
   ultCharge: z.number().min(0).max(100).optional(),
@@ -746,6 +751,8 @@ export const PlayerStateSchema = z.object({
    * operative when the sim asks whether the crew is down.
    */
   connected: z.boolean().optional(),
+  /** HUB.md §7: standing at the departure gate. Server-derived in co-op; absent in solo and legacy snapshots. */
+  ready: z.boolean().optional(),
   /** Skill-tree nodes this operative bought (`src/shared/skills.ts`); absent until the first purchase. */
   skillNodeIds: z.array(z.string().max(64)).max(64).optional(),
 });
@@ -913,6 +920,18 @@ export const GameSnapshotSchema = z.object({
    * run `roomId` above is `${biomeId}:${roomId}` and `roomIndex` is the floor-plan index.
    */
   floor: FloorRunStateSchema.optional(),
+  /**
+   * The `dash_echo` burn trail: the points still burning behind a dashing operative, so the
+   * renderer can draw what the simulation is charging enemies for. Sparse — absent entirely
+   * unless somebody bought the attunement and is mid-dash, so nothing else pays for it.
+   */
+  trails: z.array(z.object({
+    playerId: IdString,
+    x: z.number(),
+    y: z.number(),
+    /** Time left on this point, for the fade. */
+    remainingMs: z.number().nonnegative(),
+  })).max(160).optional(),
 });
 export type GameSnapshot = z.infer<typeof GameSnapshotSchema>;
 

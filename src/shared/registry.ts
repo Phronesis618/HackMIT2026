@@ -276,7 +276,7 @@ export const ATTUNEMENT_EFFECT_INFO: Record<AttunementEffectId, { summary: strin
   relic_mend: { summary: 'Reading a relic restores 25 Integrity.', status: 'implemented' },
   remains_charge: { summary: 'Recovering remains adds 40 ultimate charge.', status: 'implemented' },
   clear_surge: { summary: 'Clearing a room grants 4 seconds of haste: 30% faster movement, 20% shorter attack cooldown.', status: 'implemented' },
-  first_strike: { summary: 'Your first hit on an untouched enemy deals double.', status: 'implemented' },
+  first_strike: { summary: "The crew's first hit on an enemy deals double. It does not stack with a world law that does the same.", status: 'implemented' },
   guardian_bane: { summary: 'The Guardian, gatekeepers and the Custodian take 20% more from you.', status: 'implemented' },
   dash_echo: { summary: 'Dashing leaves a 1.5 second trail that burns enemies for 8 per second.', status: 'implemented' },
   anchor_grace: { summary: 'The Anchor plants and discharges in half the time.', status: 'implemented' },

@@ -29,16 +29,28 @@ export interface PreviewFlags {
   fixtureWorld: boolean;
   startRoom: number | null;
   autoEnter: boolean;
+  /**
+   * DEV/QA only (`?tier=N`, 1–4): once a floors run has started, skip it forward to tier N's
+   * first biome and play from there. Null in a production bundle, whatever the URL says.
+   */
+  devTier?: number | null;
+  /** DEV/QA only (`?at=exit`): land on the tier's exit room (tier 4 = the Anchor) instead of r00. */
+  devTierAt?: 'entrance' | 'exit';
 }
 
 export function parsePreviewFlags(search: string): PreviewFlags {
   const params = new URLSearchParams(search);
   const room = params.get('room');
   const startRoom = room !== null && /^\d$/.test(room) ? Number(room) : null;
+  const tier = params.get('tier');
+  const devTier = import.meta.env.DEV && tier !== null && /^[1-4]$/.test(tier) ? Number(tier) : null;
+  const devTierAt = params.get('at') === 'exit' ? 'exit' : 'entrance';
   return {
     fixtureWorld: params.get('world') === 'fixture',
     startRoom,
     autoEnter: params.get('autoenter') === '1' || startRoom !== null,
+    devTier,
+    devTierAt,
   };
 }
 
@@ -201,6 +213,8 @@ export class GameController {
           prev.abilityQCooldownMs !== hud.abilityQCooldownMs ||
           prev.abilityECooldownMs !== hud.abilityECooldownMs ||
           prev.reviveProgress !== hud.reviveProgress ||
+          prev.hasteMs !== hud.hasteMs ||
+          prev.slowMs !== hud.slowMs ||
           prev.roomCleared !== hud.roomCleared ||
           prev.anchor?.state !== hud.anchor?.state ||
           prev.anchor?.progress !== hud.anchor?.progress ||
@@ -219,13 +233,13 @@ export class GameController {
       }
       const players = snapshot.players.map((p) => ({
         id: p.id, displayName: p.displayName, classId: p.classId, isLocal: p.id === session.localPlayerId,
-        hp: Math.round(p.hp), maxHp: p.maxHp, state: p.state, connected: p.connected !== false,
+        hp: Math.round(p.hp), maxHp: p.maxHp, state: p.state, connected: p.connected !== false, ready: p.ready === true,
       }));
       const prevPlayers = store.get().players;
       if (prevPlayers.length !== players.length || prevPlayers.some((p, i) => {
         const next = players[i]!;
         return p.id !== next.id || p.displayName !== next.displayName || p.classId !== next.classId || p.hp !== next.hp || p.maxHp !== next.maxHp || p.state !== next.state
-          || (p.connected !== false) !== next.connected;
+          || (p.connected !== false) !== next.connected || (p.ready === true) !== next.ready;
       })) {
         store.set({ players });
       }
@@ -414,6 +428,17 @@ export class GameController {
       store.set({ phase: 'training', room: { index: 0, name: trainingRoom.name, description: trainingRoom.description, isFinal: false } });
     } else if (phase === 'debrief') {
       store.set({ phase: 'debrief' });
+    } else if (phase === 'expedition' && this.deps.flags.devTier != null) {
+      // DEV/QA only (`?tier=N`): the run has just started at tier 0; skip it to the requested
+      // tier so the last biome and the ending can be *played* without walking five biomes.
+      // Deferred a tick so the jump never re-enters the session mid-transition; it is a no-op
+      // if the crew is already that deep, so re-entering expedition cannot double-jump.
+      const session = this.deps.session as { devJumpToTier?: (tier: number, at?: 'entrance' | 'exit') => void };
+      if (typeof session.devJumpToTier === 'function') {
+        const tier = this.deps.flags.devTier;
+        const at = this.deps.flags.devTierAt ?? 'entrance';
+        setTimeout(() => session.devJumpToTier?.(tier, at), 0);
+      }
     }
   }
 
@@ -531,6 +556,9 @@ function hudFrom(me: PlayerState, snapshot: GameSnapshot): NonNullable<UiModel['
     abilityQCooldownMs: Math.ceil((me.abilityQCooldownMs ?? 0) / 100) * 100,
     abilityECooldownMs: Math.ceil((me.abilityECooldownMs ?? 0) / 100) * 100,
     reviveProgress: me.reviveProgress ?? 0,
+    // A24: rounded to a tenth so the chip does not rerender the UI every frame.
+    ...((me.hasteMs ?? 0) > 0 ? { hasteMs: Math.ceil((me.hasteMs ?? 0) / 100) * 100 } : {}),
+    ...((me.slowMs ?? 0) > 0 ? { slowMs: Math.ceil((me.slowMs ?? 0) / 100) * 100 } : {}),
     roomCleared: snapshot.roomCleared ?? false,
     anchor: snapshot.anchor,
     ultCharge: Math.round(me.ultCharge ?? 0),

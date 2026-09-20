@@ -13,14 +13,15 @@ import { AbilityIcon } from './AbilityIcon';
 import { ProvenanceBadge } from './ProvenanceBadge';
 import { Codex } from './WorldPanel';
 import { MemoryWall, OPEN_MENU_EVENT } from './MemoryWall';
+import { FieldNotesPage } from './FieldNotes';
 
-export const MENU_PAGES = ['codex', 'bestiary', 'operative', 'skills', 'controls', 'memories'] as const;
+export const MENU_PAGES = ['codex', 'bestiary', 'operative', 'skills', 'controls', 'fieldnotes', 'memories'] as const;
 export type MenuPage = (typeof MENU_PAGES)[number];
 
-const PAGE_LABEL: Record<MenuPage, string> = { codex: 'Codex', bestiary: 'Bestiary', operative: 'Operative', skills: 'Skills', controls: 'Controls', memories: 'Memories' };
+const PAGE_LABEL: Record<MenuPage, string> = { codex: 'Codex', bestiary: 'Bestiary', operative: 'Operative', skills: 'Skills', controls: 'Controls', fieldnotes: 'Field Notes', memories: 'Memories' };
 
 /**
- * Hollow-Knight-style full-screen menu: Tab opens from the stage, Esc closes, 1–6 select pages.
+ * Hollow-Knight-style full-screen menu: Tab opens from the stage, Esc closes, 1–7 select pages.
  * The game keeps running underneath (co-op cannot pause); this is a place to read, not a
  * pause screen. Everything the old sidebar used to say lives here instead.
  */
@@ -77,6 +78,7 @@ export function GameMenu({ model, actions }: { model: UiModel; actions: UiAction
           {page === 'operative' && <OperativePage model={model} actions={actions} />}
           {page === 'skills' && <SkillsPage model={model} actions={actions} />}
           {page === 'controls' && <ControlsPage />}
+          {page === 'fieldnotes' && <FieldNotesPage />}
           {page === 'memories' && <MemoryWall memories={model.memories} actions={actions} context={model} />}
         </section>
       </div>
@@ -159,7 +161,7 @@ export function BestiaryPage({ model }: { model: UiModel }) {
                   <span>{remains.fragment.text}</span>
                 </blockquote>
               ) : remains ? (
-                <p className="bestiary__locked">??? · defeat one and recover what it leaves behind</p>
+                <p className="bestiary__locked">Not found yet · defeat one and recover what it leaves behind</p>
               ) : (
                 <p className="bestiary__locked">Not encountered in this world</p>
               )}
@@ -254,7 +256,7 @@ const CONTROLS: { group: string; rows: { keys: string[]; action: string }[] }[] 
   ] },
   { group: 'Interface', rows: [
     { keys: ['Tab'], action: 'Open / close this menu' },
-    { keys: ['1', '–', '6'], action: 'Jump to a menu page' },
+    { keys: ['1', '–', '7'], action: 'Jump to a menu page' },
     { keys: ['Esc'], action: 'Close the menu' },
   ] },
 ];

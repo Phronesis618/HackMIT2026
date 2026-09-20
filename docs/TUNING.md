@@ -36,6 +36,24 @@ see what a change did. Anything outside the safe range is a different game, not 
 Per-room intensity still scales the three hazard numbers around these (`terrainTuning`, TILES.md
 §4.2); the knobs above are the middle of that band, not a hard cap.
 
+## The opening strike (`docs/design/WORLD_MUTATORS.md` §4, `docs/design/ITEMS.md` §5)
+
+Two things pay the crew for hitting an enemy first: the **`first_light` world law** (×2 at
+intensity 0, ×3 at intensity 1) and the **`first_strike` attunement** (×2, bought in the skill
+tree). They name the same moment, so they do **not** multiply — a world that rolled the law and a
+crew that bought the node used to open at ×6 on a single swing. The larger of the two applies, and
+never above the knob below.
+
+| Knob | What it does | Now | Safe range |
+| --- | --- | --- | --- |
+| `openingStrikeMaxMul` | Ceiling on the crew's first hit on one enemy, law and attunement taken together (the larger, not the product). | 3 | 2–4 (at 6 — the old product — a bought build one-shots a gatekeeper; below 2 the law and the node both stop mattering) |
+
+Both key on the first hit a **player** lands on that enemy (`struckByPlayer`), never on the enemy
+being at full health: a burn tick, a vent or a canister is the room's damage and cannot spend the
+crew's opening strike. A lingering `dash_echo` trail tick is crew damage but not a strike — it
+neither takes the bonus nor spends it. One function decides all of this: `openingStrikeMul` in
+`src/sim/effects.ts`.
+
 ## Floors (`docs/design/FLOORS.md` §12)
 
 | Knob | What it does | Now | Safe range |

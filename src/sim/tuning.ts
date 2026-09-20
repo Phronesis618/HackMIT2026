@@ -44,6 +44,14 @@ export const DEMO_TUNING = {
   /** Share of a kill's reward and ult charge paid when the ROOM made the kill, not the crew. */
   envKillCredit: 0.5,
 
+  // --- the opening strike (docs/design/WORLD_MUTATORS.md §4, docs/design/ITEMS.md §5) -------
+  /**
+   * Ceiling on the crew's first hit on an enemy. The `first_light` law (x2–3) and the
+   * `first_strike` attunement (x2) name the same moment, so they do not multiply: the larger of
+   * the two applies, and never above this. Without it a law-plus-attunement build opened at x6.
+   */
+  openingStrikeMaxMul: 3,
+
   // --- floors (docs/design/FLOORS.md §12) --------------------------------------------------
   /** Enemy health and damage grow by this much per biome tier. Tier 0 is the legacy numbers. */
   tierScalePerTier: 0.18,
