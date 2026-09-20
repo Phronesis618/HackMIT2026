@@ -56,7 +56,7 @@ export const NEUTRAL_LAWS: Readonly<ResolvedLaws> = Object.freeze({
 /** Laws the sim or renderer actually applies today. The rest resolve to numbers nobody reads yet. */
 export const IMPLEMENTED_LAW_IDS: readonly WorldLawId[] = [
   'thin_air', 'tidal_drag', 'committed_strike', 'glass_lattice', 'long_echo', 'first_light',
-  'few_and_terrible', 'the_many', 'long_dark',
+  'few_and_terrible', 'the_many', 'unstable_matter', 'long_dark',
 ];
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
@@ -322,6 +322,10 @@ export function lawEffectText(law: WorldLaw): string {
     case 'first_light': return `The crew's first hit on an enemy deals ${times(r.firstStrikeMul)} damage. The room's own damage does not count.`;
     case 'few_and_terrible': return `Enemy groups ${times(r.enemyCountMul)} size. Enemy health ${times(r.enemyHpMul)}, damage +${pct(r.enemyDamageMul)}.`;
     case 'the_many': return `Enemy groups ${times(r.enemyCountMul)} size, up to ${LAW_ROOM_ENEMY_CAP} per room. Enemy health ${times(r.enemyHpMul)}, damage -${pct(r.enemyDamageMul)}.`;
+    case 'unstable_matter': {
+      const blast = r.deathBlast!;
+      return `Every enemy bursts when it dies: ${blast.enemyDamage} to enemies and ${blast.playerDamage} to the crew within ${blast.radius} px, less at the edge.`;
+    }
     case 'long_dark': return `Hazard tiles and attack warnings always show. Everything else, enemies included, is hidden past ${r.lightRadius} px from each operative.`;
     default: return LAW_INFO[law.lawId].summary;
   }

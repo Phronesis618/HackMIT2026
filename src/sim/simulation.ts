@@ -108,6 +108,9 @@ interface EnemyRuntime {
   struckByPlayer?: boolean;
 }
 
+/** `unstable_matter`: a pack shoulder to shoulder must not chain for ever. */
+const DEATH_BLAST_MAX_CHAIN = 8;
+
 /** Floors: the crew arrives through a door, on its `entry` tile, facing `inward`. */
 interface DoorArrival {
   entry: { x: number; y: number };
@@ -225,6 +228,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   let collapse: CollapseRun | null = null;
   /** Written when the Custodian falls; the extraction offers it as a thing to carry out. */
   let custodianLog: { title: string; detail: string } | null = null;
+  /** `unstable_matter` chain guard: how deep the current burst chain is. */
+  let deathBlastDepth = 0;
 
   function emit(data: GameEventInput): GameEvent {
     return { ...data, id: `${tick}:${eventCounter++}`, tick, timeMs: tick * TICK_MS };
@@ -785,6 +790,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: by?.state.id ?? null,
         worldId: phase === 'expedition' ? world?.worldId ?? null : null }));
       dropRemains(e);
+      detonateBody(e, events);
       // The fight writes its own record: the world's name for the Custodian, its three moves, how
       // long it took and who landed the last hit. The extraction may offer it as a thing to carry.
       if (e.custodian && e.maxBossPhase === undefined) {
@@ -795,6 +801,49 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
           detail: `${e.custodian.custodian.title}: ${moves}. ${Math.round(tick * TICK_MS / 1000)} seconds. Last hit by ${by?.state.displayName ?? 'the room'}.`.slice(0, 200),
         };
       }
+    }
+  }
+
+  /**
+   * `unstable_matter` (WORLD_MUTATORS.md): a body that comes apart takes the room with it.
+   *
+   * The blast IS the canister's (TILES.md T1) with the law's numbers: linear falloff to 0.35 at
+   * the rim, line of sight required, and any `*` inside the circle lights its fuse. A chain is
+   * capped so one pack standing shoulder to shoulder cannot recurse for ever.
+   *
+   * The crew's damage is credited to the enemy that burst, because that is what happened; the
+   * enemy-side damage is the room's, so nobody is paid full price for a kill they did not make.
+   */
+  function detonateBody(dead: EnemyRuntime, events: GameEvent[]): void {
+    const blast = laws.deathBlast;
+    if (!blast || deathBlastDepth >= DEATH_BLAST_MAX_CHAIN) return;
+    const at = { x: dead.state.x, y: dead.state.y };
+    deathBlastDepth++;
+    try {
+      progress.terrain = armCanistersInCircle(room, progress.terrain, at.x, at.y, blast.radius,
+        roomTerrainTuning(room).canisterFuseMs).state;
+      const hitEnemyIds: string[] = [];
+      const hitPlayerIds: string[] = [];
+      for (const e of progress.enemies) {
+        if (e.state.hp <= 0) continue;
+        const falloff = blastFalloff(distance(at, e.state) - ENEMY_INFO[e.state.enemyId].radius, blast.radius);
+        if (falloff <= 0 || !clearPath(grid, at, e.state)) continue;
+        hitEnemyIds.push(e.state.id);
+        damageEnemyFrom(e, { kind: 'terrain', tile: TERRAIN_DAMAGE_SOURCE.canister },
+          Math.max(1, Math.round(blast.enemyDamage * falloff)), events);
+      }
+      for (const p of orderedPlayers()) {
+        if (p.state.hp <= 0) continue;
+        const falloff = blastFalloff(distance(at, p.state) - PLAYER_RADIUS, blast.radius);
+        if (falloff <= 0 || !clearPath(grid, at, p.state)) continue;
+        if (damagePlayer(p, dead.state.id, Math.max(1, Math.round(blast.playerDamage * falloff)), false, events)) {
+          hitPlayerIds.push(p.state.id);
+        }
+      }
+      // The renderer's blast effect; `terrain_detonated` is the cue it already knows how to draw.
+      events.push(emit({ type: 'terrain_detonated', x: at.x, y: at.y, radius: blast.radius, hitPlayerIds, hitEnemyIds }));
+    } finally {
+      deathBlastDepth--;
     }
   }
 

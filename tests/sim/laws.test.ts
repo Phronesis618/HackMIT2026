@@ -192,6 +192,62 @@ describe('laws in the simulation', () => {
     expect(few[0]!.maxHp).toBe(Math.round(ENEMY_INFO[few[0]!.enemyId].maxHp * 2.2));
   });
 
+  it('unstable_matter bursts a body into its neighbours and the crew, and only with the law on', () => {
+    // A private arena: one pair of husks 34 px apart (the sim's spawn offset), an operative in
+    // reach of both. Blast radius at intensity 0.5 is 70 px, so the pair is well inside it.
+    const arena = () => RoomSpecSchema.parse({
+      id: 'burst-arena', index: 0, name: 'Burst arena', description: '', width: 16, height: 10,
+      tiles: Array.from({ length: 10 }, (_, y) =>
+        Array.from({ length: 16 }, (_, x) => (x === 0 || x === 15 || y === 0 || y === 9 ? '#' : y === 4 && x === 2 ? 'P' : y === 1 && x === 14 ? 'X' : '.')).join('')),
+      props: [], attributions: [], relics: [],
+      encounters: [{ id: 'pair', enemyId: 'husk', x: 7, y: 4, count: 2 }],
+      exits: [{ x: 14, y: 1, toRoomIndex: 1, direction: 'east' }], isFinal: false,
+    });
+    const fight = (laws?: WorldLaw[]) => {
+      const world = fixtureWorld('vantage-spire', laws);
+      const sim = createSimulation({ deriveLaws: false });
+      sim.addPlayer({ id: 'op-a', displayName: 'a', classId: 'bastion' });
+      sim.setWorld(PreparedWorldSchema.parse({ ...world, rooms: [arena(), world.rooms[1]!, world.rooms[2]!] }));
+      sim.enterRoom(0);
+      const events = [];
+      let firstDeath: string | null = null;
+      let survivorHpAtDeath = 0;
+      for (let i = 0; i < 1200; i++) {
+        const snapshot = sim.getSnapshot();
+        const me = snapshot.players[0]!;
+        const target = snapshot.enemies.filter((enemy) => enemy.hp > 0)
+          .sort((a, b) => Math.hypot(a.x - me.x, a.y - me.y) - Math.hypot(b.x - me.x, b.y - me.y))[0];
+        if (!target) break;
+        const d = Math.hypot(target.x - me.x, target.y - me.y);
+        sim.applyIntent({
+          playerId: 'op-a', seq: i, moveX: d > 40 ? 1 : 0, moveY: 0, aimX: target.x, aimY: target.y,
+          attack: d <= 52, dash: false, ability: null, interact: false,
+        });
+        const stepped = sim.step();
+        events.push(...stepped);
+        const death = stepped.find((event) => event.type === 'enemy_defeated');
+        if (death?.type === 'enemy_defeated' && firstDeath === null) {
+          firstDeath = death.enemyId;
+          survivorHpAtDeath = sim.getSnapshot().enemies.find((enemy) => enemy.id !== firstDeath)!.hp;
+        }
+        if (firstDeath !== null && i > 0 && stepped.length === 0) break;
+      }
+      return { events, firstDeath, survivorHpAtDeath, sim };
+    };
+
+    const plain = fight();
+    expect(plain.firstDeath).not.toBeNull();
+    expect(plain.events.filter((event) => event.type === 'terrain_detonated')).toEqual([]);
+
+    const burst = fight([law('unstable_matter')]);
+    const blast = burst.events.find((event) => event.type === 'terrain_detonated');
+    expect(blast).toMatchObject({ type: 'terrain_detonated', radius: resolveLaws([law('unstable_matter')]).deathBlast!.radius });
+    // The neighbour is hurt by the body, and so is the operative standing over it.
+    expect(burst.survivorHpAtDeath).toBeLessThan(plain.survivorHpAtDeath);
+    expect(burst.events.some((event) => event.type === 'player_damaged' && event.sourceEnemyId === burst.firstDeath)).toBe(true);
+    expect(plain.events.some((event) => event.type === 'player_damaged' && event.sourceEnemyId === plain.firstDeath)).toBe(false);
+  });
+
   it('long_echo shortens Q and tidal_drag shortens the dash cooldown by the exact factor', () => {
     const sim = createSimulation({ deriveLaws: false });
     sim.addPlayer({ id: 'op-a', displayName: 'a', classId: 'bastion' });
