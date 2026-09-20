@@ -5,7 +5,7 @@ import {
   WorldFixtureSchema, type GameEvent, type PlayerIntent, type RoomEncounter, type RoomSpec,
 } from '../../src/shared/contracts';
 import {
-  ABILITY_UNLOCK_COST, ANCHOR_HOLD_MS, REVIVE_DURATION_MS, REVIVE_HP,
+  ABILITY_UNLOCK_COST, ANCHOR_HOLD_MS, LORE_READ_MS, REVIVE_DURATION_MS, REVIVE_HP,
   ROOM_CLEAR_REWARD, TICK_MS, tileToWorld,
 } from '../../src/shared/conventions';
 import { CLASS_ABILITIES, CLASS_IDS, ENEMY_IDS, type ClassId, type EnemyId } from '../../src/shared/registry';
@@ -420,6 +420,54 @@ describe('progression, objectives, and co-op', () => {
     expect(sim.getPhase()).toBe('debrief');
     expect(sim.getSnapshot().anchor).toMatchObject({ state: 'planted', progress: 1 });
     expect(sim.returnToHeadquarters()).toEqual([]);
+  });
+
+  it('reads a relic only with an uninterrupted F hold beside it and records the discovery', () => {
+    const sim = createSimulation();
+    sim.addPlayer({ id: playerId, displayName: 'Tester', classId: 'bastion' });
+    const room0 = RoomSpecSchema.parse({ ...arena(0), relics: [{ id: 'relic', x: 6, y: 5, fragmentIndex: 0 }] });
+    sim.setWorld(world([room0, arena(1), arena(2, [encounter('guardian', 10)])]));
+    sim.enterRoom(0);
+    expect(sim.getSnapshot().loreNodes).toEqual([expect.objectContaining({ id: 'relic', kind: 'relic', state: 'sealed', progress: 0 })]);
+    frames(sim, 10, { interact: true });
+    expect(sim.getSnapshot().discoveredLore).toEqual([]);
+
+    const relic = tileToWorld(6, 5);
+    walkTo(sim, relic.x, relic.y);
+    const half = frames(sim, Math.floor(LORE_READ_MS / TICK_MS / 2), { interact: true });
+    expect(half.some((e) => e.type === 'lore_discovered')).toBe(false);
+    expect(sim.getSnapshot().loreNodes![0]!.state).toBe('reading');
+    input(sim, { interact: false });
+    sim.step();
+    expect(sim.getSnapshot().loreNodes![0]).toMatchObject({ state: 'sealed', progress: 0 });
+
+    const events = frames(sim, Math.ceil(LORE_READ_MS / TICK_MS) + 1, { interact: true });
+    const fragment = fixture.recipe.lore[0]!;
+    expect(events.filter((e) => e.type === 'lore_discovered')).toEqual([expect.objectContaining({
+      playerId, kind: 'relic', fragmentIndex: 0, title: fragment.title, text: fragment.text,
+    })]);
+    expect(sim.getSnapshot().loreNodes![0]).toMatchObject({ state: 'collected', progress: 1 });
+    expect(sim.getSnapshot().discoveredLore).toEqual([0]);
+    expect(frames(sim, 60, { interact: true }).some((e) => e.type === 'lore_discovered')).toBe(false);
+  });
+
+  it('drops an enemy kind\'s remains once per run where it fell, collected by touch', () => {
+    const sim = setup('beacon', [encounter('husk', 8, 7, 'a'), encounter('husk', 12, 7, 'b')]);
+    const events = fight(sim);
+    const huskFragment = fixture.recipe.lore.findIndex((f) => f.kind === 'remains' && f.enemyId === 'husk');
+    const pickedUp = events.filter((e) => e.type === 'lore_discovered');
+    const pending = sim.getSnapshot().loreNodes!.filter((n) => n.kind === 'remains');
+    expect(pickedUp.length + pending.length).toBe(1);
+    if (pending.length === 1) {
+      const node = pending[0]!;
+      expect(node).toMatchObject({ fragmentIndex: huskFragment, state: 'sealed' });
+      expect(sim.getSnapshot().discoveredLore).toEqual([]);
+      walkTo(sim, node.x, node.y);
+    } else {
+      expect(pickedUp[0]).toMatchObject({ kind: 'remains', fragmentIndex: huskFragment });
+    }
+    expect(sim.getSnapshot().loreNodes!.filter((n) => n.kind === 'remains')).toEqual([]);
+    expect(sim.getSnapshot().discoveredLore).toEqual([huskFragment]);
   });
 
   it('has deterministic co-op results independent of per-tick input arrival order', () => {

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { ArtRecipe, EnemyState, GameEvent, GameSnapshot, PlayerState, ReceiptLine, RoomSpec } from '../../shared/contracts';
-import { ATTACK_ARC_RAD, ATTACK_RANGE, DEPTH, PLAYER_RADIUS, TILE_SIZE, tileToWorld } from '../../shared/conventions';
+import { ATTACK_ARC_RAD, ATTACK_RANGE, DEPTH, LORE_READ_RANGE, PLAYER_RADIUS, TILE_SIZE, tileToWorld } from '../../shared/conventions';
 import { ENEMY_INFO } from '../../shared/registry';
 import { hexToInt, tokens } from '../../shared/tokens';
 import { drawMotif, drawProp, drawSanctuary, drawSkyline, drawVignette } from './drawing';
@@ -49,6 +49,11 @@ export class RoomScene extends Phaser.Scene {
   /** In-world Integrity/status strip above the room, replacing the old sidebar meter. */
   private statusView: Phaser.GameObjects.Graphics | null = null;
   private statusLabels = new Map<string, Phaser.GameObjects.Text>();
+  /** Relics lying in the room and remains dropped by enemies (authoritative, from the snapshot). */
+  private loreNodesView: Phaser.GameObjects.Graphics | null = null;
+  private loreHint: Phaser.GameObjects.Text | null = null;
+  /** Text is rasterised at this multiple so camera zoom on a high-DPI canvas stays crisp. */
+  private textResolution = 1;
   private latestSnapshot: GameSnapshot | null = null;
   private localPlayerId = '';
   private enemyPositions = new Map<string, { x: number; y: number }>();
@@ -64,6 +69,11 @@ export class RoomScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBackgroundColor(tokens.color.ink900);
     this.onReady();
+  }
+
+  /** `this.add.text` with the scene's current text resolution folded into the style. */
+  private text(x: number, y: number, content: string, style: Phaser.Types.GameObjects.Text.TextStyle): Phaser.GameObjects.Text {
+    return this.add.text(x, y, content, { ...style, resolution: this.textResolution });
   }
 
   // ---- room ------------------------------------------------------------------
@@ -87,12 +97,21 @@ export class RoomScene extends Phaser.Scene {
     this.loreMarkers = this.computeLoreMarkers(room, loreLines);
     this.statusView = null;
     this.statusLabels.clear();
+    this.loreNodesView = null;
+    this.loreHint = null;
 
     const layer = this.add.layer();
     this.roomLayer = layer;
     const roomW = room.width * TILE_SIZE;
     const roomH = room.height * TILE_SIZE;
     const p = art.palette;
+
+    // Frame the whole room. The canvas may be several times the nominal 1024px design
+    // width (high-DPI), so the zoom ceiling scales with it and text rasterises to match.
+    const cam = this.cameras.main;
+    const density = Math.max(1, cam.width / tokens.canvas.defaultWidth);
+    const zoom = Math.min(1.6 * density, cam.width / (roomW + 96), cam.height / (roomH + 96));
+    this.textResolution = Math.min(4, Math.max(1, Math.ceil(zoom)));
 
     const sky = this.add.graphics().setDepth(DEPTH.background);
     drawSkyline(sky, art.skyline, roomW, roomH, p);
@@ -139,7 +158,7 @@ export class RoomScene extends Phaser.Scene {
         }
         if (ch === 'A') {
           decals.lineStyle(2, accentInt, 0.9).strokeCircle(x + TILE_SIZE / 2, y + TILE_SIZE / 2, 12);
-          layer.add(this.add.text(x + TILE_SIZE / 2, y + TILE_SIZE + 6, 'ANCHOR SITE', {
+          layer.add(this.text(x + TILE_SIZE / 2, y + TILE_SIZE + 6, 'ANCHOR SITE', {
             fontFamily: tokens.font.mono, fontSize: '9px', color: p.accent,
           }).setOrigin(0.5, 0).setDepth(DEPTH.floorDecal));
         }
@@ -159,7 +178,7 @@ export class RoomScene extends Phaser.Scene {
       const exit = room.exits[0];
       drawSanctuary(sanctuary, roomW, roomH, p, exit ? tileToWorld(exit.x, exit.y) : undefined);
       layer.add(sanctuary);
-      layer.add(this.add.text(roomW - 160, 17, 'CHRONICLE ARCHIVE', {
+      layer.add(this.text(roomW - 160, 17, 'CHRONICLE ARCHIVE', {
         fontFamily: tokens.font.mono, fontSize: '10px', color: tokens.color.warmLamp,
       }).setOrigin(0.5).setDepth(DEPTH.overlay));
     }
@@ -185,7 +204,7 @@ export class RoomScene extends Phaser.Scene {
     // reusable caption that reveals the quote when a player walks up to it.
     this.loreView = this.add.graphics().setDepth(DEPTH.floorDecal + 2);
     layer.add(this.loreView);
-    this.loreCaption = this.add
+    this.loreCaption = this
       .text(0, 0, '', {
         fontFamily: tokens.font.body, fontSize: '11px', color: p.text, align: 'center',
         wordWrap: { width: 220 }, backgroundColor: 'rgba(7, 9, 15, 0.78)',
@@ -196,6 +215,14 @@ export class RoomScene extends Phaser.Scene {
       .setVisible(false);
     layer.add(this.loreCaption);
 
+    // Relics and dropped remains: physical lore, drawn from the authoritative snapshot.
+    this.loreNodesView = this.add.graphics().setDepth(DEPTH.entities - 1);
+    layer.add(this.loreNodesView);
+    this.loreHint = this.text(0, 0, 'HOLD F · READ', {
+      fontFamily: tokens.font.mono, fontSize: '9px', color: p.accent, letterSpacing: 1,
+    }).setOrigin(0.5, 1).setDepth(DEPTH.overlay).setVisible(false);
+    layer.add(this.loreHint);
+
     // In-world Integrity strip (replaces the old sidebar meter); one row per crew member.
     this.statusView = this.add.graphics().setDepth(DEPTH.overlay - 1);
     layer.add(this.statusView);
@@ -204,7 +231,7 @@ export class RoomScene extends Phaser.Scene {
     drawVignette(fog, roomW, roomH, art.fog, p);
     layer.add(fog);
 
-    const title = this.add
+    const title = this
       .text(roomW / 2, -28, opts.headquarters ? room.name.toUpperCase() : `${room.index + 1} · ${room.name.toUpperCase()}`, {
         fontFamily: tokens.font.display,
         fontSize: '14px',
@@ -219,7 +246,7 @@ export class RoomScene extends Phaser.Scene {
     // A DM-style beat on arrival: the room's mood in its own words, then it fades and
     // leaves the (now much smaller) sidebar to the mechanical stuff.
     if (room.description) {
-      const descriptionCard = this.add
+      const descriptionCard = this
         .text(roomW / 2, Math.min(96, roomH * 0.3), room.description, {
           fontFamily: tokens.font.body, fontSize: '12px', color: p.text, align: 'center',
           wordWrap: { width: Math.min(roomW - 40, 420) },
@@ -237,9 +264,6 @@ export class RoomScene extends Phaser.Scene {
       });
     }
 
-    // Camera: frame the whole room.
-    const cam = this.cameras.main;
-    const zoom = Math.min(1.6, cam.width / (roomW + 96), cam.height / (roomH + 96));
     cam.setZoom(zoom);
     cam.centerOn(roomW / 2, roomH / 2 - 8);
     cam.fadeIn(280, 0, 0, 0);
@@ -316,7 +340,7 @@ export class RoomScene extends Phaser.Scene {
 
     if (snapshot.anchor && !this.anchorView) {
       this.anchorView = this.add.graphics().setDepth(DEPTH.entities);
-      this.anchorLabel = this.add.text(0, 0, '', {
+      this.anchorLabel = this.text(0, 0, '', {
         fontFamily: tokens.font.mono, fontSize: '12px', color: this.art.palette.text,
       }).setOrigin(0.5).setDepth(DEPTH.overlay);
       this.roomLayer?.add([this.anchorView, this.anchorLabel]);
@@ -343,7 +367,82 @@ export class RoomScene extends Phaser.Scene {
     }
 
     this.updateLoreCaption(snapshot, localPlayerId);
+    this.updateLoreNodes(snapshot, localPlayerId);
     if (!this.isHeadquarters) this.updateStatusStrip(snapshot, localPlayerId);
+  }
+
+  /**
+   * Relics read as small standing tablets; remains as a shard where the enemy fell. Sealed
+   * ones breathe, a relic being read fills an arc, collected relics stay as dim furniture.
+   */
+  private updateLoreNodes(snapshot: GameSnapshot, localPlayerId: string): void {
+    const g = this.loreNodesView;
+    if (!g || !this.art) return;
+    g.clear();
+    const accent = hexToInt(this.art.palette.accent);
+    const warm = hexToInt(tokens.color.warmLamp);
+    const ink = hexToInt(this.art.palette.wall);
+    const t = this.time.now / 1000;
+    const me = snapshot.players.find((p) => p.id === localPlayerId);
+    let hintTarget: { x: number; y: number } | null = null;
+    for (const node of snapshot.loreNodes ?? []) {
+      const collected = node.state === 'collected';
+      const pulse = 0.5 + 0.5 * Math.sin(t * 2.4 + node.x * 0.02);
+      if (node.kind === 'relic') {
+        if (!collected) g.fillStyle(accent, 0.06 + 0.06 * pulse).fillCircle(node.x, node.y + 4, 22 + pulse * 3);
+        g.fillStyle(0x000000, 0.3).fillEllipse(node.x + 2, node.y + 10, 22, 8);
+        g.fillStyle(ink, 1).fillRoundedRect(node.x - 7, node.y - 11, 14, 20, 3);
+        g.lineStyle(1.5, accent, collected ? 0.25 : 0.85).strokeRoundedRect(node.x - 7, node.y - 11, 14, 20, 3);
+        g.lineStyle(1, accent, collected ? 0.2 : 0.7);
+        for (let i = 0; i < 3; i++) g.lineBetween(node.x - 4, node.y - 6 + i * 5, node.x + (i === 1 ? 2 : 4), node.y - 6 + i * 5);
+        if (node.state === 'reading') {
+          g.lineStyle(3, accent, 1).beginPath()
+            .arc(node.x, node.y, 18, -Math.PI / 2, -Math.PI / 2 + node.progress * Math.PI * 2, false).strokePath();
+        } else if (!collected && me && Math.hypot(me.x - node.x, me.y - node.y) <= LORE_READ_RANGE + 12) {
+          hintTarget = node;
+        }
+      } else {
+        const spin = t * 1.8;
+        g.fillStyle(warm, 0.08 + 0.08 * pulse).fillCircle(node.x, node.y, 16 + pulse * 3);
+        g.lineStyle(1.5, warm, 0.9).beginPath();
+        for (let i = 0; i < 4; i++) {
+          const a = spin + i * Math.PI / 2;
+          const r = i % 2 === 0 ? 8 : 4;
+          const px = node.x + Math.cos(a) * r;
+          const py = node.y + Math.sin(a) * r;
+          if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+        }
+        g.closePath().strokePath();
+        g.fillStyle(warm, 0.9).fillCircle(node.x, node.y, 2);
+      }
+    }
+    if (this.loreHint) {
+      if (hintTarget) this.loreHint.setPosition(hintTarget.x, hintTarget.y - 18).setVisible(true);
+      else this.loreHint.setVisible(false);
+    }
+  }
+
+  /** The discovery moment: title + text over the room, then it fades and lives in the Codex. */
+  private revealLore(title: string, text: string, x: number, y: number): void {
+    if (!this.room || !this.art) return;
+    const p = this.art.palette;
+    this.burst(x, y, hexToInt(tokens.color.warmLamp), 18);
+    const roomW = this.room.width * TILE_SIZE;
+    const roomH = this.room.height * TILE_SIZE;
+    const top = Math.min(96, roomH * 0.3);
+    const heading = this.text(roomW / 2, top, title.toUpperCase(), {
+      fontFamily: tokens.font.display, fontSize: '13px', color: tokens.color.warmLamp, letterSpacing: 3, align: 'center',
+    }).setOrigin(0.5, 1).setAlpha(0).setDepth(DEPTH.overlay);
+    const body = this.text(roomW / 2, top + 6, text, {
+      fontFamily: tokens.font.body, fontSize: '12px', color: p.text, align: 'center',
+      wordWrap: { width: Math.min(roomW - 40, 420) }, backgroundColor: 'rgba(7, 9, 15, 0.7)',
+      padding: { left: 10, right: 10, top: 8, bottom: 8 },
+    }).setOrigin(0.5, 0).setAlpha(0).setDepth(DEPTH.overlay);
+    this.roomLayer?.add([heading, body]);
+    this.tweens.add({
+      targets: [heading, body], alpha: 1, duration: tokens.motion.baseMs, hold: 6000, yoyo: true,
+      onComplete: () => { heading.destroy(); body.destroy(); },
+    });
   }
 
   /** Reveals the nearest lore marker's quote only while a player stands close to it. */
@@ -392,7 +491,7 @@ export class RoomScene extends Phaser.Scene {
 
       let label = this.statusLabels.get(player.id);
       if (!label) {
-        label = this.add.text(0, 0, '', { fontFamily: tokens.font.mono, fontSize: '9px', color: tokens.color.mist100 }).setOrigin(0, 0.5).setDepth(DEPTH.overlay);
+        label = this.text(0, 0, '', { fontFamily: tokens.font.mono, fontSize: '9px', color: tokens.color.mist100 }).setOrigin(0, 0.5).setDepth(DEPTH.overlay);
         this.roomLayer?.add(label);
         this.statusLabels.set(player.id, label);
       }
@@ -416,7 +515,7 @@ export class RoomScene extends Phaser.Scene {
     const body = this.add.graphics();
     const facing = this.add.graphics();
     const hpBar = this.add.graphics();
-    const label = this.add
+    const label = this
       .text(0, -radius - 14, name, {
         fontFamily: tokens.font.body,
         fontSize: '12px',
@@ -525,10 +624,10 @@ export class RoomScene extends Phaser.Scene {
     };
     const labels: Phaser.GameObjects.Text[] = [];
     const letter = (x: number, y: number, text: string): void => {
-      labels.push(this.add.text(x, y, text, { fontFamily: tokens.font.mono, fontSize: '11px', color: palette.text }).setOrigin(0.5));
+      labels.push(this.text(x, y, text, { fontFamily: tokens.font.mono, fontSize: '11px', color: palette.text }).setOrigin(0.5));
     };
     const caption = (x: number, y: number, text: string): void => {
-      labels.push(this.add.text(x, y, text, { fontFamily: tokens.font.mono, fontSize: '8px', color: palette.text }).setOrigin(0.5).setAlpha(0.6));
+      labels.push(this.text(x, y, text, { fontFamily: tokens.font.mono, fontSize: '8px', color: palette.text }).setOrigin(0.5).setAlpha(0.6));
     };
 
     // WASD cluster, left side.
@@ -657,6 +756,10 @@ export class RoomScene extends Phaser.Scene {
         case 'player_revived': {
           const target = this.players.get(event.playerId)?.container;
           if (target) this.burst(target.x, target.y, hexToInt(tokens.color.success), PLAYER_RADIUS + 10);
+          break;
+        }
+        case 'lore_discovered': {
+          this.revealLore(event.title, event.text, event.x, event.y);
           break;
         }
         case 'anchor_planted': {

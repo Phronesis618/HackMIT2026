@@ -1,10 +1,11 @@
 import type {
   AnchorState, EnemyState, EnemyTelegraph, GameEvent, GameEventInput, GamePhase,
-  GameSnapshot, PlayerIdentity, PlayerIntent, PlayerState, PreparedWorld, ProjectileState, RoomSpec,
+  GameSnapshot, LoreNode, PlayerIdentity, PlayerIntent, PlayerState, PreparedWorld, ProjectileState, RoomSpec,
 } from '../shared/contracts';
 import {
   ABILITY_UNLOCK_COST, ANCHOR_HOLD_MS, ANCHOR_RANGE, ATTACK_DURATION_MS,
   DASH_COOLDOWN_MS, DASH_DURATION_MS, DASH_INVULNERABLE_MS, DASH_SPEED,
+  LORE_PICKUP_RANGE, LORE_READ_MS, LORE_READ_RANGE,
   PLAYER_MAX_HP, PLAYER_RADIUS, REVIVE_DURATION_MS, REVIVE_HP, REVIVE_RANGE,
   ROOM_CLEAR_REWARD, TICK_MS, TILE_SIZE, tileToWorld, worldToTile,
 } from '../shared/conventions';
@@ -60,10 +61,16 @@ interface ProjectileRuntime {
   homingTurnRate?: number;
 }
 
+interface LoreNodeRuntime {
+  state: LoreNode;
+  holdMs: number;
+}
+
 interface RoomProgress {
   enemies: EnemyRuntime[];
   anchor: AnchorState | null;
   cleared: boolean;
+  loreNodes: LoreNodeRuntime[];
 }
 
 export interface Simulation {
@@ -101,10 +108,12 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   let eventCounter = 0;
   const players = new Map<string, PlayerRuntime>();
   const rooms = new Map<number, RoomProgress>();
-  let progress: RoomProgress = { enemies: [], anchor: null, cleared: false };
+  let progress: RoomProgress = { enemies: [], anchor: null, cleared: false, loreNodes: [] };
   /** Ephemeral bullet-hell bolts; never persisted across room switches (combat gates exits). */
   let projectiles: ProjectileRuntime[] = [];
   let projectileCounter = 0;
+  /** Fragment indices found this run; relics stay readable but remains drop only once per kind. */
+  let discoveredLore = new Set<number>();
 
   function emit(data: GameEventInput): GameEvent {
     return { ...data, id: `${tick}:${eventCounter++}`, tick, timeMs: tick * TICK_MS };
@@ -197,6 +206,13 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       enemies: nextPhase === 'expedition' ? spawnEnemies() : [],
       anchor: anchorPoint ? { ...anchorPoint, state: 'dormant', progress: 0 } : null,
       cleared: false,
+      loreNodes: nextPhase === 'expedition' ? room.relics.map((relic) => ({
+        state: {
+          id: relic.id, kind: 'relic', ...tileToWorld(relic.x, relic.y), fragmentIndex: relic.fragmentIndex,
+          state: discoveredLore.has(relic.fragmentIndex) ? 'collected' : 'sealed', progress: 0,
+        },
+        holdMs: 0,
+      })) : [],
     };
     if (nextPhase === 'expedition') rooms.set(next.index, progress);
     placePlayers();
@@ -232,7 +248,62 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (s.hp === 0) {
       s.telegraph = null;
       events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: p.state.id }));
+      dropRemains(e);
     }
+  }
+
+  /** The first kill of each enemy kind leaves its lore behind where it fell. */
+  function dropRemains(e: EnemyRuntime): void {
+    const lore = world?.recipe.lore ?? [];
+    const fragmentIndex = lore.findIndex((f) => f.kind === 'remains' && f.enemyId === e.state.enemyId);
+    if (fragmentIndex < 0 || discoveredLore.has(fragmentIndex)) return;
+    if (progress.loreNodes.some((n) => n.state.fragmentIndex === fragmentIndex)) return;
+    progress.loreNodes.push({
+      state: { id: `remains-${e.state.id}`, kind: 'remains', x: e.state.x, y: e.state.y, fragmentIndex, state: 'sealed', progress: 0 },
+      holdMs: 0,
+    });
+  }
+
+  function discoverLore(node: LoreNodeRuntime, by: PlayerRuntime, events: GameEvent[]): void {
+    const fragment = world?.recipe.lore[node.state.fragmentIndex];
+    node.state.state = 'collected';
+    node.state.progress = 1;
+    node.holdMs = 0;
+    discoveredLore.add(node.state.fragmentIndex);
+    if (!fragment) return;
+    events.push(emit({
+      type: 'lore_discovered', playerId: by.state.id, fragmentIndex: node.state.fragmentIndex, kind: fragment.kind,
+      title: fragment.title, text: fragment.text, x: node.state.x, y: node.state.y,
+    }));
+  }
+
+  /**
+   * Remains are picked up by touch; relics take a short uninterrupted F-hold so reading is a
+   * deliberate beat rather than an accident mid-fight. Rescuers stay reserved for revives.
+   */
+  function updateLore(living: PlayerRuntime[], busy: Set<string>, events: GameEvent[]): void {
+    for (const node of progress.loreNodes) {
+      if (node.state.state === 'collected') continue;
+      if (node.state.kind === 'remains') {
+        const finder = living.find((p) => distance(p.state, node.state) <= LORE_PICKUP_RANGE + PLAYER_RADIUS);
+        if (finder) discoverLore(node, finder, events);
+        continue;
+      }
+      const reader = living.find((p) => !busy.has(p.state.id) && p.interacting && !p.damagedThisTick &&
+        distance(p.state, node.state) <= LORE_READ_RANGE && clearPath(grid, p.state, node.state));
+      if (!reader) {
+        node.holdMs = 0;
+        node.state.state = 'sealed';
+        node.state.progress = 0;
+        continue;
+      }
+      busy.add(reader.state.id);
+      node.holdMs += TICK_MS;
+      node.state.state = 'reading';
+      node.state.progress = Math.min(1, node.holdMs / LORE_READ_MS);
+      if (node.state.progress >= 1 - 1e-7) discoverLore(node, reader, events);
+    }
+    progress.loreNodes = progress.loreNodes.filter((n) => !(n.state.kind === 'remains' && n.state.state === 'collected'));
   }
 
   function damagePlayer(p: PlayerRuntime, sourceEnemyId: string, damage: number, ranged: boolean, events: GameEvent[]): boolean {
@@ -692,6 +763,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         events.push(emit({ type: 'player_revived', playerId: downed.state.id, byPlayerId: rescuer.state.id, hp: downed.state.hp }));
       }
     }
+    updateLore(living, busy, events);
     if (!progress.cleared && living.length > 0 && livingEnemies().length === 0) {
       progress.cleared = true;
       for (const p of players.values()) p.state.resources += ROOM_CLEAR_REWARD;
@@ -754,7 +826,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     getPlayerIds: playerIds,
     setWorld(next) {
       if (phase !== 'headquarters' && world?.worldId !== next?.worldId) return;
-      if (world?.worldId !== next?.worldId) rooms.clear();
+      if (world?.worldId !== next?.worldId) {
+        rooms.clear();
+        discoveredLore = new Set();
+      }
       world = next;
     },
     getWorld() { return world; },
@@ -779,6 +854,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       const events: GameEvent[] = [];
       finishRun('aborted', events);
       rooms.clear();
+      discoveredLore = new Set();
       for (const p of players.values()) p.state.hp = p.state.maxHp;
       loadRoom(hq, 'headquarters');
       return events;
@@ -823,6 +899,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         projectiles: projectiles.map((pr): ProjectileState => ({
           id: pr.id, ownerEnemyId: pr.ownerEnemyId, x: pr.x, y: pr.y, vx: pr.vx, vy: pr.vy, radius: pr.radius,
         })),
+        loreNodes: progress.loreNodes.map((n) => ({ ...n.state })),
+        discoveredLore: [...discoveredLore].sort((a, b) => a - b),
         anchor: progress.anchor ? { ...progress.anchor } : null,
         roomCleared: phase !== 'headquarters' && progress.cleared,
       };

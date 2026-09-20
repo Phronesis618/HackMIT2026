@@ -25,11 +25,18 @@ export class PhaserWorldRenderer implements WorldRenderer {
         resolve();
       });
       this.scene = scene;
+      // Render at the display's real pixel density (and at least the container's CSS size)
+      // so Scale.FIT never upscales a 1024px backing store onto a 2x/3x screen. Rooms are
+      // framed by camera zoom relative to this size, so world units are unaffected.
+      const dpr = typeof window !== 'undefined' ? Math.min(3, Math.max(1, window.devicePixelRatio || 1)) : 1;
+      const cssWidth = Math.max(tokens.canvas.defaultWidth, container.getBoundingClientRect?.().width || 0);
+      const width = Math.round(cssWidth * dpr);
+      const height = Math.round(width * tokens.canvas.defaultHeight / tokens.canvas.defaultWidth);
       this.game = new Phaser.Game({
         type: Phaser.AUTO,
         parent: container,
-        width: tokens.canvas.defaultWidth,
-        height: tokens.canvas.defaultHeight,
+        width,
+        height,
         backgroundColor: tokens.color.ink900,
         antialias: true,
         scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },

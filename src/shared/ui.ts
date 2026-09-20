@@ -15,6 +15,7 @@ import type {
   CreationReceipt,
   GenerationProvenance,
   GenerationStatus,
+  LoreFragment,
   MemoryRecord,
   PlayerActionState,
 } from './contracts';
@@ -38,6 +39,8 @@ export interface UiWorldSummary {
   receipt: CreationReceipt;
   committedRoomCount: number;
   plannedRoomCount: number;
+  /** Every fragment the world holds; the Codex shows undiscovered ones as ???. */
+  lore: LoreFragment[];
 }
 
 export interface UiRoomSummary {
@@ -77,6 +80,8 @@ export interface UiModel {
   world: UiWorldSummary | null;
   room: UiRoomSummary | null;
   hud: UiHud | null;
+  /** Indices into `world.lore` discovered this run (authoritative, from the snapshot). */
+  discoveredLore: number[];
   memories: MemoryRecord[];
   /** Truthful implementation status, for the class picker and HUD hints. */
   classStatus: Record<ClassId, ImplementationStatus>;

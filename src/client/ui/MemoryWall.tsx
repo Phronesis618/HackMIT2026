@@ -8,6 +8,7 @@ const KIND_LABEL: Record<MemoryRecord['kind'], string> = {
   milestone: 'Milestone',
   anchor: 'Anchor',
   run_summary: 'Expedition',
+  lore: 'Lore',
 };
 
 /** Device-local memory wall. Only ever shows records derived from real events. */

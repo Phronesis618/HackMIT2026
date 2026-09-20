@@ -1,8 +1,41 @@
+import { ENEMY_INFO } from '../../shared/registry';
 import type { UiWorldSummary } from '../../shared/ui';
 import { ProvenanceBadge } from './ProvenanceBadge';
 
+/**
+ * Codex: what the crew has actually found, nothing more. Fragments are authored by the
+ * world and only unlock through play — reading a relic in a room, or defeating an enemy
+ * kind for the first time. Undiscovered entries stay ??? so the sidebar never tells what
+ * the rooms are meant to show.
+ */
+function Codex({ world, discovered }: { world: UiWorldSummary; discovered: number[] }) {
+  if (world.lore.length === 0) return null;
+  const found = new Set(discovered);
+  const relics = world.lore.map((f, i) => ({ f, i })).filter(({ f }) => f.kind === 'relic');
+  const remains = world.lore.map((f, i) => ({ f, i })).filter(({ f }) => f.kind === 'remains');
+  const entry = ({ f, i }: { f: UiWorldSummary['lore'][number]; i: number }) => {
+    const known = found.has(i);
+    const hint = f.kind === 'relic'
+      ? `Unread · room ${f.roomIndex + 1}`
+      : `Unknown · ${f.enemyId ? ENEMY_INFO[f.enemyId].name : 'hostile'} remains`;
+    return (
+      <li key={i} className={`codex__entry ${known ? 'codex__entry--found' : ''}`}>
+        <span className="codex__title">{known ? f.title : '???'}</span>
+        <span className="codex__text">{known ? f.text : hint}</span>
+      </li>
+    );
+  };
+  return (
+    <div className="codex">
+      <p className="eyebrow">Codex · {found.size}/{world.lore.length} found</p>
+      {relics.length > 0 && <ul className="codex__list" aria-label="Relics">{relics.map(entry)}</ul>}
+      {remains.length > 0 && <ul className="codex__list" aria-label="Remains">{remains.map(entry)}</ul>}
+    </div>
+  );
+}
+
 /** Creation receipt: shown immediately after a world is prepared. Honest by construction. */
-export function WorldPanel({ world }: { world: UiWorldSummary }) {
+export function WorldPanel({ world, discoveredLore = [] }: { world: UiWorldSummary; discoveredLore?: number[] }) {
   const r = world.receipt;
   return (
     <div className="panel panel--world">
@@ -12,6 +45,7 @@ export function WorldPanel({ world }: { world: UiWorldSummary }) {
         <ProvenanceBadge provenance={world.provenance} />
       </div>
       <p className="tagline">{world.tagline}</p>
+      <Codex world={world} discovered={discoveredLore} />
       {world.provenance.source !== 'live' && (
         <p className="receipt__disclosure">
           {world.provenance.source === 'fixture' ? 'Offline fixture.' : 'Live generation failed; using an offline fixture.'}

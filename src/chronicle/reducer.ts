@@ -189,6 +189,24 @@ function memoryFromEvent(
         provenanceSource: ctx.world?.provenanceSource ?? 'fixture',
       };
     }
+    case 'lore_discovered': {
+      const world = ctx.world;
+      if (!world) return null;
+      const participants = resolveParticipants([event.playerId], ctx.players);
+      return {
+        id: memoryId('lore', event),
+        kind: 'lore',
+        worldId: world.worldId,
+        worldTitle: clip(world.title, 40),
+        roomIndex: null,
+        createdAt: ctx.now,
+        participants,
+        title: clip(event.title, 80),
+        summary: clip(`${event.text} (${event.kind === 'relic' ? 'read' : 'recovered'} by ${joinNames(participants)})`, 400),
+        sourceEventIds: [event.id],
+        provenanceSource: world.provenanceSource,
+      };
+    }
     case 'enemy_defeated': {
       const world = ctx.world;
       if (!world || !hasMemory('arrival_keepsake', world.worldId) || hasMemory('milestone', world.worldId)) return null;

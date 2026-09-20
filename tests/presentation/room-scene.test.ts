@@ -219,6 +219,38 @@ describe('room presentation against authoritative contracts', () => {
     expect(hqBars.fillRoundedRect).not.toHaveBeenCalled();
   });
 
+  it('draws relics and remains from the snapshot, prompts to read nearby relics and plays the reveal on discovery', () => {
+    const scene = setup();
+    const me = sampleSnapshot.players[0]!;
+    const nodesView = stage.nodes.find((n) => n.depth === DEPTH.entities - 1)!;
+    const hint = stage.nodes.find((n) => n.text === 'HOLD F · READ')!;
+    expect(hint.visible).toBe(false);
+    scene.renderSnapshot({
+      ...sampleSnapshot,
+      loreNodes: [
+        { id: 'relic', kind: 'relic', x: me.x + 20, y: me.y, fragmentIndex: 0, state: 'sealed', progress: 0 },
+        { id: 'remains-x', kind: 'remains', x: 300, y: 200, fragmentIndex: 4, state: 'sealed', progress: 0 },
+      ],
+    }, localId);
+    expect(nodesView.fillRoundedRect).toHaveBeenCalled();
+    expect(nodesView.closePath).toHaveBeenCalled();
+    expect(hint.visible).toBe(true);
+    scene.renderSnapshot({
+      ...sampleSnapshot,
+      loreNodes: [{ id: 'relic', kind: 'relic', x: me.x + 20, y: me.y, fragmentIndex: 0, state: 'reading', progress: 0.5 }],
+    }, localId);
+    expect(hint.visible).toBe(false);
+    expect(nodesView.arc).toHaveBeenCalled();
+
+    scene.playEvents([{
+      id: 'test-lore', tick: 800, timeMs: 0, type: 'lore_discovered', playerId: localId, fragmentIndex: 0,
+      kind: 'relic', title: 'Departures board', text: 'Every line reads DELAYED.', x: me.x + 20, y: me.y,
+    }]);
+    expect(effects()).toHaveLength(1);
+    expect(stage.nodes.some((n) => n.text === 'DEPARTURES BOARD')).toBe(true);
+    expect(stage.nodes.some((n) => n.text === 'Every line reads DELAYED.')).toBe(true);
+  });
+
   it('reveals a contributed idea in-world only once a player walks up to what it shaped', () => {
     const marker = tileToWorld(5, 4);
     const room = RoomSpecSchema.parse({

@@ -74,6 +74,7 @@ export class GameController {
       world: null,
       room: null,
       hud: null,
+      discoveredLore: [],
       memories: chronicle.getMemories(),
       classStatus: Object.fromEntries(CLASS_IDS.map((id) => [id, CLASS_INFO[id].status])) as UiModel['classStatus'],
       preview: { fixtureWorld: flags.fixtureWorld, startRoom: flags.startRoom },
@@ -194,6 +195,11 @@ export class GameController {
       if (prevPlayers.length !== players.length || prevPlayers.some((p, i) => p.id !== players[i]!.id || p.displayName !== players[i]!.displayName || p.classId !== players[i]!.classId)) {
         store.set({ players });
       }
+      const discoveredLore = snapshot.discoveredLore ?? [];
+      const prevLore = store.get().discoveredLore;
+      if (prevLore.length !== discoveredLore.length || prevLore.some((index, i) => index !== discoveredLore[i])) {
+        store.set({ discoveredLore });
+      }
     }
     this.rafHandle = requestAnimationFrame(this.loop);
   };
@@ -258,6 +264,7 @@ export class GameController {
         receipt: world.receipt,
         committedRoomCount: world.rooms.length,
         plannedRoomCount: world.plannedRoomCount,
+        lore: world.recipe.lore,
       },
       notice: null,
     });
