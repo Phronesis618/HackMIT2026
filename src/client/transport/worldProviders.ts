@@ -16,6 +16,7 @@ import {
   type GenerationStatus,
   type PreparedWorld,
 } from '../../shared/contracts';
+import { serverFlag } from '../../shared/flags';
 import { floorsSeedFor, upgradeToFloors } from '../../shared/floorgen';
 import { hashString } from '../../shared/ids';
 import fixtureJson from '../../../fixtures/worlds/vantage-spire.json';
@@ -40,8 +41,14 @@ const StreamRecordSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('error'), message: z.string().min(1).max(200) }),
 ]);
 
-/** `?floors=1` opts this browser into floors worlds (F1b hook; default off). */
+/**
+ * Whether to ask for a floors world. `RELAY_FLOORS=1` on the server turns it on for every
+ * client (reported by `/api/config`, see src/shared/flags.ts); `?floors=1` still opts one
+ * browser in on its own. Either way the world that arrives carries `floors` or it does not, so
+ * client and server cannot end up disagreeing about the world they are both holding.
+ */
 function floorsRequested(): boolean {
+  if (serverFlag('floors') === true) return true;
   return typeof location !== 'undefined' && new URLSearchParams(location.search).get('floors') === '1';
 }
 

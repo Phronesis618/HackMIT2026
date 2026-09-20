@@ -83,7 +83,7 @@ describe('long_dark light', () => {
 
 describe('look URL overrides', () => {
   it('accept only registry ids', () => {
-    const empty = { laws: [], look: null, derived: false };
+    const empty = { laws: [], look: null, lawsDerived: false, lookDerived: false };
     expect(withLookOverrides(empty, '?palette=nope&lighting=<script>')).toBe(empty);
     expect(withLookOverrides(empty, '?palette=rust&lighting=rim').look).toMatchObject({ paletteFamily: 'rust', lighting: 'rim' });
     expect(withLookOverrides(empty, '?dark=215').laws[0]).toMatchObject({ lawId: 'long_dark', intensity: 0.5 });

@@ -49,6 +49,12 @@ export interface UiWorldSummary {
   attunements: Attunement[];
   /** World laws (agent M1): the world's name for each law beside the engine's plain effect. Absent = none. */
   laws?: UiWorldLaw[];
+  /**
+   * True when the ENGINE chose these laws from the world's motifs because no model wrote any.
+   * The panel says so: a derived law's name and line are the engine's, not the world's writing
+   * (docs/PRODUCT.md — never present engine output as the model's).
+   */
+  lawsDerived?: boolean;
 }
 
 export interface UiWorldLaw {

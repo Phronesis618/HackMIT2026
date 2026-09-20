@@ -124,7 +124,9 @@ per tick and merged by the session so presses between ticks are not lost.
 ## Config boundary
 
 `src/server/config.ts` reads `PORT`, `HOST`, `RELAY_GENERATION_MODE`, `RELAY_AI_PROVIDER`,
-`ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `OPENAI_API_KEY`, `OPENAI_MODEL`, and `RELAY_FLOORS` (plus a tiny
-`.env` loader). Provider selection is shared by solo and co-op generation.
+`ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `RELAY_FLOORS` and `RELAY_LAWS`
+(plus a tiny `.env` loader). Provider selection is shared by solo and co-op generation.
 `describeForClient()` is the only configuration shape that
-leaves the server (`/api/config`): `{ generationMode, liveGenerationAvailable }`.
+leaves the server (`/api/config`): `{ generationMode, liveGenerationAvailable, floors, laws }`.
+The last two make the server authoritative about session-wide features: clients adopt them at boot
+(`src/shared/flags.ts`) instead of each needing `?floors=1` / `?laws=1` in its own URL.

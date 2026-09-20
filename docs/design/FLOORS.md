@@ -136,7 +136,7 @@ Also worth knowing:
 
 Everything is additive and optional. `src/shared/floors.ts` never imports `contracts.ts`; `contracts.ts` imports `floors.ts`.
 
-**Flags.** Server: env `RELAY_FLOORS=1` (`config.generation.floors`, passed to `createGenerationService({ floors })`). Per request: `GenerationRequest.floors?: boolean` wins over the env. Browser: `?floors=1` makes `worldProviders.ts` send `floors: true` and upgrades the bundled offline fixture. Default off.
+**Flags.** Server: env `RELAY_FLOORS=1` (`config.generation.floors`, passed to `createGenerationService({ floors })`). Per request: `GenerationRequest.floors?: boolean` wins over the env. Browser: `?floors=1` makes `worldProviders.ts` send `floors: true` and upgrades the bundled offline fixture; a browser also sends `floors: true` when `GET /api/config` says the server has the flag on (`src/shared/flags.ts`), so no client needs the URL flag. Default off.
 
 **Rooms.** A `RoomSpec` is either legacy or a floors room, never a mix (`refineRoomAddressing`).
 

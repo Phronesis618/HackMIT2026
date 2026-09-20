@@ -328,6 +328,7 @@ export class GameController {
   }
 
   private handleWorld(world: PreparedWorld): void {
+    const lawsView = withLookOverrides(worldLawsView(world));
     this.deps.audio.setWorld?.(world.art);
     this.deps.chronicle.refreshReceipt({
       worldId: world.worldId,
@@ -347,9 +348,10 @@ export class GameController {
         plannedRoomCount: world.plannedRoomCount,
         lore: world.recipe.lore,
         attunements: world.recipe.attunements,
-        laws: withLookOverrides(worldLawsView(world)).laws.map((law) => ({
+        laws: lawsView.laws.map((law) => ({
           lawId: law.lawId, name: law.name, description: law.description, effect: lawEffectText(law), active: IMPLEMENTED_LAW_IDS.includes(law.lawId),
         })),
+        lawsDerived: lawsView.lawsDerived,
       },
       notice: null,
     });

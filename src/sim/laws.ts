@@ -16,6 +16,7 @@ import {
   sanitizeLaws, type WorldLaw, type WorldLawId, type WorldLook,
 } from '../shared/laws';
 import type { MotifId } from '../shared/registry';
+import { serverFlag } from '../shared/flags';
 
 export interface ResolvedLaws {
   // movement
@@ -178,8 +179,15 @@ export function applyEncounterLaws<T extends Pick<RoomEncounter, 'enemyId' | 'ro
 /**
  * `RELAY_LAWS=1` (Node) or `?laws=1` (browser), mirroring `RELAY_FLOORS` / `?floors=1`. Only gates
  * DERIVED laws and look: picks present in a live recipe are always honoured.
+ *
+ * A server's answer WINS outright. Nothing in a `PreparedWorld` says whether its laws were
+ * derived, so a browser that guessed differently from the server would render and describe a
+ * different game from the one the server is simulating — which is what `?laws=1` on every client
+ * was papering over. Env / URL are the fallback for a client that reached no server.
  */
 export function lawsFlagEnabled(): boolean {
+  const fromServer = serverFlag('laws');
+  if (fromServer !== null) return fromServer;
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.RELAY_LAWS;
   if (env !== undefined && ['1', 'true'].includes(env.trim().toLowerCase())) return true;
   const search = (globalThis as { location?: { search?: string } }).location?.search;
@@ -266,20 +274,33 @@ export function deriveWorldLaws(art: Pick<ArtRecipe, 'motifIds' | 'fog' | 'glowI
   };
 }
 
-export interface WorldLawsView { laws: WorldLaw[]; look: WorldLook | null; derived: boolean }
+export interface WorldLawsView {
+  laws: WorldLaw[];
+  look: WorldLook | null;
+  /** True when the engine chose these LAWS from the motifs; false when the model wrote them. */
+  lawsDerived: boolean;
+  /** Same question for the look. Tracked separately: a recipe may carry one and not the other. */
+  lookDerived: boolean;
+}
 
 /**
  * What a world's laws and look ARE, for the sim, the renderer and the UI alike. Picks in the
  * recipe always win (sanitized). Without them, the offline derivation applies only when
  * `derive` is on, so default legacy output is untouched.
+ *
+ * `lawsDerived` / `lookDerived` are the provenance half: anything the engine chose must be
+ * labelled as the engine's, never as the world's own writing (docs/PRODUCT.md).
  */
 export function worldLawsView(world: Pick<PreparedWorld, 'worldId' | 'recipe' | 'art'> | null | undefined, derive: boolean = lawsFlagEnabled()): WorldLawsView {
-  if (!world) return { laws: [], look: null, derived: false };
+  if (!world) return { laws: [], look: null, lawsDerived: false, lookDerived: false };
   const picked = world.recipe.laws && world.recipe.laws.length > 0 ? sanitizeLaws(world.recipe.laws).laws : null;
   const look = world.recipe.look ?? null;
-  if ((picked && look) || !derive) return { laws: picked ?? [], look, derived: false };
+  if ((picked && look) || !derive) return { laws: picked ?? [], look, lawsDerived: false, lookDerived: false };
   const derived = deriveWorldLaws(world.art, hashString(world.worldId));
-  return { laws: picked ?? derived.laws, look: look ?? derived.look, derived: true };
+  return {
+    laws: picked ?? derived.laws, look: look ?? derived.look,
+    lawsDerived: picked === null, lookDerived: look === null,
+  };
 }
 
 // ---------------------------------------------------------------------------

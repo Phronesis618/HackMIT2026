@@ -254,7 +254,7 @@ describe('offline derivation', () => {
   it('gives the three fixtures different, legal law sets and looks', () => {
     const views = ['vantage-spire', 'crystal-tide', 'root-archive'].map((name) => worldLawsView(fixtureWorld(name), true));
     for (const view of views) {
-      expect(view.derived).toBe(true);
+      expect(view).toMatchObject({ lawsDerived: true, lookDerived: true });
       expect(view.laws).toHaveLength(2);
       const total = view.laws.reduce((sum, l) => sum + LAW_INFO[l.lawId].budget, 0);
       expect(total).toBeGreaterThanOrEqual(LAW_BUDGET_RANGE.min);
@@ -268,8 +268,8 @@ describe('offline derivation', () => {
   it('is deterministic, off by default, and never overrides a recipe that has laws', () => {
     const world = fixtureWorld('crystal-tide');
     expect(worldLawsView(world, true)).toEqual(worldLawsView(world, true));
-    expect(worldLawsView(world, false)).toEqual({ laws: [], look: null, derived: false });
-    expect(worldLawsView(world)).toEqual({ laws: [], look: null, derived: false });
+    expect(worldLawsView(world, false)).toEqual({ laws: [], look: null, lawsDerived: false, lookDerived: false });
+    expect(worldLawsView(world)).toEqual({ laws: [], look: null, lawsDerived: false, lookDerived: false });
     const picked = fixtureWorld('crystal-tide', [law('long_dark')]);
     expect(worldLawsView(picked, false).laws.map((l) => l.lawId)).toEqual(['long_dark']);
     expect(worldLawsView(picked, true).laws.map((l) => l.lawId)).toEqual(['long_dark']);

@@ -6,7 +6,10 @@
 (renderer, `src/client/render/lighting.ts`). Look: 6 palette families + contrast clamp (`color.ts`), 6 lighting modes,
 all 12 floor materials, all 12 atmospheres. Not yet: the other 9 laws (they resolve to numbers nobody reads), `wallStyle`,
 `skylineDepth`, `grain`, per-biome intensity scaling (§3.3). Laws in a recipe always apply; with no laws in the recipe,
-`RELAY_LAWS=1` (server/Node) or `?laws=1` (browser) derives 2 laws + a look from the motifs. Dev look switches:
+`RELAY_LAWS=1` (server/Node) derives 2 laws + a look from the motifs, **for every client**: the server reports the
+flag on `GET /api/config` and each browser adopts it (`src/shared/flags.ts`), so a co-op crew cannot play one game
+while half their screens draw another. `?laws=1` is only the fallback when no server answered. Derived laws are
+labelled as the engine's in the world panel — the engine picked and named them, no model did. Dev look switches:
 `?palette=&lighting=&floor=&atmo=&dark=<px>`. The rest of this document is the original design. This answers the lead's third ask: *"ideally the AI
 can also script strong gameplay mechanics or changes that help the game feel less repetitive and more
 different between worlds, and can also change up how things look in the worlds."*
