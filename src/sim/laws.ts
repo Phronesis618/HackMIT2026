@@ -194,35 +194,44 @@ interface MotifIdentity {
 
 /** Authored, not generated: each motif implies a way the place plays and a way it looks. */
 const MOTIF_IDENTITY: Record<MotifId, MotifIdentity> = {
-  spires: { laws: ['thin_air', 'few_and_terrible', 'long_echo'], names: { thin_air: 'High Air', few_and_terrible: 'The Standing Watch', long_echo: 'Tower Echo' },
+  spires: { laws: ['thin_air', 'few_and_terrible', 'long_echo'], names: { thin_air: 'High Air', few_and_terrible: 'The Standing Watch', long_echo: 'Tower Repeater' },
     look: { paletteFamily: 'bleach', floorMaterial: 'slabs', wallStyle: 'blockwork', lighting: 'shafts', atmosphere: 'dust' } },
-  arches: { laws: ['long_echo', 'the_many', 'committed_strike'], names: { long_echo: 'Vault Echo', the_many: 'The Crowded Nave', committed_strike: 'Set Stance' },
+  arches: { laws: ['long_echo', 'the_many', 'committed_strike'], names: { long_echo: 'Vault Return', the_many: 'The Crowded Nave', committed_strike: 'Set Stance' },
     look: { paletteFamily: 'sodium', floorMaterial: 'flagstone', wallStyle: 'blockwork', lighting: 'overhead', atmosphere: 'dust' } },
   cables: { laws: ['committed_strike', 'the_many', 'long_echo'], names: { committed_strike: 'Tethered Strike', the_many: 'Line Noise', long_echo: 'Signal Return' },
     look: { paletteFamily: 'ink_neon', floorMaterial: 'grating', wallStyle: 'girder', lighting: 'rim', atmosphere: 'sparks' } },
-  crystals: { laws: ['glass_lattice', 'long_echo', 'thin_air'], names: { glass_lattice: 'Glass Lattice', long_echo: 'Facet Echo', thin_air: 'Clear Air' },
+  crystals: { laws: ['glass_lattice', 'long_echo', 'thin_air'], names: { glass_lattice: 'Glass Lattice', long_echo: 'Facet Return', thin_air: 'Clear Air' },
     look: { paletteFamily: 'bloom', floorMaterial: 'crystal', wallStyle: 'glass', lighting: 'underlit', atmosphere: 'glints' } },
   roots: { laws: ['the_many', 'tidal_drag', 'first_light'], names: { the_many: 'The Undergrowth', tidal_drag: 'Root Drag', first_light: 'First Cut' },
     look: { paletteFamily: 'rust', floorMaterial: 'organic', wallStyle: 'overgrown', lighting: 'overhead', atmosphere: 'spores' } },
-  monoliths: { laws: ['few_and_terrible', 'committed_strike', 'first_light'], names: { few_and_terrible: 'The Few', committed_strike: 'Weight of Stone', first_light: 'First Mark' },
+  monoliths: { laws: ['few_and_terrible', 'committed_strike', 'first_light'], names: { few_and_terrible: 'The Few', committed_strike: 'Heavy Footing', first_light: 'First Mark' },
     look: { paletteFamily: 'monochrome', floorMaterial: 'slabs', wallStyle: 'hewn', lighting: 'flat', atmosphere: 'ash' } },
   ruined_machinery: { laws: ['committed_strike', 'few_and_terrible', 'long_echo'], names: { committed_strike: 'Seized Gears', few_and_terrible: 'Last Machines', long_echo: 'Idle Cycle' },
     look: { paletteFamily: 'rust', floorMaterial: 'plates', wallStyle: 'panelled', lighting: 'stormlight', atmosphere: 'embers' } },
-  lanterns: { laws: ['first_light', 'long_echo', 'tidal_drag'], names: { first_light: 'First Light', long_echo: 'Lamp Echo', tidal_drag: 'Thick Air' },
+  lanterns: { laws: ['first_light', 'long_echo', 'tidal_drag'], names: { first_light: 'First Light', long_echo: 'Relit Lamps', tidal_drag: 'Thick Air' },
     look: { paletteFamily: 'sodium', floorMaterial: 'boards', wallStyle: 'panelled', lighting: 'underlit', atmosphere: 'fireflies' } },
 };
 
 /** The derived (no-model) in-world line per law. No numbers: the engine's effect text carries those. */
 const LAW_LINE: Record<WorldLawId, string> = {
-  thin_air: 'Dashes carry further here.', tidal_drag: 'Everything moves through something.',
-  committed_strike: 'Nobody walks out of their own swing.', glass_lattice: 'Thin walls, bright light.',
-  long_echo: 'The place remembers a gesture and gives it back early.', bleeding_light: 'Only what is read will mend.',
-  first_light: 'The first cut is the deep one.', few_and_terrible: 'Fewer things, and each one worse.',
-  the_many: 'Crowded with small failures.', wardens_watch: 'Everything here has a rank.',
-  restless: 'Nothing here stays down.', unstable_matter: 'Matter here does not let go quietly.',
-  hollow_ground: 'This place was built hollow.', slow_fire: 'Time thickens near the burning parts.',
-  sealed_halls: 'The doors here have opinions.', long_dark: 'Bring your own light.',
-  mirror_halls: 'The map will not hold still.', held_breath: 'No sound it does not have to make.',
+  thin_air: 'The air is thin. A dash carries farther and takes longer to come back.',
+  tidal_drag: 'The floor drags at boots. Walking is slow for everyone and dashes come back sooner.',
+  committed_strike: 'Swings are heavy here. Feet stay planted until the swing ends.',
+  glass_lattice: 'Thin plating all round. Hits land harder in both directions.',
+  long_echo: 'Q and E come back early. The ultimate fills slowly.',
+  bleeding_light: 'Abilities mend nothing here. Reading a relic does.',
+  first_light: 'An enemy nobody has touched takes the first hit hard.',
+  few_and_terrible: 'Fewer enemies per room, each much tougher.',
+  the_many: 'More enemies per room, each weaker.',
+  wardens_watch: 'Enemies wearing a ring are elites.',
+  restless: 'A fallen enemy stands up once unless its marker is walked over.',
+  unstable_matter: 'Enemies burst when they fall. Stand clear of the body.',
+  hollow_ground: 'More terrain features per room.',
+  slow_fire: 'Everything slows near a live hazard. Dashes do not.',
+  sealed_halls: 'Combat rooms are split by a door, with the exit on the far side.',
+  long_dark: 'Sight ends a short way from each operative. Hazards and attack warnings still show.',
+  mirror_halls: 'No minimap. A room is named when it is entered.',
+  held_breath: 'Attacks make no sound. Their warnings last longer and draw brighter.',
 };
 
 function hashString(text: string): number {

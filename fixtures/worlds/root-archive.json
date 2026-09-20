@@ -689,19 +689,19 @@
       {
         "lawId": "long_dark",
         "name": "Order 9",
-        "description": "Sight fails past 215 px from an operative; lanterns and conduits add light. Adjei's Order 9 cut the reading wings to nil, lamp oil included.",
+        "description": "Adjei's Order 9 cut the reading wings to nil, lamp oil included. Nothing shows beyond a short radius of each operative but hazards and tells.",
         "intensity": 0.6
       },
       {
-        "lawId": "restless",
-        "name": "Still in Their Seats",
-        "description": "A fallen enemy stands again after 11.5 s at 42% health unless an operative walks over its marker. Lind counted 30 patrons in Reading Room West every morning.",
+        "lawId": "the_many",
+        "name": "Thirty Seats",
+        "description": "Lind counted 30 patrons in Reading Room West every morning, all of them seated. More enemies per room, each weaker.",
         "intensity": 0.5
       },
       {
         "lawId": "long_echo",
         "name": "Courier Pace",
-        "description": "Ability cooldowns are a third shorter and the ultimate charges 25% slower. Farrow ran the Index to the Seed Vault door in 4 minutes, 8 days in a row.",
+        "description": "Farrow ran the Index to the Seed Vault door in 4 minutes, 8 days in a row. Q and E come back sooner; the ultimate charges slower.",
         "intensity": 0.5
       }
     ],

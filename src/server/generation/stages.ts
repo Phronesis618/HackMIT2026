@@ -15,7 +15,7 @@ import { BIOME_LINE_KINDS, WorldBibleSchema, clampLoreRefs, type BiomeRoomLines,
 import { BIOME_BRIEF_COUNT, BiomeBriefSchema, BiomeTerrainSchema, ROOM_KINDS, type BiomeBrief } from '../../shared/floors';
 import { seededInt } from './exemplars';
 import {
-  CustodianSchema, TerrainSkinSchema, WorldLawSchema, WorldLookSchema, sanitizeCustodian, sanitizeLaws, sanitizeTerrainSkins,
+  CustodianSchema, LAW_INFO, TerrainSkinSchema, WorldLawSchema, WorldLookSchema, sanitizeCustodian, sanitizeLaws, sanitizeTerrainSkins,
   type Custodian, type TerrainSkin, type WorldLaw, type WorldLook,
 } from '../../shared/laws';
 import { KIND_SPECS, lintProse, lintRecipeText, formatRepairFeedback, type ProseKind } from '../../shared/prose';
@@ -395,9 +395,10 @@ export function parseLaws(input: unknown, bible: WorldBible): LawsPart {
   const look = WorldLookSchema.safeParse(record.look);
   if (!look.success && record.look != null) notes.push('World look was invalid and was dropped; the renderer derives it from motifs.');
   const lawItems = Array.isArray(record.laws) ? record.laws.map((law) => parseWithFit(WorldLawSchema, law)).flatMap((r) => (r.success ? [r.data] : [])) : [];
-  const { laws } = sanitizeLaws(lawItems);
+  // Honesty: a live world never carries a law the engine does not apply (LAW_INFO.implemented).
+  const { laws } = sanitizeLaws(lawItems.filter((law) => LAW_INFO[law.lawId].implemented));
   const lawCount = Array.isArray(record.laws) ? record.laws.length : 0;
-  if (lawCount > laws.length) notes.push(`Dropped ${lawCount - laws.length} world law(s): invalid, conflicting, over a group cap or outside the difficulty budget.`);
+  if (lawCount > laws.length) notes.push(`Dropped ${lawCount - laws.length} world law(s): invalid, conflicting, over a group cap, outside the difficulty budget or not implemented by the engine.`);
   const skins = (Array.isArray(record.terrainSkins) ? record.terrainSkins : []).map((skin) => parseWithFit(TerrainSkinSchema, skin)).flatMap((r) => (r.success ? [r.data] : []));
   const boss = parseCustodian(record, nonBossKinds(bible));
   return {

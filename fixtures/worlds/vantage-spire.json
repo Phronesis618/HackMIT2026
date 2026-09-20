@@ -124,7 +124,7 @@
         "kind": "relic",
         "title": "Notice to riders",
         "source": "printed card taped to the kiosk glass",
-        "text": "The departures board shows DELAYED on all lines. This is a fault, reported on forms 112, 118, 121 and 130. Riders in cage belts may unclip at the barrier and wait in the concourse. As of 17:52, 300 riders have not. The kiosk closes at 18:00 as normal. L. Brandt.",
+        "text": "The departures board shows DELAYED on all lines. This is a fault, reported on forms 112, 118, 121 and 130. Riders in cage belts may unclip at the barrier and wait in the concourse. As of 17:52, 300 riders have not. The kiosk closes at 18:00 as normal. L. Pereira.",
         "roomIndex": 0,
         "enemyId": null,
         "authorIndex": 2,
@@ -154,7 +154,7 @@
         "kind": "relic",
         "title": "Log, Day 5, 17:40",
         "source": "warden's logbook, last written page",
-        "text": "17:40. Cage 2 counterweight came through the concourse roof, 40 storeys, and landed 8 m from the kiosk. The handrails are live. Mrs Okafor took a shock off the Platform 3 rail and is sitting down. Headcount at the barrier 300, all still clipped in. Radioed Winch House 40 at 17:41. No answer, Sanjay. Keep everyone off the rails.",
+        "text": "17:40. Cage 2 counterweight came through the concourse roof, 40 storeys, and landed 8 m from the kiosk. The handrails are live. Mrs Dunne took a shock off the Platform 3 rail and is sitting down. Headcount at the barrier 300, all still clipped in. Radioed Winch House 40 at 17:41. No answer, Sanjay. Keep everyone off the rails.",
         "roomIndex": 0,
         "enemyId": null,
         "authorIndex": 1,
@@ -164,7 +164,7 @@
         "kind": "relic",
         "title": "Form 131",
         "source": "maintenance request, filled in and never filed",
-        "text": "Form 131. Location: Winch House 40. Fault: door bolted from inside; drum running with no cages attached. Reported by: L. Brandt, kiosk. Previous forms on this location: none, as the door used to be open. Mr Osei answered through the door that the timetable is being held. Requested action: unbolt the door.",
+        "text": "Form 131. Location: Winch House 40. Fault: door bolted from inside; drum running with no cages attached. Reported by: L. Pereira, kiosk. Previous forms on this location: none, as the door used to be open. Knocked at 04:10 and 04:25. The drum is louder than the door. Requested action: unbolt the door. Priority: as per forms 112, 118, 121 and 130.",
         "roomIndex": 2,
         "enemyId": null,
         "authorIndex": 2,
@@ -174,7 +174,7 @@
         "kind": "remains",
         "title": "Cage belt, size M",
         "source": "webbing belt, clip still closed",
-        "text": "Cage belt, Vantage Spire issue, size M. In the chest pocket, a Day 5 ticket punched for Cage 2 at 17:45. The clip is closed. The kiosk notice from Brandt said riders may unclip at the barrier; the clip needs two hands, and a rider holding a bag has one.",
+        "text": "Cage belt, Vantage Spire issue, size M. In the chest pocket, a Day 5 ticket punched for Cage 2 at 17:45. The clip is closed. The kiosk notice from Pereira said riders may unclip at the barrier; the clip needs two hands, and a rider holding a bag has one.",
         "roomIndex": 0,
         "enemyId": "husk",
         "authorIndex": 2,
@@ -204,7 +204,7 @@
         "kind": "remains",
         "title": "Brake lever, Winch House 40",
         "source": "lever head snapped off the winch brake",
-        "text": "Winch House 40 brake lever, cast iron, snapped 10 cm above the pivot. Vik measured the four trunks on Day 6 through the bolted door: 44 mm each, at full speed with nothing on them. Osei gave her the same answer he gave Brandt. The timetable is being held.",
+        "text": "Winch House 40 brake lever, cast iron, snapped 10 cm above the pivot. Vik measured the four trunks on Day 6 through the gap under the bolted door: 44 mm each, at full speed with nothing on them. She wired a tag to the door handle, STOP THE DRUM, with a line for Osei's countersignature. The line is blank.",
         "roomIndex": 0,
         "enemyId": "guardian",
         "authorIndex": 0,
@@ -230,7 +230,7 @@
       {
         "effectId": "clear_surge",
         "name": "Board Clears",
-        "description": "Clearing a room grants 4 s of haste. Brandt's split-flap board took 4 s to cycle from DELAYED to a platform number, on the days it did."
+        "description": "Clearing a room grants 4 s of haste. Pereira's split-flap board took 4 s to cycle from DELAYED to a platform number, on the days it did."
       }
     ],
     "terrainSkins": [
@@ -373,7 +373,7 @@
       {
         "id": "b3-kiosk-row",
         "name": "Kiosk Row",
-        "tagline": "Brandt's kiosk and 9 shuttered stalls, stock still on the shelves.",
+        "tagline": "Pereira's kiosk and 9 shuttered stalls, stock still on the shelves.",
         "motifIds": [
           "lanterns"
         ],
@@ -580,7 +580,7 @@
           "want": "his 18:00 relief to turn up so he can collect Priya from the school gate"
         },
         {
-          "name": "Lotte Brandt",
+          "name": "Lotte Pereira",
           "job": "ticket clerk, Threshold Concourse kiosk",
           "want": "the split-flap board repaired, as requested on four forms"
         }
@@ -622,7 +622,7 @@
         },
         {
           "date": "Day 5, 17:52",
-          "fact": "Brandt's split-flap board locked every line on DELAYED; 300 riders in cage belts stayed clipped in at the barriers."
+          "fact": "Pereira's split-flap board locked every line on DELAYED; 300 riders in cage belts stayed clipped in at the barriers."
         },
         {
           "date": "Day 6, 04:00",
@@ -643,9 +643,9 @@
           "never": "blames a rider"
         },
         {
-          "name": "Lotte Brandt",
+          "name": "Lotte Pereira",
           "document": "kiosk notices and maintenance request forms",
-          "register": "Printed notices, form numbers, 'as previously requested'. Counts how many times she has asked. Signs L. Brandt.",
+          "register": "Printed notices, form numbers, 'as previously requested'. Counts how many times she has asked. Signs L. Pereira.",
           "never": "uses an exclamation mark"
         }
       ],
@@ -671,21 +671,21 @@
     "biomeRoomLines": [],
     "laws": [
       {
-        "lawId": "sealed_halls",
-        "name": "Barrier Drop",
-        "description": "Every fighting room is split by a barrier gate with the exit beyond it. Ramaswami dropped the Platform 3 barriers at 17:40 on Day 5 and nobody has lifted them.",
-        "intensity": 0.6
-      },
-      {
-        "lawId": "wardens_watch",
-        "name": "Marshals on Shift",
-        "description": "A third of what stands here is a cage marshal in a load rig: ringed, tougher, better drops. Osei kept 40 marshals on shift through Day 5.",
+        "lawId": "the_many",
+        "name": "Rated for 400",
+        "description": "Ramaswami counted 1,100 riders on Platform 3, which is rated for 400. More enemies per room, each weaker.",
         "intensity": 0.5
       },
       {
-        "lawId": "slow_fire",
-        "name": "Handrail Current",
-        "description": "Within 3 tiles of a live hazard everything but a dash moves at half speed. The lantern circuits have run through every handrail since Cage 2 fell.",
+        "lawId": "committed_strike",
+        "name": "Clipped to the Rail",
+        "description": "A cage belt clips to the rail and takes two hands to undo. Operatives barely move during a basic attack and hit harder.",
+        "intensity": 0.5
+      },
+      {
+        "lawId": "thin_air",
+        "name": "Open Shaft",
+        "description": "Cage 2's shaft is 40 storeys of updraught with no cage in it since Day 5. Dashes carry farther and take longer to come back.",
         "intensity": 0.5
       }
     ],
