@@ -117,6 +117,13 @@
 
 ## Current integration — Devin across all roles
 
+## Floors runs
+
+- **Implemented:** floor Chronicle memories derive from real biome, room and clear events; the
+  hub records deepest tier and cleared biomes, with device-local Quartermaster cues and HQ rows.
+- **Mocked:** focused floors event scripts and storage fixtures in presentation tests.
+- **Unverified:** browser floors traversal and live multiplayer floors runs.
+
 - [PR #10](https://github.com/Phronesis618/HackMIT2026/pull/10), code/test revision
   `083d1e0`, includes earlier presentation PRs #5 and #8.
 - **Implemented:** snapshot-driven telegraphs, class attack geometry, health/state,
