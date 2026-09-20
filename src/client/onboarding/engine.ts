@@ -106,10 +106,14 @@ export class OnboardingEngine {
       }
     }
 
-    // 3. Pick the next one.
+    // 3. Pick the next one. A strictly higher priority preempts whatever is on screen and
+    // skips the cooldown: a downed teammate cannot wait behind a note about rubble. Nothing
+    // flaps, because showing a lesson retires it immediately.
     if (!this.hintsOff() && !ctx.blocked) {
       const ready = this.pick(ctx);
-      if (!this.prompt && ready && ctx.nowMs >= this.nextAllowedMs) this.show(ready, ctx);
+      if (ready && (!this.prompt ? ctx.nowMs >= this.nextAllowedMs : ready.lesson.priority > (LESSON_BY_ID.get(this.prompt.id)?.priority ?? 0))) {
+        this.show(ready, ctx);
+      }
     }
 
     if (persistNeeded) this.persist();

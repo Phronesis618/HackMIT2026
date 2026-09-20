@@ -102,7 +102,9 @@ const HUB_LESSONS: Lesson[] = [
     text: HUB_TEXT.receipt,
     priority: P.hub + 3,
     holdMs: 5000,
-    trigger: (ctx) => atHub(ctx) && ctx.events.some((e) => e.type === 'world_prepared'),
+    // A durable condition, not the `world_prepared` event: the event lasts one tick, and by
+    // then `hub.prepare` may still be on screen. A world at the hub means a receipt to read.
+    trigger: (ctx) => atHub(ctx) && ctx.model.world !== null,
   },
   {
     id: 'hub.gate',
@@ -171,7 +173,10 @@ const CONTROL_LESSONS: Lesson[] = [
     text: RUN_TEXT.unlockE,
     priority: P.control - 1,
     holdMs: 9000,
-    trigger: (ctx) => inRun(ctx) && (hud(ctx)?.resources ?? 0) >= ABILITY_UNLOCK_COST && hud(ctx)?.abilityEUnlocked !== true,
+    // Affordable from the first second of a run, so the real gate is the first cleared room:
+    // a menu prompt three seconds into the first fight is exactly the noise Fan warns about.
+    trigger: (ctx) => inRun(ctx) && ctx.facts.roomsCleared >= 1
+      && (hud(ctx)?.resources ?? 0) >= ABILITY_UNLOCK_COST && hud(ctx)?.abilityEUnlocked !== true,
     satisfied: (ctx) => ctx.facts.unlockedE,
   },
   {

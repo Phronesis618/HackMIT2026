@@ -59,6 +59,19 @@ describe('onboarding scheduler', () => {
     expect(engine.getView().prompt?.id).toBe('coop.revive');
   });
 
+  it('a downed teammate preempts whatever note is on screen', () => {
+    const { engine } = engineWith();
+    engine.tick(context({ snapshot: snapshot({ floor: { biomeId: 'b', roomId: 'r', tier: 0, path: ['b'], map: [], doorsLocked: true, biomeChoice: null } }), phaseMs: 2000 }));
+    expect(engine.getView().prompt?.id).toBe('note.doors');
+    const down = snapshot({
+      players: [player(ME), player(MATE, { state: 'down' })],
+      floor: { biomeId: 'b', roomId: 'r', tier: 0, path: ['b'], map: [], doorsLocked: true, biomeChoice: null },
+    });
+    // No cooldown wait: the higher priority takes the band immediately.
+    engine.tick(context({ nowMs: 10_100, snapshot: down, phaseMs: 2100, facts: { teammateDown: true } }));
+    expect(engine.getView().prompt?.id).toBe('coop.revive');
+  });
+
   it('keeps a quiet gap between one prompt leaving and the next arriving', () => {
     const { engine } = engineWith();
     const enemies = [{ id: 'e1', enemyId: 'husk' as const, x: 200, y: 200, facing: 0, hp: 10, maxHp: 10, state: 'chasing' as const }];

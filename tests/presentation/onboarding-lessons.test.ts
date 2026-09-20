@@ -10,6 +10,16 @@ import { currentRoomKind, LESSON_BY_ID, terrainFeaturesOf, isBlocked, parseHintF
 import type { LessonContext } from '../../src/client/onboarding';
 import { context, ME, MATE, player, snapshot, uiModel } from './onboardingFixture';
 
+const worldModel = (phase: 'headquarters' | 'expedition') => uiModel({
+  phase,
+  world: {
+    worldId: 'w', title: 't', tagline: '', themeSummary: '',
+    provenance: { source: 'fixture', label: 'OFFLINE FIXTURE', generatedAt: 0, durationMs: 0, attempts: 0, notes: [] },
+    receipt: { source: 'fixture', worldTitle: 't', headline: '', lines: [] },
+    committedRoomCount: 1, plannedRoomCount: 1, lore: [], attunements: [],
+  },
+});
+
 const lesson = (id: string) => {
   const found = LESSON_BY_ID.get(id);
   if (!found) throw new Error(`no lesson ${id}`);
@@ -61,9 +71,8 @@ describe('hub lessons', () => {
   });
 
   it('hub.gate appears only once a world is prepared', () => {
-    const withWorld = uiModel({ phase: 'headquarters', world: { worldId: 'w', title: 't', tagline: '', themeSummary: '', provenance: { source: 'fixture', label: 'OFFLINE FIXTURE', generatedAt: 0, durationMs: 0, attempts: 0, notes: [] }, receipt: { source: 'fixture', worldTitle: 't', headline: '', lines: [] }, committedRoomCount: 1, plannedRoomCount: 1, lore: [], attunements: [] } });
     expect(lesson('hub.gate').trigger(hq())).toBe(false);
-    expect(lesson('hub.gate').trigger(context({ model: withWorld, snapshot: snapshot({ phase: 'headquarters' }) }))).toBe(true);
+    expect(lesson('hub.gate').trigger(context({ model: worldModel('headquarters') }))).toBe(true);
   });
 
   it('hub.guest only speaks to a co-op guest', () => {
@@ -72,10 +81,11 @@ describe('hub lessons', () => {
     expect(lesson('hub.guest').trigger(hq({ ...armed, isCoOp: true, isHost: false }))).toBe(true);
   });
 
-  it('hub.receipt fires on the world_prepared event and nothing else', () => {
+  it('hub.receipt waits for a world to exist, not for the one-tick event', () => {
     expect(lesson('hub.receipt').trigger(hq())).toBe(false);
-    const event = { id: 'e', tick: 1, timeMs: 1, type: 'world_prepared' as const, worldId: 'w', worldTitle: 't', source: 'fixture' as const, playerIds: [ME] };
-    expect(lesson('hub.receipt').trigger(hq({ events: [event] }))).toBe(true);
+    expect(lesson('hub.receipt').trigger(context({ model: worldModel('headquarters') }))).toBe(true);
+    // Out in the run there is no receipt on screen to point at.
+    expect(lesson('hub.receipt').trigger(context({ model: worldModel('expedition') }))).toBe(false);
   });
 });
 
@@ -104,9 +114,12 @@ describe('control lessons', () => {
     const hud = (resources: number, abilityEUnlocked = false) => uiModel({
       hud: { hp: 1, maxHp: 1, state: 'idle', dashReady: true, dashCooldownMs: 0, attackReady: true, enemiesRemaining: 0, resources, abilityEUnlocked },
     });
-    expect(lesson('run.unlock_e').trigger(context({ model: hud(ABILITY_UNLOCK_COST - 1) }))).toBe(false);
-    expect(lesson('run.unlock_e').trigger(context({ model: hud(ABILITY_UNLOCK_COST) }))).toBe(true);
-    expect(lesson('run.unlock_e').trigger(context({ model: hud(ABILITY_UNLOCK_COST, true) }))).toBe(false);
+    const cleared = { roomsCleared: 1 };
+    expect(lesson('run.unlock_e').trigger(context({ model: hud(ABILITY_UNLOCK_COST - 1), facts: cleared }))).toBe(false);
+    expect(lesson('run.unlock_e').trigger(context({ model: hud(ABILITY_UNLOCK_COST), facts: cleared }))).toBe(true);
+    expect(lesson('run.unlock_e').trigger(context({ model: hud(ABILITY_UNLOCK_COST, true), facts: cleared }))).toBe(false);
+    // Affordable from the start of a run; it still waits for the first cleared room.
+    expect(lesson('run.unlock_e').trigger(context({ model: hud(ABILITY_UNLOCK_COST) }))).toBe(false);
   });
 
   it('run.ability_r waits for a full ultimate charge', () => {
