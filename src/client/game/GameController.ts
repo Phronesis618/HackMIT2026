@@ -8,17 +8,19 @@
  *   input (per frame)  -> session.setIntent
  *   UiActions          -> session methods (UI never touches the session directly)
  */
-import type { GameEvent, GameSnapshot, PlayerState, PreparedWorld } from '../../shared/contracts';
+import type { GameEvent, GameSnapshot, PlayerIdentity, PlayerState, PreparedWorld, RoomSpec } from '../../shared/contracts';
 import { CLASS_INFO, CLASS_IDS, type ClassId } from '../../shared/registry';
 import type { WorldRenderer } from '../../shared/render';
 import type { GameSession } from '../../shared/session';
 import type { UiActions, UiModel } from '../../shared/ui';
-import { headquartersArt, headquartersRoom, trainingArt, trainingRoom } from '../../sim';
+import { nearbyHeadquartersStation } from '../../shared/headquarters';
+import { createRoomProvider, headquartersArt, headquartersRoom, trainingArt, trainingRoom, type RoomProvider } from '../../sim';
 import type { AudioPort } from '../audio';
 import { cueForEvent } from '../audio';
 import type { BrowserChronicle } from '../chronicle';
 import type { LocalSession } from '../transport/LocalSession';
 import { createKeyboardMouseInput, type InputSampler } from './input';
+import { stageOwnsInput } from './keyboardFocus';
 import type { UiStore } from './uiStore';
 
 export interface PreviewFlags {
@@ -46,6 +48,7 @@ export interface GameControllerDeps {
   store: UiStore;
   flags: PreviewFlags;
   liveGenerationAvailable: boolean;
+  persistIdentity?: (identity: PlayerIdentity) => void;
 }
 
 export class GameController {
@@ -53,9 +56,14 @@ export class GameController {
   private input: InputSampler | null = null;
   private rafHandle = 0;
   private latestSnapshot: GameSnapshot | null = null;
+  private interactHeld = false;
   private stageMounted = false;
   private disposers: Array<() => void> = [];
   private thumbnailTimers = new Set<ReturnType<typeof setTimeout>>();
+  /** Floors worlds: rooms are compiled here from `world.floors`, the snapshot only names them. */
+  private floorRooms: { worldId: string; provider: RoomProvider } | null = null;
+  private shownWorldId: string | null = null;
+  private shownRoomId: string | null = null;
 
   constructor(private readonly deps: GameControllerDeps) {
     this.actions = this.createActions();
@@ -79,6 +87,7 @@ export class GameController {
       classStatus: Object.fromEntries(CLASS_IDS.map((id) => [id, CLASS_INFO[id].status])) as UiModel['classStatus'],
       preview: { fixtureWorld: flags.fixtureWorld, startRoom: flags.startRoom },
       notice: null,
+      headquarters: { nearbyStationId: null, activeStationId: null },
     };
   }
 
@@ -101,6 +110,17 @@ export class GameController {
       chronicle.subscribe((memories) => store.set({ memories })),
     );
     if (session.onError) this.disposers.push(session.onError((message) => this.notice('error', message)));
+    // Floors stopgap until the biome-choice panel (agent F3) lands: 1 / 2 pick an offered biome.
+    const pickBiome = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey || !stageOwnsInput(event.target, stage)) return;
+      const choice = this.latestSnapshot?.floor?.biomeChoice;
+      const biomeId = choice?.options[event.code === 'Digit1' ? 0 : event.code === 'Digit2' ? 1 : -1];
+      if (biomeId !== undefined) session.chooseBiome?.(biomeId);
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', pickBiome);
+      this.disposers.push(() => window.removeEventListener('keydown', pickBiome));
+    }
 
     this.loop();
     await session.start();
@@ -149,16 +169,16 @@ export class GameController {
     if (previous.connection.status !== connection.status || previous.connection.isHost !== connection.isHost) store.set({ connection });
     const contributions = session.getContributions();
     if (previous.contributions.length !== contributions.length || previous.contributions.some((c, index) => c.id !== contributions[index]?.id)) store.set({ contributions });
-    const identity = session.getLocalPlayer();
-    if (previous.localPlayer.id !== identity.id || previous.localPlayer.classId !== identity.classId || previous.localPlayer.displayName !== identity.displayName) {
-      store.set({ localPlayer: { ...identity, isLocal: true } });
-    }
+    this.syncIdentity();
     const snapshot = this.latestSnapshot;
     if (snapshot && this.input) {
       const me = snapshot.players.find((p) => p.id === session.localPlayerId);
       const pointer = this.input.getPointer();
       const aim = pointer ? renderer.screenToWorld(pointer.x, pointer.y) : me ? { x: me.x + Math.cos(me.facing), y: me.y + Math.sin(me.facing) } : { x: 0, y: 0 };
-      session.setIntent(this.input.sample(aim));
+      const intent = this.input.sample(aim);
+      if (intent.interact && !this.interactHeld) this.activateHeadquartersStation();
+      this.interactHeld = intent.interact === true;
+      session.setIntent(intent);
       renderer.renderSnapshot(snapshot, session.localPlayerId);
 
       if (me) {
@@ -213,37 +233,51 @@ export class GameController {
   private handleSnapshot(snapshot: GameSnapshot): void {
     this.latestSnapshot = snapshot;
     const { session, store, renderer, audio } = this.deps;
+    const nearbyStationId = nearbyHeadquartersStation(snapshot, session.localPlayerId)?.id ?? null;
+    const headquarters = store.get().headquarters;
+    const activeStationId = headquarters?.activeStationId === nearbyStationId ? nearbyStationId : null;
+    if (headquarters?.nearbyStationId !== nearbyStationId || headquarters?.activeStationId !== activeStationId) {
+      store.set({ headquarters: { nearbyStationId, activeStationId } });
+    }
     const me = snapshot.players.find((p) => p.id === session.localPlayerId);
     audio.setScene?.(snapshot.phase);
     if (snapshot.phase === 'training') {
       if (store.get().phase !== 'training') {
+        this.shownWorldId = null;
+        this.shownRoomId = trainingRoom.id;
         renderer.showRoom(trainingRoom, trainingArt);
         store.set({ phase: 'training', room: { index: 0, name: trainingRoom.name, description: trainingRoom.description, isFinal: false }, hud: me ? hudFrom(me, snapshot) : null });
       }
       return;
     }
+    if (snapshot.phase !== 'headquarters' && store.get().phase !== snapshot.phase) {
+      store.set({ phase: snapshot.phase });
+    }
     const world = session.getWorld();
-    const room = snapshot.roomIndex === null ? null : world?.rooms[snapshot.roomIndex];
-    if (world && room && snapshot.phase !== 'headquarters' && (store.get().room?.index !== room.index || store.get().phase === 'headquarters' || store.get().phase === 'training')) {
-      // Each biome renders with its own compiled art; the exit label tells players where they are heading.
-      const biome = world.biomes.find((b) => b.roomIndices.includes(room.index));
+    const room = snapshot.floor && world ? this.floorRoom(world, snapshot.floor)
+      : snapshot.roomIndex === null ? null : world?.rooms[snapshot.roomIndex];
+    const roomChanged = this.shownWorldId !== world?.worldId || this.shownRoomId !== room?.id;
+    if (world && room && snapshot.worldId === world.worldId && snapshot.roomId === room.id && snapshot.phase !== 'headquarters' && roomChanged) {
+      this.shownWorldId = world.worldId;
+      this.shownRoomId = room.id;
       const nextIndex = room.exits[0]?.toRoomIndex;
-      const nextRoom = nextIndex === undefined ? undefined : world.rooms[nextIndex];
-      const nextBiome = nextRoom ? world.biomes.find((b) => b.roomIndices.includes(nextRoom.index)) : undefined;
-      const exitLabel = nextRoom
-        ? `→ ${nextRoom.name}${nextBiome && nextBiome !== biome ? ` · ${nextBiome.name}` : ''}`
-        : nextIndex !== undefined ? '→ next room (still forming)' : undefined;
-      renderer.showRoom(room, biome?.art ?? world.art, world.receipt.lines, {
-        title: world.recipe.title,
-        tagline: world.recipe.tagline,
-        ...(biome ? { biome: { name: biome.name, index: biome.index, count: world.biomes.length, firstRoom: biome.roomIndices[0] === room.index } } : {}),
-        ...(exitLabel ? { exitLabel } : {}),
-      });
-      store.set({
-        room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal, ...(biome ? { biomeName: biome.name, biomeIndex: biome.index } : {}) },
-        phase: snapshot.phase,
-        hud: me ? hudFrom(me, snapshot) : store.get().hud,
-      });
+      const nextRoom = snapshot.floor || nextIndex === undefined ? undefined : world.rooms[nextIndex];
+      const exitLabel = nextRoom ? `→ ${nextRoom.name}` : !snapshot.floor && nextIndex !== undefined && !room.isFinal ? '→ next room (still forming)' : undefined;
+      renderer.showRoom(room, world.art, world.receipt.lines, { title: world.recipe.title, tagline: world.recipe.tagline, ...(exitLabel ? { exitLabel } : {}) });
+      store.set({ room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal }, phase: snapshot.phase, hud: me ? hudFrom(me, snapshot) : store.get().hud });
+    }
+  }
+
+  /** Same deterministic provider the sim uses, so a room address is all the snapshot has to carry. */
+  private floorRoom(world: PreparedWorld, floor: NonNullable<GameSnapshot['floor']>): RoomSpec | null {
+    if (this.floorRooms?.worldId !== world.worldId) {
+      const provider = createRoomProvider(world);
+      this.floorRooms = provider ? { worldId: world.worldId, provider } : null;
+    }
+    try {
+      return this.floorRooms?.provider.getRoom({ biomeId: floor.biomeId, roomId: floor.roomId }) ?? null;
+    } catch {
+      return null; // an address outside this world: keep showing the last room
     }
   }
 
@@ -254,12 +288,18 @@ export class GameController {
       const cue = cueForEvent(e);
       if (cue) audio.play(cue);
       if (e.type === 'contribution_submitted') store.set({ contributions: session.getContributions() });
+      if (e.type === 'biome_choice_offered') {
+        const names = e.options.map((id, i) => `[${i + 1}] ${session.getWorld()?.floors?.briefs.find((brief) => brief.id === id)?.name ?? id}`);
+        this.notice('info', `The way on is open. ${session.getIsHost?.() === false ? 'The host chooses' : 'Choose'}: ${names.join('  ·  ')}`);
+      }
     }
 
     const world = session.getWorld();
     const snapshot = this.latestSnapshot ?? session.getSnapshot();
     const created = chronicle.ingest(events, {
       players: (snapshot?.players ?? []).map((p) => ({ id: p.id, displayName: p.displayName })),
+      localPlayerId: session.localPlayerId,
+      classByPlayerId: Object.fromEntries((snapshot?.players ?? []).map((p) => [p.id, p.classId])),
       world: world
         ? { worldId: world.worldId, title: world.recipe.title, provenanceSource: world.provenance.source, receipt: world.receipt }
         : null,
@@ -285,6 +325,12 @@ export class GameController {
 
   private handleWorld(world: PreparedWorld): void {
     this.deps.audio.setWorld?.(world.art);
+    this.deps.chronicle.refreshReceipt({
+      worldId: world.worldId,
+      title: world.recipe.title,
+      provenanceSource: world.provenance.source,
+      receipt: world.receipt,
+    });
     this.deps.store.set({
       world: {
         worldId: world.worldId,
@@ -300,7 +346,6 @@ export class GameController {
         palette: world.art.palette,
         motifIds: world.art.motifIds,
         roomNames: world.rooms.map((room) => room.name),
-        biomes: world.biomes.map((b) => ({ name: b.name, roomNames: b.roomIndices.map((i) => world.rooms[i]?.name).filter((n): n is string => Boolean(n)), palette: b.art.palette })),
         rules: world.recipe.rules,
       },
       notice: null,
@@ -310,11 +355,16 @@ export class GameController {
   private handlePhase(phase: 'headquarters' | 'training' | 'expedition' | 'debrief'): void {
     const { renderer, store, audio } = this.deps;
     audio.setScene?.(phase);
+    store.set({ headquarters: { nearbyStationId: null, activeStationId: null } });
     if (phase === 'headquarters') {
+      this.shownWorldId = null;
+      this.shownRoomId = headquartersRoom.id;
       renderer.showHeadquarters(headquartersRoom, headquartersArt);
       store.set({ phase: 'headquarters', room: null, hud: null });
     } else if (phase === 'training') {
-      renderer.showRoom(trainingRoom, trainingArt);
+      if (this.shownWorldId !== null || this.shownRoomId !== trainingRoom.id) renderer.showRoom(trainingRoom, trainingArt);
+      this.shownWorldId = null;
+      this.shownRoomId = trainingRoom.id;
       store.set({ phase: 'training', room: { index: 0, name: trainingRoom.name, description: trainingRoom.description, isFinal: false } });
     } else if (phase === 'debrief') {
       store.set({ phase: 'debrief' });
@@ -325,6 +375,35 @@ export class GameController {
     this.deps.store.set({ notice: { kind, text } });
   }
 
+  private syncIdentity(): void {
+    const { session, store, persistIdentity } = this.deps;
+    if (session.mode === 'remote' && session.getConnectionStatus() !== 'connected') return;
+    const identity = session.getLocalPlayer();
+    const previous = store.get().localPlayer;
+    if (previous.id === identity.id && previous.classId === identity.classId && previous.displayName === identity.displayName) return;
+    store.set({ localPlayer: { ...identity, isLocal: true } });
+    persistIdentity?.(identity);
+  }
+
+  private canUseHeadquarters(): boolean {
+    const { session, store } = this.deps;
+    return session.getPhase() === 'headquarters'
+      && store.get().phase === 'headquarters'
+      && !['queued', 'generating', 'validating'].includes(store.get().generation.phase)
+      && session.getConnectionStatus() === 'connected';
+  }
+
+  private activateHeadquartersStation(): void {
+    if (!this.canUseHeadquarters()) return;
+    const { session, store, audio } = this.deps;
+    const snapshot = session.getSnapshot();
+    const station = snapshot ? nearbyHeadquartersStation(snapshot, session.localPlayerId) : null;
+    if (!station) return;
+    store.set({ headquarters: { nearbyStationId: station.id, activeStationId: station.id } });
+    if (station.classId) this.actions.selectClass(station.classId);
+    audio.play('ui_confirm');
+  }
+
   // ---- UiActions -------------------------------------------------------------------
 
   private createActions(): UiActions {
@@ -332,15 +411,12 @@ export class GameController {
     return {
       setDisplayName: (name) => {
         session.setDisplayName(name);
-        const me = session.getLocalPlayer();
-        store.set({ localPlayer: { ...me, isLocal: true } });
-        persistIdentity(me);
+        this.syncIdentity();
       },
       selectClass: (classId: ClassId) => {
+        if (!this.canUseHeadquarters()) return;
         session.setClass(classId);
-        const me = session.getLocalPlayer();
-        store.set({ localPlayer: { ...me, isLocal: true } });
-        persistIdentity(me);
+        this.syncIdentity();
       },
       submitContribution: (text) => {
         const c = session.submitContribution(text);
@@ -380,19 +456,12 @@ export class GameController {
         const ok = session.enterTraining?.() ?? false;
         if (!ok) this.notice('info', 'The training range is available in solo play from headquarters.');
       },
+      activateHeadquartersStation: () => this.activateHeadquartersStation(),
+      closeHeadquartersStation: () => store.set((model) => ({
+        ...model,
+        headquarters: { nearbyStationId: model.headquarters?.nearbyStationId ?? null, activeStationId: null },
+      })),
     };
-  }
-}
-
-// ---- identity persistence (device-local) --------------------------------------------
-
-export const IDENTITY_STORAGE_KEY = 'relay.identity.v1';
-
-export function persistIdentity(identity: { id: string; displayName: string; classId: ClassId }): void {
-  try {
-    localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(identity));
-  } catch {
-    /* ignore */
   }
 }
 

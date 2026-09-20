@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import type { Palette } from '../../shared/contracts';
 import { TILE_SIZE } from '../../shared/conventions';
-import type { MotifId, PropId } from '../../shared/registry';
+import { PROP_INFO, type MotifId, type PropId } from '../../shared/registry';
 import { hexToInt } from '../../shared/tokens';
 
 export type G = Phaser.GameObjects.Graphics;
@@ -95,7 +95,20 @@ export function drawProp(g: G, propId: PropId, cx: number, cy: number, palette: 
   const wall = hexToInt(palette.wall);
   const edge = hexToInt(palette.wallEdge);
   const half = TILE_SIZE / 2;
-  g.fillStyle(0x000000, 0.28).fillEllipse(cx + 3, cy + 12, 30, 12);
+  const info = PROP_INFO[propId];
+  if (info.blocksMovement) {
+    // Footprint: the exact tiles that block, as a dark base plate with a crisp edge, then a
+    // contact shadow. Anything without this plate can be walked through.
+    const fw = info.footprint.w * TILE_SIZE;
+    const fh = info.footprint.h * TILE_SIZE;
+    g.fillStyle(0x000000, 0.34).fillRoundedRect(cx - half + 2, cy - half + 2, fw - 4, fh - 4, 5);
+    g.lineStyle(1.5, 0x000000, 0.7).strokeRoundedRect(cx - half + 2, cy - half + 2, fw - 4, fh - 4, 5);
+    g.lineStyle(1, edge, 0.45).strokeRoundedRect(cx - half + 3.5, cy - half + 3.5, fw - 7, fh - 7, 4);
+    g.fillStyle(0x000000, 0.4).fillEllipse(cx - half + fw / 2 + 2, cy - half + fh - 6, fw - 8, 12);
+    if (propId === 'monolith_shard') cy += half; // stands on both of its tiles
+  } else {
+    g.fillStyle(0x000000, 0.2).fillEllipse(cx + 3, cy + 12, 26, 9);
+  }
   switch (propId) {
     case 'pillar':
       g.fillStyle(wall, 1).fillRect(cx - 10, cy - 22, 20, 36);

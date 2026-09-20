@@ -126,32 +126,6 @@ describe('composeWorld', () => {
     }
   });
 
-  it('splits longer expeditions into up to three biomes with their own construction and palette', () => {
-    const six = composeWorld({ ...request(['space pirates', 'a frozen moon full of crystal moths']), plannedRoomCount: 6 });
-    expect(six.recipe.biomes).toHaveLength(3);
-    expect(six.recipe.biomes.map((b) => b.rooms.length)).toEqual([2, 2, 2]);
-    expect(six.recipe.rooms).toHaveLength(6);
-    const [a, b, c] = six.recipe.biomes;
-    expect(new Set([a!.name, b!.name, c!.name]).size).toBe(3);
-    expect(b!.palette!.floor).not.toBe(a!.palette!.floor);
-    expect(b!.motifIds[0]).not.toBe(a!.motifIds[0]);
-    const last = c!.rooms.at(-1)!;
-    expect(last.enemyIds[0]).toBe('guardian');
-    expect(last.propIds).toContain('anchor_pedestal');
-    expect(new Set(six.recipe.rooms.map((r) => r.name)).size).toBe(6);
-    const compiled = compileWorldRecipe(six.recipe, { plannedRoomCount: 6, seed: 11 });
-    expect(compiled.rooms.map((r) => r.biomeIndex)).toEqual([0, 0, 1, 1, 2, 2]);
-    expect(compiled.biomes.map((bm) => bm.roomIndices)).toEqual([[0, 1], [2, 3], [4, 5]]);
-    expect(compiled.biomes[1]!.art.skyline).toBe(b!.motifIds[0]);
-    expect(compiled.rooms[5]!.isFinal).toBe(true);
-    expect(compiled.rooms[4]!.exits[0]!.toRoomIndex).toBe(5);
-    for (const n of [1, 2, 4, 5, 9]) {
-      const sized = composeWorldRecipe({ ...request(['haunted graveyard']), plannedRoomCount: n });
-      expect(sized.biomes.reduce((sum, bm) => sum + bm.rooms.length, 0)).toBe(n);
-      expect(compileWorldRecipe(sized, { plannedRoomCount: n, seed: 2 }).rooms).toHaveLength(n);
-    }
-  });
-
   it('produces distinct worlds across many different ideas', () => {
     const prompts = ['space pirates', 'sunken cathedral', 'neon city market', 'frozen research station', 'volcanic forge', 'haunted graveyard', 'overgrown library', 'crystal caves', 'storm-lashed airship dock', 'clockwork factory'];
     const recipes = prompts.map((p) => composeWorldRecipe(request([p])));

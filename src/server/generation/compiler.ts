@@ -8,25 +8,24 @@
  */
 import {
   ArtRecipeSchema,
-  CompiledBiomeSchema,
-  MAX_ROOMS,
-  recipeRoomBlueprints,
   RoomSpecSchema,
   WorldRecipeSchema,
   type ArtRecipe,
   type Attribution,
-  type CompiledBiome,
   type ContributionMapping,
-  type Palette,
   type RoomBlueprint,
   type RoomEncounter,
   type RoomProp,
   type RoomRelic,
   type RoomSpec,
+  type RoomTerrain,
   type WorldRecipe,
 } from '../../shared/contracts';
+import { ANCHOR_RANGE, LORE_READ_RANGE, PLAYER_RADIUS, TILE_SIZE, tileToWorld } from '../../shared/conventions';
 import { hashString } from '../../shared/ids';
-import { MOTIF_IDS, PROP_INFO, type MotifId } from '../../shared/registry';
+import { ENEMY_INFO, MOTIF_IDS, PROP_INFO, WALKABLE_TILES, type MotifId } from '../../shared/registry';
+import { buildSolidGrid, circleHitsSolid, type SolidGrid } from '../../sim/collision';
+import { clearPath } from '../../sim/combat';
 
 export interface CompileWorldRecipeOptions {
   plannedRoomCount: number;
@@ -37,8 +36,6 @@ export interface CompileWorldRecipeOptions {
 export interface CompiledWorldRecipe {
   rooms: RoomSpec[];
   art: ArtRecipe;
-  /** One entry per biome in the recipe (empty for single-biome recipes). */
-  biomes: CompiledBiome[];
   /** Honest descriptions of deterministic repairs made by trusted code. */
   notes: string[];
 }
@@ -53,8 +50,8 @@ type Grid = string[][];
 export function compileWorldRecipe(rawRecipe: WorldRecipe, options: CompileWorldRecipeOptions): CompiledWorldRecipe {
   const recipe = WorldRecipeSchema.parse(rawRecipe);
   const plannedRoomCount = options.plannedRoomCount;
-  if (!Number.isInteger(plannedRoomCount) || plannedRoomCount < 1 || plannedRoomCount > MAX_ROOMS) {
-    throw new Error(`plannedRoomCount must be an integer from 1 to ${MAX_ROOMS}; received ${plannedRoomCount}`);
+  if (!Number.isInteger(plannedRoomCount) || plannedRoomCount < 1 || plannedRoomCount > 3) {
+    throw new Error(`plannedRoomCount must be an integer from 1 to 3; received ${plannedRoomCount}`);
   }
   const committedRoomCount = options.committedRoomCount ?? plannedRoomCount;
   if (!Number.isInteger(committedRoomCount) || committedRoomCount < 1 || committedRoomCount > plannedRoomCount) {
@@ -63,13 +60,12 @@ export function compileWorldRecipe(rawRecipe: WorldRecipe, options: CompileWorld
 
   const seed = options.seed ?? hashString(JSON.stringify(recipe));
   const notes: string[] = [];
-  const blueprints = recipeRoomBlueprints(recipe);
   const rooms = Array.from({ length: committedRoomCount }, (_, index) => {
-    const entry = blueprints[index] ?? blueprints[blueprints.length - 1]!;
-    if (index >= blueprints.length) {
-      notes.push(`Room ${index + 1} reused the final blueprint because the recipe supplied only ${blueprints.length} room(s).`);
+    const blueprint = recipe.rooms[index] ?? recipe.rooms[recipe.rooms.length - 1]!;
+    if (index >= recipe.rooms.length) {
+      notes.push(`Room ${index + 1} reused the final blueprint because the recipe supplied only ${recipe.rooms.length} room(s).`);
     }
-    return compileRoom(recipe, entry.blueprint, index, plannedRoomCount, seed, notes, entry.biomeIndex);
+    return compileRoom(recipe, blueprint, index, plannedRoomCount, seed, notes);
   });
 
   const droppedMappings = recipe.contributionMappings.filter((mapping) => mapping.roomIndex >= plannedRoomCount).length;
@@ -81,36 +77,16 @@ export function compileWorldRecipe(rawRecipe: WorldRecipe, options: CompileWorld
   const orphanRemains = recipe.lore.filter((f) => f.kind === 'remains' && f.enemyId === null).length;
   if (orphanRemains > 0) notes.push(`${orphanRemains} remains fragment(s) name no enemy and will never drop.`);
 
-  const art = compileArt(recipe.palette, recipe.motifIds, seed, recipe.rules.includes('low_visibility'));
-  // Biome art: each biome renders with its own motifs (and palette when it declares one), so
-  // crossing into a new biome visibly changes the construction of the world.
-  const biomes: CompiledBiome[] = recipe.biomes.map((biome, biomeIndex) => {
-    const roomIndices = blueprints
-      .map((entry, roomIndex) => ({ entry, roomIndex }))
-      .filter(({ entry, roomIndex }) => entry.biomeIndex === biomeIndex && roomIndex < plannedRoomCount)
-      .map(({ roomIndex }) => roomIndex);
-    return CompiledBiomeSchema.parse({
-      index: biomeIndex,
-      name: biome.name,
-      description: biome.description,
-      roomIndices: roomIndices.length > 0 ? roomIndices : [Math.min(plannedRoomCount - 1, blueprints.findIndex((e) => e.biomeIndex === biomeIndex))].filter((i) => i >= 0),
-      art: compileArt(biome.palette ?? recipe.palette, biome.motifIds, hashString(`${seed}:biome:${biomeIndex}`), recipe.rules.includes('low_visibility')),
-    });
-  }).filter((biome) => biome.roomIndices.length > 0);
-
-  return { rooms, art, biomes, notes: notes.slice(0, 10) };
-}
-
-function compileArt(palette: Palette, motifIds: MotifId[], seed: number, murky = false): ArtRecipe {
-  return ArtRecipeSchema.parse({
+  const art = ArtRecipeSchema.parse({
     paletteFamily: 'ink-neon',
-    palette,
-    motifIds: motifIds.slice(0, 4),
-    skyline: motifIds[0],
-    // low_visibility worlds are visibly murkier as well as mechanically shorter-sighted.
-    fog: murky ? fraction(seed, 'fog', 75, 95) : fraction(seed, 'fog', 20, 55),
+    palette: recipe.palette,
+    motifIds: recipe.motifIds,
+    skyline: recipe.motifIds[0],
+    fog: fraction(seed, 'fog', 20, 55),
     glowIntensity: fraction(seed, 'glow', 50, 85),
   });
+
+  return { rooms, art, notes: notes.slice(0, 10) };
 }
 
 function compileRoom(
@@ -120,7 +96,6 @@ function compileRoom(
   plannedRoomCount: number,
   seed: number,
   notes: string[],
-  biomeIndex = 0,
 ): RoomSpec {
   const roomSeed = hashString(`${seed}:room:${index}:${blueprint.name}`);
   const width = 22 + pick(roomSeed, 'width', 7); // 22–28, inside the 18–28 product target.
@@ -130,6 +105,7 @@ function compileRoom(
   const grid = createBorderedGrid(width, height);
 
   applyMotifStructure(grid, pathY, blueprint.motifIds[0] ?? recipe.motifIds[0], roomSeed);
+  applyTerrain(grid, pathY, blueprint, roomSeed);
   if (blueprint.hazards) applyHazards(grid, pathY, roomSeed);
 
   // Reserve and re-clear the critical route after all structural work.
@@ -141,29 +117,38 @@ function compileRoom(
   const candidates = floorCandidates(grid, pathY, roomSeed);
   const mappings = recipe.contributionMappings.filter((mapping) => mapping.roomIndex === index);
   const props = placeProps(grid, blueprint, index, candidates, mappings, notes);
-  const encounters = placeEncounters(grid, blueprint, index, candidates, mappings, props, isFinal, notes);
-  const attributions = buildAttributions(grid, blueprint, index, pathY, mappings, props, encounters);
-  if (attributions.length < mappings.length) notes.push(`Room ${index + 1} omitted mappings without an observable target.`);
-  const relics = placeRelics(grid, recipe, index, candidates, props, encounters, notes);
-
   const room = RoomSpecSchema.parse({
     id: `generated-room-${roomSeed.toString(36)}-${index}`,
     index,
-    biomeIndex,
     name: blueprint.name,
     description: blueprint.description,
     width,
     height,
     tiles: grid.map((row) => row.join('')),
     props,
-    encounters,
+    encounters: [],
     exits: isFinal ? [] : [{ x: width - 1, y: pathY, toRoomIndex: index + 1, direction: 'east' }],
     isFinal,
-    attributions,
-    relics,
+    attributions: [],
+    relics: [],
   });
-  if (!hasCriticalRoute(room)) throw new Error(`Room ${index + 1} has no safe route to its objective.`);
-  return room;
+  room.encounters = placeEncounters(room, grid, blueprint, candidates, mappings, notes);
+  room.attributions = buildAttributions(grid, blueprint, index, pathY, mappings, room.props, room.encounters);
+  if (room.attributions.length < mappings.length) notes.push(`Room ${index + 1} omitted mappings without an observable target.`);
+  room.relics = placeRelics(grid, recipe, index, candidates, room.props, room.encounters, notes);
+  if (isFinal) room.anchorRelays = placeAnchorRelays(room);
+  const reached = reachableTiles(room);
+  const objective = findTile(grid, isFinal ? 'A' : 'X')!;
+  if (!reached.has(`${objective.x},${objective.y}`)) throw new Error(`Room ${index + 1} has no safe route to its objective.`);
+  const solid = buildSolidGrid(room);
+  for (const encounter of room.encounters) {
+    const center = tileToWorld(encounter.x, encounter.y);
+    if (!reached.has(`${encounter.x},${encounter.y}`) ||
+      circleHitsSolid(solid, center.x, center.y, ENEMY_INFO[encounter.enemyId].radius)) {
+      throw new Error(`Room ${index + 1} has an inaccessible ${encounter.enemyId} encounter.`);
+    }
+  }
+  return RoomSpecSchema.parse(room);
 }
 
 function createBorderedGrid(width: number, height: number): Grid {
@@ -224,6 +209,85 @@ function applyHazards(grid: Grid, pathY: number, seed: number): void {
   }
 }
 
+function defaultTerrain(motif: MotifId): RoomTerrain {
+  if (motif === 'roots' || motif === 'crystals') {
+    return { features: ['breakable_walls', 'rubble'], layout: 'scattered', density: 'balanced' };
+  }
+  if (motif === 'arches' || motif === 'monoliths' || motif === 'spires') {
+    return { features: ['breakable_walls', 'bridges'], layout: 'barricades', density: 'balanced' };
+  }
+  return { features: ['bridges', 'conduits'], layout: 'crossroads', density: 'balanced' };
+}
+
+function applyTerrain(grid: Grid, pathY: number, blueprint: RoomBlueprint, seed: number): void {
+  const terrain = blueprint.terrain ?? defaultTerrain(blueprint.motifIds[0]!);
+  const features = new Set(terrain.features);
+  const density = terrain.density === 'sparse' ? 1 : terrain.density === 'dense' ? 3 : 2;
+  const cells = floorCandidates(grid, pathY, seed);
+  const width = grid[0]!.length;
+  const height = grid.length;
+  if (features.has('bridges')) {
+    const halfLength = terrain.layout === 'barricades' ? 3 : 2;
+    let placed = 0;
+    for (const center of cells) {
+      const horizontal = terrain.layout === 'barricades' ? false
+        : terrain.layout === 'crossroads' ? placed % 2 === 0 : pick(seed, 'bridge-axis', 2) === 0;
+      let stamped = false;
+      for (const horizontalWall of [horizontal, !horizontal]) {
+        const footprint: Coord[] = [];
+        for (let along = -halfLength; along <= halfLength; along++) {
+          for (let across = -1; across <= 1; across++) {
+            footprint.push({
+              x: center.x + (horizontalWall ? along : across),
+              y: center.y + (horizontalWall ? across : along),
+            });
+          }
+        }
+        if (footprint.some(({ x, y }) => x < 2 || x >= width - 2 || y < 1 || y >= height - 1 ||
+          Math.abs(y - pathY) <= 1 || !['.', '#'].includes(grid[y]![x]!))) continue;
+        for (const { x, y } of footprint) grid[y]![x] = '.';
+        for (let along = -halfLength; along <= halfLength; along++) {
+          grid[center.y + (horizontalWall ? 0 : along)]![center.x + (horizontalWall ? along : 0)] = '#';
+        }
+        grid[center.y]![center.x] = '=';
+        for (const side of [-1, 1]) {
+          grid[center.y + (horizontalWall ? side : 0)]![center.x + (horizontalWall ? 0 : side)] = '>';
+        }
+        stamped = true;
+        break;
+      }
+      if (stamped && ++placed >= (density === 3 ? 2 : 1)) break;
+    }
+  }
+  if (features.has('breakable_walls')) {
+    const walls: Coord[] = [];
+    for (let y = 2; y < height - 2; y++) {
+      for (let x = 2; x < width - 2; x++) {
+        if (grid[y]![x] !== '#') continue;
+        if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => grid[y + dy!]![x + dx!] === '=')) continue;
+        walls.push({ x, y });
+      }
+    }
+    walls.sort((a, b) => hashString(`${seed}:wall:${a.x}:${a.y}`) - hashString(`${seed}:wall:${b.x}:${b.y}`));
+    for (const { x, y } of walls.slice(0, density * 2)) grid[y]![x] = 'B';
+  }
+  for (const feature of ['rubble', 'conduits'] as const) {
+    if (!features.has(feature)) continue;
+    let placed = 0;
+    for (const center of cells) {
+      const offsets = feature === 'rubble'
+        ? [[0, 0], [1, 0], [0, 1], [1, 1]]
+        : terrain.layout === 'crossroads'
+          ? [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]
+          : [[0, 0], [1, 0], [2, 0], [3, 0]];
+      const patch = offsets.map(([dx, dy]) => ({ x: center.x + dx!, y: center.y + dy! }));
+      if (patch.some(({ x, y }) => x < 2 || x >= width - 2 || Math.abs(y - pathY) <= 1 || grid[y]?.[x] !== '.')) continue;
+      for (const { x, y } of patch) grid[y]![x] = feature === 'rubble' ? ':' : '+';
+      if (++placed >= density) break;
+    }
+  }
+}
+
 function floorCandidates(grid: Grid, pathY: number, seed: number): Coord[] {
   const candidates: Coord[] = [];
   for (let y = 1; y < grid.length - 1; y++) {
@@ -280,31 +344,41 @@ function placeProps(
 }
 
 function placeEncounters(
+  room: RoomSpec,
   grid: Grid,
   blueprint: RoomBlueprint,
-  roomIndex: number,
   candidates: Coord[],
   mappings: ContributionMapping[],
-  props: RoomProp[],
-  isFinal: boolean,
   notes: string[],
 ): RoomEncounter[] {
+  const roomIndex = room.index;
   const enemyIds = [...blueprint.enemyIds];
-  if (isFinal && !enemyIds.includes('guardian')) {
+  if (room.isFinal && !enemyIds.includes('guardian')) {
     enemyIds.push('guardian');
     notes.push(`Room ${roomIndex + 1} added the required Guardian encounter.`);
   }
   const encounterMappings = mappings.filter((mapping) => mapping.kind === 'encounter');
   const occupied = new Set<string>();
-  for (const prop of props) {
-    const { w, h } = PROP_INFO[prop.propId].footprint;
-    markOccupied(occupied, prop.x, prop.y, w, h);
-  }
   return enemyIds.slice(0, 4).flatMap((enemyId, encounterIndex) => {
+    const solid = buildSolidGrid(room);
+    const reached = reachableTiles(room, solid);
+    const unavailable = new Set(occupied);
+    for (const prop of room.props) {
+      const { w, h } = PROP_INFO[prop.propId].footprint;
+      markOccupied(unavailable, prop.x, prop.y, w, h);
+    }
     const padding = enemyId === 'guardian' ? 1 : 0;
     const size = padding * 2 + 1;
-    const coord = candidates.find(({ x, y }) =>
-      footprintFits(grid, occupied, x - padding, y - padding, size, size));
+    let coord = candidates.find(({ x, y }) => {
+      const center = tileToWorld(x, y);
+      return reached.has(`${x},${y}`) &&
+        !circleHitsSolid(solid, center.x, center.y, ENEMY_INFO[enemyId].radius) &&
+        footprintFits(grid, unavailable, x - padding, y - padding, size, size);
+    });
+    if (!coord) {
+      coord = repairEncounterSpace(room, grid, occupied);
+      if (coord) notes.push(`Room ${roomIndex + 1} cleared optional decoration for ${enemyId} encounter clearance.`);
+    }
     if (!coord) throw new Error(`Room ${roomIndex + 1} has no safe spawn for ${enemyId}.`);
     markOccupied(occupied, coord.x - padding, coord.y - padding, size, size);
     const mapping = encounterMappings[encounterIndex];
@@ -317,6 +391,39 @@ function placeEncounters(
       ...(mapping ? { attributionId: mapping.contributionId } : {}),
     }];
   });
+}
+
+function repairEncounterSpace(room: RoomSpec, grid: Grid, occupied: Set<string>): Coord | undefined {
+  const pathY = findTile(grid, 'P')!.y;
+  const candidates: Array<Coord & { cost: number; props: RoomProp[] }> = [];
+  for (const y of [pathY - 2, pathY + 2]) {
+    for (let x = 2; x < room.width - 2; x++) {
+      const patch = new Set<string>();
+      markOccupied(patch, x - 1, y - 1, 3, 3);
+      if ([...patch].some((key) => occupied.has(key))) continue;
+      const props = room.props.filter((prop) => {
+        const { w, h } = PROP_INFO[prop.propId].footprint;
+        for (let dy = 0; dy < h; dy++) {
+          for (let dx = 0; dx < w; dx++) if (patch.has(`${prop.x + dx},${prop.y + dy}`)) return true;
+        }
+        return false;
+      });
+      let cost = props.reduce((sum, prop) => sum + PROP_INFO[prop.propId].footprint.w * PROP_INFO[prop.propId].footprint.h, 0);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) if (grid[y + dy]![x + dx] !== '.') cost++;
+      }
+      candidates.push({ x, y, cost, props });
+    }
+  }
+  candidates.sort((a, b) => a.cost - b.cost || a.y - b.y || a.x - b.x);
+  const target = candidates[0];
+  if (!target) return undefined;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) grid[target.y + dy]![target.x + dx] = '.';
+  }
+  room.props = room.props.filter((prop) => !target.props.includes(prop));
+  room.tiles = grid.map((row) => row.join(''));
+  return { x: target.x, y: target.y };
 }
 
 /**
@@ -339,6 +446,7 @@ function placeRelics(
     markOccupied(occupied, prop.x, prop.y, w, h);
   }
   for (const encounter of encounters) markOccupied(occupied, encounter.x - 1, encounter.y - 1, 3, 3);
+  const core = findTile(grid, 'A');
   const relics: RoomRelic[] = [];
   recipe.lore.forEach((fragment, fragmentIndex) => {
     if (fragment.kind !== 'relic' || fragment.roomIndex !== roomIndex) return;
@@ -346,7 +454,8 @@ function placeRelics(
       notes.push(`Room ${roomIndex + 1} kept only three relics.`);
       return;
     }
-    const coord = candidates.find(({ x, y }) => footprintFits(grid, occupied, x, y, 1, 1));
+    const coord = candidates.find(({ x, y }) => footprintFits(grid, occupied, x, y, 1, 1) &&
+      (!core || Math.hypot(x - core.x, y - core.y) * TILE_SIZE > LORE_READ_RANGE + ANCHOR_RANGE));
     if (!coord) {
       notes.push(`Room ${roomIndex + 1} omitted the relic "${fragment.title}"; no open floor remained.`);
       return;
@@ -399,12 +508,7 @@ function buildAttributions(
   });
 }
 
-function hasCriticalRoute(room: RoomSpec): boolean {
-  const blocked = new Set<string>();
-  for (const prop of room.props) {
-    const info = PROP_INFO[prop.propId];
-    if (info.blocksMovement) markOccupied(blocked, prop.x, prop.y, info.footprint.w, info.footprint.h);
-  }
+function reachableTiles(room: RoomSpec, solid: SolidGrid = buildSolidGrid(room)): Set<string> {
   const grid = room.tiles.map((row) => row.split(''));
   const start = findTile(grid, 'P')!;
   const queue = [start];
@@ -413,12 +517,58 @@ function hasCriticalRoute(room: RoomSpec): boolean {
     const { x, y } = queue[i]!;
     const tile = grid[y]?.[x];
     const key = `${x},${y}`;
-    if (!tile || '# ~'.includes(tile) || blocked.has(key) || seen.has(key)) continue;
-    if (tile === (room.isFinal ? 'A' : 'X')) return true;
+    const center = tileToWorld(x, y);
+    if (!tile || !WALKABLE_TILES.has(tile) || tile === '~' || seen.has(key) ||
+      circleHitsSolid(solid, center.x, center.y, PLAYER_RADIUS)) continue;
     seen.add(key);
-    queue.push({ x: x + 1, y }, { x: x - 1, y }, { x, y: y + 1 }, { x, y: y - 1 });
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      if (clearPath(solid, center, tileToWorld(x + dx, y + dy), PLAYER_RADIUS)) queue.push({ x: x + dx, y: y + dy });
+    }
   }
-  return false;
+  return seen;
+}
+
+function placeAnchorRelays(room: RoomSpec): Coord[] {
+  const tiles = room.tiles.map((line) => line.split(''));
+  const spawn = findTile(tiles, 'P')!;
+  const core = findTile(tiles, 'A')!;
+  const queue = [spawn];
+  const seen = new Set<string>([`${spawn.x},${spawn.y}`]);
+  const reached = reachableTiles(room);
+  const occupied = new Set<string>();
+  for (const prop of room.props) {
+    const { w, h } = PROP_INFO[prop.propId].footprint;
+    markOccupied(occupied, prop.x, prop.y, w, h);
+  }
+  const candidates: Coord[] = [];
+  for (let i = 0; i < queue.length; i++) {
+    const point = queue[i]!;
+    const tile = room.tiles[point.y]![point.x]!;
+    if (tile === '.' && !occupied.has(`${point.x},${point.y}`) &&
+      room.relics.every((relic) =>
+        Math.hypot(point.x - relic.x, point.y - relic.y) * TILE_SIZE > LORE_READ_RANGE + ANCHOR_RANGE)) {
+      candidates.push(point);
+    }
+    for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]] as const) {
+      const x = point.x + dx;
+      const y = point.y + dy;
+      const key = `${x},${y}`;
+      if (seen.has(key) || !reached.has(key)) continue;
+      seen.add(key);
+      queue.push({ x, y });
+    }
+  }
+  const relays: Coord[] = [];
+  for (let i = 0; i < 3; i++) {
+    const anchors = [core, spawn, ...relays];
+    const score = (candidate: Coord) => Math.min(...anchors.map((anchor) =>
+      Math.hypot(candidate.x - anchor.x, candidate.y - anchor.y)));
+    candidates.sort((a, b) => score(b) - score(a) || a.y - b.y || a.x - b.x);
+    const point = candidates.shift();
+    if (!point) throw new Error(`Room ${room.index + 1} has no safe space for three Anchor relays.`);
+    relays.push(point);
+  }
+  return relays;
 }
 
 function footprintFits(grid: Grid, occupied: Set<string>, x: number, y: number, width: number, height: number): boolean {

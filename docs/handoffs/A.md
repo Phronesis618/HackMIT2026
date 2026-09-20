@@ -1,5 +1,27 @@
 # Handoff — Agent A (Fable, `feat/core`)
 
+## Terrain, Custodian finale, and Stillpoint sanctuary — 2026-09-20
+
+- Branch: `devin/1789887155-terrain-boss-sanctuary`; integration commits through `e1e43c2`.
+- Implemented: bounded terrain recipes, deterministic fixtures, attackable barriers with
+  per-room damage persistence, raised crossings, rubble/conduit movement, and snapshot rendering.
+  Three Guardian health phases introduce charges, denser rings, and exposed recovery windows.
+  Final rooms charge three relays under expanding pulses, then discharge the central Anchor.
+  Legacy rooms without relay metadata preserve the old interaction.
+- Implemented: walkable Stillpoint with four class shrines, device-local Archive records,
+  Observatory, training access, and the existing portal/contribution flows. Station actions
+  read authoritative snapshots; the server remains authoritative for class changes.
+- Shared changes are additive: optional recipe terrain, room relay sites, boss phase/recovery,
+  Anchor ritual, snapshot terrain, and UI station state/actions. Registry adds five tile
+  characters. No dependency changes.
+- Verified: `npm run check` passes: 288 tests across 30 files, typecheck and production build.
+  Following approval on PR #16 (comment 5748345520), the existing collision test walks to
+  the Stillpoint pillar and outer walls with the same bounded assertions; `compactWorld`
+  supplies local relay coordinates; the Phaser mock adds `strokeEllipse` and `fillTriangle`.
+- Mocked: renderer unit tests use Phaser display mocks; no new gameplay stubs.
+- Unverified: live model generation and browser/co-op playthrough of the integrated expansion.
+  The team requested to handle the merge of PR #16. Demo instructions are in `docs/DEMO.md`.
+
 ## Operator mode + world dressing (Sep 20, early morning)
 
 - **Implemented — operator generation transport (demo-only):** `RELAY_AI_PROVIDER=operator`

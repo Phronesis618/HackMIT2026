@@ -5,6 +5,7 @@
 import type { RoomSpec } from '../shared/contracts';
 import { TILE_SIZE } from '../shared/conventions';
 import { PROP_INFO, SOLID_TILES } from '../shared/registry';
+import { terrainTileAt } from '../shared/terrain';
 
 export interface SolidGrid {
   width: number;
@@ -13,12 +14,13 @@ export interface SolidGrid {
   solid: Uint8Array;
 }
 
-export function buildSolidGrid(room: RoomSpec): SolidGrid {
+/** `sealedDoors`: floors rooms lock their door ('X') tiles while a fight is on. */
+export function buildSolidGrid(room: RoomSpec, brokenWalls: readonly string[] = [], sealedDoors = false): SolidGrid {
   const solid = new Uint8Array(room.width * room.height);
+  if (sealedDoors) for (const exit of room.exits) solid[exit.y * room.width + exit.x] = 1;
   for (let row = 0; row < room.height; row++) {
-    const line = room.tiles[row] ?? '';
     for (let col = 0; col < room.width; col++) {
-      const ch = line[col] ?? ' ';
+      const ch = terrainTileAt(room, col, row, brokenWalls);
       if (SOLID_TILES.has(ch)) solid[row * room.width + col] = 1;
     }
   }

@@ -8,6 +8,7 @@
  *
  */
 import type { GenerationRequest, GenerationStatus, PreparedWorld } from '../../shared/contracts';
+import { floorsSeedFor, upgradeToFloors } from '../../shared/floorgen';
 import { DEFAULT_ANTHROPIC_MODEL, type AIProvider, type GenerationMode } from '../config';
 import { createFixtureGenerationService, loadWorldFixtures } from './fixtureService';
 import { createLiveGenerationService } from './liveService';
@@ -51,6 +52,42 @@ export interface GenerationServiceOptions {
   recipeProvider?: { provider: RecipeProvider; model: string };
   /** Instant provider used instead of a static fixture when the primary provider fails. */
   fallbackProvider?: RecipeProvider;
+  /**
+   * Floors mode default (env RELAY_FLOORS=1). A request's own `floors` field wins. When off
+   * (the default) every output is exactly what it was before floors existed.
+   */
+  floors?: boolean;
+}
+
+/**
+ * Floors mode for one request: the legacy pipeline still produces the recipe, art, provenance
+ * and receipt (fixture, live or fallback); the first committed world is then upgraded with
+ * `upgradeToFloors` (briefs from `recipe.biomes` or derived, route dealt from the seed, `rooms`
+ * = the entrance room). A floors world is complete in one record, so the stream stops there
+ * and the legacy rooms 2..3 are never compiled.
+ */
+export function withFloors<T extends Pick<GenerationService, 'prepareWorld' | 'prepareWorldStream'>>(service: T, floorsDefault: boolean): T {
+  const wanted = (request: GenerationRequest) => request.floors ?? floorsDefault;
+  const upgrade = (world: PreparedWorld, request: GenerationRequest) => upgradeToFloors(world, floorsSeedFor(world, request.seed));
+  async function* prepareWorldStream(request: GenerationRequest, onStatus?: (status: GenerationStatus) => void, signal?: AbortSignal): AsyncGenerator<PreparedWorld> {
+    if (!wanted(request)) {
+      yield* service.prepareWorldStream(request, onStatus, signal);
+      return;
+    }
+    for await (const world of service.prepareWorldStream(request, onStatus, signal)) {
+      yield upgrade(world, request);
+      return;
+    }
+  }
+  return {
+    ...service,
+    prepareWorldStream,
+    async prepareWorld(request: GenerationRequest, onStatus?: (status: GenerationStatus) => void, signal?: AbortSignal) {
+      if (!wanted(request)) return service.prepareWorld(request, onStatus, signal);
+      for await (const world of prepareWorldStream(request, onStatus, signal)) return world;
+      throw new Error('Generation produced no world.');
+    },
+  };
 }
 
 export function createGenerationService(options: GenerationServiceOptions): GenerationService {
@@ -93,7 +130,7 @@ export function createGenerationService(options: GenerationServiceOptions): Gene
     };
 
   return {
-    ...service,
+    ...withFloors(service, options.floors ?? false),
     info: () => ({
       requestedMode: options.mode,
       effectiveMode: liveConfigured ? 'live' : 'fixture',
@@ -107,4 +144,5 @@ export function createGenerationService(options: GenerationServiceOptions): Gene
 
 export { createFixtureGenerationService, loadWorldFixtures } from './fixtureService';
 export { buildReceipt } from './receipt';
+export { upgradeToFloors } from '../../shared/floorgen';
 export { compileWorldRecipe, type CompiledWorldRecipe, type CompileWorldRecipeOptions } from './compiler';

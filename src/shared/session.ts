@@ -55,6 +55,8 @@ export interface GameSession {
   getConnectionStatus(): ConnectionStatus;
   getIsHost?(): boolean;
   unlockAbility?(): void;
+  /** Floors: vote for (solo/host: decide) the next biome while `snapshot.floor.biomeChoice` is open. */
+  chooseBiome?(biomeId: string): void;
   getWorld(): PreparedWorld | null;
   getGenerationStatus(): GenerationStatus;
   getSnapshot(): GameSnapshot | null;

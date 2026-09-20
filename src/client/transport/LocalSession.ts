@@ -8,7 +8,6 @@
 import {
   ATTRIBUTING_SOURCES,
   IDLE_GENERATION_STATUS,
-  MAX_ROOMS,
   GenerationRequestSchema,
   GenerationStatusSchema,
   type Contribution,
@@ -21,7 +20,7 @@ import {
   type PlayerIntent,
   type PreparedWorld,
 } from '../../shared/contracts';
-import { DEFAULT_PLANNED_ROOM_COUNT, TICK_MS } from '../../shared/conventions';
+import { TICK_MS } from '../../shared/conventions';
 import { randomId } from '../../shared/ids';
 import type { ConnectionStatus, GameSession, LocalIntent, Unsubscribe } from '../../shared/session';
 import { createSimulation, type Simulation } from '../../sim';
@@ -32,8 +31,6 @@ export interface LocalSessionOptions {
   worldProvider: WorldProvider;
   /** Injected for tests; defaults to setInterval/performance.now. */
   scheduler?: { setInterval: typeof setInterval; clearInterval: typeof clearInterval; now: () => number };
-  /** Rooms per expedition (1–9); defaults to DEFAULT_PLANNED_ROOM_COUNT. */
-  plannedRoomCount?: number;
 }
 
 const MAX_CATCHUP_TICKS = 5;
@@ -43,7 +40,6 @@ export class LocalSession implements GameSession {
   readonly localPlayerId: string;
 
   private identity: PlayerIdentity;
-  private readonly plannedRoomCount: number;
   private readonly sim: Simulation;
   private readonly provider: WorldProvider;
   private readonly scheduler: NonNullable<LocalSessionOptions['scheduler']>;
@@ -56,6 +52,7 @@ export class LocalSession implements GameSession {
   private snapshot: GameSnapshot | null = null;
 
   private pendingIntent: LocalIntent | null = null;
+  private pendingExit: { roomId: string; target: number } | null = null;
   private intentSeq = 0;
   private metaEventCounter = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -63,6 +60,7 @@ export class LocalSession implements GameSession {
   private lastTime = 0;
   private disposed = false;
   private activeGeneration: AbortController | null = null;
+  private generationHasPrefix = false;
   private lastPhase: GamePhase = 'headquarters';
 
   private snapshotListeners = new Set<(s: GameSnapshot) => void>();
@@ -75,7 +73,6 @@ export class LocalSession implements GameSession {
     this.identity = options.identity;
     this.localPlayerId = options.identity.id;
     this.provider = options.worldProvider;
-    this.plannedRoomCount = Math.min(MAX_ROOMS, Math.max(1, Math.round(options.worldProvider.plannedRoomCount ?? options.plannedRoomCount ?? DEFAULT_PLANNED_ROOM_COUNT)));
     this.scheduler = options.scheduler ?? {
       setInterval: globalThis.setInterval.bind(globalThis),
       clearInterval: globalThis.clearInterval.bind(globalThis),
@@ -83,6 +80,7 @@ export class LocalSession implements GameSession {
     };
     this.sim = createSimulation();
     this.sim.addPlayer(this.identity);
+    this.sim.setHostPlayerId(this.localPlayerId); // solo: the only operative decides biome choices
   }
 
   // ---- lifecycle -------------------------------------------------------------
@@ -100,6 +98,7 @@ export class LocalSession implements GameSession {
     this.disposed = true;
     this.activeGeneration?.abort();
     this.activeGeneration = null;
+    this.pendingExit = null;
     if (this.timer !== null) this.scheduler.clearInterval(this.timer);
     this.timer = null;
     this.connection = 'offline';
@@ -148,17 +147,25 @@ export class LocalSession implements GameSession {
 
   private handleSimEvents(events: GameEvent[]): GameEvent[] {
     const extra: GameEvent[] = [];
+    if (this.sim.getPhase() !== 'expedition') this.pendingExit = null;
     for (const event of events) {
-      if (event.type !== 'exit_reached') continue;
+      if (event.type !== 'exit_reached' || event.roomIndex !== this.sim.getRoom().index) continue;
+      // Floors doors: the sim already moved the crew through the graph on this tick.
+      if (event.toRoomId !== undefined) continue;
       if (this.sim.getPhase() === 'training') {
         // The range's only exit leads home.
         extra.push(...this.sim.returnToHeadquarters());
       } else if (this.sim.getPhase() === 'headquarters') {
-        if (this.world) extra.push(...this.enterRoom(0));
+        if (this.awaitingFirstPrefix()) {
+          this.setGeneration({ ...this.generation, message: 'Waiting for the first room to be committed.' });
+        } else if (this.world) extra.push(...this.enterRoom(0));
         else this.setGeneration({ ...this.generation, message: 'Prepare a world before entering the portal.' });
-      } else if (this.world) {
+      } else if (this.world && this.sim.getPhase() === 'expedition') {
         if (event.toRoomIndex < this.world.rooms.length) extra.push(...this.enterRoom(event.toRoomIndex));
-        else this.setGeneration({ ...this.generation, message: `Room ${event.toRoomIndex + 1} is not committed yet.` });
+        else {
+          this.pendingExit = { roomId: this.sim.getRoom().id, target: event.toRoomIndex };
+          this.setGeneration({ ...this.generation, message: `Room ${event.toRoomIndex + 1} is not committed yet.` });
+        }
       }
     }
     return extra;
@@ -209,8 +216,14 @@ export class LocalSession implements GameSession {
     for (const listener of this.snapshotListeners) listener(this.snapshot);
   }
 
+  chooseBiome(biomeId: string): void {
+    if (this.disposed) return;
+    this.sim.chooseBiome(this.localPlayerId, biomeId); // resolves on the next tick
+  }
+
   enterTraining(): boolean {
-    if (this.disposed || this.sim.getPhase() !== 'headquarters') return false;
+    if (this.disposed || this.sim.getPhase() !== 'headquarters' || this.awaitingFirstPrefix()) return false;
+    this.pendingExit = null;
     const events = this.sim.enterTraining();
     this.snapshot = this.sim.getSnapshot();
     if (events.length) this.emitEvents(events);
@@ -221,16 +234,19 @@ export class LocalSession implements GameSession {
 
   async requestWorld(): Promise<PreparedWorld> {
     if (this.disposed) throw new Error('Session has been disposed.');
+    if (this.sim.getPhase() !== 'headquarters') throw new Error('World generation requires headquarters.');
     this.activeGeneration?.abort();
     const controller = new AbortController();
     this.activeGeneration = controller;
+    this.generationHasPrefix = false;
+    this.pendingExit = null;
     const requestId = randomId('req');
     const startedAt = Date.now();
     const request = GenerationRequestSchema.parse({
       requestId,
       sessionId: this.sessionId,
       contributions: this.contributions,
-      plannedRoomCount: this.plannedRoomCount,
+      plannedRoomCount: 3,
     });
     const current = () => !this.disposed && this.activeGeneration === controller && !controller.signal.aborted;
     this.setGeneration({ phase: 'queued', message: 'Requesting a world…', requestId, startedAt, elapsedMs: 0 });
@@ -254,19 +270,6 @@ export class LocalSession implements GameSession {
       const provider = this.provider;
       const consume = async () => {
         let previous: PreparedWorld | undefined;
-        // The receipt memory is written once the receipt is final (every room committed), so
-        // it never records fewer shaped features than the finished world actually has.
-        let announced = false;
-        const announce = (world: PreparedWorld): void => {
-          if (announced) return;
-          announced = true;
-          this.emitEvents([
-            this.metaEvent({
-              type: 'world_prepared', worldId: world.worldId, worldTitle: world.recipe.title,
-              source: world.provenance.source, playerIds: this.sim.getPlayerIds(),
-            }),
-          ]);
-        };
         try {
           const worlds = provider.prepareWorldStream
             ? provider.prepareWorldStream(request, options)
@@ -275,9 +278,11 @@ export class LocalSession implements GameSession {
             if (!current()) return;
             const world = parseWorldPrefix(rawWorld, request, previous);
             const first = !previous;
-            previous = structuredClone(world);
-            this.world = world;
             this.sim.setWorld(world);
+            if (this.sim.getWorld() !== world) throw new Error('Simulation rejected the prepared world.');
+            this.world = world;
+            previous = structuredClone(world);
+            this.generationHasPrefix = true;
             this.setGeneration({
               phase: ATTRIBUTING_SOURCES.has(world.provenance.source) ? 'ready' : 'fallback',
               message: `${world.provenance.label}: ${world.rooms.length}/${world.plannedRoomCount} rooms ready.`,
@@ -286,17 +291,29 @@ export class LocalSession implements GameSession {
             if (!current()) return;
             for (const l of this.worldListeners) l(world);
             if (!current()) return;
-            if (world.rooms.length >= world.plannedRoomCount) announce(world);
-            if (first) resolve(world);
+            if (first) {
+              this.emitEvents([
+                this.metaEvent({
+                  type: 'world_prepared', worldId: world.worldId, worldTitle: world.recipe.title,
+                  source: world.provenance.source, playerIds: this.sim.getPlayerIds(),
+                }),
+              ]);
+              resolve(world);
+            }
+            if (!current()) return;
+            const events = this.finishPendingExit();
+            if (events.length) {
+              this.snapshot = this.sim.getSnapshot();
+              this.emitEvents(events);
+              for (const listener of this.snapshotListeners) listener(this.snapshot);
+            }
           }
-          if (current() && previous && !announced) announce(previous);
           if (current() && (!previous || previous.rooms.length < previous.plannedRoomCount)) {
             throw new Error('World stream ended before all rooms were committed.');
           }
         } catch (error) {
           if (current()) {
             const detail = error instanceof Error ? error.message : 'World generation failed.';
-            if (previous && !announced) announce(previous);
             const message = previous ? `Committed rooms remain playable. ${detail}` : detail;
             this.setGeneration({ phase: 'failed', message: message.slice(0, 200), requestId, startedAt, elapsedMs: Date.now() - startedAt });
             reject(error);
@@ -330,6 +347,7 @@ export class LocalSession implements GameSession {
 
   returnToHeadquarters(): void {
     if (this.disposed || this.sim.getPhase() === 'headquarters') return;
+    this.pendingExit = null;
     const events = this.sim.returnToHeadquarters();
     this.snapshot = this.sim.getSnapshot();
     if (events.length) this.emitEvents(events);
@@ -338,9 +356,25 @@ export class LocalSession implements GameSession {
   }
 
   private enterRoom(index: number): GameEvent[] {
+    if (this.awaitingFirstPrefix()) return [];
+    this.pendingExit = null;
     const events = this.sim.enterRoom(index);
     this.notifyPhase();
     return events;
+  }
+
+  private finishPendingExit(): GameEvent[] {
+    if (!this.pendingExit) return [];
+    if (this.sim.getPhase() !== 'expedition' || this.pendingExit.roomId !== this.sim.getRoom().id) {
+      this.pendingExit = null;
+      return [];
+    }
+    if (!this.world?.rooms[this.pendingExit.target]) return [];
+    return this.enterRoom(this.pendingExit.target);
+  }
+
+  private awaitingFirstPrefix(): boolean {
+    return this.activeGeneration !== null && !this.generationHasPrefix;
   }
 
   private notifyPhase(): void {

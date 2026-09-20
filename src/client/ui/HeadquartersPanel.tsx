@@ -26,8 +26,17 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
   return (
     <div className="panel panel--hq">
       <p className="eyebrow">The sanctuary between worlds</p>
-      <h2 className="panel__title">Headquarters</h2>
-      <p className="muted">Bring an idea. Step through together. Keep what happened.</p>
+      <h2 className="panel__title">The Stillpoint</h2>
+      <p className="muted">A quiet place to choose who you will be next.</p>
+      <div className="hq-directory" aria-label="Headquarters directory">
+        <span><strong>Northwest · Armory</strong> — four weapon stands</span>
+        <span><strong>North · Returns hall</strong> — quartermaster and relic shelf</span>
+        <span><strong>Northeast · Archive</strong> — device-local records and class plinths</span>
+        <span><strong>Southwest · Training</strong> — practice enemy patterns</span>
+        <span><strong>Southeast · Observatory</strong> — shape the next world</span>
+        <span><strong>South · Departure gate</strong> — enter your expedition</span>
+      </div>
+      <p className="hint">Walk up to a station and press F. Take a weapon from its stand to change class; the ability bar explains your current kit.</p>
       {model.connection.mode === 'remote' && (
         <div className="generation">
           <p className="eyebrow">Shared crew · {model.players.length}/4</p>
@@ -38,7 +47,7 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
       {!connected && <p className="combat-status" role="status">Server {model.connection.status}. Rejoin co-op to reconnect; solo remains available.</p>}
 
       <details className="operative">
-        <summary>{model.localPlayer.displayName} · {selectedClass.name}</summary>
+        <summary>{model.localPlayer.displayName} · {selectedClass.name} · quick controls</summary>
       <label className="field">
         <span className="field__label">Operative</span>
         <input
@@ -53,7 +62,7 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
       </label>
 
       <div className="field">
-        <span className="field__label">Class</span>
+        <span className="field__label">Accessible class controls · also available at the armory stands</span>
         <div className="chips">
           {CLASS_IDS.map((id) => (
             <button
@@ -115,7 +124,7 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
         <button type="button" className="btn btn--primary" onClick={actions.requestWorld} disabled={busy || !connected || !host}>
           {busy ? 'Preparing…' : worldReady ? 'Prepare another world' : 'Prepare world'}
         </button>
-        <button type="button" className="btn" onClick={actions.enterPortal} disabled={!worldReady || !connected || !host}>
+        <button type="button" className="btn" onClick={actions.enterPortal} disabled={busy || !worldReady || !connected || !host}>
           Enter portal
         </button>
       </div>

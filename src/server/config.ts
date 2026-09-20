@@ -41,6 +41,8 @@ export interface ServerConfig {
     operatorDir: string;
     /** How long the `operator` provider waits for a reply before the labelled fixture fallback. */
     operatorTimeoutMs: number;
+    /** RELAY_FLOORS=1: worlds are floors worlds unless a request says `floors: false`. Default off. */
+    floors: boolean;
   };
   /** Absolute path to the production client bundle, or null if not built. */
   staticDir: string | null;
@@ -105,6 +107,7 @@ export function loadServerConfig(options: LoadConfigOptions = {}): ServerConfig 
       openaiModel: (env.OPENAI_MODEL ?? '').trim() || 'gpt-5-mini',
       operatorDir: path.resolve(REPO_ROOT, (env.RELAY_OPERATOR_DIR ?? '').trim() || path.join('.relay', 'operator')),
       operatorTimeoutMs: Number.isFinite(operatorTimeoutMs) && operatorTimeoutMs > 0 ? operatorTimeoutMs : DEFAULT_OPERATOR_TIMEOUT_MS,
+      floors: ['1', 'true'].includes((env.RELAY_FLOORS ?? '').trim().toLowerCase()),
     },
     staticDir: fs.existsSync(path.join(staticDir, 'index.html')) ? staticDir : null,
     fixturesDir: path.join(REPO_ROOT, 'fixtures', 'worlds'),

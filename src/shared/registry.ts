@@ -190,16 +190,30 @@ export const PROP_INFO: Record<PropId, { blocksMovement: boolean; footprint: { w
 /**
  * Tile characters used in RoomSpec.tiles rows.
  *  '#' wall (solid)   '.' floor   ' ' void (outside the room, solid)
- *  '~' hazard floor (renders as hazard; NO damage yet — planned)
+ *  '~' hazard floor
+ *  'B' breakable wall (solid until destroyed, then rubble)
+ *  '=' walkable bridge through a wall run; '>' adjoining ramp
+ *  ':' slowing rubble; '+' conductive speed floor
  *  'P' player spawn (exactly one per room; walkable)
  *  'X' exit (walkable; must have a matching RoomSpec.exits entry)
  *  'A' anchor site (walkable; exactly one in the final room)
  */
-export const TILE_CHARS = ['#', '.', ' ', '~', 'P', 'X', 'A'] as const;
+export const TILE_CHARS = ['#', '.', ' ', '~', 'P', 'X', 'A', 'B', '=', '>', ':', '+'] as const;
 export type TileChar = (typeof TILE_CHARS)[number];
 
-export const SOLID_TILES: ReadonlySet<string> = new Set(['#', ' ']);
-export const WALKABLE_TILES: ReadonlySet<string> = new Set(['.', '~', 'P', 'X', 'A']);
+export const SOLID_TILES: ReadonlySet<string> = new Set(['#', ' ', 'B']);
+export const WALKABLE_TILES: ReadonlySet<string> = new Set(['.', '~', 'P', 'X', 'A', '=', '>', ':', '+']);
+export const TERRAIN_FEATURE_IDS = ['breakable_walls', 'bridges', 'rubble', 'conduits'] as const;
+export type TerrainFeatureId = (typeof TERRAIN_FEATURE_IDS)[number];
+export const TERRAIN_LAYOUT_IDS = ['scattered', 'barricades', 'crossroads'] as const;
+export const TERRAIN_DENSITIES = ['sparse', 'balanced', 'dense'] as const;
+export const BREAKABLE_WALL_HP = 36;
+export const TERRAIN_FEATURE_INFO: Record<TerrainFeatureId, string> = {
+  breakable_walls: 'B: destructible bulkheads, 36 HP; break into slowing rubble to open a route.',
+  bridges: '=: a walkable crossing through a wall run, with > ramps on both sides; no jumping other walls.',
+  rubble: ':: debris patches slow walking to 65%; dashes retain their normal speed.',
+  conduits: '+: conductive floor lanes boost walking to 125%; dashes retain their normal speed.',
+};
 
 /**
  * World attunements: the skill-tree branch a world grows for itself. The model picks a

@@ -71,6 +71,48 @@ Static hosting supports the solo fixture demo: if the generation server is unava
 client displays an explicit offline notice and uses a bundled fixture. Live generation and
 LAN co-op require the Node server.
 
+### Host the full game on Render
+
+Current hosted game: [RELAY](https://relay-a3yv.onrender.com). Redeploying this service keeps
+the same URL.
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Phronesis618/HackMIT2026)
+
+1. Open the button, sign in to Render, and authorize access to this repository if prompted.
+2. Review the Blueprint and create its **Free** web service. `render.yaml` uses the existing
+   Dockerfile to serve the game, `/api`, and `/ws` together. No database is required.
+3. Once the deploy is live, open the service's Render URL. Share that URL for solo play or
+   append `/?mode=coop` for the shared crew.
+
+The initial deployment works without an AI key and clearly labels its offline fixtures.
+To activate Claude, add `ANTHROPIC_API_KEY` in the service's **Environment** settings, then
+save and redeploy. Create a key at [Claude Console](https://platform.claude.com/settings/keys)
+if needed. The Blueprint already selects live mode, Anthropic, and `claude-sonnet-4-6`.
+Keep the key in Render's environment settings; never put it in Git or a `VITE_` variable.
+For GPT instead, use the [provider configuration below](#switch-back-to-gpt).
+
+Verify the deployed service:
+
+- `/api/health` should report `ok: true`. Without a key, `generation.effectiveMode` is
+  `fixture`; with the selected key configured, it is `live`.
+- `/api/config` should report `liveGenerationAvailable: true` after adding the key.
+  This confirms configuration, not that the provider accepted a request.
+- Prepare a world from HQ and check its receipt for `LIVE · claude-sonnet-4-6`.
+  A fixture/fallback receipt means no fresh AI world was produced; inspect Render's logs.
+- Open `/?mode=coop` in two browsers to join the same crew.
+
+Keep **one service instance**: the current backend has one in-memory crew of up to four
+players. Restarts/redeploys reset that crew; saved memories remain in each browser's local
+storage. The Blueprint automatically deploys new pushes or merges to `main`
+(`autoDeployTrigger: commit`). Auto-deploys require a connected GitHub repository. For an
+existing service, sync the updated Blueprint, or select **Settings → Auto-Deploy → On Commit**
+and confirm the linked branch is `main`. Keep the existing `ANTHROPIC_API_KEY` in Render;
+the Blueprint does not replace it.
+
+Render's [free instance](https://render.com/docs/free) sleeps after 15 minutes without
+inbound traffic and takes about a minute to wake. Open the site before presenting, or
+choose a paid instance for an always-on demo. AI provider usage is billed separately.
+
 ## Team and ownership
 
 Three humans, three agents, one repo. **Read [`AGENTS.md`](AGENTS.md) first.**
@@ -84,6 +126,31 @@ Three humans, three agents, one repo. **Read [`AGENTS.md`](AGENTS.md) first.**
 Docs: [`docs/PRODUCT.md`](docs/PRODUCT.md) · [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) ·
 [`docs/ART_DIRECTION.md`](docs/ART_DIRECTION.md) · [`docs/TEAM_PLAN.md`](docs/TEAM_PLAN.md) ·
 handoffs in [`docs/handoffs/`](docs/handoffs/).
+
+### Claude comments → Devin
+
+The `Claude comments to Devin` GitHub Action forwards new conversation comments on open
+issues and pull requests from `curious-droid` to a Devin automation webhook. The author
+must also be an owner, member, or collaborator. To change the author, set the repository
+Actions variable `CLAUDE_GITHUB_LOGIN`.
+
+Enable it after the workflow is merged to `main`:
+
+1. Create a [Devin automation](https://docs.devin.ai/product-guides/automations) with an
+   incoming webhook trigger and a **Start session** action for `@Phronesis618/HackMIT2026`.
+   Instruct it to act on the supplied comment, skip status-only/already-completed requests,
+   and coordinate with any Devin session already working on the issue or PR.
+2. Copy the webhook URL and its generated secret into repository
+   [Actions secrets](https://github.com/Phronesis618/HackMIT2026/settings/secrets/actions),
+   named `DEVIN_WEBHOOK_URL` and `DEVIN_WEBHOOK_SECRET`. The webhook secret is shown only
+   once; regenerate it in Devin if needed.
+3. Post a new task comment from the configured account and check the **Claude comments to
+   Devin** workflow run.
+
+Edits, inline review comments, comments on closed threads, and other authors do not trigger
+this workflow. Comments posted using a workflow's `GITHUB_TOKEN` do not trigger another
+GitHub Actions workflow; Claude must post through its own user/app credentials.
+The bridge checks out no repository code and has no GitHub token permissions.
 
 ## Current playable loop
 
@@ -121,6 +188,8 @@ ANTHROPIC_MODEL=claude-sonnet-4-6
 
 Claude uses the Messages API with a forced recipe tool. Its output goes through the same
 Zod validation, bounded repair, safe compiler, and incremental room delivery as OpenAI.
+Each Claude request has a 55-second deadline; OpenAI retains a 25-second deadline.
+Invalid recipes can receive one repair attempt within a new request deadline.
 
 ### Switch back to GPT
 

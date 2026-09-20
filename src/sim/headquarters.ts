@@ -4,41 +4,53 @@
  * (src/client/render); Agent A owns this layout because the simulation walks it.
  */
 import { type ArtRecipe, type RoomSpec, RoomSpecSchema } from '../shared/contracts';
+import {
+  HEADQUARTERS_ID, HEADQUARTERS_PROPLESS_STATIONS, HEADQUARTERS_RELIC_BRACKETS, HEADQUARTERS_STATIONS,
+} from '../shared/headquarters';
 
-export const HEADQUARTERS_ROOM_ID = 'headquarters';
+export const HEADQUARTERS_ROOM_ID = HEADQUARTERS_ID;
+
+const width = 30;
+const height = 20;
+const tiles = Array.from({ length: height }, (_, y) =>
+  Array.from({ length: width }, (_, x) => {
+    if (x === 0 || y === 0 || x === width - 1 || y === height - 1) return '#';
+    if ((x === 11 || x === 19) && y < 9 && y !== 5 && y !== 6) return '#';
+    if (y === 13 && ((x < 11 && x !== 6 && x !== 7) || (x > 19 && x !== 22 && x !== 23))) return '#';
+    if ((x === 11 || x === 19) && y > 13 && y !== 15 && y !== 16) return '#';
+    if (x === 15 && y === 10) return 'P';
+    if (x === 15 && y === 18) return 'X';
+    return '.';
+  }).join(''),
+);
 
 export const headquartersRoom: RoomSpec = RoomSpecSchema.parse({
   id: HEADQUARTERS_ROOM_ID,
   index: 0,
-  name: 'Relay Headquarters',
-  description: 'The sanctuary between worlds. Contribute an idea, then step through the portal.',
-  width: 22,
-  height: 12,
-  tiles: [
-    '######################',
-    '#....................#',
-    '#..##............##..#',
-    '#....................#',
-    '#....................#',
-    '#.........P..........#',
-    '#....................#',
-    '#....................#',
-    '#..##............##..#',
-    '#....................#',
-    '#..........X.........#',
-    '######################',
-  ],
+  name: 'The Stillpoint',
+  description: 'The sanctuary between worlds. Take a weapon from the armory, read the archive, or chart an expedition.',
+  width,
+  height,
+  tiles,
   props: [
-    { id: 'hq-console', propId: 'terminal', x: 10, y: 1 },
-    { id: 'hq-lantern-a', propId: 'lantern', x: 3, y: 3 },
-    { id: 'hq-lantern-b', propId: 'lantern', x: 18, y: 3 },
-    { id: 'hq-lantern-c', propId: 'lantern', x: 3, y: 9 },
-    { id: 'hq-lantern-d', propId: 'lantern', x: 18, y: 9 },
-    { id: 'hq-pillar-a', propId: 'pillar', x: 6, y: 5 },
-    { id: 'hq-pillar-b', propId: 'pillar', x: 15, y: 5 },
+    ...HEADQUARTERS_STATIONS.filter((station) => !HEADQUARTERS_PROPLESS_STATIONS.has(station.id)).map((station) => ({
+      id: `hq-station-${station.id}`, propId: 'terminal' as const, x: station.x, y: station.y,
+    })),
+    ...HEADQUARTERS_RELIC_BRACKETS.map((bracket, index) => ({
+      id: `hq-relic-bracket-${index}`, propId: 'monolith_shard' as const, x: bracket.x, y: bracket.y,
+    })),
+    { id: 'hq-lantern-a', propId: 'lantern', x: 12, y: 8 },
+    { id: 'hq-lantern-b', propId: 'lantern', x: 18, y: 8 },
+    { id: 'hq-lantern-c', propId: 'lantern', x: 12, y: 16 },
+    { id: 'hq-lantern-d', propId: 'lantern', x: 18, y: 16 },
+    { id: 'hq-pillar-a', propId: 'pillar', x: 13, y: 3 },
+    { id: 'hq-pillar-b', propId: 'pillar', x: 17, y: 3 },
+    { id: 'hq-archive-spine', propId: 'monolith_shard', x: 27, y: 6 },
+    { id: 'hq-archive-light', propId: 'lantern', x: 21, y: 7 },
+    { id: 'hq-navigation-cable', propId: 'cable_bundle', x: 27, y: 17 },
   ],
   encounters: [],
-  exits: [{ x: 11, y: 10, toRoomIndex: 0, direction: 'south' }],
+  exits: [{ x: 15, y: 18, toRoomIndex: 0, direction: 'south' }],
   isFinal: false,
   attributions: [],
 });

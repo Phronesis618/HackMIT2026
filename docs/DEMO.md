@@ -22,7 +22,11 @@ For a container host, use the production-container commands in the README.
 
 ## Presentation sequence
 
-1. Start at headquarters. Choose a class and enter a display name.
+1. Start at the Stillpoint sanctuary. Walk northwest to the Armory and tap F at a class
+   shrine to attune. The northeast Echo Archive shows device-local records; the southwest
+   Proving Chamber opens solo training; the southeast Observatory focuses the contribution
+   console. Enter a display name in the sidebar. Manual class controls remain available
+   as an accessibility shortcut.
 2. Each player contributes an idea. The host presses **Prepare world**.
 3. Read the creation receipt before entering. State the provenance label aloud:
    **LIVE**, **OFFLINE FIXTURE**, or **FALLBACK FIXTURE**. Unused contributions must remain
@@ -30,9 +34,15 @@ For a container host, use the production-container commands in the README.
 4. Enter the portal together. Pause briefly for the first-room reveal and arrival keepsake.
 5. Show movement, a directional attack, a dash through danger and the class's Q ability.
 6. Clear a room, spend the earned resource on the E unlock and demonstrate its effect.
-7. Continue through three rooms. Defeat the Guardian, approach the Anchor and hold F.
-8. Review the debrief, return to headquarters and show the new event-derived memories.
-9. Reload to show that the memory wall persists on this browser. Co-op shares event content;
+7. Continue through three rooms. Break amber cracked barriers with normal attacks; ramps
+   cross wall runs, rubble slows walking, and cyan conduits accelerate walking. Dashes keep
+   their normal speed.
+8. Defeat the three-phase Custodian. Follow the numbered relays and tap F at each lit one.
+   Once the first relay is active, the Anchor warns in red before emitting a widening pulse;
+   dash through it. Activated relays stay charged. Return to the core and tap F to release
+   the signal, watch the discharge, then return to the sanctuary and its Archive.
+9. Review the debrief, return to headquarters and show the new event-derived memories.
+10. Reload to show that the memory wall persists on this browser. Co-op shares event content;
    storage and captured arrival images belong to each browser.
 
 ## Controls
@@ -45,7 +55,8 @@ For a container host, use the production-container commands in the README.
 | Dash | Shift or Space |
 | Class ability | Q |
 | Unlocked ability | E |
-| Interact / revive | Hold F nearby |
+| Relays / Anchor release / HQ stations | Tap F nearby |
+| Read a relic / revive | Hold F nearby |
 | Sound | Sound on/off in the top bar |
 
 Attacks and abilities are presses, not automatic repeats. Release movement before typing an

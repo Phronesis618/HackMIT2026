@@ -1,0 +1,92 @@
+import type { GameSnapshot, MemoryRecord } from './contracts';
+import { tileToWorld } from './conventions';
+import type { ClassId } from './registry';
+
+export const HEADQUARTERS_ID = 'headquarters';
+export const HEADQUARTERS_INTERACT_RANGE = 58;
+
+export type HeadquartersStationId =
+  | ClassId
+  | 'archive'
+  | 'records'
+  | 'observatory'
+  | 'training'
+  | 'portal'
+  | 'quartermaster'
+  | 'relics';
+
+export interface HeadquartersStation {
+  id: HeadquartersStationId;
+  name: string;
+  wing: string;
+  description: string;
+  action: string;
+  x: number;
+  y: number;
+  classId?: ClassId;
+}
+
+export const HEADQUARTERS_STATIONS: readonly HeadquartersStation[] = [
+  { id: 'bastion', classId: 'bastion', name: 'Arc-blade stand', wing: 'Armory', description: 'Arc-blade and tower shield on a rack. Heavy, slow, and hard to move once planted.', action: 'Take the arc-blade', x: 4, y: 3 },
+  { id: 'shade', classId: 'shade', name: 'Phase blade stand', wing: 'Armory', description: 'Twin phase blades on a rack. Short reach, fast cadence, no shield.', action: 'Take the phase blades', x: 8, y: 3 },
+  { id: 'beacon', classId: 'beacon', name: 'Lantern staff stand', wing: 'Armory', description: 'Lantern staff on a rack. Repairs the crew and quickens their weapons.', action: 'Take the lantern staff', x: 4, y: 7 },
+  { id: 'weaver', classId: 'weaver', name: 'Plasma loom stand', wing: 'Armory', description: 'Plasma loom on a rack. Pulls enemies into shape at range.', action: 'Take the plasma loom', x: 8, y: 7 },
+  { id: 'archive', name: 'Echo archive', wing: 'Records wing', description: 'What survives a world is what you carried back. Read the records held on this device.', action: 'Read records', x: 24, y: 4 },
+  { id: 'records', name: 'Class plinths', wing: 'Records wing', description: 'Four plinths, one per weapon. Counts come from runs recorded on this device.', action: 'Read service record', x: 24, y: 8 },
+  { id: 'quartermaster', name: 'Quartermaster', wing: 'Returns hall', description: 'Keeps the returns bench. Counts what came back and what did not.', action: 'Speak to the quartermaster', x: 15, y: 6 },
+  { id: 'relics', name: 'Relic shelf', wing: 'Returns hall', description: 'Five brackets. A relic is shelved only if it came back from an anchored run.', action: 'Read the shelf', x: 15, y: 1 },
+  { id: 'observatory', name: 'World observatory', wing: 'Navigation wing', description: 'Every expedition begins as a signal. Add your idea to the next world.', action: 'Plan expedition', x: 24, y: 16 },
+  { id: 'training', name: 'Proving chamber', wing: 'Training wing', description: 'A safe place to learn a dangerous craft. Practice against the real enemy patterns.', action: 'Inspect range', x: 5, y: 16 },
+  { id: 'portal', name: 'Departure gate', wing: 'Transit hall', description: 'The way out, and the promise of a way back.', action: 'Inspect destination', x: 15, y: 18 },
+];
+
+/**
+ * Stations without a blocking terminal prop: the portal tile, the shelf's reading tile, and the
+ * quartermaster, who stands in the north-south walkway. All registry props block movement, so
+ * the NPC, the returns bench and the record plinths are renderer-only dressing.
+ */
+export const HEADQUARTERS_PROPLESS_STATIONS: ReadonlySet<HeadquartersStationId> = new Set(['portal', 'relics', 'quartermaster']);
+
+export const HEADQUARTERS_RELIC_BRACKETS: readonly { x: number; y: number }[] = [
+  { x: 12, y: 1 }, { x: 13, y: 1 }, { x: 14, y: 1 }, { x: 16, y: 1 }, { x: 17, y: 1 },
+];
+
+/** Renderer-only dressing (no props, so HQ collision is unchanged). */
+export const HEADQUARTERS_RECORD_PLINTHS: readonly { classId: ClassId; x: number; y: number }[] = [
+  { classId: 'bastion', x: 23, y: 7 }, { classId: 'shade', x: 25, y: 7 }, { classId: 'beacon', x: 23, y: 8 }, { classId: 'weaver', x: 25, y: 8 },
+];
+
+export const HEADQUARTERS_RETURNS_BENCH: readonly { x: number; y: number }[] = [{ x: 14, y: 6 }, { x: 16, y: 6 }];
+
+export function headquartersStation(id: HeadquartersStationId | null | undefined): HeadquartersStation | null {
+  return HEADQUARTERS_STATIONS.find((station) => station.id === id) ?? null;
+}
+
+export function nearbyHeadquartersStation(snapshot: GameSnapshot, localPlayerId: string): HeadquartersStation | null {
+  if (snapshot.phase !== 'headquarters' || snapshot.roomId !== HEADQUARTERS_ID) return null;
+  const player = snapshot.players.find((candidate) => candidate.id === localPlayerId);
+  if (!player || player.hp <= 0) return null;
+  let nearest: HeadquartersStation | null = null;
+  let nearestDistance = HEADQUARTERS_INTERACT_RANGE;
+  for (const station of HEADQUARTERS_STATIONS) {
+    const position = tileToWorld(station.x, station.y);
+    const distance = Math.hypot(player.x - position.x, player.y - position.y);
+    if (distance <= nearestDistance) {
+      nearest = station;
+      nearestDistance = distance;
+    }
+  }
+  return nearest;
+}
+
+export function headquartersRecords(memories: readonly MemoryRecord[]) {
+  const unique = [...new Map(memories.map((memory) => [memory.id, memory])).values()];
+  return {
+    memories: unique.length,
+    worldsVisited: new Set(unique.filter((memory) => memory.kind === 'arrival_keepsake').map((memory) => memory.worldId)).size,
+    anchors: unique.filter((memory) => memory.kind === 'anchor').length,
+    expeditionsEnded: unique.filter((memory) => memory.kind === 'run_summary').length,
+    lore: unique.filter((memory) => memory.kind === 'lore').length,
+    receipts: unique.filter((memory) => memory.kind === 'creation_receipt').length,
+  };
+}

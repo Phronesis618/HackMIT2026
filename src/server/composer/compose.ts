@@ -21,7 +21,6 @@ import {
   type WorldRecipe,
 } from '../../shared/contracts';
 import { hashString } from '../../shared/ids';
-import { MAX_ROOMS } from '../../shared/contracts';
 import type { EnemyId, MotifId, PropId, WorldRuleId } from '../../shared/registry';
 import { CREATURE_SYNONYMS, HAZARD_WORDS, PROP_SYNONYMS, REMAINS_TEMPLATES, STOPWORDS, THEMES, type ThemeDef } from './themes';
 
@@ -66,6 +65,9 @@ const THEME_RULES: Record<string, WorldRuleId[]> = {
   crystal: ['gravity_well', 'regen_fields'], storm: ['frenzy', 'gravity_well'], cathedral: ['regen_fields', 'bulwark'],
   festival: ['scavenger', 'frenzy'],
 };
+
+/** Legacy pipeline: at most three rooms per world (the floors pipeline derives its biomes from the recipe). */
+const MAX_ROOMS = 3;
 
 const ROOM_NOUNS: Record<RoomRole, string[]> = {
   entry: ['Gate', 'Threshold', 'Landing', 'Approach'],
@@ -242,11 +244,6 @@ export function composeWorld(request: GenerationRequest): Composition {
   const counts = distributeRooms(n);
   const sibling = secondary ?? THEMES.filter((t) => t.id !== primary.id && t.motifs.some((m) => primary.motifs.includes(m)))[Math.floor(rand() * 3)] ?? THEMES[(THEMES.indexOf(primary) + 5) % THEMES.length]!;
   const biomeThemes: ThemeDef[] = counts.length === 1 ? [primary] : counts.length === 2 ? [primary, sibling] : [primary, sibling, primary];
-  const biomePalettes: Palette[] = biomeThemes.map((theme, b) => {
-    if (b === 0) return palette;
-    if (b === 1) return jitterPalette(theme.palette, null, rand);
-    return deepen(palette);
-  });
   const biomeNames = biomeThemes.map((theme, b) => {
     const adjective = pick(rand, theme.adjectives);
     const noun = pick(rand, theme.nouns);
@@ -449,13 +446,6 @@ export function composeWorld(request: GenerationRequest): Composition {
     motifIds: uniqueMotifs,
     palette,
     rooms: rooms.map(toBlueprint),
-    biomes: counts.map((_, b) => ({
-      name: biomeNames[b]!,
-      description: clip(biomeThemes[b]!.summary, 300),
-      motifIds: biomeMotifs[b]!,
-      palette: biomePalettes[b]!,
-      rooms: rooms.filter((r) => r.biomeIndex === b).map(toBlueprint),
-    })),
     contributionMappings: mappings,
     lore,
     attunements,

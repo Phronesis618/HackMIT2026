@@ -2,6 +2,81 @@
 
 Agent C records only work and verification performed in this session.
 
+## Whole-project readiness — 2026-09-20
+
+At jonapplehe's request, Devin reviewed gameplay, generation, network sessions,
+presentation and Chronicle/product coverage in five isolated read-only agents, then
+implemented confirmed defects in five scoped fix agents. Gameplay event origins fed
+the Chronicle corrections. Parent integration retained main's floors traversal and UI
+redesign at `6b31828`, reconciled adjacent layout/focus edits, and wired receipt refresh.
+
+Combined `npm run check` passed **623 tests / 54 files**, TypeScript and production build.
+Regressions include the reported compiler seeds, a Bastion clearing required encounters,
+fallback before any invalid prefix, delayed solo portals/exits, training projectiles,
+cross-world event replay, streamed receipts after reload, reconnect room identity,
+storage isolation and UI keyboard handlers. Existing tests were not weakened.
+`git diff --check` passed. No paid model calls, public deployment or credentials were used.
+Browser/physical-LAN/live-provider claims remain pending separate evidence.
+
+## Memory archive and next-world ideas — 2026-09-20
+
+On `devin/1789890825-memory-seeds`, Devin added archive search/filtering, plain-text reports
+with provenance and source-event evidence, and editable memory-derived contribution drafts.
+The contribution composer uses the existing UI action and shared text validator; it never
+generates Chronicle events or changes stored records.
+
+`npm run check` passed: 542 tests / 37 files, TypeScript and Vite build.
+Implementation commit: `efab963`. Merged `main` at `1536031` without conflicts and repeated
+the full check: 547 tests / 38 files, typecheck and production build passed.
+Twenty new tests exercise archive filtering/export and memory idea constraints and rendering.
+Initial test runs caught two test typing errors and an HTML attribute-case assertion; those
+new tests were corrected without changing existing tests or configuration. Whitespace checks
+pass. UI actions and memory samples in tests are mocks, not gameplay evidence.
+
+Scope was posted to issue #4 before implementation. Direct messaging to other Devin
+sessions was access-denied; GitHub was used for coordination. This work avoids the active H1
+Stillpoint slice and the floors/writing paths. Browser play, file download and live-generation
+effects have not been tested in this session.
+
+## Render hosting setup — 2026-09-20
+
+On `devin/1789889059-render-deploy` (`4c70ab3`, PR #17), Devin added a Render Blueprint and
+deployment instructions after consulting Render's official Blueprint, deploy-button, free
+instance, and WebSocket documentation. The Blueprint passed Render's published JSON Schema.
+`npm run check` passed: 288 tests / 30 files, typecheck and build. The existing Dockerfile
+built successfully; its production container became healthy on port 10000. Shell-driven
+checks verified HTML/assets, health/config, validated three-room fixture generation with
+Claude selected but no key, and two WebSocket clients sharing a host/guest crew.
+The user subsequently supplied https://relay-a3yv.onrender.com. Public HTTP checks verified
+HTML/assets, health/config and schema-valid fixture generation; a secure WebSocket client
+received welcome and pong messages. After the user added the key in Render, health/config
+reported Anthropic live mode. Two actual `POST /api/world` calls with sample contributions
+each returned a validated `live_fallback_fixture` after 25 seconds. Neither produced live AI.
+
+The follow-up on the same branch enables `autoDeployTrigger: commit` for `main` and extends
+Claude's bounded request deadline to 55 seconds, retaining OpenAI's 25-second limit. New
+mocked tests accept a validated 30-second Claude response and enforce the 55-second abort
+for both the default and an oversized timeout. Latest `npm run check`: 333 tests / 32 files,
+typecheck and build passed. Render schema validation and whitespace checks also passed.
+Live verification of the longer deadline and automatic deployment await merging PR #17 and
+syncing/redeploying the service. Browser play was not tested. The session could not access
+Render settings; no real provider credential was read, stored, or committed.
+
+## Gameplay expansion — 2026-09-20
+
+On `devin/1789887155-terrain-boss-sanctuary`, Devin integrated tactical terrain, the phased
+Custodian and relay finale, and the Stillpoint headquarters. Two delegated Devin sessions
+implemented compiler/terrain helpers and sanctuary UI/layout; the parent implemented the
+boss/finale, authoritative terrain runtime, renderer integration, and runtime regression tests.
+Commits include `cae7051`, `d3227f7`, `8405164`, `dac0c50`, `ae2d6db`, and `e1e43c2`.
+
+Final `npm run check`: 288 tests / 30 files, typecheck and production build pass.
+The first integrated run had six failures from outdated fixtures and mocks. After approval
+in PR #16 comment 5748345520, Devin updated the HQ collision route and pillar coordinates,
+provided compact-room relay sites, and added two Phaser mock methods. The collision bounds
+retain their one-tile width; outer-wall assertions and all other assertions are unchanged.
+Browser testing and live generation were not performed; no screenshot or recording is claimed.
+
 ## Claude provider integration — 2026-09-20
 
 On `devin/1789878276-claude-provider`, Devin implemented the requested Claude/OpenAI

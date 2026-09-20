@@ -11,13 +11,20 @@ import type { ArtRecipe, EnemyState, GameEvent, GameSnapshot, PlayerState, Recei
 import { ATTACK_ARC_RAD, ATTACK_RANGE, DEPTH, LORE_READ_RANGE, PLAYER_RADIUS, TILE_SIZE, tileToWorld } from '../../shared/conventions';
 import { hashString } from '../../shared/ids';
 import type { RoomWorldContext } from '../../shared/render';
+import { guardianTitle } from '../../shared/finale';
 import { CLASS_THEME, ENEMY_INFO, type ClassId } from '../../shared/registry';
 import { hexToInt, tokens } from '../../shared/tokens';
 import { ENEMY_COMBAT } from '../../sim/combat';
 import { drawHostile, drawOperative } from './characters';
-import { hexInt } from './color';
+import { hexInt, VOID_COLOR } from './color';
+import { drawAnchorRitual } from './anchorRitual';
+import { collectTerrainTiles, drawTerrain, terrainCaption, type TerrainTile } from './terrain';
+import { drawHeadquartersStations, type HeadquartersStationView } from './headquarters';
 import { drawMotif, drawProp, drawSanctuary, drawVignette } from './drawing';
 import { drawBackdrop, drawFloor, drawLightPools, drawMotes, drawWalls, makeMotes, type Mote } from './environment';
+import { artForRoom } from './biomeArt';
+import { drawRoomKindDynamic, drawRoomKindStatic, featurePrompt, roomKindState, type RoomKindState } from './roomKinds';
+import { drawDoorFrames, drawDoorStates, selectDoorViews, stepSeal, type DoorView } from './doors';
 import { drawFloorDressing, drawOverhead, drawWallDressing, FLOOR_PATTERN, MOTE_STYLE, stencilColors, type MoteStyle } from './dressing';
 import * as fx from './fx';
 
@@ -44,8 +51,6 @@ interface LoreMarker {
 /** Player proximity, in px, before an in-world lore caption reveals its text. */
 const LORE_REVEAL_RADIUS = 56;
 
-const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX'];
-
 export class RoomScene extends Phaser.Scene {
   static readonly KEY = 'room';
 
@@ -65,8 +70,19 @@ export class RoomScene extends Phaser.Scene {
   private loreCaption: Phaser.GameObjects.Text | null = null;
   /** In-world Integrity/status strip above the room. */
   private statusView: Phaser.GameObjects.Graphics | null = null;
-  private statusLabels = new Map<string, Phaser.GameObjects.Text>();
+  private bossLabel: Phaser.GameObjects.Text | null = null;
+  private terrainView: Phaser.GameObjects.Graphics | null = null;
+  private terrainHint: Phaser.GameObjects.Text | null = null;
+  private terrainTiles: TerrainTile[] = [];
+  private headquartersStations: HeadquartersStationView | null = null;
   private portalPulse = 0;
+  /** Floors rooms only: per-door look for the latest snapshot and the eased shutter position. */
+  private doorsView: Phaser.GameObjects.Graphics | null = null;
+  private doorViews: DoorView[] = [];
+  private doorSeal = 0;
+  private kindView: Phaser.GameObjects.Graphics | null = null;
+  private kindHint: Phaser.GameObjects.Text | null = null;
+  private kindState: RoomKindState = { roomCleared: false, featureUsed: false, choiceOpen: false };
   private players = new Map<string, EntityView>();
   private enemies = new Map<string, EntityView>();
   private anchorView: Phaser.GameObjects.Graphics | null = null;
@@ -91,7 +107,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor(tokens.color.ink900);
+    this.cameras.main.setBackgroundColor(VOID_COLOR);
     this.onReady();
   }
 
@@ -108,6 +124,8 @@ export class RoomScene extends Phaser.Scene {
     opts: { headquarters: boolean; world?: RoomWorldContext },
     loreLines: ReceiptLine[] = [],
   ): void {
+    // Floors: the biome's own motifs and palette turn (no-op for legacy rooms and the hub).
+    art = artForRoom(room, art);
     this.room = room;
     this.art = art;
     this.isHeadquarters = opts.headquarters;
@@ -128,9 +146,19 @@ export class RoomScene extends Phaser.Scene {
     this.loreCaption = null;
     this.loreMarkers = this.computeLoreMarkers(room, loreLines);
     this.statusView = null;
-    this.statusLabels.clear();
+    this.bossLabel = null;
+    this.terrainView = null;
+    this.terrainHint = null;
+    this.terrainTiles = collectTerrainTiles(room);
+    this.headquartersStations = null;
     this.loreNodesView = null;
     this.loreHint = null;
+    this.doorsView = null;
+    this.doorViews = [];
+    this.doorSeal = 0;
+    this.kindView = null;
+    this.kindHint = null;
+    this.kindState = { roomCleared: false, featureUsed: false, choiceOpen: false };
 
     const layer = this.add.layer();
     this.roomLayer = layer;
@@ -185,10 +213,42 @@ export class RoomScene extends Phaser.Scene {
       }
     }
     layer.add(decals);
+    room.anchorRelays?.forEach((relay, index) => {
+      const point = tileToWorld(relay.x, relay.y);
+      layer.add(this.text(point.x, point.y + 24, `RELAY ${index + 1}`, {
+        fontFamily: tokens.font.mono, fontSize: '9px', color: p.accent,
+      }).setOrigin(0.5).setDepth(DEPTH.floorDecal));
+    });
 
     const walls = this.add.graphics().setDepth(DEPTH.propsBehind);
     drawWalls(walls, room, p, seed);
     layer.add(walls);
+    this.terrainView = this.add.graphics().setDepth(DEPTH.propsBehind + 0.5);
+    layer.add(this.terrainView);
+    drawTerrain(this.terrainView, room, this.terrainTiles, undefined, p, this.time.now);
+    if (room.kind !== undefined) {
+      // Floors room: what the room is for, readable from the door (roomKinds.ts).
+      const kindStatic = this.add.graphics().setDepth(DEPTH.floorDecal + 2);
+      drawRoomKindStatic(kindStatic, room, p);
+      layer.add(kindStatic);
+      this.kindView = this.add.graphics().setDepth(DEPTH.propsBehind + 1.5);
+      layer.add(this.kindView);
+      this.kindHint = this.text(0, 0, '', {
+        fontFamily: tokens.font.mono, fontSize: '9px', color: p.text, letterSpacing: 1,
+        backgroundColor: 'rgba(4, 5, 10, 0.8)', padding: { left: 6, right: 6, top: 3, bottom: 3 },
+      }).setOrigin(0.5, 1).setDepth(DEPTH.overlay - 1).setVisible(false);
+      layer.add(this.kindHint);
+    }
+    if (room.kind !== undefined) {
+      // Floors room: real doorways on the border wall. Frames are static; the light, the
+      // chevron and the combat shutter are redrawn per frame in update().
+      const frames = this.add.graphics().setDepth(DEPTH.propsBehind + 0.2);
+      drawDoorFrames(frames, room, p);
+      layer.add(frames);
+      this.doorsView = this.add.graphics().setDepth(DEPTH.propsBehind + 0.6);
+      layer.add(this.doorsView);
+      this.doorViews = selectDoorViews(room, null);
+    }
     if (!opts.headquarters) {
       const dressing = this.add.graphics().setDepth(DEPTH.propsBehind);
       drawWallDressing(dressing, room, p, art.motifIds, seed);
@@ -200,19 +260,16 @@ export class RoomScene extends Phaser.Scene {
       const exit = room.exits[0];
       drawSanctuary(sanctuary, roomW, roomH, p, exit ? tileToWorld(exit.x, exit.y) : undefined);
       layer.add(sanctuary);
-      layer.add(this.text(roomW - 160, 17, 'CHRONICLE ARCHIVE', {
-        fontFamily: tokens.font.mono, fontSize: '10px', color: tokens.color.warmLamp,
-      }).setOrigin(0.5).setDepth(DEPTH.overlay));
+      this.headquartersStations = drawHeadquartersStations(this, layer, room, this.textResolution);
     }
 
     const props = this.add.graphics().setDepth(DEPTH.propsBehind + 1);
     for (const prop of room.props) {
+      if (opts.headquarters && prop.id.startsWith('hq-station-')) continue;
       const c = tileToWorld(prop.x, prop.y);
       drawProp(props, prop.propId, c.x, c.y, p, art.glowIntensity);
     }
     layer.add(props);
-
-    if (opts.headquarters) this.drawControlsFloorHint(layer, roomW / 2, 7 * TILE_SIZE, p);
 
     this.portalGlow = this.add.graphics().setDepth(DEPTH.floorDecal + 3);
     layer.add(this.portalGlow);
@@ -244,9 +301,14 @@ export class RoomScene extends Phaser.Scene {
     }).setOrigin(0.5, 1).setDepth(DEPTH.overlay).setVisible(false);
     layer.add(this.loreHint);
 
-    // In-world Integrity strip; one row per crew member.
+    // Boss bar (crew Integrity lives in the React HUD).
     this.statusView = this.add.graphics().setDepth(DEPTH.overlay - 1);
     layer.add(this.statusView);
+    this.terrainHint = this.text(0, 0, '', {
+      fontFamily: tokens.font.mono, fontSize: '9px', color: p.accent,
+      backgroundColor: 'rgba(7, 9, 15, 0.85)', padding: { left: 6, right: 6, top: 4, bottom: 4 },
+    }).setOrigin(0.5, 0).setDepth(DEPTH.overlay - 1).setVisible(false);
+    layer.add(this.terrainHint);
     // A DM-style beat on arrival: the room's mood in its own words, then it fades out.
     if (room.description && !opts.headquarters) {
       const descriptionCard = this
@@ -278,30 +340,11 @@ export class RoomScene extends Phaser.Scene {
     drawVignette(fog, roomW, roomH, art.fog * 0.6, p);
     layer.add(fog);
 
-    const title = this
-      .text(roomW / 2, -28, opts.headquarters ? room.name.toUpperCase() : `${room.index + 1} · ${room.name.toUpperCase()}`, {
-        fontFamily: tokens.font.display,
-        fontSize: '14px',
-        color: p.text,
-        letterSpacing: 3,
-      })
-      .setOrigin(0.5)
-      .setAlpha(0.85)
-      .setDepth(DEPTH.overlay);
-    layer.add(title);
-
+    // The room title and the crew's Integrity bars live in the React HUD now (U1); the canvas
+    // keeps only what belongs to the place itself: the world's name set into the arrival floor.
     if (!opts.headquarters && opts.world) {
-      // Which world (and which region of it) this is, in every room; the world title is
-      // stencilled into the arrival room's floor and each new biome announces itself the same way.
-      const biome = opts.world.biome;
-      const label = biome && biome.count > 1
-        ? `${opts.world.title.toUpperCase()}  ·  ${ROMAN[biome.index] ?? biome.index + 1} / ${ROMAN[biome.count - 1] ?? biome.count}  ${biome.name.toUpperCase()}`
-        : opts.world.title.toUpperCase();
-      layer.add(this.text(roomW / 2, -13, label, {
-        fontFamily: tokens.font.mono, fontSize: '9px', color: p.accent, letterSpacing: 2,
-      }).setOrigin(0.5).setAlpha(0.7).setDepth(DEPTH.overlay));
       if (room.index === 0) this.drawWorldStencil(layer, room, opts.world, p);
-      else if (biome?.firstRoom) this.drawWorldStencil(layer, room, { title: biome.name, tagline: `Region ${ROMAN[biome.index] ?? biome.index + 1} of ${opts.world.title}` }, p);
+      // Where the exit leads ("→ Plunder Hold"), set beside the door so the run reads as a route.
       if (opts.world.exitLabel) {
         for (const exit of room.exits) {
           const c = tileToWorld(exit.x, exit.y);
@@ -324,6 +367,19 @@ export class RoomScene extends Phaser.Scene {
     if (!this.art || snapshot.roomId !== this.room?.id) return;
     this.latestSnapshot = snapshot;
     this.localPlayerId = localPlayerId;
+    this.headquartersStations?.update(snapshot, localPlayerId);
+    if (this.doorsView) this.doorViews = selectDoorViews(this.room, snapshot.floor);
+    if (this.kindView) {
+      this.kindState = roomKindState(this.room, snapshot);
+      const prompt = featurePrompt(this.room, this.kindState);
+      const me = snapshot.players.find((player) => player.id === localPlayerId);
+      const focus = this.room.focus ? tileToWorld(this.room.focus.x, this.room.focus.y) : null;
+      const near = me && focus ? Math.hypot(me.x - focus.x, me.y - focus.y) < TILE_SIZE * 4.5 : false;
+      if (prompt && focus && near) {
+        if (this.kindHint?.text !== prompt) this.kindHint?.setText(prompt);
+        this.kindHint?.setPosition(focus.x, focus.y - (this.room.feature === 'biome_exit' ? 34 : 30)).setVisible(true);
+      } else this.kindHint?.setVisible(false);
+    }
 
     const seenPlayers = new Set<string>();
     for (const player of snapshot.players) {
@@ -389,6 +445,7 @@ export class RoomScene extends Phaser.Scene {
       const accent = hexToInt(this.art.palette.accent);
       const t = this.time.now / 1000;
       this.anchorView.clear();
+      drawAnchorRitual(this.anchorView, a, this.time.now, accent, Math.hypot(this.room.width, this.room.height) * TILE_SIZE);
       this.anchorView.fillStyle(accent, 0.15).fillCircle(a.x, a.y, 20 + Math.sin(t * 3.3) * 3);
       this.anchorView.fillStyle(accent, a.state === 'planted' ? 1 : 0.6).fillCircle(a.x, a.y, 6);
       this.anchorView.lineStyle(2, accent, 0.8).strokeTriangle(a.x, a.y - 17, a.x - 10, a.y + 7, a.x + 10, a.y + 7);
@@ -403,7 +460,11 @@ export class RoomScene extends Phaser.Scene {
       this.anchorLabel
         ?.setPosition(a.x, a.y - 42)
         .setVisible(true)
-        .setText(a.state === 'planted' ? 'ANCHOR PLANTED' : a.state === 'planting' ? `PLANTING · ${Math.floor(a.progress * 100)}%` : 'ANCHOR DORMANT');
+        .setText(a.ritual
+          ? a.ritual.stage === 'locked' ? 'CIRCUIT LOCKED'
+            : a.ritual.stage === 'relays' ? `${a.ritual.activeRelay}/3 RELAYS`
+              : a.ritual.stage === 'core' ? 'F · RELEASE THE SIGNAL' : 'WORLD SECURED'
+          : a.state === 'planted' ? 'ANCHOR PLANTED' : a.state === 'planting' ? `PLANTING · ${Math.floor(a.progress * 100)}%` : 'ANCHOR DORMANT');
     } else if (!snapshot.anchor) {
       this.anchorView?.clear();
       this.anchorLabel?.setVisible(false);
@@ -411,6 +472,13 @@ export class RoomScene extends Phaser.Scene {
 
     this.updateLoreCaption(snapshot, localPlayerId);
     this.updateLoreNodes(snapshot, localPlayerId);
+    if (this.terrainView) drawTerrain(this.terrainView, this.room, this.terrainTiles, snapshot.terrain, this.art.palette, this.time.now);
+    const local = snapshot.players.find((player) => player.id === localPlayerId);
+    const caption = local ? terrainCaption(this.room, this.terrainTiles, snapshot.terrain, local) : null;
+    if (caption && local && !this.loreCaption?.visible && !this.loreHint?.visible) {
+      this.terrainHint?.setPosition(local.x, local.y + 30).setText(caption).setVisible(true);
+    }
+    else this.terrainHint?.setVisible(false);
     if (!this.isHeadquarters) this.updateStatusStrip(snapshot, localPlayerId);
   }
 
@@ -540,50 +608,36 @@ export class RoomScene extends Phaser.Scene {
     caption.setPosition(nearest.x, nearest.y - 30).setVisible(true);
   }
 
-  /** In-world Integrity strip above the room: one compact bar per crew member. */
+  /** Boss bar under the room. Crew Integrity is shown by the React HUD, not in the canvas. */
   private updateStatusStrip(snapshot: GameSnapshot, localPlayerId: string): void {
     const bars = this.statusView;
     if (!bars) return;
     bars.clear();
-    // Bottom-right of the room, out of the way of the DOM party frames (top-left) and the ability bar.
-    const rowH = 15;
-    const barW = 108;
-    const barX = (this.room?.width ?? 0) * TILE_SIZE - 14 - barW;
-    const baseY = (this.room?.height ?? 0) * TILE_SIZE + 18;
-    snapshot.players.forEach((player, i) => {
-      const y = baseY + i * rowH;
-      const pct = player.maxHp > 0 ? Math.max(0, Math.min(1, player.hp / player.maxHp)) : 0;
-      const down = player.state === 'down';
-      const isLocal = player.id === localPlayerId;
-      const fillColor = down ? hexToInt(tokens.color.danger) : pct <= 0.25 ? hexToInt(tokens.color.danger) : hexToInt(tokens.color.success);
-      const edgeColor = hexToInt(isLocal ? tokens.canvas.localPlayerAccent : tokens.canvas.remotePlayerAccent);
-      bars.fillStyle(0x000000, 0.55).fillRoundedRect(barX, y, barW, 8, 3);
-      if (!down) bars.fillStyle(fillColor, 0.95).fillRoundedRect(barX, y, barW * pct, 8, 3);
-      bars.lineStyle(1, edgeColor, isLocal ? 0.9 : 0.5).strokeRoundedRect(barX, y, barW, 8, 3);
-
-      let label = this.statusLabels.get(player.id);
-      if (!label) {
-        label = this.text(0, 0, '', { fontFamily: tokens.font.mono, fontSize: '9px', color: tokens.color.mist100 }).setOrigin(1, 0.5).setDepth(DEPTH.overlay);
-        this.roomLayer?.add(label);
-        this.statusLabels.set(player.id, label);
+    const boss = snapshot.enemies.find((enemy) => enemy.enemyId === 'guardian' && enemy.hp > 0);
+    if (boss && this.room) {
+      const width = Math.min(340, this.room.width * TILE_SIZE - 48);
+      const x = (this.room.width * TILE_SIZE - width) / 2;
+      const y = this.room.height * TILE_SIZE + 9;
+      bars.fillStyle(0x000000, 0.8).fillRect(x, y, width, 7);
+      bars.fillStyle(hexToInt(tokens.color.danger), 0.95).fillRect(x, y, width * boss.hp / boss.maxHp, 7);
+      for (const fraction of [1 / 3, 2 / 3]) {
+        bars.lineStyle(2, 0x080b15, 1).lineBetween(x + width * fraction, y, x + width * fraction, y + 7);
       }
-      label.setPosition(barX - 6, y + 4);
-      const text = `${player.displayName}${down ? ' · down' : ''}`;
-      if (label.text !== text) label.setText(text);
-    });
-    for (const [id, label] of this.statusLabels) {
-      if (!snapshot.players.some((p) => p.id === id)) {
-        label.destroy();
-        this.statusLabels.delete(id);
+      if (!this.bossLabel) {
+        this.bossLabel = this.text(this.room.width * TILE_SIZE / 2, y + 16, '', {
+          fontFamily: tokens.font.mono, fontSize: '10px', color: tokens.color.danger,
+        }).setOrigin(0.5).setDepth(DEPTH.overlay);
+        this.roomLayer?.add(this.bossLabel);
       }
-    }
+      this.bossLabel.setVisible(true).setText(`${guardianTitle(boss)}${(boss.recoveryMs ?? 0) > 0 ? ' · EXPOSED' : ''}`);
+    } else this.bossLabel?.setVisible(false);
   }
 
   /** Windup telegraph: danger zone brightens and a ring fills as the strike approaches. */
   private drawTelegraph(g: Phaser.GameObjects.Graphics, enemy: EnemyState): void {
     const warning = enemy.telegraph;
     if (!warning) return;
-    const total = ENEMY_COMBAT[enemy.enemyId].windup;
+    const total = enemy.bossPhase === 3 ? 900 : ENEMY_COMBAT[enemy.enemyId].windup;
     const progress = total > 0 ? 1 - Math.min(1, warning.remainingMs / total) : 1;
     const color = fx.enemyAccent(enemy.enemyId);
     const hot = hexToInt(tokens.canvas.telegraph);
@@ -666,6 +720,13 @@ export class RoomScene extends Phaser.Scene {
       view.facing.lineStyle(2, hexToInt(tokens.canvas.telegraph), 0.9).beginPath().arc(0, 0, radius + 12, -Math.PI / 3, Math.PI / 3, false).strokePath();
     }
     if ((enemy.slowMs ?? 0) > 0) view.facing.lineStyle(1.5, 0x5ef0b0, 0.7).strokeCircle(0, 0, radius + 5);
+    if (enemy.enemyId === 'guardian' && enemy.hp > 0) {
+      for (let i = 0; i < (enemy.bossPhase ?? 1); i++) {
+        view.facing.lineStyle(1, hexToInt(tokens.color.danger), 0.45)
+          .beginPath().arc(0, 0, radius + 6 + i * 5, this.time.now / 700 + i * 2, this.time.now / 700 + i * 2 + 1.5, false).strokePath();
+      }
+      if ((enemy.recoveryMs ?? 0) > 0) view.facing.lineStyle(3, hexToInt(tokens.color.success), 0.85).strokeCircle(0, 0, radius + 3);
+    }
     view.facing.setRotation(enemy.facing);
     if (enemy.hp < enemy.maxHp && enemy.state !== 'dead') this.drawHpBar(view.hpBar, enemy.hp, enemy.maxHp, radius, fx.enemyAccent(enemy.enemyId));
     else view.hpBar.clear();
@@ -703,15 +764,11 @@ export class RoomScene extends Phaser.Scene {
     return markers;
   }
 
-  /**
-   * Crude Isaac-style floor tutorial: WASD + mouse + the action keys, drawn once on the
-   * headquarters floor instead of repeating the same sentence in the HUD every room.
-   */
   /** The generated world's title and tagline, set into the arrival room's floor below the spawn. */
   private drawWorldStencil(
     layer: Phaser.GameObjects.Layer,
     room: RoomSpec,
-    world: RoomWorldContext,
+    world: { title: string; tagline: string },
     palette: ArtRecipe['palette'],
   ): void {
     let spawn = { col: Math.floor(room.width / 2), row: Math.floor(room.height / 2) };
@@ -742,53 +799,6 @@ export class RoomScene extends Phaser.Scene {
     layer.add(this.text(cx, cy + 9, world.tagline, {
       fontFamily: tokens.font.body, fontSize: '9px', color: palette.text, align: 'center', wordWrap: { width: halfW * 2 - 24 },
     }).setOrigin(0.5).setAlpha(0.7).setDepth(DEPTH.floorDecal + 3));
-  }
-
-  private drawControlsFloorHint(layer: Phaser.GameObjects.Layer, cx: number, cy: number, palette: ArtRecipe['palette']): void {
-    const g = this.add.graphics().setDepth(DEPTH.floorDecal + 1);
-    const ink = hexToInt(palette.wallEdge);
-    const accent = hexToInt(palette.accent);
-    const key = (x: number, y: number, w: number, h: number): void => {
-      g.fillStyle(hexToInt(palette.wall), 0.9).fillRoundedRect(x - w / 2, y - h / 2, w, h, 4);
-      g.lineStyle(1.5, ink, 0.8).strokeRoundedRect(x - w / 2, y - h / 2, w, h, 4);
-    };
-    const labels: Phaser.GameObjects.Text[] = [];
-    const letter = (x: number, y: number, text: string): void => {
-      labels.push(this.text(x, y, text, { fontFamily: tokens.font.mono, fontSize: '11px', color: palette.text }).setOrigin(0.5));
-    };
-    const caption = (x: number, y: number, text: string): void => {
-      labels.push(this.text(x, y, text, { fontFamily: tokens.font.mono, fontSize: '8px', color: palette.text }).setOrigin(0.5).setAlpha(0.6));
-    };
-
-    // WASD cluster, left side.
-    const wasdX = cx - 150;
-    key(wasdX, cy - 16, 22, 22);
-    letter(wasdX, cy - 16, 'W');
-    for (const [dx, ch] of [[-24, 'A'], [0, 'S'], [24, 'D']] as const) {
-      key(wasdX + dx, cy + 8, 22, 22);
-      letter(wasdX + dx, cy + 8, ch);
-    }
-    caption(wasdX, cy + 30, 'MOVE');
-
-    // Mouse glyph, aim.
-    const mouseX = cx - 70;
-    g.lineStyle(1.5, ink, 0.85).fillStyle(hexToInt(palette.wall), 0.9);
-    g.fillRoundedRect(mouseX - 12, cy - 24, 24, 34, 12).strokeRoundedRect(mouseX - 12, cy - 24, 24, 34, 12);
-    g.lineStyle(1.5, accent, 0.9).lineBetween(mouseX, cy - 24, mouseX, cy - 8);
-    caption(mouseX, cy + 22, 'AIM');
-
-    // Action keys, right side: attack, dash, abilities, interact.
-    const actions: Array<[string, string]> = [['J', 'ATTACK'], ['SHIFT', 'DASH'], ['Q', 'Q'], ['E', 'E'], ['F', 'HOLD']];
-    actions.forEach(([label, cap], i) => {
-      const x = cx + 10 + i * 40;
-      const w = label.length > 1 ? 34 : 22;
-      key(x, cy - 6, w, 22);
-      letter(x, cy - 6, label);
-      caption(x, cy + 16, cap);
-    });
-
-    layer.add(g);
-    layer.add(labels);
   }
 
   private clearEntities(): void {
@@ -823,8 +833,8 @@ export class RoomScene extends Phaser.Scene {
   }
 
   /**
-   * Damage / heal numbers: large, high-contrast, with a pop-in and a rising fade so they read
-   * from across the room. `weight` scales size and hang time (1 = normal hit, 2 = heavy, 3 = ultimate).
+   * Damage / heal numbers and callouts: large, high-contrast, with a pop-in and a rising fade
+   * so they read from across the room. `weight` scales size and hang time (1 normal, 2 heavy, 3 ultimate).
    */
   private floatText(x: number, y: number, text: string, color: string, size = 20, weight = 1): void {
     const drift = ((this.effectSeed * 37) % 21) - 10;
@@ -838,7 +848,7 @@ export class RoomScene extends Phaser.Scene {
       .setScale(0.6);
     this.roomLayer?.add(t);
     const hang = 720 + weight * 180;
-    this.tweens.add({ targets: t, scale: 1 + weight * 0.12, duration: 140, ease: 'Back.easeOut', yoyo: false });
+    this.tweens.add({ targets: t, scale: 1 + weight * 0.12, duration: 140, ease: 'Back.easeOut' });
     this.tweens.add({ targets: t, x: x + drift, y: y - 38 - weight * 10, duration: hang, ease: 'Cubic.easeOut' });
     this.tweens.add({ targets: t, alpha: 0, delay: hang * 0.55, duration: hang * 0.45, ease: 'Quad.easeIn', onComplete: () => t.destroy() });
   }
@@ -1058,7 +1068,16 @@ export class RoomScene extends Phaser.Scene {
     const g = this.portalGlow;
     g.clear();
     const pulse = 0.5 + 0.5 * Math.sin(t * 2.2);
-    for (const exit of this.room.exits) {
+    if (this.doorsView) {
+      this.doorSeal = stepSeal(this.doorSeal, this.doorViews.some((door) => door.state === 'sealed') ? 1 : 0, delta);
+      this.doorsView.clear();
+      drawDoorStates(this.doorsView, this.doorViews, this.art.palette, this.doorSeal, t, this.room.kind === 'exit');
+    }
+    if (this.kindView) {
+      this.kindView.clear();
+      drawRoomKindDynamic(this.kindView, this.room, this.art.palette, this.kindState, t);
+    }
+    for (const exit of this.doorsView ? [] : this.room.exits) {
       const c = tileToWorld(exit.x, exit.y);
       if (this.isHeadquarters) {
         // The portal: layered rings + rotating arcs, the luminous heart of the HQ.

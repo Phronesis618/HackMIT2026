@@ -3,9 +3,9 @@ import type { IncomingMessage, Server } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
+  ATTRIBUTING_SOURCES,
   IDLE_GENERATION_STATUS,
   GenerationStatusSchema,
-  ATTRIBUTING_SOURCES,
   PreparedWorldSchema,
   type Contribution,
   type GameEvent,
@@ -16,7 +16,7 @@ import {
   type PlayerIntent,
   type PreparedWorld,
 } from '../../shared/contracts';
-import { DEFAULT_PLANNED_ROOM_COUNT, TICK_MS } from '../../shared/conventions';
+import { TICK_MS } from '../../shared/conventions';
 import { randomId } from '../../shared/ids';
 import { PROTOCOL_VERSION, decodeClientMessage, encodeMessage, type ClientMessage, type Lobby, type ServerMessage } from '../../shared/protocol';
 import { createSimulation, type Simulation } from '../../sim';
@@ -131,6 +131,7 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
   function electHost(): void {
     if (hostPlayerId && members.get(hostPlayerId)?.client) return;
     hostPlayerId = [...members.values()].find((member) => member.client)?.identity.id ?? null;
+    sim.setHostPlayerId(hostPlayerId); // floors: the (new) host decides biome choices
   }
 
   function clearIntents(): void {
@@ -155,7 +156,9 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
       pendingExit = null;
       return [];
     }
-    const exit = events.find((event) => event.type === 'exit_reached'
+    // Floors: the sim walks doors and biome picks itself; a fresh room only needs clean intents.
+    if (events.some((event) => event.type === 'room_entered')) clearIntents();
+    const exit = events.find((event) => event.type === 'exit_reached' && event.toRoomId === undefined
       && event.roomIndex === sim.getRoom().index
       && (phase !== 'headquarters' || event.playerId === hostPlayerId));
     if (!exit || exit.type !== 'exit_reached') return [];
@@ -187,20 +190,10 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
     generationHasPrefix = false;
     const startedAt = Date.now();
     let committed: PreparedWorld | null = null;
-    // Receipt memories are written once the receipt is final (all rooms committed).
-    let announced = false;
-    const announceWorld = (next: PreparedWorld): void => {
-      if (announced || closed) return;
-      announced = true;
-      publishEvents([metaEvent({
-        type: 'world_prepared', worldId: next.worldId, worldTitle: next.recipe.title,
-        source: next.provenance.source, playerIds: sim.getPlayerIds(),
-      })]);
-    };
     setGeneration({ phase: 'queued', message: 'Preparing a shared world…', requestId, startedAt, elapsedMs: 0 });
     try {
       for await (const candidate of generate({
-        requestId, sessionId, contributions: contributions.map((contribution) => ({ ...contribution })), plannedRoomCount: DEFAULT_PLANNED_ROOM_COUNT,
+        requestId, sessionId, contributions: contributions.map((contribution) => ({ ...contribution })), plannedRoomCount: 3,
       })) {
         if (closed) break;
         const next = PreparedWorldSchema.parse(candidate);
@@ -214,6 +207,7 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
           || committed.rooms.some((room, index) => JSON.stringify(room) !== JSON.stringify(next.rooms[index])))) {
           throw new Error('Generation attempted to replace committed rooms.');
         }
+        const first = committed === null;
         committed = next;
         generationHasPrefix = true;
         world = next;
@@ -224,18 +218,19 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
           message: `${next.provenance.label}: ${next.rooms.length}/${next.plannedRoomCount} rooms committed.`.slice(0, 200),
           requestId, startedAt, elapsedMs: Date.now() - startedAt,
         });
-        if (next.rooms.length >= next.plannedRoomCount) announceWorld(next);
+        if (first) publishEvents([metaEvent({
+          type: 'world_prepared', worldId: next.worldId, worldTitle: next.recipe.title,
+          source: next.provenance.source, playerIds: sim.getPlayerIds(),
+        })]);
         const events = finishPendingExit();
         publishSnapshot();
         publishEvents(events);
       }
       if (!closed && !committed) throw new Error('Generation returned no committed rooms.');
-      if (!closed && committed) announceWorld(committed);
       if (!closed && committed && committed.rooms.length < committed.plannedRoomCount) {
         throw new Error('Generation ended before all planned rooms were committed.');
       }
     } catch (cause) {
-      if (!closed && committed) announceWorld(committed);
       if (!closed) {
         const message = cause instanceof Error ? cause.message.slice(0, 200) : 'World generation failed.';
         setGeneration({ phase: 'failed', message, requestId, startedAt, elapsedMs: Date.now() - startedAt });
@@ -385,6 +380,11 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
         publishEvents(events);
         break;
       }
+      case 'choose_biome':
+        // Every operative may vote; the sim only lets the host's vote decide (setHostPlayerId).
+        sim.chooseBiome(member.identity.id, message.biomeId);
+        publishSnapshot();
+        break;
       case 'unlock_ability': {
         if (!sim.unlockAbility) {
           error(client, 'Ability unlocks are unavailable on this server.', 'unlock_ability');
@@ -466,7 +466,8 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
       const phase = sim.getPhase();
       const events = sim.step();
       const extra = handleExits(events);
-      if (phase !== sim.getPhase() || extra.length || events.some((event) => event.type === 'run_ended')) publishSnapshot();
+      if (phase !== sim.getPhase() || extra.length
+        || events.some((event) => event.type === 'run_ended' || event.type === 'room_entered')) publishSnapshot();
       publishEvents([...events, ...extra]);
     }
   }, TICK_MS);

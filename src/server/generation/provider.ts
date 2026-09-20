@@ -1,7 +1,10 @@
 import fs from 'node:fs';
 import { z } from 'zod';
 import { WorldRecipeSchema, type GenerationRequest, type GenerationSource, type WorldRecipe } from '../../shared/contracts';
-import { ATTUNEMENT_EFFECT_IDS, ATTUNEMENT_EFFECT_INFO, ENEMY_IDS, MOTIF_IDS, PROP_IDS } from '../../shared/registry';
+import {
+  ATTUNEMENT_EFFECT_IDS, ATTUNEMENT_EFFECT_INFO, ENEMY_IDS, MOTIF_IDS, PROP_IDS,
+  TERRAIN_DENSITIES, TERRAIN_FEATURE_INFO, TERRAIN_LAYOUT_IDS,
+} from '../../shared/registry';
 
 const responseSchema = z.object({
   status: z.literal('completed'),
@@ -72,10 +75,15 @@ export function createAnthropicProvider(options: ProviderOptions): RecipeProvide
 
 function createRecipeProvider(options: ProviderOptions, provider: 'openai' | 'anthropic'): RecipeProvider {
   const instructions = fs.readFileSync(new URL('../../../prompts/runtime/world-recipe.md', import.meta.url), 'utf8')
-    .replace('{{registry}}', JSON.stringify({ motifIds: MOTIF_IDS, propIds: PROP_IDS, enemyIds: ENEMY_IDS, attunementEffects: Object.fromEntries(ATTUNEMENT_EFFECT_IDS.map((id) => [id, ATTUNEMENT_EFFECT_INFO[id].summary])) }));
+    .replace('{{registry}}', JSON.stringify({
+      motifIds: MOTIF_IDS, propIds: PROP_IDS, enemyIds: ENEMY_IDS,
+      terrainFeatures: TERRAIN_FEATURE_INFO, terrainLayouts: TERRAIN_LAYOUT_IDS, terrainDensities: TERRAIN_DENSITIES,
+      attunementEffects: Object.fromEntries(ATTUNEMENT_EFFECT_IDS.map((id) => [id, ATTUNEMENT_EFFECT_INFO[id].summary])),
+    }));
   const schema = z.toJSONSchema(WorldRecipeSchema, { target: 'draft-7' });
   const fetchResponse = options.fetch ?? fetch;
-  const timeoutMs = Math.min(25_000, Math.max(1, options.timeoutMs ?? 25_000));
+  const maxTimeoutMs = provider === 'anthropic' ? 55_000 : 25_000;
+  const timeoutMs = Math.min(maxTimeoutMs, Math.max(1, options.timeoutMs ?? maxTimeoutMs));
 
   return {
     async generate(request, repair, signal) {
@@ -203,7 +211,7 @@ function readAnthropicResponse(body: unknown, onUsage?: (usage: ProviderUsage) =
   return { raw: tool.input, ...(measured ? { usage: measured } : {}) };
 }
 
-function assertDisplayText(recipe: WorldRecipe): void {
+export function assertDisplayText(recipe: WorldRecipe): void {
   const text = [
     recipe.title, recipe.tagline, recipe.themeSummary,
     ...recipe.rooms.flatMap((room) => [room.name, room.description]),

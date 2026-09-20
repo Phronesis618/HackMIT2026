@@ -1,5 +1,66 @@
 # Handoff — Agent C (Devin)
 
+## Readiness corrections — 2026-09-20
+
+- Branch: `devin/1789890936-readiness-fixes`, integrated over `main` at `6b31828`.
+- **Implemented:** solo first-prefix portal gating and deferred room exits; accessible
+  generated encounters and complete-plan validation before live publication; shared operator
+  display-text checks; moving training projectiles; world-scoped combat/lore origins and
+  training isolation; bounded floor-plan seeds; reconnect room identity; tab-scoped confirmed
+  identity persistence; keyboard/menu focus; visible receipts and persisted receipt refresh.
+- **Verified:** combined `npm run check`: **623 tests / 54 files**, typecheck and production
+  build passed; `git diff --check` passed. HTTP/WebSocket integration suites run real local
+  servers. New regressions retain the incoming floor traversal and redesigned UI.
+- **Mocked:** paid model responses, headless renderer and DOM adapters in automated tests.
+- **Unverified:** current-revision browser victory, physical LAN, live provider output/latency
+  and public deployment. Delegated browser verification follows the PR.
+- **Shared changes for A review:** optional nullable `worldId` on `enemy_defeated` and
+  `lore_discovered` (legacy payloads valid); `FloorPlan.seed` stores bounded input while
+  internal derived RNG keys are unchanged. No new dependencies or registry IDs.
+- The overnight floors/rendering/writing/tiles/hub/boss expansion remains its owners' work;
+  this correction does not enable floors or claim planned collapse/relic features are complete.
+
+## Memory archive and next-world ideas — 2026-09-20
+
+- Branch: `devin/1789890825-memory-seeds`; implementation commit `efab963`.
+- **Implemented:** searchable device-local archive with world/type filters and bounded card
+  display; plain-text field reports preserve recorded participants, provenance and event IDs.
+  A saved memory can start an editable, 200-character contribution through the existing
+  `UiActions.submitContribution`. Three directions suggest carrying it forward, an earlier
+  world, or a possible continuation. No saved record is changed or invented.
+- **Verified:** after integrating `main` at `1536031`, `npm run check`: 547 tests / 38 files,
+  typecheck and production build pass.
+  Twenty new regressions cover search, ordering, export evidence, escaped rendering, Unicode
+  truncation, contribution eligibility, guest access and fixture disclosure.
+  `git diff --check` passes; the repository has no separate lint command.
+- **Mocked:** UI actions and sample records only in automated tests.
+- **Unverified:** browser interactions/download, layout, live generation and co-op delivery.
+  Field reports are keepsakes, not progress backups. Fixture generation does not respond to
+  memory ideas. A co-op host must prepare the world after contributions.
+- Coordinated scope on issue #4 with the active Stillpoint and integration workstreams.
+  No H1 station code, reducer/storage, shared contracts, root dependencies or server changes.
+
+## Render hosting setup — 2026-09-20
+
+- Branch: `devin/1789889059-render-deploy`; implementation commit `4c70ab3`; PR #17.
+- **Implemented:** a free, single-instance Render Blueprint using the existing Dockerfile,
+  deployment button, and launch/Claude configuration instructions. The follow-up enables
+  automatic deploys from `main` and extends Claude's request deadline from 25 to 55 seconds.
+  OpenAI's deadline, cancellation, validation and labelled fallback remain intact.
+- **Verified:** official Render JSON Schema validation; latest `npm run check` (333 tests / 32
+  files, typecheck/build); original Docker build and healthy container on port 10000. Local HTTP
+  served the game/assets, health/config, and a validated three-room fixture without a key.
+  Two WebSocket clients joined one crew as host and guest.
+- **Public deployment:** https://relay-a3yv.onrender.com served HTML/assets, health/config,
+  a schema-valid fixture world, and secure WebSocket welcome/ping/pong. After the user added
+  the Anthropic key in Render, configuration reported live mode. Two actual generation
+  attempts still returned `live_fallback_fixture`, each reporting a 25-second provider timeout.
+- **Mocked:** external providers in automated tests, including a successful 30-second Claude
+  response and aborted requests at the 55-second default/cap. These do not prove live success.
+- **Unverified:** successful live Claude generation, browser gameplay, and an automatic Render
+  deploy. Merge PR #17 and sync the Blueprint/redeploy, then repeat public generation. This
+  session cannot merge into `main` or access Render settings. No key was read or committed.
+
 ## Claude provider integration — 2026-09-20
 
 - Branch: `devin/1789878276-claude-provider`.

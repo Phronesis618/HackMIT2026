@@ -20,9 +20,26 @@ import {
   ENEMY_IDS,
   MOTIF_IDS,
   PROP_IDS,
+  PROP_INFO,
+  TERRAIN_DENSITIES,
+  TERRAIN_FEATURE_IDS,
+  TERRAIN_LAYOUT_IDS,
   TILE_CHARS,
   WORLD_RULE_IDS,
+  WALKABLE_TILES,
 } from './registry';
+import {
+  BiomeBriefListSchema,
+  EncounterRoleSchema,
+  FloorIdString,
+  FLOOR_ENTRANCE_ROOM_ID,
+  FloorRunStateSchema,
+  floorRoomIndex,
+  MAX_FLOOR_ROOM_INDEX,
+  RoomFeatureSchema,
+  RoomKindSchema,
+  WorldFloorsSchema,
+} from './floors';
 
 // ---------------------------------------------------------------------------
 // Primitives
@@ -35,10 +52,6 @@ export const ContributionText = z.string().trim().min(1).max(200);
 export const Paragraph = z.string().trim().min(1).max(600);
 export const Timestamp = z.number().int().nonnegative(); // Unix ms
 export const TileCoord = z.number().int().min(0).max(63);
-/** Rooms per expedition: up to three biomes of up to three rooms each. */
-export const MAX_ROOMS = 9;
-export const MAX_BIOMES = 3;
-const RoomIndex = z.number().int().min(0).max(MAX_ROOMS - 1);
 
 export const ClassIdSchema = z.enum(CLASS_IDS);
 export const AbilityIdSchema = z.enum(ABILITY_IDS);
@@ -79,7 +92,12 @@ export const GenerationRequestSchema = z.object({
   /** Deterministic seed for fixture selection / layout jitter. */
   seed: z.number().int().nonnegative().optional(),
   /** How many rooms the run will eventually have (rooms may be committed one at a time). */
-  plannedRoomCount: z.number().int().min(1).max(MAX_ROOMS).default(3),
+  plannedRoomCount: z.number().int().min(1).max(3).default(3),
+  /**
+   * Floors mode override for this request: true = attach `PreparedWorld.floors`, false = never,
+   * absent = the server's RELAY_FLOORS default. `plannedRoomCount` only shapes the legacy rooms.
+   */
+  floors: z.boolean().optional(),
 });
 export type GenerationRequest = z.infer<typeof GenerationRequestSchema>;
 export type GenerationRequestInput = z.input<typeof GenerationRequestSchema>;
@@ -203,6 +221,8 @@ export const RoomEncounterSchema = z.object({
   y: TileCoord,
   count: z.number().int().min(1).max(6),
   attributionId: IdString.optional(),
+  /** Floors rooms only: why the director placed this group (hook for gatekeeper/guardian fights). */
+  role: EncounterRoleSchema.optional(),
 });
 export type RoomEncounter = z.infer<typeof RoomEncounterSchema>;
 
@@ -216,11 +236,21 @@ export const RoomRelicSchema = z.object({
 });
 export type RoomRelic = z.infer<typeof RoomRelicSchema>;
 
+/**
+ * A door tile. Legacy 3-room worlds address the target by `toRoomIndex` (0..2) alone.
+ * Floors rooms address it by `toRoomId` within the same biome and also carry `entry`;
+ * there `toRoomIndex` is the target's position in its floor plan (`r07` -> 7), kept so
+ * legacy consumers still read a number. RoomSpecSchema enforces which form a room uses.
+ */
 export const RoomExitSchema = z.object({
   x: TileCoord,
   y: TileCoord,
-  toRoomIndex: RoomIndex,
+  toRoomIndex: z.number().int().min(0).max(MAX_FLOOR_ROOM_INDEX),
   direction: z.enum(['north', 'south', 'east', 'west']),
+  /** Floors: id of the neighbouring room in the same biome. */
+  toRoomId: FloorIdString.optional(),
+  /** Floors: walkable tile just inside THIS door; a player arriving through it stands here. */
+  entry: z.object({ x: TileCoord, y: TileCoord }).optional(),
 });
 export type RoomExit = z.infer<typeof RoomExitSchema>;
 
@@ -229,9 +259,8 @@ const tileCharSet = new Set<string>(TILE_CHARS);
 export const RoomSpecSchema = z
   .object({
     id: IdString,
-    index: RoomIndex,
-    /** Which biome of the world this room belongs to (0 when the world has no biomes). */
-    biomeIndex: z.number().int().min(0).max(MAX_BIOMES - 1).default(0),
+    /** Legacy: position in `PreparedWorld.rooms` (0..2). Floors: position in the biome's floor plan (0..63). */
+    index: z.number().int().min(0).max(MAX_FLOOR_ROOM_INDEX),
     name: ShortText,
     description: z.string().trim().max(300),
     width: z.number().int().min(8).max(48),
@@ -244,8 +273,21 @@ export const RoomSpecSchema = z
     isFinal: z.boolean(),
     attributions: z.array(AttributionSchema).max(24),
     relics: z.array(RoomRelicSchema).max(6).default([]),
+    anchorRelays: z.array(z.object({ x: TileCoord, y: TileCoord })).length(3).optional(),
+    // --- floors rooms only (all absent on legacy rooms; see docs/design/FLOORS.md) ---
+    /** Address of this room: `{biomeId, roomId}`. `id` is `${biomeId}:${roomId}`. */
+    biomeId: FloorIdString.optional(),
+    roomId: FloorIdString.optional(),
+    kind: RoomKindSchema.optional(),
+    /** What stands on `focus`: treasure, a lore relic, a rest site, the biome exit or the Anchor. */
+    feature: RoomFeatureSchema.optional(),
+    /** The room's point of interest; the 'A' tile when `feature` is `anchor`, plain floor otherwise. */
+    focus: z.object({ x: TileCoord, y: TileCoord }).optional(),
+    /** Steps from the biome entrance along the floor graph. */
+    depth: z.number().int().min(0).max(MAX_FLOOR_ROOM_INDEX).optional(),
   })
   .superRefine((room, ctx) => {
+    refineRoomAddressing(room, ctx);
     if (room.tiles.length !== room.height) {
       ctx.addIssue({ code: 'custom', message: `tiles has ${room.tiles.length} rows, height is ${room.height}` });
       return;
@@ -288,11 +330,22 @@ export const RoomSpecSchema = z
     const inBounds = (x: number, y: number) => x < room.width && y < room.height;
     const walkable = (x: number, y: number) => {
       const ch = room.tiles[y]?.[x];
-      return ch !== undefined && ch !== '#' && ch !== ' ';
+      return ch !== undefined && WALKABLE_TILES.has(ch);
     };
     for (const p of room.props) {
       if (!inBounds(p.x, p.y)) ctx.addIssue({ code: 'custom', message: `prop ${p.id} out of bounds` });
       else if (!walkable(p.x, p.y)) ctx.addIssue({ code: 'custom', message: `prop ${p.id} is placed on a wall/void tile` });
+      const info = PROP_INFO[p.propId];
+      if (info.blocksMovement) {
+        for (let dy = 0; dy < info.footprint.h; dy++) {
+          for (let dx = 0; dx < info.footprint.w; dx++) {
+            const tile = room.tiles[p.y + dy]?.[p.x + dx];
+            if (tile !== '.') {
+              ctx.addIssue({ code: 'custom', message: `blocking prop ${p.id} overlaps a solid, special tile or boundary` });
+            }
+          }
+        }
+      }
     }
     for (const e of room.encounters) {
       if (!inBounds(e.x, e.y)) ctx.addIssue({ code: 'custom', message: `encounter ${e.id} out of bounds` });
@@ -302,8 +355,75 @@ export const RoomSpecSchema = z
       if (!inBounds(r.x, r.y)) ctx.addIssue({ code: 'custom', message: `relic ${r.id} out of bounds` });
       else if (!walkable(r.x, r.y)) ctx.addIssue({ code: 'custom', message: `relic ${r.id} is placed on a wall/void tile` });
     }
+    if (room.anchorRelays) {
+      const unique = new Set(room.anchorRelays.map((relay) => `${relay.x},${relay.y}`));
+      if (!room.isFinal || unique.size !== 3) ctx.addIssue({ code: 'custom', message: 'Anchor relays require three distinct sites in the final room' });
+      for (const relay of room.anchorRelays) {
+        if (!inBounds(relay.x, relay.y) || !walkable(relay.x, relay.y) || room.tiles[relay.y]?.[relay.x] === '~') {
+          ctx.addIssue({ code: 'custom', message: 'Anchor relay must be on safe walkable ground' });
+        }
+      }
+    }
   });
 export type RoomSpec = z.infer<typeof RoomSpecSchema>;
+
+/**
+ * A room is either legacy (no address, index/toRoomIndex 0..2 exactly as before floors) or a
+ * floors room (full address, every exit carries `toRoomId` + `entry`). Nothing in between.
+ */
+function refineRoomAddressing(
+  room: {
+    index: number; width: number; height: number; tiles: string[]; isFinal: boolean;
+    biomeId?: string; roomId?: string; kind?: string; feature?: string; focus?: { x: number; y: number };
+    exits: Array<{ x: number; y: number; toRoomIndex: number; toRoomId?: string; entry?: { x: number; y: number } }>;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  const floors = room.biomeId !== undefined || room.roomId !== undefined;
+  if (!floors) {
+    if (room.index > 2) ctx.addIssue({ code: 'custom', message: `legacy room index ${room.index} exceeds 2` });
+    if (room.kind !== undefined || room.feature !== undefined || room.focus !== undefined) {
+      ctx.addIssue({ code: 'custom', message: 'kind/feature/focus need a floors address (biomeId + roomId)' });
+    }
+    for (const exit of room.exits) {
+      if (exit.toRoomIndex > 2) ctx.addIssue({ code: 'custom', message: `legacy exit targets room ${exit.toRoomIndex}, max is 2` });
+      if (exit.toRoomId !== undefined || exit.entry !== undefined) {
+        ctx.addIssue({ code: 'custom', message: 'exit toRoomId/entry need a floors address on the room' });
+      }
+    }
+    return;
+  }
+  if (room.biomeId === undefined || room.roomId === undefined || room.kind === undefined || room.feature === undefined || room.focus === undefined) {
+    ctx.addIssue({ code: 'custom', message: 'floors room needs biomeId, roomId, kind, feature and focus' });
+    return;
+  }
+  if (floorRoomIndex(room.roomId) !== room.index) {
+    ctx.addIssue({ code: 'custom', message: `floors room ${room.roomId} must have index ${floorRoomIndex(room.roomId) ?? '<rNN>'}, found ${room.index}` });
+  }
+  if (room.isFinal !== (room.feature === 'anchor')) {
+    ctx.addIssue({ code: 'custom', message: `floors room isFinal must equal feature === 'anchor'` });
+  }
+  const walkable = (x: number, y: number) => WALKABLE_TILES.has(room.tiles[y]?.[x] ?? ' ');
+  if (!walkable(room.focus.x, room.focus.y)) ctx.addIssue({ code: 'custom', message: 'focus is not on a walkable tile' });
+  if (room.exits.length === 0) ctx.addIssue({ code: 'custom', message: 'floors room needs at least one door' });
+  const targets = new Set<string>();
+  for (const exit of room.exits) {
+    if (exit.toRoomId === undefined || exit.entry === undefined) {
+      ctx.addIssue({ code: 'custom', message: `floors exit at (${exit.x},${exit.y}) needs toRoomId and entry` });
+      continue;
+    }
+    if (exit.toRoomId === room.roomId) ctx.addIssue({ code: 'custom', message: 'exit leads back to its own room' });
+    if (floorRoomIndex(exit.toRoomId) !== exit.toRoomIndex) {
+      ctx.addIssue({ code: 'custom', message: `exit toRoomIndex ${exit.toRoomIndex} does not match toRoomId ${exit.toRoomId}` });
+    }
+    if (targets.has(exit.toRoomId)) ctx.addIssue({ code: 'custom', message: `two doors lead to ${exit.toRoomId}` });
+    targets.add(exit.toRoomId);
+    const adjacent = Math.abs(exit.entry.x - exit.x) + Math.abs(exit.entry.y - exit.y) === 1;
+    if (!adjacent || !walkable(exit.entry.x, exit.entry.y) || room.tiles[exit.entry.y]?.[exit.entry.x] === 'X') {
+      ctx.addIssue({ code: 'custom', message: `exit entry (${exit.entry.x},${exit.entry.y}) must be a walkable tile next to its door` });
+    }
+  }
+}
 
 /** Every room relic must point at a `relic` fragment of the recipe it ships with. */
 function refineRelicReferences(world: { recipe: WorldRecipe; rooms: RoomSpec[] }, ctx: z.RefinementCtx): void {
@@ -320,21 +440,31 @@ function refineRelicReferences(world: { recipe: WorldRecipe; rooms: RoomSpec[] }
 // World recipe (model-facing structured output) and prepared world (client-facing)
 // ---------------------------------------------------------------------------
 
-export const RoomBlueprintSchema = z.object({
+export const RoomTerrainSchema = z.object({
+  features: z.array(z.enum(TERRAIN_FEATURE_IDS)).max(4),
+  layout: z.enum(TERRAIN_LAYOUT_IDS),
+  density: z.enum(TERRAIN_DENSITIES),
+});
+export type RoomTerrain = z.infer<typeof RoomTerrainSchema>;
+
+const roomBlueprintShape = {
   name: ShortText,
   description: z.string().trim().max(300),
   motifIds: z.array(MotifIdSchema).min(1).max(3),
   propIds: z.array(PropIdSchema).max(6),
   enemyIds: z.array(EnemyIdSchema).max(3),
   hazards: z.boolean(),
-});
+  terrain: RoomTerrainSchema.nullable().optional(),
+};
+// Provider JSON requires nullable keys; local parsing also accepts legacy recipes.
+export const RoomBlueprintSchema = z.object(roomBlueprintShape).meta({ required: Object.keys(roomBlueprintShape) });
 export type RoomBlueprint = z.infer<typeof RoomBlueprintSchema>;
 
 export const ContributionMappingSchema = z.object({
   contributionId: IdString,
   kind: AttributionKindSchema,
   featureDescription: z.string().trim().min(1).max(200),
-  roomIndex: RoomIndex,
+  roomIndex: z.number().int().min(0).max(2),
 });
 export type ContributionMapping = z.infer<typeof ContributionMappingSchema>;
 
@@ -358,7 +488,7 @@ export const LoreFragmentSchema = z.object({
   source: z.string().trim().min(1).max(60),
   text: z.string().trim().min(1).max(520),
   /** `relic`: the room it lies in. `remains`: ignored (drops wherever the enemy falls). */
-  roomIndex: RoomIndex,
+  roomIndex: z.number().int().min(0).max(2),
   /** `remains` only; null for relics. */
   enemyId: EnemyIdSchema.nullable(),
 });
@@ -375,48 +505,35 @@ export const AttunementSchema = z.object({
 });
 export type Attunement = z.infer<typeof AttunementSchema>;
 
-export const BiomeBlueprintSchema = z.object({
-  name: ShortText,
-  description: z.string().trim().max(300).default(''),
-  motifIds: z.array(MotifIdSchema).min(1).max(3),
-  /** Optional palette override; the biome inherits the world palette when absent. */
-  palette: PaletteSchema.optional(),
-  rooms: z.array(RoomBlueprintSchema).min(1).max(3),
-});
-export type BiomeBlueprint = z.infer<typeof BiomeBlueprintSchema>;
-
-/** Room blueprints in play order: the biomes' rooms when biomes exist, else the flat list. */
-export function recipeRoomBlueprints(recipe: { rooms: RoomBlueprint[]; biomes: BiomeBlueprint[] }): Array<{ blueprint: RoomBlueprint; biomeIndex: number }> {
-  if (recipe.biomes.length > 0) return recipe.biomes.flatMap((biome, biomeIndex) => biome.rooms.map((blueprint) => ({ blueprint, biomeIndex })));
-  return recipe.rooms.map((blueprint) => ({ blueprint, biomeIndex: 0 }));
-}
-
 export const WorldRecipeSchema = z.object({
   title: z.string().trim().min(1).max(40),
   tagline: z.string().trim().min(1).max(80),
   themeSummary: z.string().trim().min(1).max(400),
   motifIds: z.array(MotifIdSchema).min(1).max(4),
   palette: PaletteSchema,
-  /** Flat room list (legacy / single-biome). When `biomes` is non-empty the compiler uses the biomes' rooms instead. */
-  rooms: z.array(RoomBlueprintSchema).max(MAX_ROOMS),
-  /**
-   * Up to three biomes, each a distinct region (own name, motifs and optional palette) holding
-   * 1–3 room blueprints. Rooms are visited biome by biome; the guardian/anchor room is the
-   * last room of the last biome.
-   */
-  biomes: z.array(BiomeBlueprintSchema).max(MAX_BIOMES).default([]),
+  rooms: z.array(RoomBlueprintSchema).min(1).max(3),
   contributionMappings: z.array(ContributionMappingSchema).max(24),
   lore: z.array(LoreFragmentSchema).max(12),
   /** 2–4 world-specific skill nodes; see `src/shared/skills.ts` for how they join the tree. */
   attunements: z.array(AttunementSchema).max(4).default([]),
   /** Up to two gameplay modifiers from the registry's closed set (see WORLD_RULE_INFO). */
   rules: z.array(WorldRuleIdSchema).max(2).default([]),
-}).superRefine((recipe, ctx) => {
-  const total = recipe.biomes.length > 0 ? recipe.biomes.reduce((n, b) => n + b.rooms.length, 0) : recipe.rooms.length;
-  if (total < 1) ctx.addIssue({ code: 'custom', message: 'a recipe needs at least one room (in rooms or in biomes)' });
-  if (total > MAX_ROOMS) ctx.addIssue({ code: 'custom', message: `a recipe may hold at most ${MAX_ROOMS} rooms across its biomes` });
 });
-export type WorldRecipe = z.infer<typeof WorldRecipeSchema>;
+
+/**
+ * The recipe as stored in a world or fixture: today's model output plus optional floors data.
+ * `WorldRecipeSchema` above stays the exact JSON schema of the current model call (strict
+ * structured output rejects optional keys), so providers keep using it unchanged. A
+ * pipeline that has the model write biome briefs parses with THIS schema instead.
+ * When `biomes` is absent the briefs are derived (`deriveBiomeBriefs` in src/shared/floorgen).
+ *
+ * EXTENSION POINT (agent W2): add the optional world `bible` here, next to `biomes`.
+ */
+export const FloorsWorldRecipeSchema = WorldRecipeSchema.extend({
+  /** Exactly 8 bounded biome briefs: opener, three pairs of choices, finale. Model-facing. */
+  biomes: BiomeBriefListSchema.optional(),
+});
+export type WorldRecipe = z.infer<typeof FloorsWorldRecipeSchema>;
 
 export const ReceiptLineSchema = z.object({
   contributionId: IdString,
@@ -442,31 +559,38 @@ export type CreationReceipt = z.infer<typeof CreationReceiptSchema>;
  * What the client receives and plays. `rooms` holds only COMMITTED rooms (rooms[i].index
  * === i). Later rooms may be appended by a follow-up message while players play, but a
  * committed room is never changed.
+ *
+ * FLOORS WORLD (`floors` present). Every other room is compiled lazily from `floors` with
+ * `createFloorRuntime` and is never sent. For legacy consumers and refinements:
+ *  - `rooms` is exactly `[entrance]`: room `r00` of the opening biome (`floors.route.tiers[0][0]`),
+ *    byte-identical to `createFloorRuntime(world).getRoom(entranceRef())`.
+ *  - `plannedRoomCount` is 1 = "`rooms` is complete, nothing else will stream". It is NOT
+ *    the length of the run; use `floors.route.graph.nodes[].roomBudget` for that.
+ *  - `rooms[0].isFinal` is false. In floors mode `isFinal` means `feature === 'anchor'`, which
+ *    only the exit room of the tier-4 biome has.
+ *  - exits carry `toRoomId`; their `toRoomIndex` is the target's floor-plan index, so a legacy
+ *    consumer sees a room that "is not committed yet" rather than a crash.
  */
-export const CompiledBiomeSchema = z.object({
-  index: z.number().int().min(0).max(MAX_BIOMES - 1),
-  name: ShortText,
-  description: z.string().trim().max(300).default(''),
-  roomIndices: z.array(RoomIndex).min(1).max(MAX_ROOMS),
-  art: ArtRecipeSchema,
-});
-export type CompiledBiome = z.infer<typeof CompiledBiomeSchema>;
-
 export const PreparedWorldSchema = z
   .object({
     worldId: IdString,
     createdAt: Timestamp,
-    recipe: WorldRecipeSchema,
+    recipe: FloorsWorldRecipeSchema,
     art: ArtRecipeSchema,
-    rooms: z.array(RoomSpecSchema).min(1).max(MAX_ROOMS),
-    plannedRoomCount: z.number().int().min(1).max(MAX_ROOMS),
-    /** Compiled biomes: name + which room indices + the art the renderer uses for them. */
-    biomes: z.array(CompiledBiomeSchema).max(MAX_BIOMES).default([]),
+    rooms: z.array(RoomSpecSchema).min(1).max(3),
+    plannedRoomCount: z.number().int().min(1).max(3),
     provenance: GenerationProvenanceSchema,
     receipt: CreationReceiptSchema,
+    floors: WorldFloorsSchema.optional(),
   })
   .superRefine((world, ctx) => {
+    if (world.floors) {
+      refineFloorsWorld(world.floors, world.rooms, world.plannedRoomCount, ctx);
+      refineRelicReferences(world, ctx);
+      return;
+    }
     world.rooms.forEach((room, i) => {
+      if (room.roomId !== undefined) ctx.addIssue({ code: 'custom', message: `rooms[${i}] is a floors room but the world has no floors` });
       if (room.index !== i) ctx.addIssue({ code: 'custom', message: `rooms[${i}].index is ${room.index}` });
       for (const exit of room.exits) {
         if (exit.toRoomIndex >= world.plannedRoomCount) {
@@ -485,15 +609,31 @@ export const PreparedWorldSchema = z
   });
 export type PreparedWorld = z.infer<typeof PreparedWorldSchema>;
 
+function refineFloorsWorld(floors: z.infer<typeof WorldFloorsSchema>, rooms: RoomSpec[], plannedRoomCount: number, ctx: z.RefinementCtx): void {
+  const entrance = rooms[0];
+  if (!entrance) return;
+  const openerId = floors.route.tiers[0]?.[0];
+  if (rooms.length !== 1 || plannedRoomCount !== 1) {
+    ctx.addIssue({ code: 'custom', message: 'a floors world carries exactly its entrance room (rooms.length 1, plannedRoomCount 1)' });
+  }
+  if (entrance.biomeId !== openerId || entrance.roomId !== FLOOR_ENTRANCE_ROOM_ID || entrance.kind !== 'entrance') {
+    ctx.addIssue({ code: 'custom', message: `rooms[0] must be the entrance r00 of opening biome ${openerId}` });
+  }
+  const budget = floors.route.graph.nodes.find((node) => node.biomeId === openerId)?.roomBudget ?? 0;
+  for (const exit of entrance.exits) {
+    if (exit.toRoomIndex >= budget) ctx.addIssue({ code: 'custom', message: `entrance exit targets ${exit.toRoomId}, beyond the biome's ${budget} rooms` });
+  }
+}
+
 /** On-disk fixture format (fixtures/worlds/*.json). Provenance/receipt are stamped at runtime. */
 export const WorldFixtureSchema = z.object({
   fixtureId: IdString,
   /** Free-text note shown in provenance so nobody mistakes it for live output. */
   fixtureNote: z.string().max(200),
-  recipe: WorldRecipeSchema,
+  recipe: FloorsWorldRecipeSchema,
   art: ArtRecipeSchema,
-  rooms: z.array(RoomSpecSchema).min(1).max(MAX_ROOMS),
-  plannedRoomCount: z.number().int().min(1).max(MAX_ROOMS),
+  rooms: z.array(RoomSpecSchema).min(1).max(3),
+  plannedRoomCount: z.number().int().min(1).max(3),
 }).superRefine(refineRelicReferences);
 export type WorldFixture = z.infer<typeof WorldFixtureSchema>;
 
@@ -590,6 +730,8 @@ export const EnemyStateSchema = z.object({
   slowMs: z.number().nonnegative().optional(),
   stunMs: z.number().nonnegative().optional(),
   markMs: z.number().nonnegative().optional(),
+  bossPhase: z.number().int().min(1).max(3).optional(),
+  recoveryMs: z.number().nonnegative().optional(),
 });
 export type EnemyState = z.infer<typeof EnemyStateSchema>;
 
@@ -613,6 +755,14 @@ export const AnchorStateSchema = z.object({
   y: z.number(),
   state: z.enum(['dormant', 'planting', 'planted']),
   progress: z.number().min(0).max(1),
+  ritual: z.object({
+    stage: z.enum(['locked', 'relays', 'core', 'discharging', 'complete']),
+    relays: z.array(z.object({ x: z.number(), y: z.number(), activated: z.boolean() })).length(3),
+    activeRelay: z.number().int().min(0).max(3),
+    pulseRadius: z.number().nonnegative(),
+    pulseWarningMs: z.number().nonnegative(),
+    dischargeMs: z.number().nonnegative(),
+  }).optional(),
 });
 export type AnchorState = z.infer<typeof AnchorStateSchema>;
 
@@ -635,6 +785,16 @@ export const GameSnapshotSchema = z.object({
   discoveredLore: z.array(z.number().int().min(0)).optional(),
   anchor: AnchorStateSchema.nullable(),
   roomCleared: z.boolean().optional(),
+  terrain: z.object({
+    brokenWalls: z.array(z.string().regex(/^\d+,\d+$/)).max(2048),
+    wallDamage: z.record(z.string().regex(/^\d+,\d+$/), z.number().nonnegative()),
+  }).optional(),
+  /**
+   * Floors runs only (absent in HQ, training and legacy worlds): where the crew is in the
+   * biome graph, the fog-of-war map, door locks and the pending biome choice. In a floors
+   * run `roomId` above is `${biomeId}:${roomId}` and `roomIndex` is the floor-plan index.
+   */
+  floor: FloorRunStateSchema.optional(),
 });
 export type GameSnapshot = z.infer<typeof GameSnapshotSchema>;
 
@@ -666,6 +826,10 @@ export const GameEventSchema = z.discriminatedUnion('type', [
     roomId: IdString,
     roomName: z.string().max(80),
     playerIds: z.array(IdString),
+    /** Floors runs: the room's address and kind (`roomId` above stays the full RoomSpec id). */
+    biomeId: IdString.optional(),
+    floorRoomId: IdString.optional(),
+    kind: RoomKindSchema.optional(),
   }),
   z.object({ ...eventBase, type: z.literal('player_dashed'), playerId: IdString, x: z.number(), y: z.number(), facing: z.number() }),
   z.object({
@@ -680,7 +844,7 @@ export const GameEventSchema = z.discriminatedUnion('type', [
     hitEnemyIds: z.array(IdString),
   }),
   z.object({ ...eventBase, type: z.literal('enemy_damaged'), enemyId: IdString, byPlayerId: IdString, amount: z.number(), remainingHp: z.number() }),
-  z.object({ ...eventBase, type: z.literal('enemy_defeated'), enemyId: IdString, byPlayerId: IdString }),
+  z.object({ ...eventBase, type: z.literal('enemy_defeated'), enemyId: IdString, byPlayerId: IdString, worldId: IdString.nullable().optional() }),
   z.object({ ...eventBase, type: z.literal('player_damaged'), playerId: IdString, amount: z.number(), remainingHp: z.number(), sourceEnemyId: IdString.nullable() }),
   z.object({ ...eventBase, type: z.literal('player_downed'), playerId: IdString }),
   z.object({ ...eventBase, type: z.literal('player_revived'), playerId: IdString, byPlayerId: IdString, hp: z.number().positive() }),
@@ -703,11 +867,17 @@ export const GameEventSchema = z.discriminatedUnion('type', [
     x: z.number(), y: z.number(), facing: z.number(), hitPlayerIds: z.array(IdString),
   }),
   z.object({
-    ...eventBase, type: z.literal('lore_discovered'), playerId: IdString,
+    ...eventBase, type: z.literal('lore_discovered'), playerId: IdString, worldId: IdString.nullable().optional(),
     fragmentIndex: z.number().int().min(0), kind: z.enum(['relic', 'remains']),
     title: z.string().max(40), source: z.string().max(60), text: z.string().max(520), x: z.number(), y: z.number(),
   }),
-  z.object({ ...eventBase, type: z.literal('exit_reached'), playerId: IdString, roomIndex: z.number().int().min(0), toRoomIndex: z.number().int().min(0) }),
+  z.object({ ...eventBase, type: z.literal('exit_reached'), playerId: IdString, roomIndex: z.number().int().min(0), toRoomIndex: z.number().int().min(0), toRoomId: IdString.optional() }),
+  // Floors runs. `options` are biome ids of PreparedWorld.floors.briefs.
+  z.object({ ...eventBase, type: z.literal('biome_choice_offered'), worldId: IdString, fromBiomeId: IdString, options: z.array(IdString).min(1).max(2) }),
+  z.object({
+    ...eventBase, type: z.literal('biome_entered'), worldId: IdString, biomeId: IdString, biomeName: z.string().max(80),
+    tier: z.number().int().min(0).max(4), chosenByPlayerId: IdString.nullable(), playerIds: z.array(IdString),
+  }),
   z.object({ ...eventBase, type: z.literal('anchor_planted'), worldId: IdString, roomIndex: z.number().int().min(0), playerIds: z.array(IdString) }),
   z.object({
     ...eventBase,

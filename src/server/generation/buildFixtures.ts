@@ -1,8 +1,31 @@
 import fs from 'node:fs';
-import { WorldFixtureSchema, type WorldRecipe } from '../../shared/contracts';
+import vantageSpire from '../../../fixtures/worlds/vantage-spire.json';
+import { WorldFixtureSchema, WorldRecipeSchema, type ArtRecipe, type RoomTerrain, type WorldRecipe } from '../../shared/contracts';
 import { compileWorldRecipe } from './compiler';
 
-const themes: { fixtureId: string; seed: number; recipe: WorldRecipe }[] = [
+const vantageTerrain: RoomTerrain[] = [
+  { features: ['breakable_walls', 'bridges', 'conduits'], layout: 'crossroads', density: 'balanced' },
+  { features: ['bridges', 'rubble', 'conduits'], layout: 'barricades', density: 'dense' },
+  { features: ['breakable_walls', 'bridges', 'rubble', 'conduits'], layout: 'crossroads', density: 'balanced' },
+];
+const vantageRecipe = WorldRecipeSchema.parse(vantageSpire.recipe);
+const themes: {
+  fixtureId: string;
+  seed: number;
+  recipe: WorldRecipe;
+  roomIdPrefix?: string;
+  artOverrides?: Partial<ArtRecipe>;
+}[] = [
+  {
+    fixtureId: 'vantage-spire',
+    seed: 2027,
+    roomIdPrefix: 'vantage-spire',
+    artOverrides: { skyline: 'spires', fog: 0.35, glowIntensity: 0.6 },
+    recipe: {
+      ...vantageRecipe,
+      rooms: vantageRecipe.rooms.map((room, index) => ({ ...room, terrain: vantageTerrain[index]! })),
+    },
+  },
   {
     fixtureId: 'crystal-tide',
     seed: 618,
@@ -21,20 +44,22 @@ const themes: { fixtureId: string; seed: number; recipe: WorldRecipe }[] = [
           name: 'Prism Landing', description: 'Crystal shelves interrupt the violet shallows.',
           motifIds: ['crystals', 'arches'], propIds: ['crystal_cluster', 'crystal_cluster', 'monolith_shard'],
           enemyIds: ['sentinel'], hazards: true,
+          terrain: { features: ['breakable_walls', 'rubble'], layout: 'scattered', density: 'balanced' },
         },
         {
           name: 'Refraction Gallery', description: 'Arched buttresses hold a cracked observatory aloft.',
           motifIds: ['arches', 'crystals'], propIds: ['pillar', 'crystal_cluster', 'monolith_shard', 'crystal_cluster'],
           enemyIds: ['sentinel', 'lurker'], hazards: true,
+          terrain: { features: ['bridges', 'conduits'], layout: 'barricades', density: 'balanced' },
         },
         {
           name: 'Prism Heart', description: 'The Guardian stands watch over the final crystal lens.',
           motifIds: ['monoliths', 'crystals'], propIds: ['anchor_pedestal', 'crystal_cluster', 'monolith_shard'],
           enemyIds: ['guardian', 'sentinel'], hazards: true,
+          terrain: { features: ['breakable_walls', 'bridges', 'conduits'], layout: 'crossroads', density: 'balanced' },
         },
       ],
       contributionMappings: [],
-      biomes: [],
       rules: [],
       lore: [
         { kind: 'relic', roomIndex: 0, enemyId: null, title: 'Tide gauge, cracked', source: 'scratched into the glass of a brass tide gauge',
@@ -78,20 +103,22 @@ const themes: { fixtureId: string; seed: number; recipe: WorldRecipe }[] = [
           name: 'Root Vestibule', description: 'Lanterns light the roots threading through abandoned records.',
           motifIds: ['roots', 'lanterns'], propIds: ['root_mass', 'root_mass', 'lantern', 'terminal'],
           enemyIds: ['lurker', 'husk'], hazards: false,
+          terrain: { features: ['breakable_walls', 'rubble'], layout: 'scattered', density: 'sparse' },
         },
         {
           name: 'Buried Index', description: 'Broken machines have become planters for a luminous forest.',
           motifIds: ['ruined_machinery', 'roots'], propIds: ['terminal', 'root_mass', 'crate', 'lantern'],
           enemyIds: ['lurker', 'lurker', 'husk'], hazards: false,
+          terrain: { features: ['breakable_walls', 'bridges', 'conduits'], layout: 'crossroads', density: 'balanced' },
         },
         {
           name: 'Seed Vault', description: 'The Guardian defends the archive seed beside the Anchor site.',
           motifIds: ['roots', 'lanterns'], propIds: ['anchor_pedestal', 'root_mass', 'lantern', 'terminal'],
           enemyIds: ['guardian', 'lurker'], hazards: false,
+          terrain: { features: ['breakable_walls', 'bridges', 'rubble'], layout: 'barricades', density: 'balanced' },
         },
       ],
       contributionMappings: [],
-      biomes: [],
       rules: [],
       lore: [
         { kind: 'relic', roomIndex: 0, enemyId: null, title: 'Reading-room notice', source: 'a laminated notice, half swallowed by root',
@@ -118,12 +145,14 @@ const themes: { fixtureId: string; seed: number; recipe: WorldRecipe }[] = [
   },
 ];
 
-for (const { fixtureId, seed, recipe } of themes) {
+for (const { fixtureId, seed, recipe, roomIdPrefix, artOverrides } of themes) {
   const { rooms, art } = compileWorldRecipe(recipe, { seed, plannedRoomCount: 3 });
   const fixture = WorldFixtureSchema.parse({
     fixtureId,
     fixtureNote: 'Authored offline theme compiled with a fixed seed. Not generated from player contributions.',
-    plannedRoomCount: 3, recipe, art, rooms,
+    plannedRoomCount: 3, recipe,
+    art: { ...art, ...artOverrides },
+    rooms: rooms.map((room) => ({ ...room, id: roomIdPrefix ? `${roomIdPrefix}-room-${room.index}` : room.id })),
   });
   fs.writeFileSync(new URL(`../../../fixtures/worlds/${fixtureId}.json`, import.meta.url), `${JSON.stringify(fixture, null, 2)}\n`);
   console.log(`Wrote ${fixtureId}.`);

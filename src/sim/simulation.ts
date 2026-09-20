@@ -19,7 +19,16 @@ import {
   nearestOpenPosition, type Point, type ProjectilePattern,
 } from './combat';
 import { headquartersRoom } from './headquarters';
+import { terrainSpeedMultiplier, type TerrainState } from '../shared/terrain';
+import { createTerrainState, strikeBreakableWalls } from './terrain';
+import { ANCHOR_DISCHARGE_MS, ANCHOR_PULSE_SPEED, ANCHOR_PULSE_WARNING_MS, guardianPhase, RELAY_ACTIVATION_RANGE } from '../shared/finale';
 import { TRAINING_REGEN_PER_TICK, TRAINING_RESPAWN_MS, TRAINING_WAKE_RANGE, trainingRoom } from './training';
+import { FLOOR_ENTRANCE_ROOM_ID } from '../shared/floors';
+import { createRoomProvider, type RoomProvider } from './floorProvider';
+import {
+  FLOOR_TUNING, TREASURE_REWARD, advanceBiome, clearReward, connectedTiles, createFloorsRun, doorArrival, floorRunState, focusPoint,
+  markCleared, markVisited, sealsDoors, tierMultiplier, type FloorsRun,
+} from './floors';
 
 type LivePlayerState = PlayerState & Required<Pick<PlayerState,
   'resources' | 'abilityEUnlocked' | 'abilityQCooldownMs' | 'abilityECooldownMs' |
@@ -35,6 +44,8 @@ interface PlayerRuntime {
   hitRemainingMs: number;
   onExit: boolean;
   interacting: boolean;
+  interactHeld: boolean;
+  interactPressed: boolean;
   damagedThisTick: boolean;
   history: Array<Point & { hp: number }>;
   /** Time since the last hazard-floor bite (rules: unstable_ground). */
@@ -55,6 +66,14 @@ interface EnemyRuntime {
   channelMsRemaining: number;
   channelAngle: number;
   channelTimerMs: number;
+  /** Floors gatekeepers are Custodians held to their first phase. */
+  maxBossPhase?: 1 | 2 | 3;
+}
+
+/** Floors: the crew arrives through a door, on its `entry` tile, facing `inward`. */
+interface DoorArrival {
+  entry: { x: number; y: number };
+  inward: { x: number; y: number };
 }
 
 interface ProjectileRuntime {
@@ -80,6 +99,8 @@ interface RoomProgress {
   anchor: AnchorState | null;
   cleared: boolean;
   loreNodes: LoreNodeRuntime[];
+  pulseHitPlayers: Set<string>;
+  terrain: TerrainState;
 }
 
 export interface Simulation {
@@ -97,6 +118,10 @@ export interface Simulation {
   returnToHeadquarters(): GameEvent[];
   /** From HQ only: the practice range (respawning targets, all abilities, no run). */
   enterTraining(): GameEvent[];
+  /** Floors co-op: whose `chooseBiome` decides. Null = the first operative (solo). */
+  setHostPlayerId(playerId: string | null): void;
+  /** Floors: vote while the biome choice is open; the host's vote moves the crew on the next step. */
+  chooseBiome(playerId: string, biomeId: string): void;
   unlockAbility(playerId: string): GameEvent[];
   /** Buttons are pressed this tick; interact is held this tick. */
   applyIntent(intent: PlayerIntent): void;
@@ -107,6 +132,8 @@ export interface Simulation {
 
 export interface SimulationOptions {
   headquarters?: RoomSpec;
+  /** Floors worlds: how room addresses become RoomSpecs. Tests inject doubles; default = createRoomProvider. */
+  roomProvider?: (world: PreparedWorld) => RoomProvider | null;
 }
 
 export function createSimulation(options: SimulationOptions = {}): Simulation {
@@ -120,8 +147,16 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   let tick = 0;
   let eventCounter = 0;
   const players = new Map<string, PlayerRuntime>();
-  const rooms = new Map<number, RoomProgress>();
-  let progress: RoomProgress = { enemies: [], anchor: null, cleared: false, loreNodes: [] };
+  /** Per-room persistent state. Legacy rooms key by index, floors rooms by `biomeId:roomId`. */
+  const rooms = new Map<number | string, RoomProgress>();
+  const roomKey = (spec: RoomSpec): number | string => spec.roomId !== undefined ? spec.id : spec.index;
+  let roomProvider: RoomProvider | null = null;
+  /** Non-null exactly while a floors expedition (or its debrief) is running. */
+  let floorsRun: FloorsRun | null = null;
+  let hostPlayerId: string | null = null;
+  /** Floors tier scaling of enemy damage; 1 everywhere else. */
+  let enemyDamageScale = 1;
+  let progress: RoomProgress = { enemies: [], anchor: null, cleared: false, loreNodes: [], pulseHitPlayers: new Set(), terrain: createTerrainState() };
   /** Ephemeral bullet-hell bolts; never persisted across room switches (combat gates exits). */
   let projectiles: ProjectileRuntime[] = [];
   let projectileCounter = 0;
@@ -160,12 +195,38 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     p.attackRemainingMs = 0;
     p.hitRemainingMs = 0;
     p.interacting = false;
+    p.interactHeld = false;
+    p.interactPressed = false;
     p.damagedThisTick = false;
     p.history = [];
     p.onExit = false;
   }
 
-  function placePlayers(): void {
+  function doorsLocked(): boolean {
+    return floorsRun !== null && phase === 'expedition' && sealsDoors(room) && !progress.cleared;
+  }
+
+  function rebuildGrid(): void {
+    grid = buildSolidGrid(room, progress.terrain.brokenWalls, doorsLocked());
+  }
+
+  function placePlayers(arrival?: DoorArrival): void {
+    if (arrival) {
+      // Doors count as solid for placement so nobody lands on one and bounces straight back.
+      const placement = buildSolidGrid(room, progress.terrain.brokenWalls, true);
+      const base = tileToWorld(arrival.entry.x, arrival.entry.y);
+      const { inward } = arrival;
+      const slots: Array<[number, number]> = [[0, 0], [1, 0], [1, 1], [1, -1]];
+      orderedPlayers().forEach((p, i) => {
+        const [forward, side] = slots[i] ?? [2, 0];
+        Object.assign(p.state, nearestOpenPosition(placement, {
+          x: base.x + (inward.x * forward - inward.y * side) * TILE_SIZE * 0.9,
+          y: base.y + (inward.y * forward + inward.x * side) * TILE_SIZE * 0.9,
+        }, PLAYER_RADIUS));
+        resetTransient(p);
+      });
+      return;
+    }
     const spawn = findTile('P') ?? tileToWorld(1, 1);
     orderedPlayers().forEach((p, i) => {
       // Fan the crew out right / down / up first: spawns sit against the west wall, so an
@@ -189,24 +250,39 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       encounters.push({ id: 'anchor-guardian', enemyId: 'guardian', x: tile.col, y: tile.row, count: 1 });
     }
     const rules = phase === 'expedition' ? world?.recipe.rules ?? [] : [];
-    const hpScale = rules.includes('bulwark') ? 1.35 : rules.includes('frenzy') ? 0.8 : 1;
-    for (const encounter of encounters) {
+    const ruleHp = rules.includes('bulwark') ? 1.35 : rules.includes('frenzy') ? 0.8 : 1;
+    const hpScale = (floorsRun && phase === 'expedition' ? tierMultiplier(floorsRun.tier) : 1) * ruleHp;
+    for (const planned of encounters) {
+      // Floors biome exits: the gatekeeper is a one-phase Custodian until B1 gives it its own fight.
+      const gatekeeper = floorsRun !== null && planned.role === 'gatekeeper';
+      const swarmy = planned.enemyId === 'swarmling' || planned.enemyId === 'husk';
+      const encounter = gatekeeper
+        ? { ...planned, enemyId: 'guardian' as const, count: 1 }
+        : rules.includes('dense_swarm') && swarmy ? { ...planned, count: planned.count + 1 } : planned;
       const info = ENEMY_INFO[encounter.enemyId];
-      const swarmy = encounter.enemyId === 'swarmling' || encounter.enemyId === 'husk';
-      const count = encounter.count + (rules.includes('dense_swarm') && swarmy ? 1 : 0);
-      for (let i = 0; i < count; i++) {
+      const maxHp = Math.round(info.maxHp * hpScale * (gatekeeper ? FLOOR_TUNING.gatekeeperHpShare : 1));
+      let reachable: Set<number> | undefined;
+      for (let i = 0; i < encounter.count; i++) {
         const base = tileToWorld(encounter.x, encounter.y);
         const offset = i === 0 ? 0 : (i % 2 === 0 ? 1 : -1) * Math.ceil(i / 2) * (info.radius * 2 + 6);
-        const spawn = nearestOpenPosition(grid, { x: base.x + offset, y: base.y }, info.radius);
+        let spawn = nearestOpenPosition(grid, { x: base.x + offset, y: base.y }, info.radius);
+        if (floorsRun && i > 0) {
+          // Pack members fan out sideways; never into a pocket the crew cannot reach (sealed doors would never open).
+          reachable ??= connectedTiles(grid, { col: encounter.x, row: encounter.y });
+          const tile = worldToTile(spawn.x, spawn.y);
+          if (!reachable.has(tile.row * grid.width + tile.col)) spawn = nearestOpenPosition(grid, base, info.radius);
+        }
         enemies.push({
           state: {
             id: `${encounter.id.slice(0, 61)}-${i}`, enemyId: encounter.enemyId,
             ...spawn,
-            facing: Math.PI, hp: Math.round(info.maxHp * hpScale), maxHp: Math.round(info.maxHp * hpScale), state: 'idle',
+            facing: Math.PI, hp: maxHp, maxHp, state: 'idle',
             telegraph: null, slowMs: 0, stunMs: 0, markMs: 0,
+            ...(encounter.enemyId === 'guardian' ? { bossPhase: 1, recoveryMs: 0 } : {}),
           },
           cooldownMs: 500, hitMs: 0, attackCount: 0, spawn, respawnMs: 0,
           channelMsRemaining: 0, channelAngle: 0, channelTimerMs: 0,
+          ...(gatekeeper ? { maxBossPhase: 1 as const } : {}),
         });
       }
     }
@@ -226,17 +302,27 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     }
   }
 
-  function loadRoom(next: RoomSpec, nextPhase: GamePhase): void {
+  function loadRoom(next: RoomSpec, nextPhase: GamePhase, arrival?: DoorArrival): void {
     room = next;
     phase = nextPhase;
     grid = buildSolidGrid(room);
     projectiles = [];
-    const saved = nextPhase === 'expedition' ? rooms.get(next.index) : undefined;
+    enemyDamageScale = floorsRun && nextPhase === 'expedition' ? tierMultiplier(floorsRun.tier) : 1;
+    const saved = nextPhase === 'expedition' ? rooms.get(roomKey(next)) : undefined;
     const anchorPoint = room.isFinal ? findTile('A') : null;
     progress = saved ?? {
       enemies: nextPhase === 'expedition' || nextPhase === 'training' ? spawnEnemies() : [],
-      anchor: anchorPoint ? { ...anchorPoint, state: 'dormant', progress: 0 } : null,
+      anchor: anchorPoint ? {
+        ...anchorPoint, state: 'dormant', progress: 0,
+        ...(room.anchorRelays ? { ritual: {
+          stage: 'locked' as const,
+          relays: room.anchorRelays.map((relay) => ({ ...tileToWorld(relay.x, relay.y), activated: false })),
+          activeRelay: 0, pulseRadius: 0, pulseWarningMs: ANCHOR_PULSE_WARNING_MS, dischargeMs: 0,
+        } } : {}),
+      } : null,
       cleared: false,
+      pulseHitPlayers: new Set(),
+      terrain: createTerrainState(),
       loreNodes: nextPhase === 'expedition' ? room.relics.map((relic) => ({
         state: {
           id: relic.id, kind: 'relic', ...tileToWorld(relic.x, relic.y), fragmentIndex: relic.fragmentIndex,
@@ -245,8 +331,64 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         holdMs: 0,
       })) : [],
     };
-    if (nextPhase === 'expedition') rooms.set(next.index, progress);
-    placePlayers();
+    if (nextPhase === 'expedition') rooms.set(roomKey(next), progress);
+    // Floors: a room with nobody to fight is open from the start and pays nothing.
+    if (floorsRun && nextPhase === 'expedition' && !saved && progress.enemies.length === 0) progress.cleared = true;
+    rebuildGrid();
+    placePlayers(arrival);
+  }
+
+  /** Floors: load a room of the current biome and record it on the map. */
+  function enterFloorRoom(next: RoomSpec, arrival: DoorArrival | undefined, events: GameEvent[]): void {
+    if (!floorsRun || !world || next.biomeId === undefined || next.roomId === undefined) return;
+    loadRoom(next, 'expedition', arrival);
+    markVisited(floorsRun, { biomeId: next.biomeId, roomId: next.roomId });
+    // Rest sites and caches show as cleared on the map once they are used, not on entry.
+    if (progress.cleared && next.feature !== 'rest' && next.feature !== 'treasure') markCleared(floorsRun, next.roomId);
+    events.push(emit({ type: 'room_entered', worldId: world.worldId, roomIndex: next.index, roomId: next.id, roomName: next.name,
+      playerIds: playerIds(), biomeId: next.biomeId, floorRoomId: next.roomId, kind: next.kind }));
+  }
+
+  /** Floors: the host's pick resolved last tick; move the crew to the next biome's entrance. */
+  function enterChosenBiome(events: GameEvent[]): void {
+    const run = floorsRun;
+    const choice = run?.choice;
+    if (!run || !choice?.chosenBiomeId || !world || phase !== 'expedition') return;
+    const biomeId = choice.chosenBiomeId;
+    const decider = run.hostPlayerId ?? playerIds()[0];
+    const chosenBy = decider !== undefined && choice.votes[decider] === biomeId ? decider : null;
+    rooms.clear(); // no way back to the biome we leave
+    advanceBiome(run, biomeId);
+    events.push(emit({ type: 'biome_entered', worldId: world.worldId, biomeId, biomeName: run.provider.brief(biomeId).name,
+      tier: run.tier, chosenByPlayerId: chosenBy, playerIds: playerIds() }));
+    enterFloorRoom(run.provider.getRoom({ biomeId, roomId: FLOOR_ENTRANCE_ROOM_ID }), undefined, events);
+  }
+
+  /** Floors room kinds: rest sites, caches and the biome choice site all sit on the room's focus. */
+  function updateFloorFeatures(living: PlayerRuntime[], busy: Set<string>, events: GameEvent[]): void {
+    const run = floorsRun;
+    const site = focusPoint(room);
+    if (!run || !world || !site || room.roomId === undefined) return;
+    const near = (p: PlayerRuntime) => distance(p.state, site) <= FLOOR_TUNING.featureRange;
+    if (room.feature === 'rest' && !run.usedFeatures.has(room.roomId)) {
+      const visitor = living.find(near);
+      if (!visitor || !living.some((p) => p.state.hp < p.state.maxHp)) return;
+      run.usedFeatures.add(room.roomId);
+      markCleared(run, room.roomId);
+      for (const p of living) heal(p, visitor, Math.ceil(p.state.maxHp * FLOOR_TUNING.restHealFraction), events);
+    } else if (room.feature === 'treasure' && !run.usedFeatures.has(room.roomId)) {
+      if (!living.some(near)) return;
+      run.usedFeatures.add(room.roomId);
+      markCleared(run, room.roomId);
+      for (const p of players.values()) p.state.resources += TREASURE_REWARD;
+      events.push(emit({ type: 'room_cleared', worldId: world.worldId, roomIndex: room.index, roomId: room.id, playerIds: playerIds(), reward: TREASURE_REWARD }));
+    } else if (room.feature === 'biome_exit' && progress.cleared && !run.choice) {
+      const opener = living.find((p) => !busy.has(p.state.id) && p.interactPressed && near(p));
+      const options = run.provider.nextBiomeChoices(run.biomeId).slice(0, 2);
+      if (!opener || options.length === 0) return;
+      run.choice = { fromBiomeId: run.biomeId, options, votes: {}, hostPlayerId: run.hostPlayerId, chosenBiomeId: null };
+      events.push(emit({ type: 'biome_choice_offered', worldId: world.worldId, fromBiomeId: run.biomeId, options }));
+    }
   }
 
   function makePlayer(identity: PlayerIdentity): PlayerRuntime {
@@ -262,7 +404,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       },
       intent: null, unlockedClasses: new Set(), dashRemainingMs: 0,
       dashDirection: { x: 1, y: 0 }, attackRemainingMs: 0, hitRemainingMs: 0,
-      onExit: false, interacting: false, damagedThisTick: false, history: [], hazardMs: 0, regenCarry: 0,
+      onExit: false, interacting: false, interactHeld: false, interactPressed: false, damagedThisTick: false, history: [], hazardMs: 0, regenCarry: 0,
     };
   }
 
@@ -284,13 +426,15 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       s.telegraph = null;
       // Hostiles pay out on death: the roguelike loop's small change (bigger under scavenger).
       if (phase === 'expedition') p.state.resources += ENEMY_INFO[s.enemyId].shards + (hasRule('scavenger') ? 1 : 0);
-      events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: p.state.id }));
+      events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: p.state.id,
+        worldId: phase === 'expedition' ? world?.worldId ?? null : null }));
       dropRemains(e);
     }
   }
 
   /** The first kill of each enemy kind leaves its lore behind where it fell. */
   function dropRemains(e: EnemyRuntime): void {
+    if (phase !== 'expedition') return;
     const lore = world?.recipe.lore ?? [];
     const fragmentIndex = lore.findIndex((f) => f.kind === 'remains' && f.enemyId === e.state.enemyId);
     if (fragmentIndex < 0 || discoveredLore.has(fragmentIndex)) return;
@@ -302,14 +446,15 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   }
 
   function discoverLore(node: LoreNodeRuntime, by: PlayerRuntime, events: GameEvent[]): void {
-    const fragment = world?.recipe.lore[node.state.fragmentIndex];
+    if (phase !== 'expedition' || !world) return;
+    const fragment = world.recipe.lore[node.state.fragmentIndex];
     node.state.state = 'collected';
     node.state.progress = 1;
     node.holdMs = 0;
+    if (!fragment || discoveredLore.has(node.state.fragmentIndex)) return;
     discoveredLore.add(node.state.fragmentIndex);
-    if (!fragment) return;
     events.push(emit({
-      type: 'lore_discovered', playerId: by.state.id, fragmentIndex: node.state.fragmentIndex, kind: fragment.kind,
+      type: 'lore_discovered', worldId: world.worldId, playerId: by.state.id, fragmentIndex: node.state.fragmentIndex, kind: fragment.kind,
       title: fragment.title, source: fragment.source, text: fragment.text, x: node.state.x, y: node.state.y,
     }));
   }
@@ -346,6 +491,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   function damagePlayer(p: PlayerRuntime, sourceEnemyId: string, damage: number, ranged: boolean, events: GameEvent[]): boolean {
     const s = p.state;
     if (s.hp <= 0 || s.invulnerableMs > 0 || (ranged && s.shieldMs > 0)) return false;
+    if (enemyDamageScale !== 1 && sourceEnemyId !== 'anchor-pulse') damage = Math.round(damage * enemyDamageScale);
     let amount = Math.min(s.hp, s.shieldMs > 0 ? Math.ceil(damage * 0.2) : damage);
     // Training range: hits land (so the telegraphs teach), but nobody goes down.
     if (phase === 'training') amount = Math.min(amount, Math.max(0, s.hp - 1));
@@ -478,6 +624,11 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       damageEnemy(e, p, spec.damage + bonus, events);
       if (s.classId === 'weaver') e.state.slowMs = Math.max(e.state.slowMs ?? 0, 1000);
     }
+    const terrainStrike = strikeBreakableWalls(room, grid, progress.terrain, {
+      x: s.x, y: s.y, facing: s.facing, range: spec.range, arc: spec.arc, damage: spec.damage + bonus,
+    });
+    progress.terrain = terrainStrike.state;
+    if (terrainStrike.hits.some((hit) => hit.destroyed)) rebuildGrid();
   }
 
   /** Push an enemy away from (or toward, with negative distance) a point, respecting walls. */
@@ -649,6 +800,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const intent = p.intent;
     p.intent = null;
     p.interacting = intent?.interact === true && s.hp > 0;
+    p.interactPressed = p.interacting && !p.interactHeld;
+    if (intent) p.interactHeld = intent.interact === true;
     if (s.hp <= 0) {
       s.state = 'down';
       s.vx = s.vy = 0;
@@ -683,8 +836,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     } else {
       const onHazard = tileUnder(s.x, s.y) === '~';
       const speed = CLASS_COMBAT[s.classId].speed * (p.attackRemainingMs > 0 ? 0.35 : 1) *
-        (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1) * (hasRule('gravity_well') ? 0.9 : 1) *
-        (onHazard && hasRule('unstable_ground') ? 0.6 : 1);
+        (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1) *
+        terrainSpeedMultiplier(room, s.x, s.y, progress.terrain.brokenWalls) *
+        (hasRule('gravity_well') ? 0.9 : 1) * (onHazard && hasRule('unstable_ground') ? 0.6 : 1);
       s.vx = length > 0 ? moveX / length * speed : 0;
       s.vy = length > 0 ? moveY / length * speed : 0;
     }
@@ -700,10 +854,15 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (s.state === 'dashing' || s.state === 'attacking' || intent?.ability || length > 0) p.interacting = false;
   }
 
-  /** Picks the telegraph shape for an enemy's next attack. Guardian cycles four phases. */
   function attackKindFor(s: EnemyState, e: EnemyRuntime): { kind: EnemyTelegraph['kind']; range: number; arc: number } {
     const spec = ENEMY_COMBAT[s.enemyId];
     if (s.enemyId === 'guardian') {
+      if ((s.bossPhase ?? 1) >= 2) {
+        const pattern = (s.bossPhase === 3 ? ['charge', 'ring', 'beam', 'burst', 'ring'] : ['beam', 'charge', 'ring', 'burst']) as Array<EnemyTelegraph['kind']>;
+        const kind = pattern[e.attackCount % pattern.length]!;
+        return { kind, range: kind === 'charge' ? 220 : kind === 'beam' ? 340 : kind === 'ring' ? 260 : 125,
+          arc: kind === 'charge' ? 0.3 : kind === 'beam' ? 0.22 : Math.PI * 2 };
+      }
       const phase = e.attackCount % 4;
       if (phase === 0) return { kind: 'burst', range: spec.range, arc: spec.arc };
       if (phase === 1) return { kind: 'volley', range: spec.range, arc: 0.2 };
@@ -741,8 +900,12 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     } else if (telegraph.kind === 'volley' || telegraph.kind === 'spread' || telegraph.kind === 'ring' || telegraph.kind === 'homing') {
       if (s.enemyId === 'guardian') {
         const isVolleyPhase = telegraph.kind === 'volley';
-        firePattern(s.id, telegraph.x, telegraph.y, telegraph.facing, isVolleyPhase ? 'volley' : 'ring',
-          isVolleyPhase ? GUARDIAN_VOLLEY_PATTERN : GUARDIAN_RING_PATTERN,
+        const ringPattern = s.bossPhase === 3
+          ? { ...GUARDIAN_RING_PATTERN, count: 12, spacing: Math.PI / 6, speed: 240, life: 1600 }
+          : GUARDIAN_RING_PATTERN;
+        const angle = telegraph.facing + (isVolleyPhase ? 0 : (e.attackCount % 2) * ringPattern.spacing / 2);
+        firePattern(s.id, telegraph.x, telegraph.y, angle, isVolleyPhase ? 'volley' : 'ring',
+          isVolleyPhase ? GUARDIAN_VOLLEY_PATTERN : ringPattern,
           isVolleyPhase ? GUARDIAN_VOLLEY_DAMAGE : GUARDIAN_RING_DAMAGE);
       } else {
         const pattern = ENEMY_PROJECTILE_PATTERN[s.enemyId];
@@ -751,6 +914,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     }
     s.telegraph = null;
     e.cooldownMs = spec.cooldown;
+    if (s.enemyId === 'guardian') {
+      s.recoveryMs = telegraph.kind === 'charge' || telegraph.kind === 'burst' ? 1100 : 650;
+      e.cooldownMs = s.bossPhase === 3 ? 1200 : 1600;
+    }
     e.attackCount++;
   }
 
@@ -785,6 +952,18 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const s = e.state;
     if (s.hp <= 0) return;
     const spec = ENEMY_COMBAT[s.enemyId];
+    if (s.enemyId === 'guardian') {
+      const nextPhase = Math.min(e.maxBossPhase ?? 3, guardianPhase(s.hp, s.maxHp)) as 1 | 2 | 3;
+      if (nextPhase !== s.bossPhase) {
+        s.bossPhase = nextPhase;
+        s.telegraph = null;
+        s.recoveryMs = 1400;
+        e.cooldownMs = 1500;
+        e.attackCount = 0;
+        projectiles = projectiles.filter((projectile) => projectile.ownerEnemyId !== s.id);
+      }
+      s.recoveryMs = decay(s.recoveryMs ?? 0);
+    }
     s.slowMs = decay(s.slowMs ?? 0);
     s.stunMs = decay(s.stunMs ?? 0);
     s.markMs = decay(s.markMs ?? 0);
@@ -793,6 +972,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (s.stunMs > 0) {
       s.telegraph = null;
       s.state = 'hit';
+      return;
+    }
+    if ((s.recoveryMs ?? 0) > 0) {
+      s.state = 'idle';
       return;
     }
     if (e.channelMsRemaining > 0) {
@@ -813,15 +996,15 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       .sort((a, b) => distance(s, a.state) - distance(s, b.state))[0];
     if (!target || (phase === 'training' && distance(s, target.state) > TRAINING_WAKE_RANGE)
       || (hasRule('low_visibility') && distance(s, target.state) > LOW_VISIBILITY_RANGE && e.hitMs === 0)) {
-      // Training targets doze in their pens until an operative walks up to them; in the murk
-      // of a low-visibility world hostiles hold position until you are close (or hit them).
+      // Training targets doze in their pens until an operative walks up to them.
       s.state = 'idle';
       return;
     }
     s.facing = Math.atan2(target.state.y - s.y, target.state.x - s.x);
     const { kind, range, arc } = attackKindFor(s, e);
     if (e.cooldownMs === 0 && distance(s, target.state) <= range && clearPath(grid, s, target.state)) {
-      s.telegraph = { kind, x: s.x, y: s.y, facing: s.facing, range, arcRad: arc, remainingMs: spec.windup };
+      s.telegraph = { kind, x: s.x, y: s.y, facing: s.facing, range, arcRad: arc,
+        remainingMs: s.bossPhase === 3 ? 900 : spec.windup };
       s.state = 'attacking';
       events.push(emit({ type: 'enemy_telegraphed', enemyId: s.id, telegraph: { ...s.telegraph } }));
       return;
@@ -832,7 +1015,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       const waypoint = chaseWaypoint(grid, s, target.state, ENEMY_INFO[s.enemyId].radius);
       const d = distance(s, waypoint);
       const paceScale = hasRule('frenzy') ? 1.25 : hasRule('bulwark') ? 0.85 : 1;
-      const step = Math.min(d, spec.speed * paceScale * (s.slowMs > 0 ? 0.35 : 1) * TICK_MS / 1000);
+      const step = Math.min(d, spec.speed * paceScale * (s.slowMs > 0 ? 0.35 : 1) *
+        terrainSpeedMultiplier(room, s.x, s.y, progress.terrain.brokenWalls) * TICK_MS / 1000);
       if (d > 0) {
         const moved = moveCircle(grid, s.x, s.y, ENEMY_INFO[s.enemyId].radius,
           (waypoint.x - s.x) / d * step, (waypoint.y - s.y) / d * step);
@@ -856,6 +1040,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
    * mends under regen_fields — the two floor rules that make walking a world feel different.
    */
   function applyFloorEffects(living: PlayerRuntime[], events: GameEvent[]): void {
+    if (phase !== 'expedition') return;
     const regen = hasRule('regen_fields');
     const unstable = hasRule('unstable_ground');
     const lanterns = regen ? room.props.filter((prop) => prop.propId === 'lantern').map((prop) => tileToWorld(prop.x, prop.y)) : [];
@@ -920,12 +1105,21 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     applyFloorEffects(living, events);
     if (!progress.cleared && living.length > 0 && livingEnemies().length === 0) {
       progress.cleared = true;
-      const reward = ROOM_CLEAR_REWARD + (hasRule('scavenger') ? 2 : 0);
+      const reward = (floorsRun ? clearReward(room) : ROOM_CLEAR_REWARD) + (hasRule('scavenger') ? 2 : 0);
       for (const p of players.values()) p.state.resources += reward;
       events.push(emit({ type: 'room_cleared', worldId: world.worldId, roomIndex: room.index, roomId: room.id, playerIds: playerIds(), reward }));
+      if (floorsRun && room.roomId !== undefined) {
+        markCleared(floorsRun, room.roomId);
+        rebuildGrid(); // the doors unseal
+      }
     }
+    if (floorsRun) updateFloorFeatures(living, busy, events);
     const anchor = progress.anchor;
     if (!anchor || anchor.state === 'planted' || !progress.cleared) return;
+    if (anchor.ritual) {
+      updateAnchorRitual(anchor, living, busy, events);
+      return;
+    }
     const planters = living.filter((p) => p.interacting && !p.damagedThisTick && !busy.has(p.state.id) &&
       distance(p.state, anchor) <= ANCHOR_RANGE && clearPath(grid, p.state, anchor));
     if (planters.length === 0) {
@@ -943,12 +1137,77 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     }
   }
 
+  function updateAnchorRitual(anchor: AnchorState, living: PlayerRuntime[], busy: Set<string>, events: GameEvent[]): void {
+    const ritual = anchor.ritual;
+    if (!ritual || !world) return;
+    if (ritual.stage === 'locked') {
+      ritual.stage = 'relays';
+      projectiles = [];
+    }
+    if (ritual.stage === 'discharging') {
+      ritual.dischargeMs = Math.min(ANCHOR_DISCHARGE_MS, ritual.dischargeMs + TICK_MS);
+      anchor.progress = 0.75 + 0.25 * ritual.dischargeMs / ANCHOR_DISCHARGE_MS;
+      if (ritual.dischargeMs >= ANCHOR_DISCHARGE_MS - 1e-7) {
+        ritual.stage = 'complete';
+        anchor.state = 'planted';
+        anchor.progress = 1;
+        events.push(emit({ type: 'anchor_planted', worldId: world.worldId, roomIndex: room.index, playerIds: playerIds() }));
+        finishRun('anchored', events);
+      }
+      return;
+    }
+    if (ritual.activeRelay > 0) {
+      if (ritual.pulseWarningMs > 0) ritual.pulseWarningMs = decay(ritual.pulseWarningMs);
+      else {
+        const previousRadius = ritual.pulseRadius;
+        ritual.pulseRadius += ANCHOR_PULSE_SPEED * TICK_MS / 1000;
+        for (const p of living) {
+          const d = distance(p.state, anchor);
+          if (progress.pulseHitPlayers.has(p.state.id) || d < previousRadius - PLAYER_RADIUS - 5 ||
+            d > ritual.pulseRadius + PLAYER_RADIUS + 5) continue;
+          progress.pulseHitPlayers.add(p.state.id);
+          damagePlayer(p, 'anchor-pulse', 12, false, events);
+        }
+        if (ritual.pulseRadius > Math.hypot(room.width, room.height) * TILE_SIZE) {
+          ritual.pulseRadius = 0;
+          ritual.pulseWarningMs = ANCHOR_PULSE_WARNING_MS;
+          progress.pulseHitPlayers.clear();
+        }
+      }
+    }
+    const target = ritual.stage === 'core' ? anchor : ritual.relays[ritual.activeRelay];
+    if (!target) return;
+    const actor = living.find((p) => !busy.has(p.state.id) && p.state.hp > 0 && p.interactPressed && !p.damagedThisTick &&
+      distance(p.state, target) <= RELAY_ACTIVATION_RANGE && clearPath(grid, p.state, target));
+    if (!actor) return;
+    anchor.state = 'planting';
+    if (ritual.stage === 'core') {
+      ritual.stage = 'discharging';
+      ritual.pulseRadius = 0;
+      ritual.pulseWarningMs = 0;
+      return;
+    }
+    ritual.relays[ritual.activeRelay]!.activated = true;
+    ritual.activeRelay++;
+    anchor.progress = ritual.activeRelay / 4;
+    if (ritual.activeRelay === ritual.relays.length) ritual.stage = 'core';
+  }
+
   function updateExits(events: GameEvent[]): void {
     if (phase === 'debrief') return;
     const open = phase === 'headquarters' || phase === 'training' || progress.cleared;
     for (const p of orderedPlayers()) {
       const { col, row } = worldToTile(p.state.x, p.state.y);
       const exit = room.exits.find((e) => e.x === col && e.y === row);
+      if (exit && open && p.state.hp > 0 && !p.onExit && floorsRun && phase === 'expedition' && exit.toRoomId !== undefined) {
+        // Floors: the sim walks the graph itself. Same group rule as legacy exits: the first
+        // operative through a door takes the whole crew along.
+        const arrival = doorArrival(floorsRun, room, exit.toRoomId);
+        if (!arrival) continue;
+        events.push(emit({ type: 'exit_reached', playerId: p.state.id, roomIndex: room.index, toRoomIndex: exit.toRoomIndex, toRoomId: exit.toRoomId }));
+        enterFloorRoom(arrival.room, arrival, events);
+        return;
+      }
       if (exit && open && p.state.hp > 0 && !p.onExit) {
         events.push(emit({ type: 'exit_reached', playerId: p.state.id, roomIndex: room.index, toRoomIndex: exit.toRoomIndex }));
       }
@@ -986,6 +1245,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         discoveredLore = new Set();
       }
       world = next;
+      // Outside a run the provider follows the latest copy of the world (briefs may arrive late).
+      if (!floorsRun) roomProvider = next?.floors ? (options.roomProvider ?? createRoomProvider)(next) : null;
     },
     getWorld() { return world; },
     getRoom() { return room; },
@@ -995,6 +1256,16 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       const next = world.rooms[roomIndex];
       if (!next) throw new Error(`enterRoom: room ${roomIndex} is not committed yet`);
       if (phase === 'debrief' || phase === 'training') return [];
+      if (roomProvider) {
+        // Floors world: the portal leads to the opening biome's entrance; after that the sim
+        // moves the crew through doors itself, so sessions have nothing to enter by index.
+        if (phase !== 'headquarters' || roomIndex !== 0) return [];
+        floorsRun = createFloorsRun(roomProvider, hostPlayerId);
+        const events: GameEvent[] = [emit({ type: 'biome_entered', worldId: world.worldId, biomeId: floorsRun.biomeId,
+          biomeName: roomProvider.brief(floorsRun.biomeId).name, tier: floorsRun.tier, chosenByPlayerId: null, playerIds: playerIds() })];
+        enterFloorRoom(roomProvider.getRoom(roomProvider.entranceRef()), undefined, events);
+        return events;
+      }
       if (phase === 'expedition' && (
         room.index === roomIndex || !progress.cleared || livingEnemies().length > 0 ||
         !orderedPlayers().some((p) => p.state.hp > 0) ||
@@ -1008,6 +1279,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     returnToHeadquarters() {
       const events: GameEvent[] = [];
       finishRun('aborted', events);
+      floorsRun = null;
       rooms.clear();
       discoveredLore = new Set();
       for (const p of players.values()) {
@@ -1032,6 +1304,16 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       return [emit({ type: 'ability_unlocked', playerId, abilityId: CLASS_ABILITIES[p.state.classId].e,
         cost: ABILITY_UNLOCK_COST, remainingResources: p.state.resources })];
     },
+    setHostPlayerId(playerId) {
+      hostPlayerId = playerId;
+      if (floorsRun) floorsRun.hostPlayerId = playerId;
+    },
+    chooseBiome(playerId, biomeId) {
+      const choice = floorsRun?.choice;
+      if (!choice || phase !== 'expedition' || choice.chosenBiomeId || !players.has(playerId) || !choice.options.includes(biomeId)) return;
+      choice.votes[playerId] = biomeId;
+      if (playerId === (hostPlayerId ?? playerIds()[0])) choice.chosenBiomeId = biomeId;
+    },
     applyIntent(intent) {
       const p = players.get(intent.playerId);
       if (!p || phase === 'debrief') return;
@@ -1044,6 +1326,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       eventCounter = 0;
       if (phase === 'debrief') return [];
       const events: GameEvent[] = [];
+      enterChosenBiome(events);
       for (const p of orderedPlayers()) stepPlayer(p, events);
       if (phase === 'expedition') {
         for (const e of progress.enemies) stepEnemy(e, events);
@@ -1051,6 +1334,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         updateObjectives(events);
       } else if (phase === 'training') {
         for (const e of progress.enemies) stepEnemy(e, events);
+        stepProjectiles(events);
         respawnTrainingTargets();
       }
       updateExits(events);
@@ -1068,8 +1352,12 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         })),
         loreNodes: progress.loreNodes.map((n) => ({ ...n.state })),
         discoveredLore: [...discoveredLore].sort((a, b) => a - b),
-        anchor: progress.anchor ? { ...progress.anchor } : null,
+        anchor: progress.anchor ? { ...progress.anchor,
+          ...(progress.anchor.ritual ? { ritual: { ...progress.anchor.ritual,
+            relays: progress.anchor.ritual.relays.map((relay) => ({ ...relay })) } } : {}) } : null,
         roomCleared: phase !== 'headquarters' && progress.cleared,
+        terrain: { brokenWalls: [...progress.terrain.brokenWalls], wallDamage: { ...progress.terrain.wallDamage } },
+        ...(floorsRun && phase !== 'headquarters' ? { floor: floorRunState(floorsRun, doorsLocked()) } : {}),
       };
     },
     getTick() { return tick; },

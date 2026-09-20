@@ -40,6 +40,9 @@ export function createLiveGenerationService(options: {
     status('queued', primarySource === 'procedural' ? 'Composing a world from your ideas…' : 'Preparing live world generation…');
     const notes: string[] = [];
     let attempts = 0;
+    let source = primarySource;
+    let badge = primaryBadge;
+    let model = options.model;
     const fallback = (): PreparedWorld => {
       const world = prepareFromFixture({
         fixture: options.fixtures[seed % options.fixtures.length]!,
@@ -51,9 +54,6 @@ export function createLiveGenerationService(options: {
     };
     let repair: string | undefined;
     let result: Awaited<ReturnType<RecipeProvider['generate']>> | undefined;
-    let source = primarySource;
-    let badge = primaryBadge;
-    let model = options.model;
     while (attempts < 2) {
       attempts++;
       status('generating', repair ? 'Repairing the generated recipe…' : primarySource === 'procedural' ? 'Composing a world from your ideas…' : 'Generating a world from your ideas…');
@@ -99,25 +99,25 @@ export function createLiveGenerationService(options: {
       notes.push('Removed mappings to contribution IDs absent from this request.');
     }
     const generatedAt = Date.now();
-    let committedRoomCount = 1;
+    let worlds: PreparedWorld[];
     try {
-      for (; committedRoomCount <= request.plannedRoomCount; committedRoomCount++) {
-        signal?.throwIfAborted();
-        status('validating', `Compiling and validating room ${committedRoomCount}…`);
-        const compiled = compileWorldRecipe(recipe, { plannedRoomCount: request.plannedRoomCount, seed, committedRoomCount });
-        const mappings = compiled.rooms.flatMap((room) => room.attributions.map((attribution) => ({
+      signal?.throwIfAborted();
+      status('validating', `Compiling and validating all ${request.plannedRoomCount} planned rooms…`);
+      const compiled = compileWorldRecipe(recipe, { plannedRoomCount: request.plannedRoomCount, seed });
+      worlds = compiled.rooms.map((_, index) => {
+        const rooms = compiled.rooms.slice(0, index + 1);
+        const mappings = rooms.flatMap((room) => room.attributions.map((attribution) => ({
           contributionId: attribution.contributionId,
           kind: attribution.kind,
           featureDescription: attribution.featureDescription,
           roomIndex: room.index,
         })));
-        const world = PreparedWorldSchema.parse({
+        return PreparedWorldSchema.parse({
           worldId: `world-${source === 'live' ? 'live' : 'composed'}-${hashString(`${request.sessionId}:${request.requestId}`).toString(36)}`,
           createdAt: generatedAt,
           recipe: { ...recipe, contributionMappings: mappings },
-          rooms: compiled.rooms,
+          rooms,
           art: compiled.art,
-          biomes: compiled.biomes,
           plannedRoomCount: request.plannedRoomCount,
           provenance: {
             source,
@@ -130,17 +130,17 @@ export function createLiveGenerationService(options: {
           },
           receipt: buildReceipt({ worldTitle: recipe.title, source, contributions: request.contributions, mappings }),
         });
-        status('ready', `${source === 'live' ? 'Live' : 'Composed'} world ready: ${committedRoomCount}/${request.plannedRoomCount} rooms committed.`);
-        yield world;
-      }
+      });
     } catch {
       signal?.throwIfAborted();
-      if (committedRoomCount > 1) {
-        status('failed', 'Later-room compilation failed; committed rooms are unchanged.');
-        throw new GenerationFailure('Later-room compilation failed.');
-      }
       notes.push('Generated world failed compiler validation.');
       yield fallback();
+      return;
+    }
+    for (const world of worlds) {
+      signal?.throwIfAborted();
+      status('ready', `${source === 'live' ? 'Live' : 'Composed'} world ready: ${world.rooms.length}/${request.plannedRoomCount} rooms committed.`);
+      yield world;
     }
   }
 
