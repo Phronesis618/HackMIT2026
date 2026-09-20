@@ -7,10 +7,15 @@
   sharing validation, repair, timeout/cancellation, compiler and room delivery with OpenAI.
   `RELAY_AI_PROVIDER=anthropic|openai` selects credentials and model; setup and switch-back
   examples are in the README. Keys remain on the Node server.
-- **Verified:** `npm run check`: 17 files / 203 tests passed, including both providers through
+- **Verified:** `npm run check`: 17 files / 204 tests passed, including both providers through
   real local HTTP. Typecheck, build and whitespace checks passed; no standalone lint exists.
+- **Live verified:** a temporary session key exercised `POST /api/world` with
+  `claude-sonnet-4-6`: HTTP 200, validated immutable room prefixes 1/2/3, live provenance,
+  one attempt in 13.3 seconds, 2,344 input / 759 output tokens. No key in responses or logs.
+  Initial live output exceeded text limits; concise prompt guidance and bounded repair
+  feedback now include character limits without relaxing validation.
 - **Mocked:** external model responses in automated tests; tests make no paid calls.
-- **Unverified:** live Claude/OpenAI calls (no key provisioned), browser interaction.
+- **Unverified:** live OpenAI calls, browser interaction. The Claude key was not persisted.
 - No shared contracts, dependencies, simulation or client changes.
 
 ## Current integration — Devin across all roles

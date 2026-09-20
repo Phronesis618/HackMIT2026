@@ -135,8 +135,13 @@ function createRecipeProvider(options: ProviderOptions, provider: 'openai' | 'an
             ? readAnthropicResponse(body, options.onUsage) : readOpenAIResponse(body, options.onUsage);
           const parsed = WorldRecipeSchema.safeParse(raw);
           if (!parsed.success) {
-            const paths = parsed.error.issues.map((issue) => issue.path.join('.')).slice(0, 4).join(', ');
-            throw new GenerationFailure(`Recipe failed schema validation at ${paths}.`.slice(0, 200), true);
+            const issues = parsed.error.issues.slice(0, 4).map((issue) => {
+              const path = issue.path.join('.');
+              return issue.code === 'too_big' && issue.origin === 'string'
+                ? `${path}: maximum ${issue.maximum} characters`
+                : `${path}: ${issue.message}`;
+            }).join('; ');
+            throw new GenerationFailure(`Recipe failed schema validation at ${issues}.`.slice(0, 200), true);
           }
           assertDisplayText(parsed.data);
           return { recipe: parsed.data, ...(measured ? { usage: measured } : {}) };

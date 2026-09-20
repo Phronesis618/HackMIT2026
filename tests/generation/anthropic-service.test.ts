@@ -83,6 +83,23 @@ describe('Claude generation', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('includes character bounds in repair feedback for oversized descriptions', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response({
+        ...recipe,
+        themeSummary: 'x'.repeat(401),
+        rooms: recipe.rooms.map((room) => ({ ...room, description: 'y'.repeat(301) })),
+      }))
+      .mockResolvedValueOnce(response());
+    const world = await service(fetchMock).prepareWorld(request);
+    expect(world.provenance).toMatchObject({ source: 'live', attempts: 2 });
+    const repairRequest = String(fetchMock.mock.calls[1]?.[1]?.body);
+    expect(repairRequest).toContain('themeSummary: maximum 400 characters');
+    expect(repairRequest).toContain('rooms.0.description: maximum 300 characters');
+    expect(repairRequest).not.toContain('x'.repeat(401));
+    expect(world.provenance.notes.every((note) => note.length <= 200)).toBe(true);
+  });
+
   it.each([
     { stop_reason: 'max_tokens', content: [tool()] },
     { stop_reason: 'refusal', content: [{ type: 'text', text: 'private refusal details' }] },

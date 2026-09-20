@@ -8,8 +8,15 @@ On `devin/1789878276-claude-provider`, Devin implemented the requested Claude/Op
 server configuration switch and Claude recipe tool adapter, preserving the generation
 validation and bounded fallback. Consulted Anthropic's Messages API and tool-use docs.
 Added mocked Claude safety/cancellation/repair/streaming tests and local HTTP routing
-tests for both providers. `npm run check`: 203 tests / 17 files, typecheck and build passed.
-No credentials were available for live calls; no browser testing was performed.
+tests for both providers. `npm run check`: 204 tests / 17 files, typecheck and build passed.
+The user then supplied a temporary Claude key. Initial live calls exceeded schema text
+limits and correctly fell back; a diagnostic request confirmed oversized descriptions.
+Added concise text guidance and character limits to repair feedback, plus a regression test.
+The final real `POST /api/world` using `claude-sonnet-4-6` returned HTTP 200 and validated
+room prefixes 1/2/3 with live provenance in one attempt (13.3 seconds, 2,344 input / 759
+output tokens). Earlier committed rooms remained unchanged and the key was absent from
+responses/logs. No credential was written to disk or committed. Live OpenAI and browser
+interaction remain unverified.
 
 | Date/time | Commit / branch | What Devin did (files, feature) | Tests run + result | Screenshots / notes |
 | --------- | --------------- | ------------------------------- | ------------------ | ------------------- |
