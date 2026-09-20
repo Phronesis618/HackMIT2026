@@ -4,7 +4,7 @@
 
 Local commits on Jeffrey's machine, merged with `origin/main` through `c1abe97` (floors,
 writing pipeline, hub, tiles, boss finale, co-op verify, UI audit); `npm run check` green at
-**819 tests / 70 files**. Pushing was deferred to a human (the agent's pushes need approval).
+**838 tests / 71 files** (merged through `8843860`, M1 world laws). Pushing was deferred to a human (the agent's pushes need approval).
 
 - **Implemented — offline composer (`src/server/composer/`, "Jeffrey's area" per the overnight
   plan):** `RELAY_AI_PROVIDER=composer` builds a validated `WorldRecipe` from the crew's ideas in
@@ -18,11 +18,13 @@ writing pipeline, hub, tiles, boss finale, co-op verify, UI audit); `npm run che
   never `live`. `RecipeProvider` gained optional `source`/`badge`; the generation service takes a
   `fallbackProvider` so a failed Claude/GPT/operator attempt yields a composed world (with the
   failure in its notes) instead of a canned fixture. `.env` on this laptop runs the composer.
-- **Implemented — world rules (`WORLD_RULE_IDS`, all in the sim, `tests/sim/world-rules.test.ts`):**
-  frenzy, bulwark, low_visibility (murk + aggro gating, compiler thickens fog), unstable_ground,
-  scavenger, dense_swarm, regen_fields (lantern light heals), gravity_well. Hazard floor now
-  really bites (6 per 0.7 s). Hostiles pay `ENEMY_INFO.shards` on defeat (expeditions only).
-  This is a working first cut of `docs/design/WORLD_MUTATORS.md`; extend, don't fork.
+- **Retired — my interim world rules.** I had shipped 8 implemented `rules` overnight; when M1's
+  laws harness landed (`src/sim/laws.ts`, 8 laws in the sim + long_dark in the renderer) I removed
+  the duplicate system rather than stack two modifier layers. What survives from it: hazard floor
+  ('~') now bites 6 Integrity every 0.7 s while stood in (dashing across is free) and hostiles pay
+  `ENEMY_INFO.shards` (1–8) on defeat. The composer writes 1–2 **laws** per theme in the world's
+  voice (`THEME_LAWS` / `LAW_VOICE` in `compose.ts`, through `sanitizeLaws`), drawn only from the
+  in-force set, so composed worlds show real laws on the world panel and HUD chips.
 - **Implemented — app shell:** `GenerationOverlay` (forming ring with the crew's ideas orbiting →
   reveal card with title, tagline, palette, rooms, rule chips, honest idea counts, real duration;
   pure state machine in `generationOverlayState.ts`, tested); `PartyPlate` (class portrait +
@@ -38,11 +40,6 @@ writing pipeline, hub, tiles, boss finale, co-op verify, UI audit); `npm run che
   The Tab menu's Skills page has a Learn button (sanctuary/debrief/training only); learned nodes
   tick, live nodes glow. Spends the same `resources` ECONOMY.md calls Salvage; kills now pay
   `ENEMY_INFO.shards` (1–8) on expeditions — an earn source to add to ECONOMY §3's table.
-- **Bridge — laws → rules:** W2's model-facing `recipe.laws` (`src/shared/laws.ts`, unimplemented)
-  map onto the nearest implemented rule in the sim (`LAW_TO_RULE` in `simulation.ts`: the_many→
-  dense_swarm, few_and_terrible→bulwark, restless→frenzy, long_dark→low_visibility, slow_fire→
-  unstable_ground, thin_air→gravity_well, wardens_watch→scavenger) so a chosen law is never
-  silent. M1 should replace the bridge with the real bands and can then retire `rules`.
 - **Composer ↔ W2 pipeline:** composed text passes `lintRecipeText` with zero hard failures
   (test in `tests/integration/composer.test.ts`); composer recipes carry no `bible`, so the
   pipeline keeps them without a repair round. `RELAY_FLOORS=1` + composer = floors world on
