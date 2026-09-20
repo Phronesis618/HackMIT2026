@@ -332,6 +332,9 @@ describe('attunement effects in the simulation', () => {
     const { plain, boosted } = pair(rooms, ids, buyFirst(ids, 'clear_surge'));
     clear(plain);
     clear(boosted);
+    // A24: the haste is in the snapshot, so a client can show it — and only while it is running.
+    expect(me(boosted).hasteMs).toBeGreaterThan(0);
+    expect(me(plain).hasteMs).toBeUndefined();
     const walk = stride(plain);
     expect(stride(boosted)).toBeCloseTo(walk * HASTE_MOVE_MUL, 6);
     frames(plain, 1, { attack: true });
@@ -340,6 +343,7 @@ describe('attunement effects in the simulation', () => {
     frames(plain, Math.ceil(CLEAR_SURGE_HASTE_MS / TICK_MS));
     frames(boosted, Math.ceil(CLEAR_SURGE_HASTE_MS / TICK_MS));
     expect(stride(boosted)).toBeCloseTo(stride(plain), 6);
+    expect(me(boosted).hasteMs).toBeUndefined(); // spent, and gone from the snapshot again
   });
 
   it('first_strike: the opening hit on an untouched enemy deals double, the next does not', () => {
@@ -436,6 +440,15 @@ describe('attunement effects in the simulation', () => {
       return frames(sim, ticks).filter((e): e is Extract<GameEvent, { type: 'enemy_damaged' }> => e.type === 'enemy_damaged' && e.byPlayerId === P1);
     };
     const { plain, boosted } = pair(rooms, ids, buyFirst(ids, 'dash_echo'));
+    // A24: the trail is in the snapshot, so a renderer can draw exactly what is burning.
+    frames(boosted, 1, { dash: true, moveX: 1 });
+    const lit = boosted.getSnapshot().trails ?? [];
+    expect(lit.length).toBeGreaterThan(0);
+    expect(lit.every((point) => point.playerId === P1 && point.remainingMs > 0)).toBe(true);
+    expect(plain.getSnapshot().trails).toBeUndefined(); // and nobody else pays for the field
+    frames(boosted, Math.ceil(DASH_TRAIL_MS / TICK_MS) + 20);
+    expect(boosted.getSnapshot().trails).toBeUndefined(); // burnt out, gone again
+
     expect(burn(plain)).toEqual([]);
     const hits = burn(boosted);
     expect(hits.length).toBeGreaterThanOrEqual(2);

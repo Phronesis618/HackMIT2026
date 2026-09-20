@@ -88,6 +88,26 @@ describe('run rail and command bar', () => {
     expect(html).not.toContain('Unlock E'); // only offered at headquarters
   });
 
+  /**
+   * A24. `clear_surge` haste and a slow are both timed states the simulation applies; neither was
+   * visible anywhere. One tiny chip each on the command bar, only while it is actually running.
+   */
+  it('shows a status chip for haste and for a slow, and nothing when neither is running', () => {
+    const ui = model();
+    expect(renderToStaticMarkup(createElement(AbilityBar, { model: ui, actions }))).not.toContain('status-chip');
+    ui.hud = { ...ui.hud!, hasteMs: 3200 };
+    const hasted = renderToStaticMarkup(createElement(AbilityBar, { model: ui, actions }));
+    expect(hasted).toContain('status-chip--quick');
+    expect(hasted).toContain('Quickened');
+    expect(hasted).toContain('3.2s');
+    expect(hasted).not.toContain('status-chip--slow');
+    ui.hud = { ...ui.hud!, hasteMs: 0, slowMs: 1500 };
+    const slowed = renderToStaticMarkup(createElement(AbilityBar, { model: ui, actions }));
+    expect(slowed).toContain('status-chip--slow');
+    expect(slowed).toContain('Slowed');
+    expect(slowed).not.toContain('status-chip--quick');
+  });
+
   it('summarises the memory wall in the rail instead of a bottom strip', () => {
     expect(renderToStaticMarkup(createElement(MemoryBrief, { memories: [] }))).toContain('Nothing yet');
     const ui = debrief(sampleEvents);

@@ -68,7 +68,31 @@ export function HudVitals({ model }: { model: UiModel }) {
         <span className="vitals__label">{down ? 'Down' : 'Integrity'}</span>
         <span className="vitals__num">{hud ? Math.round(hp) : '—'}<small>/{hud ? maxHp : '—'}</small></span>
       </div>
+      <StatusChips model={model} />
     </div>
+  );
+}
+
+/**
+ * A24. The two timed states the simulation applies to an operative, where they can see them:
+ * the `clear_surge` haste and a slow. One tiny chip each, only while it is running.
+ */
+export function StatusChips({ model }: { model: UiModel }) {
+  const hud = model.hud;
+  const chips = [
+    { key: 'quick', label: 'Quickened', ms: hud?.hasteMs ?? 0 },
+    { key: 'slow', label: 'Slowed', ms: hud?.slowMs ?? 0 },
+  ].filter((chip) => chip.ms > 0);
+  if (chips.length === 0) return null;
+  return (
+    <ul className="vitals__chips">
+      {chips.map((chip) => (
+        <li key={chip.key} className={`status-chip status-chip--${chip.key}`}>
+          <span className="status-chip__label">{chip.label}</span>
+          <span className="status-chip__time">{(chip.ms / 1000).toFixed(1)}s</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

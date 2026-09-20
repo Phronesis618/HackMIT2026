@@ -312,7 +312,18 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     p.onExit = false;
     p.hazard = createHazardClock();
     p.hasteMs = 0;
+    syncHaste(p);
     p.trail = null;
+  }
+
+  /**
+   * A24. Haste is runtime state, but a client cannot show what it cannot see. The snapshot
+   * carries it only while it is actually running, so a crew without `clear_surge` never pays
+   * for the field (`PlayerState.hasteMs`).
+   */
+  function syncHaste(p: PlayerRuntime): void {
+    if (p.hasteMs > 0) p.state.hasteMs = p.hasteMs;
+    else delete p.state.hasteMs;
   }
 
   function doorsLocked(): boolean {
@@ -1389,6 +1400,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     p.hitRemainingMs = decay(p.hitRemainingMs);
     s.slowMs = decay(s.slowMs ?? 0);
     p.hasteMs = decay(p.hasteMs);
+    syncHaste(p);
     p.damagedThisTick = false;
     const intent = p.intent;
     p.intent = null;
@@ -1702,6 +1714,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       for (const p of players.values()) {
         p.state.resources += reward + clearBonusResources(p.effects);
         p.hasteMs = Math.max(p.hasteMs, clearHasteMs(p.effects));
+        syncHaste(p);
       }
       events.push(emit({ type: 'room_cleared', worldId: world.worldId, roomIndex: room.index, roomId: room.id, playerIds: playerIds(), reward }));
       if (floorsRun && room.roomId !== undefined) {
@@ -2058,6 +2071,11 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       return events;
     },
     getSnapshot() {
+      // A24: the dash_echo trail, so the renderer can draw what the sim is burning enemies with.
+      // Sparse: absent entirely unless somebody bought the attunement and is mid-dash.
+      const trails = orderedPlayers().flatMap((p) => (p.trail?.points ?? []).map((point) => ({
+        playerId: p.state.id, x: point.x, y: point.y, remainingMs: point.remainingMs,
+      })));
       return {
         tick, timeMs: tick * TICK_MS, phase,
         worldId: phase === 'headquarters' ? null : world?.worldId ?? null,
@@ -2086,6 +2104,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
             : {}),
         },
         ...(floorsRun && phase !== 'headquarters' ? { floor: floorRunState(floorsRun, doorsLocked()) } : {}),
+        ...(trails.length > 0 ? { trails } : {}),
       };
     },
     getTick() { return tick; },

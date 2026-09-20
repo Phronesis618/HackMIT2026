@@ -728,6 +728,11 @@ export const PlayerStateSchema = z.object({
   rallyMs: z.number().nonnegative().optional(),
   /** Hauled or mired: movement runs at 60% while this is above zero. */
   slowMs: z.number().nonnegative().optional(),
+  /**
+   * Quickened by `clear_surge`: movement 30% faster and attacks 20% sooner while above zero
+   * (`src/sim/effects.ts`). Absent when there is no haste, so no snapshot grows without one.
+   */
+  hasteMs: z.number().nonnegative().optional(),
   reviveProgress: z.number().min(0).max(1).optional(),
   /** Ultimate charge 0..100; R fires at 100 and resets to 0. */
   ultCharge: z.number().min(0).max(100).optional(),
@@ -907,6 +912,18 @@ export const GameSnapshotSchema = z.object({
    * run `roomId` above is `${biomeId}:${roomId}` and `roomIndex` is the floor-plan index.
    */
   floor: FloorRunStateSchema.optional(),
+  /**
+   * The `dash_echo` burn trail: the points still burning behind a dashing operative, so the
+   * renderer can draw what the simulation is charging enemies for. Sparse — absent entirely
+   * unless somebody bought the attunement and is mid-dash, so nothing else pays for it.
+   */
+  trails: z.array(z.object({
+    playerId: IdString,
+    x: z.number(),
+    y: z.number(),
+    /** Time left on this point, for the fade. */
+    remainingMs: z.number().nonnegative(),
+  })).max(160).optional(),
 });
 export type GameSnapshot = z.infer<typeof GameSnapshotSchema>;
 

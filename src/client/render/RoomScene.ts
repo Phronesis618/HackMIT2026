@@ -15,6 +15,7 @@ import { guardianTitle } from '../../shared/finale';
 import { CLASS_THEME, ENEMY_INFO, type ClassId } from '../../shared/registry';
 import { hexToInt, tokens } from '../../shared/tokens';
 import { ENEMY_COMBAT } from '../../sim/combat';
+import { DASH_TRAIL_MS, DASH_TRAIL_RADIUS } from '../../sim/effects';
 import { drawHostile, drawOperative } from './characters';
 import { hexInt, lookPalette, VOID_COLOR } from './color';
 import { DEFAULT_LIGHTING, LIGHTING, drawDarkness, drawLightShafts, drawStormPulse, fixedLights, isLit, type LightSource, type LightingSpec } from './lighting';
@@ -74,6 +75,8 @@ export class RoomScene extends Phaser.Scene {
   private roomLights: LightSource[] = [];
   private lightSources: LightSource[] = [];
   private projectilesView: Phaser.GameObjects.Graphics | null = null;
+  /** A24: the `dash_echo` burn trail, redrawn from `snapshot.trails` every frame. */
+  private trailsView: Phaser.GameObjects.Graphics | null = null;
   /** In-world DM-style narration: markers over the props/encounters a real idea shaped. */
   private loreMarkers: LoreMarker[] = [];
   private loreView: Phaser.GameObjects.Graphics | null = null;
@@ -300,6 +303,9 @@ export class RoomScene extends Phaser.Scene {
     layer.add(this.telegraphs);
     this.projectilesView = this.add.graphics().setDepth(DEPTH.effects - 1);
     layer.add(this.projectilesView);
+    // Under the entities: the trail is on the floor, and it must not hide what is standing in it.
+    this.trailsView = this.add.graphics().setDepth(DEPTH.floorDecal + 4);
+    layer.add(this.trailsView);
 
     // DM-style narration: a quiet glow over anything a real idea shaped, plus one
     // reusable caption that reveals the quote when a player walks up to it.
@@ -468,6 +474,16 @@ export class RoomScene extends Phaser.Scene {
         bolts.fillStyle(boltColor, 1).fillCircle(pr.x, pr.y, pr.radius);
         bolts.lineStyle(1, 0xffffff, 0.75).strokeCircle(pr.x, pr.y, pr.radius);
       }
+    }
+
+    // A24: the dash_echo burn trail, in the operative's own colour. Sparse in the snapshot, so
+    // this costs one `clear()` a frame for everyone who never bought the attunement.
+    if (this.trailsView) {
+      fx.drawBurnTrail(
+        this.trailsView,
+        (snapshot.trails ?? []).map((point) => ({ ...point, color: this.classColor(point.playerId) })),
+        DASH_TRAIL_MS, DASH_TRAIL_RADIUS,
+      );
     }
 
     if (snapshot.anchor && !this.anchorView) {
