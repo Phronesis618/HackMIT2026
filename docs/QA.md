@@ -203,12 +203,28 @@ two players (unreachable for the same reason it is unreachable solo — see the 
 
 ## External verification
 
-- [ ] **A real live-generation run end to end.** **Unverified this pass.** The server reports
-      `liveConfigured:false` unless `RELAY_GENERATION_MODE=live` is set with a key; the harness
-      and the flags are in place (`--env RELAY_GENERATION_MODE=live`) but no live world was
-      prepared inside the deadline. Earlier live evidence: `docs/design/BLIND_READ.md`.
-- [ ] **The public Pages URL and the Render service, loaded in a browser.** **Unverified this
-      pass.**
+- [ ] **A real live-generation run end to end.** **Unverified this pass.** The local server
+      reports `liveConfigured:false` unless `RELAY_GENERATION_MODE=live` is set with a key; the
+      harness and the flags are in place (`--env RELAY_GENERATION_MODE=live`) but no live world
+      was prepared inside the deadline, so the LIVE label, model attribution and
+      Prepare→portal-ready latency are **not measured tonight**. The Render service does report
+      itself live-configured. Earlier live evidence: `docs/design/BLIND_READ.md` (first room
+      p50 47 s, 8/8 worlds with zero hard prose failures).
+- [x] **GitHub Pages — loaded in a headless browser and it works.**
+      `https://phronesis618.github.io/HackMIT2026/` returns 200 in 0.08 s, the hub renders, the
+      offline notice reads *"No generation server is reachable. Solo play uses a clearly labelled
+      offline fixture."* with a Dismiss control, the top-bar badge reads **PREVIEW · CLIENT
+      FIXTURE**, and the onboarding coach prompt (`W A S D Walk.`) is up. One 404 in the console
+      for a resource the static host does not have; the game mounts regardless.
+      Screenshot: `/tmp/relay-shots/q1/70-pages.png`.
+- [ ] **Render — reachable, but it is serving an OLD BUILD.** `GET /api/health` and `/api/config`
+      both answer in 0.16 s and report `generationMode:"live", liveGenerationAvailable:true` —
+      but **`/api/config` has no `floors` or `laws` fields at all**, which means the deployed
+      server predates `src/shared/flags.ts`. The rendered hub confirms it: different palette, the
+      old ability bar, "four class shrines" wording, no relic shelf, no quartermaster line, no
+      onboarding. Screenshot: `/tmp/relay-shots/q1/71-render.png`.
+      **Action for whoever owns the deploy: redeploy `main` to Render before the demo**, or do
+      not point a judge at that URL. The thing it serves is not the thing in this repo.
 - [ ] Two physical laptops on the presentation LAN. **Unverified** — needs two laptops.
 
 
