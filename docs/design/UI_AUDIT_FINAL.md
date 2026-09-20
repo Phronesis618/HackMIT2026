@@ -105,3 +105,32 @@ Found in `round1/`, fixed and re-shot into `round2/`.
 | ▲31 | `round1/menu-p7-1440x900.png` | **"Clear" — the one destructive action on the Memory Wall — was the lightest element in its row**, a ghost button beside a bordered "Browse archive". Given the same treatment. |
 | ○32 | `round1/final-1440x900.png` | **A warm diagonal band hangs in the void off the room's left wall** in the Vantage Spire finale room. Ruled out as the cause: `drawLightShafts` (clamped this pass, and this room's lighting is not `shafts`), `drawOverhead` (already guards every motif with `inRoom`), and `drawBackdrop` (a flat void plus a centred halo). Left rather than changed blind — it is a single edge artifact in one fixture room and the source is not in the three functions that could plausibly own it. |
 | ○33 | `round1/menu-p4-1440x900.png` | The skill tree's fourth lane now fits at 1440. A five-lane tree would still scroll horizontally inside its box. Left: no class currently builds one. |
+
+## Round 3 — the co-op ready-up strip (merged from main mid-audit)
+
+`origin/main` added `HeadquartersCrew.tsx` and a `.hq-crew` block in `headquarters.css` after
+round 2. Shot at 2 and 4 seats, 24-character names, an offline seat, all-ready, the force-start
+state, and with the station prompt open. Shots: `after/crewstrip-*.png`.
+
+| # | Screenshot | What / where / why |
+|---|---|---|
+| ▲34 | `after/crewstrip-4-long-1280x720.png` (first take) | **The strip wrapped to two rows at four seats**, as the reviewer saw. Each chip was two rows tall (name+class, then state) inside a `max-width: 60%` cap with `flex-wrap: wrap`. Fixed: one line per chip, `flex-wrap: nowrap`, names shrink and ellipsise, `max-width: calc(100% - 2 * --space-md)`, and the class word drops below 1360 px where the coloured edge already carries it. |
+| ▲35 | `after/crewstrip-4-station-1280x720.png` (first take) | **The strip sat at `top: 16px` — the wayfinder's own row** — so it ran across the "Headquarters" sub-label on the left and collided with the station prompt on the right. Moved to `top: 80px`, clear of the place label (~50 px) and the prompt (~72 px). Bottom-left (onboarding band), bottom centre (Custodian strip) and the command bar are all outside it. |
+| ▲36 | — | **The block was off-system**: nine one-off hexes (`#dfc28b`, `#23324a`, `#0a1220e6`, `#d7e0ec`, `#f2e9d6`, `#7cf5ff99`, `#8fa3ba`, `#0b1f28e6`, `#070d18`), 6 px radii, and 9/10 px type under the 11 px floor. Brought onto tokens, `--radius-sm`, and `--fs-stamp`. |
+
+## Verification
+
+Round 3 re-shot the whole matrix (76 shots) into `after/`, plus the eight crew-strip shots.
+A full pass over `after/` found nothing new beyond #34–#36, which came in with the merge.
+
+- **Montage for sign-off:** `/tmp/relay-shots/u2/montage.html` — every shot, baseline left,
+  round 3 right. Open it in a browser from `/tmp/relay-shots/u2/`.
+- `npm run check` green at every push (1073 tests).
+
+## Left open
+
+- **#32** the warm band in the void off the finale room's left wall (source not identified;
+  the three plausible owners were ruled out).
+- **#33** a five-lane skill tree would scroll horizontally. No class builds one today.
+- **#7** the 800 px layout is a sanity width, not a supported one.
+- **#11** the debrief repeats the world title under the debrief panel, by design.

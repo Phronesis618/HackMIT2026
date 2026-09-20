@@ -20,7 +20,7 @@ export const HUB_TEXT = {
   gate: 'The gate is south. Walk onto it.',
   receipt: 'The receipt names whose idea became what.',
   /** Co-op guest: preparing a world is host-only, so say so once instead of greying a button. */
-  guestGate: 'The host prepares the world and opens the gate.',
+  guestGate: 'The host prepares the world. Stand on the gate.',
 } as const;
 
 /** In a run: one control each, triggered where the control first matters. */

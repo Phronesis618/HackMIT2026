@@ -34,6 +34,79 @@
   letter-spacing: 0.08em;
   color: var(--color-mist300);
 }
+/*
+ * Crew strip (HUB.md §7): one chip per seat at the departure gate.
+ *
+ * U2a: it sat at top:16 — the wayfinder's own row, so it ran across the "Headquarters" label on
+ * the left and the station prompt on the right — and wrapped to two lines at four seats because
+ * each chip was two rows tall inside a 60% cap. It now clears the whole wayfinder row (the place
+ * label is ~50 px tall, the station prompt ~72 px), each chip is one line, and the row never
+ * wraps: names shrink and ellipsise instead. Bottom-left (the onboarding band), the bottom
+ * centre (the Custodian strip) and the command bar are all outside it.
+ */
+.hq-crew {
+  position: absolute;
+  z-index: 3;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-xs);
+  pointer-events: none;
+  max-width: calc(100% - 2 * var(--space-md));
+  flex-wrap: nowrap;
+  justify-content: center;
+}
+.hq-crew__chip {
+  --seat-color: var(--color-warmLamp);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  min-width: 0;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--hair);
+  border-left: 3px solid var(--seat-color);
+  border-radius: var(--radius-sm);
+  background: var(--plane);
+  color: var(--color-mist300);
+  font: var(--fs-stamp) var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.hq-crew__chip--local { border-color: var(--hair-strong); outline: 1px solid var(--color-neonCyan); outline-offset: 1px; }
+.hq-crew__chip--ready { background: color-mix(in srgb, var(--color-neonCyan) 10%, var(--plane)); }
+.hq-crew__chip--offline { opacity: 0.55; }
+.hq-crew__name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  color: var(--color-mist100);
+}
+.hq-crew__class { flex: none; color: var(--seat-color); }
+.hq-crew__state { flex: none; letter-spacing: 0.12em; color: var(--color-mist300); }
+.hq-crew__chip--ready .hq-crew__state { color: var(--color-neonCyan); }
+/* The class is the chip's coloured edge and its name; at four seats the word can go. */
+@media (max-width: 1360px) { .hq-crew__class { display: none; } }
+.hq-crew__gate {
+  flex: none;
+  align-self: center;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--lamp-hair);
+  border-radius: var(--radius-sm);
+  background: var(--plane);
+  color: var(--color-warmLamp);
+  font: var(--fs-stamp) var(--font-mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
 .hq-wayfinder__hint {
   margin: 0;
   padding: var(--space-sm) 12px;
@@ -179,6 +252,8 @@
   .hq-wayfinder { top: var(--space-sm); left: var(--space-sm); right: var(--space-sm); gap: var(--space-sm); }
   .hq-wayfinder__hint { max-width: 200px; }
   .hq-prompt { padding: var(--space-xs) var(--space-sm); font-size: var(--fs-sm); }
+  /* The strip keeps the top: the bottom belongs to the onboarding band and the boss strip. */
+  .hq-crew { top: 72px; max-width: calc(100% - 2 * var(--space-sm)); }
 }
 
 /* ---- returns hall: quartermaster speech + evidence footer, records tabs, relic shelf ---- */

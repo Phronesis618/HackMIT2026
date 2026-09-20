@@ -745,6 +745,8 @@ export const PlayerStateSchema = z.object({
    * operative when the sim asks whether the crew is down.
    */
   connected: z.boolean().optional(),
+  /** HUB.md §7: standing at the departure gate. Server-derived in co-op; absent in solo and legacy snapshots. */
+  ready: z.boolean().optional(),
   /** Skill-tree nodes this operative bought (`src/shared/skills.ts`); absent until the first purchase. */
   skillNodeIds: z.array(z.string().max(64)).max(64).optional(),
 });
