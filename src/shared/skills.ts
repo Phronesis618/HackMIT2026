@@ -153,7 +153,7 @@ export function buildSkillTree(classId: ClassId, world: SkillWorldContext | null
       id, name: a.name,
       description: `${a.description} (${ATTUNEMENT_EFFECT_INFO[a.effectId].summary})`,
       tier: 2 + i, lane: 2, requires: [i === 0 ? 'core.salvage' : `attune.${i - 1}.${attunements[i - 1]!.effectId}`],
-      cost: 3 + i, kind: 'attunement', effectId: a.effectId, status: ATTUNEMENT_EFFECT_INFO[a.effectId].status,
+      cost: 3 + i, kind: 'attunement', effectId: a.effectId, status: ATTUNEMENT_EFFECT_INFO[a.effectId].status === 'implemented' ? 'implemented' : 'planned',
     });
   });
   const tiers = Math.max(...nodes.map((n) => n.tier)) + 1;
