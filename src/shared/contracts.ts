@@ -51,6 +51,8 @@ export const ContributionText = z.string().trim().min(1).max(200);
 export const Paragraph = z.string().trim().min(1).max(600);
 export const Timestamp = z.number().int().nonnegative(); // Unix ms
 export const TileCoord = z.number().int().min(0).max(63);
+/** Sparse per-tile state is keyed "col,row" (TILES.md R6). */
+export const TileKey = z.string().regex(/^\d+,\d+$/);
 
 export const ClassIdSchema = z.enum(CLASS_IDS);
 export const AbilityIdSchema = z.enum(ABILITY_IDS);
@@ -782,8 +784,16 @@ export const GameSnapshotSchema = z.object({
   anchor: AnchorStateSchema.nullable(),
   roomCleared: z.boolean().optional(),
   terrain: z.object({
-    brokenWalls: z.array(z.string().regex(/^\d+,\d+$/)).max(2048),
-    wallDamage: z.record(z.string().regex(/^\d+,\d+$/), z.number().nonnegative()),
+    brokenWalls: z.array(TileKey).max(2048),
+    wallDamage: z.record(TileKey, z.number().nonnegative()),
+    /**
+     * Armed '*' canisters and their fuses (docs/design/TILES.md T1). Sparse and omitted
+     * entirely while nothing is lit, so a room without canisters costs nothing to sync.
+     */
+    canisters: z.record(TileKey, z.object({
+      fuseMs: z.number().nonnegative(),
+      depth: z.number().int().nonnegative(),
+    })).optional(),
   }).optional(),
   /**
    * Floors runs only (absent in HQ, training and legacy worlds): where the crew is in the
@@ -845,6 +855,15 @@ export const GameEventSchema = z.discriminatedUnion('type', [
   z.object({ ...eventBase, type: z.literal('enemy_defeated'), enemyId: IdString, byPlayerId: IdString.nullable() }),
   z.object({ ...eventBase, type: z.literal('player_damaged'), playerId: IdString, amount: z.number(), remainingHp: z.number(), sourceEnemyId: IdString.nullable() }),
   z.object({ ...eventBase, type: z.literal('player_downed'), playerId: IdString }),
+  /**
+   * The room went off: a '*' canister detonated (docs/design/TILES.md T1). Renderers draw the
+   * ring and the shake from this; the damage it caused arrives as ordinary damage events.
+   */
+  z.object({
+    ...eventBase, type: z.literal('terrain_detonated'),
+    x: z.number(), y: z.number(), radius: z.number().positive(),
+    hitPlayerIds: z.array(IdString), hitEnemyIds: z.array(IdString),
+  }),
   z.object({ ...eventBase, type: z.literal('player_revived'), playerId: IdString, byPlayerId: IdString, hp: z.number().positive() }),
   z.object({ ...eventBase, type: z.literal('player_healed'), playerId: IdString, byPlayerId: IdString, amount: z.number().positive(), remainingHp: z.number().positive() }),
   z.object({

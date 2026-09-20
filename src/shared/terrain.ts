@@ -7,13 +7,22 @@
  */
 import type { RoomSpec } from './contracts';
 import { worldToTile } from './conventions';
-import { TILE_CHARS, type TileChar } from './registry';
+import { DANGEROUS_TILES, PROP_INFO, TILE_CHARS, type TileChar } from './registry';
+
+/** An armed canister, counting down to its blast. Sparse: only armed tiles have an entry. */
+export interface CanisterState {
+  fuseMs: number;
+  /** How deep in a chain it is; the 6th link does not light a 7th. */
+  depth: number;
+}
 
 export interface TerrainState {
   /** Tiles destroyed into rubble this run: broken 'B' bulkheads, spent '*' canisters, shattered '-' cover. */
   brokenWalls: string[];
   /** Accumulated damage on a 'B' bulkhead, keyed "col,row". */
   wallDamage: Record<string, number>;
+  /** Armed '*' canisters, keyed "col,row". Absent is the same as empty (snapshots omit it). */
+  canisters?: Record<string, CanisterState>;
 }
 
 export function terrainTileKey(col: number, row: number): string {
@@ -21,7 +30,7 @@ export function terrainTileKey(col: number, row: number): string {
 }
 
 /** Tiles that leave rubble behind when they are destroyed. */
-const DESTRUCTIBLE = new Set<string>(['B']);
+const DESTRUCTIBLE = new Set<string>(['B', '*']);
 
 export function terrainTileAt(
   room: RoomSpec,
@@ -108,7 +117,8 @@ export const VENT_GROUPS = 3;
 export const VENT_TELL_MS = 500;
 export const VENT_FIRE_MS = 300;
 
-/** `*`: volatile canister. */
+/** `*`: volatile canister. One point of damage from any source arms it. */
+export const CANISTER_HP = 1;
 export const CANISTER_FUSE_MS = 420;
 export const CANISTER_RADIUS = 76;
 export const CANISTER_ENEMY_DAMAGE = 48;
@@ -214,4 +224,163 @@ export function ventChargeProgress(timeMs: number, col: number, row: number, cyc
 export function ventWindowId(timeMs: number, col: number, row: number, cycleMs: number = VENT_CYCLE_MS): number {
   const shifted = timeMs + ventPhaseOffset(col, row, cycleMs);
   return Math.floor(shifted / cycleMs) * VENT_GROUPS + (((col * 5 + row * 3) % VENT_GROUPS) + VENT_GROUPS) % VENT_GROUPS;
+}
+
+// ---------------------------------------------------------------------------
+// The reachability contract (TILES.md §5)
+// ---------------------------------------------------------------------------
+
+/** Everything a crew must be able to reach, and reach each other from. */
+interface KeyPoint { label: string; x: number; y: number }
+
+/** Solid for S1/S3: the tiles a player who refuses to touch anything cannot pass. */
+const SAFETY_SOLID = new Set(['#', ' ', 'B', '*', 'o', 'S']);
+/** Additionally blocked for S2: the damaging tiles a hazard-free route must avoid. */
+const SAFETY_HAZARD = new Set(['~', '^', '%', ',']);
+
+function keyPointsOf(room: RoomSpec): KeyPoint[] {
+  const points: KeyPoint[] = [];
+  room.tiles.forEach((line, y) => {
+    for (let x = 0; x < line.length; x++) {
+      if (line[x] === 'P') points.push({ label: 'spawn', x, y });
+      if (line[x] === 'A') points.push({ label: 'anchor', x, y });
+    }
+  });
+  // A door's `entry` is the walkable tile just inside it; legacy rooms use the 'X' itself.
+  for (const exit of room.exits) points.push({ label: `door ${exit.x},${exit.y}`, ...(exit.entry ?? { x: exit.x, y: exit.y }) });
+  if (room.focus) points.push({ label: 'focus', ...room.focus });
+  for (const relic of room.relics) points.push({ label: `relic ${relic.id}`, x: relic.x, y: relic.y });
+  for (const encounter of room.encounters) points.push({ label: `encounter ${encounter.id}`, x: encounter.x, y: encounter.y });
+  for (const relay of room.anchorRelays ?? []) points.push({ label: 'relay', x: relay.x, y: relay.y });
+  return points;
+}
+
+function blockingPropTiles(room: RoomSpec): Set<string> {
+  const blocked = new Set<string>();
+  for (const prop of room.props) {
+    const info = PROP_INFO[prop.propId];
+    if (!info.blocksMovement) continue;
+    for (let dy = 0; dy < info.footprint.h; dy++) {
+      for (let dx = 0; dx < info.footprint.w; dx++) blocked.add(terrainTileKey(prop.x + dx, prop.y + dy));
+    }
+  }
+  return blocked;
+}
+
+/** 4-way flood over tiles `open` accepts, never entering a blocked prop footprint. */
+function floodRoom(
+  tiles: readonly string[], from: KeyPoint, open: (ch: string) => boolean, blocked: ReadonlySet<string>,
+): Set<string> {
+  const seen = new Set<string>([terrainTileKey(from.x, from.y)]);
+  const stack: Array<{ x: number; y: number }> = [from];
+  while (stack.length > 0) {
+    const at = stack.pop()!;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const x = at.x + dx;
+      const y = at.y + dy;
+      const ch = tiles[y]?.[x];
+      const id = terrainTileKey(x, y);
+      if (ch === undefined || seen.has(id) || blocked.has(id) || !open(ch)) continue;
+      seen.add(id);
+      stack.push({ x, y });
+    }
+  }
+  return seen;
+}
+
+/** Connected groups (4-way) of one tile character. Used for the per-room count rules. */
+function tileGroups(tiles: readonly string[], ch: string): Array<Array<{ x: number; y: number }>> {
+  const seen = new Set<string>();
+  const groups: Array<Array<{ x: number; y: number }>> = [];
+  tiles.forEach((line, y) => {
+    for (let x = 0; x < line.length; x++) {
+      if (line[x] !== ch || seen.has(terrainTileKey(x, y))) continue;
+      const group: Array<{ x: number; y: number }> = [];
+      const stack = [{ x, y }];
+      seen.add(terrainTileKey(x, y));
+      while (stack.length > 0) {
+        const at = stack.pop()!;
+        group.push(at);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          const nx = at.x + dx;
+          const ny = at.y + dy;
+          const id = terrainTileKey(nx, ny);
+          if (tiles[ny]?.[nx] !== ch || seen.has(id)) continue;
+          seen.add(id);
+          stack.push({ x: nx, y: ny });
+        }
+      }
+      groups.push(group);
+    }
+  });
+  return groups;
+}
+
+/** Per-room count limits from TILES.md S8, for the tiles that exist today. */
+const TILE_GROUP_LIMITS: Array<{ ch: string; name: string; maxGroups: number; min: number; max: number }> = [
+  { ch: 'o', name: 'pit blobs', maxGroups: 2, min: 2, max: 6 },
+  { ch: '^', name: 'vent fields', maxGroups: 2, min: 4, max: 9 },
+  { ch: '-', name: 'cover runs', maxGroups: 3, min: 2, max: 4 },
+];
+
+/**
+ * The generator's contract, as a list of what a room got wrong. Empty = safe to ship.
+ *
+ * Terrain is an additive layer over a floor plan that was already guaranteed connected, so the
+ * only thing that can go wrong is a tile that subtracts connectivity or sits where a player has
+ * to stand. S1 re-checks the guarantee with every blocking tile solid, S2 asks for a route that
+ * never touches a damaging tile, S4 keeps hazards away from the places a player must be, and S8
+ * bounds how much of any one thing a room may contain.
+ */
+export function validateRoomSafety(room: RoomSpec): string[] {
+  const problems: string[] = [];
+  const points = keyPointsOf(room);
+  const blocked = blockingPropTiles(room);
+  const start = points[0];
+  if (!start) return ['room has no spawn or door to check'];
+
+  const safe = floodRoom(room.tiles, start, (ch) => !SAFETY_SOLID.has(ch), blocked);
+  for (const point of points) {
+    if (!safe.has(terrainTileKey(point.x, point.y))) {
+      problems.push(`S1: ${point.label} at ${point.x},${point.y} is unreachable when every blocking tile is solid`);
+    }
+  }
+  const dry = floodRoom(room.tiles, start, (ch) => !SAFETY_SOLID.has(ch) && !SAFETY_HAZARD.has(ch), blocked);
+  for (const point of points) {
+    if (!dry.has(terrainTileKey(point.x, point.y))) {
+      problems.push(`S2: ${point.label} at ${point.x},${point.y} has no hazard-free route`);
+    }
+  }
+  // S4: nothing that damages or deletes may sit where a player has to stand or arrive.
+  const mustBeClean = points.filter((p) => !p.label.startsWith('encounter') && !p.label.startsWith('relic'));
+  room.tiles.forEach((line, y) => {
+    for (let x = 0; x < line.length; x++) {
+      if (!DANGEROUS_TILES.has(line[x]!)) continue;
+      for (const point of mustBeClean) {
+        if (Math.max(Math.abs(point.x - x), Math.abs(point.y - y)) <= 2) {
+          problems.push(`S4: '${line[x]}' at ${x},${y} is within 2 tiles of ${point.label}`);
+        }
+      }
+    }
+  });
+  // S8: per-room counts.
+  const canisters = room.tiles.flatMap((line, y) => [...line].flatMap((ch, x) => ch === '*' ? [{ x, y }] : []));
+  if (canisters.length > 3) problems.push(`S8: ${canisters.length} canisters, max 3`);
+  for (const a of canisters) {
+    for (const b of canisters) {
+      if (a !== b && Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1) {
+        problems.push(`S8: canisters at ${a.x},${a.y} and ${b.x},${b.y} are orthogonally adjacent`);
+      }
+    }
+  }
+  for (const limit of TILE_GROUP_LIMITS) {
+    const groups = tileGroups(room.tiles, limit.ch);
+    if (groups.length > limit.maxGroups) problems.push(`S8: ${groups.length} ${limit.name}, max ${limit.maxGroups}`);
+    for (const group of groups) {
+      if (group.length < limit.min || group.length > limit.max) {
+        problems.push(`S8: ${limit.name} of ${group.length} tiles at ${group[0]!.x},${group[0]!.y}, allowed ${limit.min}..${limit.max}`);
+      }
+    }
+  }
+  return [...new Set(problems)];
 }

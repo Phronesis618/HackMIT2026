@@ -11,7 +11,7 @@ export interface TerrainTile { x: number; y: number }
  * Tiles this layer draws or captions. '~' is painted by the floor pass in environment.ts; it is
  * listed here so a player standing beside scalding floor still gets told what it is.
  */
-const CAPTIONED_TILES = 'B=>:+~';
+const CAPTIONED_TILES = 'B=>:+~*';
 
 export function collectTerrainTiles(room: RoomSpec): TerrainTile[] {
   const tiles: TerrainTile[] = [];
@@ -37,6 +37,7 @@ export function terrainCaption(
     case ':': return TERRAIN_CAPTION.rubble;
     case '+': return TERRAIN_CAPTION.conduits;
     case '~': return TERRAIN_CAPTION.hazard_floor;
+    case '*': return TERRAIN_CAPTION.canisters;
     case '>':
     case '=': return TERRAIN_CAPTION.bridges;
     default: return null;
@@ -65,6 +66,25 @@ export function drawTerrain(
         .lineBetween(x + 10, y + 13, x + 21, y + 19)
         .lineBetween(x + 21, y + 19, x + 14, y + 30);
       if (damaged) g.lineBetween(x + 10, y + 13, x + 2, y + 19).lineBetween(x + 21, y + 19, x + 30, y + 13);
+    } else if (type === '*') {
+      // A squat cylinder with a hazard chevron. Once armed its rim flashes, accelerating from
+      // about 4 Hz to 12 Hz as the fuse runs out, so the tell is the tile itself (R3).
+      const fuseMs = state?.canisters?.[terrainTileKey(tile.x, tile.y)]?.fuseMs;
+      const danger = hexInt(palette.hazard);
+      g.fillStyle(0x000000, 0.35).fillRect(x + 4, y + 8, TILE_SIZE - 6, TILE_SIZE - 8);
+      g.fillStyle(stone, 1).fillRect(x + 6, y + 6, TILE_SIZE - 12, TILE_SIZE - 9);
+      g.fillStyle(mix(palette.wall, palette.accent, 0.35), 1).fillRect(x + 6, y + 4, TILE_SIZE - 12, 5);
+      g.lineStyle(1.5, danger, 0.9)
+        .lineBetween(x + 8, y + 18, x + 16, y + 12)
+        .lineBetween(x + 16, y + 12, x + 24, y + 18);
+      if (fuseMs !== undefined) {
+        const urgency = 4 + 8 * Math.min(1, Math.max(0, 1 - fuseMs / 420));
+        const pulse = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin((timeMs / 1000) * urgency * Math.PI * 2));
+        g.lineStyle(3, danger, pulse).strokeRect(x + 4, y + 3, TILE_SIZE - 8, TILE_SIZE - 6);
+        g.fillStyle(danger, pulse * 0.35).fillRect(x, y, TILE_SIZE, TILE_SIZE);
+      } else {
+        g.lineStyle(1, edge, 0.8).strokeRect(x + 6, y + 4, TILE_SIZE - 12, TILE_SIZE - 7);
+      }
     } else if (type === ':') {
       for (let i = 0; i < 8; i++) {
         const ox = (i * 13 + tile.x * 7) % 25 + 2;

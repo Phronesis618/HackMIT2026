@@ -19,10 +19,14 @@ import {
 } from './combat';
 import { headquartersRoom } from './headquarters';
 import {
+  CANISTER_ENEMY_DAMAGE, CANISTER_KNOCKBACK, CANISTER_PLAYER_DAMAGE, CANISTER_RADIUS,
   ENV_KILL_CREDIT, isTerrainDamageSource, roomTerrainTuning, terrainSpeedMultiplier,
-  type TerrainDamageSource, type TerrainState,
+  TERRAIN_DAMAGE_SOURCE, type TerrainDamageSource, type TerrainState,
 } from '../shared/terrain';
-import { createTerrainState, strikeBreakableWalls } from './terrain';
+import {
+  applyCanisterBlastToTerrain, armCanistersInCircle, blastFalloff, createTerrainState,
+  stepCanisterFuses, strikeTerrain,
+} from './terrain';
 import { createHazardClock, stepHazardTiles, type HazardClock } from './hazards';
 import { ANCHOR_DISCHARGE_MS, ANCHOR_PULSE_SPEED, ANCHOR_PULSE_WARNING_MS, guardianPhase, RELAY_ACTIVATION_RANGE } from '../shared/finale';
 import { TRAINING_REGEN_PER_TICK, TRAINING_RESPAWN_MS, TRAINING_WAKE_RANGE, trainingRoom } from './training';
@@ -633,7 +637,12 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       }
       const nx = pr.x + pr.vx * TICK_MS / 1000;
       const ny = pr.y + pr.vy * TICK_MS / 1000;
-      if (circleHitsSolid(grid, nx, ny, pr.radius)) continue;
+      if (circleHitsSolid(grid, nx, ny, pr.radius)) {
+        // A bolt that ends on a canister lights it: enemy fire is a detonator too (T1).
+        progress.terrain = armCanistersInCircle(room, progress.terrain, nx, ny, pr.radius,
+          roomTerrainTuning(room).canisterFuseMs).state;
+        continue;
+      }
       pr.x = nx;
       pr.y = ny;
       let hit = false;
@@ -672,9 +681,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       damageEnemy(e, p, spec.damage + bonus, events);
       if (s.classId === 'weaver') e.state.slowMs = Math.max(e.state.slowMs ?? 0, 1000);
     }
-    const terrainStrike = strikeBreakableWalls(room, grid, progress.terrain, {
+    const terrainStrike = strikeTerrain(room, grid, progress.terrain, {
       x: s.x, y: s.y, facing: s.facing, range: spec.range, arc: spec.arc, damage: spec.damage + bonus,
-    });
+    }, roomTerrainTuning(room).canisterFuseMs);
     progress.terrain = terrainStrike.state;
     if (terrainStrike.hits.some((hit) => hit.destroyed)) rebuildGrid();
   }
@@ -802,6 +811,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
           strike(e, 24);
           e.state.markMs = 4000;
         }
+        // The designated remote detonator (TILES.md T1): a flare lights any canister it lands on.
+        progress.terrain = armCanistersInCircle(room, progress.terrain, moved.x, moved.y, 70,
+          roomTerrainTuning(room).canisterFuseMs).state;
         break;
       }
       case 'beacon.e.rally':
@@ -1197,12 +1209,18 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (ritual.activeRelay === ritual.relays.length) ritual.stage = 'core';
   }
 
+  /** T1 hook: everything the room does to the people in it, once per tick. */
+  function stepTerrain(events: GameEvent[]): void {
+    stepHazardFloors(events);
+    stepCanisters(events);
+  }
+
   /**
-   * T1 hook: damaging tiles. Every rule lives in sim/hazards.ts; this is only the glue that
-   * owns the entities. Enemies burn on exactly the same terms the crew does, and nothing here
-   * teaches `chaseWaypoint` to avoid a hazard — kiting a pack across one is the entire point.
+   * Damaging tiles. Every rule lives in sim/hazards.ts; this is only the glue that owns the
+   * entities. Enemies burn on exactly the same terms the crew does, and nothing here teaches
+   * `chaseWaypoint` to avoid a hazard — kiting a pack across one is the entire point.
    */
-  function stepTerrainHazards(events: GameEvent[]): void {
+  function stepHazardFloors(events: GameEvent[]): void {
     const tuning = roomTerrainTuning(room);
     const timeMs = tick * TICK_MS;
     const walls = progress.terrain.brokenWalls;
@@ -1219,6 +1237,45 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       for (const hit of stepHazardTiles(room, walls, timeMs, subject, e.hazard, tuning)) {
         damageEnemyFrom(e, { kind: 'terrain', tile: hit.source }, hit.damage, events);
       }
+    }
+  }
+
+  /**
+   * Canister fuses and their blasts. The tile becomes rubble and the grid is rebuilt BEFORE
+   * anything is damaged, so the blast's line-of-sight checks see the hole the canister just made
+   * rather than the canister itself — and a wall between you and it still shields you.
+   */
+  function stepCanisters(events: GameEvent[]): void {
+    const stepped = stepCanisterFuses(progress.terrain, TICK_MS);
+    progress.terrain = stepped.state;
+    for (const blast of stepped.blasts) {
+      const result = applyCanisterBlastToTerrain(room, progress.terrain, blast);
+      progress.terrain = result.state;
+      rebuildGrid();
+      const hitEnemyIds: string[] = [];
+      const hitPlayerIds: string[] = [];
+      for (const e of progress.enemies) {
+        if (e.state.hp <= 0) continue;
+        const falloff = blastFalloff(distance(blast, e.state) - ENEMY_INFO[e.state.enemyId].radius);
+        if (falloff <= 0 || !clearPath(grid, blast, e.state)) continue;
+        hitEnemyIds.push(e.state.id);
+        // Knocked outward, then damaged: a shove into a pit should kill before the blast does.
+        shove(e, blast, CANISTER_KNOCKBACK * falloff);
+        damageEnemyFrom(e, { kind: 'terrain', tile: TERRAIN_DAMAGE_SOURCE.canister },
+          CANISTER_ENEMY_DAMAGE * falloff, events);
+      }
+      for (const p of orderedPlayers()) {
+        if (p.state.hp <= 0) continue;
+        const falloff = blastFalloff(distance(blast, p.state) - PLAYER_RADIUS);
+        if (falloff <= 0 || !clearPath(grid, blast, p.state)) continue;
+        // Players are not thrown by a blast: losing control of your own operative in a fight
+        // reads as a bug, and the 26 damage is already the decision this tile is asking for.
+        if (damagePlayer(p, TERRAIN_DAMAGE_SOURCE.canister, Math.round(CANISTER_PLAYER_DAMAGE * falloff), false, events)) {
+          hitPlayerIds.push(p.state.id);
+        }
+      }
+      events.push(emit({ type: 'terrain_detonated', x: blast.x, y: blast.y, radius: CANISTER_RADIUS,
+        hitPlayerIds, hitEnemyIds }));
     }
   }
 
@@ -1357,7 +1414,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       const events: GameEvent[] = [];
       enterChosenBiome(events);
       for (const p of orderedPlayers()) stepPlayer(p, events);
-      stepTerrainHazards(events);
+      stepTerrain(events);
       if (phase === 'expedition') {
         for (const e of progress.enemies) stepEnemy(e, events);
         stepProjectiles(events);
@@ -1385,7 +1442,13 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
           ...(progress.anchor.ritual ? { ritual: { ...progress.anchor.ritual,
             relays: progress.anchor.ritual.relays.map((relay) => ({ ...relay })) } } : {}) } : null,
         roomCleared: phase !== 'headquarters' && progress.cleared,
-        terrain: { brokenWalls: [...progress.terrain.brokenWalls], wallDamage: { ...progress.terrain.wallDamage } },
+        terrain: {
+          brokenWalls: [...progress.terrain.brokenWalls], wallDamage: { ...progress.terrain.wallDamage },
+          // Omitted while nothing is lit, so rooms without canisters keep today's snapshot exactly.
+          ...(Object.keys(progress.terrain.canisters ?? {}).length > 0
+            ? { canisters: Object.fromEntries(Object.entries(progress.terrain.canisters ?? {}).map(([k, v]) => [k, { ...v }])) }
+            : {}),
+        },
         ...(floorsRun && phase !== 'headquarters' ? { floor: floorRunState(floorsRun, doorsLocked()) } : {}),
       };
     },

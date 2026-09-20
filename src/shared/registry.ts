@@ -196,20 +196,24 @@ export const PROP_INFO: Record<PropId, { blocksMovement: boolean; footprint: { w
  *  'P' player spawn (exactly one per room; walkable)
  *  'X' exit (walkable; must have a matching RoomSpec.exits entry)
  *  'A' anchor site (walkable; exactly one in the final room)
+ *  '*' volatile canister (solid; any damage arms it, then it detonates and leaves rubble)
  */
-export const TILE_CHARS = ['#', '.', ' ', '~', 'P', 'X', 'A', 'B', '=', '>', ':', '+'] as const;
+export const TILE_CHARS = [
+  '#', '.', ' ', '~', 'P', 'X', 'A', 'B', '=', '>', ':', '+', // base + PR #16
+  '*',                                                        // docs/design/TILES.md
+] as const;
 export type TileChar = (typeof TILE_CHARS)[number];
 
-export const SOLID_TILES: ReadonlySet<string> = new Set(['#', ' ', 'B']);
+export const SOLID_TILES: ReadonlySet<string> = new Set(['#', ' ', 'B', '*']);
 export const WALKABLE_TILES: ReadonlySet<string> = new Set(['.', '~', 'P', 'X', 'A', '=', '>', ':', '+']);
 /**
  * Tiles that damage or delete an entity. The generator keeps them away from spawns,
  * doors, the focus and relay sites (see `validateRoomSafety` in src/shared/terrain.ts).
  */
-export const DANGEROUS_TILES: ReadonlySet<string> = new Set(['~']);
+export const DANGEROUS_TILES: ReadonlySet<string> = new Set(['~', '*']);
 export const TERRAIN_FEATURE_IDS = [
   'breakable_walls', 'bridges', 'rubble', 'conduits', // PR #16 — movement modifiers
-  'hazard_floor',                                     // docs/design/TILES.md — combat-facing
+  'hazard_floor', 'canisters',                        // docs/design/TILES.md — combat-facing
 ] as const;
 export type TerrainFeatureId = (typeof TERRAIN_FEATURE_IDS)[number];
 export const TERRAIN_LAYOUT_IDS = ['scattered', 'barricades', 'crossroads'] as const;
@@ -222,7 +226,8 @@ export const TERRAIN_FEATURE_INFO: Record<TerrainFeatureId, string> = {
   bridges: '=: a walkable crossing through a wall run, with > ramps on both sides; no jumping other walls.',
   rubble: ':: debris patches slow walking to 65%; dashes retain their normal speed.',
   conduits: '+: conductive floor lanes boost walking to 125%; dashes retain their normal speed.',
-  hazard_floor: '~: scalding floor, 8 damage every 600 ms to anything standing on it, enemies included; dashes cross it safely.',
+  hazard_floor: '~: scalding floor. Standing in it ramps 3, 6, 9, 12, 15 damage every 450 ms and enemies take 60% more; stepping off or dashing resets it.',
+  canisters: '*: volatile canisters, solid until any hit arms them; 420 ms later they blast for 48 to enemies and 26 to the crew, break bulkheads and chain.',
 };
 /**
  * The HUD line shown when a player stands beside a feature. A world may rename it through
@@ -233,7 +238,8 @@ export const TERRAIN_CAPTION: Record<TerrainFeatureId, string> = {
   bridges: 'RAISED CROSSING · a route over the wall',
   rubble: 'RUBBLE · slows footsteps, not dashes',
   conduits: 'CONDUIT · faster footsteps',
-  hazard_floor: 'SCALDING FLOOR · burns anything standing on it',
+  hazard_floor: 'SCALDING FLOOR · the burn ramps while you stand in it',
+  canisters: 'VOLATILE CANISTER · one hit and it blows, both ways',
 };
 
 /**

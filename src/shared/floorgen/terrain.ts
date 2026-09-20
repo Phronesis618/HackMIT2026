@@ -26,8 +26,14 @@ interface Coord { x: number; y: number }
 const key = (x: number, y: number) => `${x},${y}`;
 const MARGIN = 2;
 const MAX_BRIDGE_TRIES = 48;
-/** Walkable for the reachability check: hazards and unbroken bulkheads do not count. */
-const safeGround = (ch: string) => ch !== '~' && ch !== 'B';
+/**
+ * Walkable for the reachability check: hazards, unbroken bulkheads and solid canisters do not
+ * count. This is TILES.md R4 — the room must be beatable by a crew that refuses to touch any
+ * of it — and the reason terrain can only ever be an additive layer over floorgen's guarantee.
+ */
+const safeGround = (ch: string) => ch !== '~' && ch !== 'B' && ch !== '*';
+/** Per-room cap from TILES.md S8. */
+const MAX_CANISTERS = 3;
 
 /** Returns the room's tile rows with terrain applied. `room` is not mutated. */
 export function applyBiomeTerrain(room: BuiltRoom, terrain: BiomeTerrain, seed: string): string[] {
@@ -58,6 +64,10 @@ export function applyBiomeTerrain(room: BuiltRoom, terrain: BiomeTerrain, seed: 
 
   if (features.has('bridges')) stampBridges(grid, order, free, terrain, density, room.spawn, blocked, rng);
   if (features.has('breakable_walls')) stampBreakableWalls(grid, density, rng);
+  if (features.has('canisters')) {
+    stampCanisters(grid, order, free, density, room.spawn,
+      [...keyPoints, ...room.encounters.map((e) => ({ x: e.x, y: e.y }))], blocked);
+  }
   for (const feature of ['rubble', 'conduits'] as const) {
     if (!features.has(feature)) continue;
     const offsets = feature === 'rubble'
@@ -123,6 +133,47 @@ function stampBridges(
       break;
     }
     if (placed >= wanted) return;
+  }
+}
+
+/**
+ * '*' canisters are solid until something shoots them, so one must never be the narrow part of
+ * a route: they only go on floor with at least 6 of its 8 neighbours open, which is the middle
+ * of a room rather than a corridor. Keeping them two tiles apart stops a carpet of them while
+ * staying inside the 76 px blast radius, so a chain is a read the player can find rather than
+ * a default. The belt-and-braces flood at the end of `applyBiomeTerrain` re-checks R4 anyway.
+ */
+function stampCanisters(
+  grid: Grid, order: readonly Coord[], free: (x: number, y: number) => boolean, density: number,
+  spawn: Coord, reachPoints: readonly Coord[], blocked: ReadonlySet<string>,
+): void {
+  const placed: Coord[] = [];
+  const open = (x: number, y: number) => {
+    const ch = grid[y]?.[x];
+    return ch !== undefined && ch !== '#' && ch !== ' ' && ch !== 'B' && ch !== '*';
+  };
+  const dryGround = (ch: string) => safeGround(ch) && ch !== '~';
+  // What was reachable before any canister, with and without stepping on a hazard. A canister
+  // may never take either of those away from a point the crew has to get to.
+  const beforeSafe = flood(grid, spawn, safeGround, blocked);
+  const beforeDry = flood(grid, spawn, dryGround, blocked);
+  const keeps = (after: Set<string>, before: Set<string>) =>
+    reachPoints.every((point) => !before.has(key(point.x, point.y)) || after.has(key(point.x, point.y)));
+  for (const cell of order) {
+    if (placed.length >= Math.min(MAX_CANISTERS, density)) return;
+    if (!free(cell.x, cell.y)) continue;
+    let openNeighbours = 0;
+    for (const dy of [-1, 0, 1]) for (const dx of [-1, 0, 1]) if ((dx || dy) && open(cell.x + dx, cell.y + dy)) openNeighbours++;
+    if (openNeighbours < 6) continue;
+    if (placed.some((p) => Math.max(Math.abs(p.x - cell.x), Math.abs(p.y - cell.y)) < 2)) continue;
+    grid[cell.y]![cell.x] = '*';
+    // Six open neighbours is not proof: a tile can sit in the neck of an alcove and still pass.
+    if (!keeps(flood(grid, spawn, safeGround, blocked), beforeSafe) ||
+        !keeps(flood(grid, spawn, dryGround, blocked), beforeDry)) {
+      grid[cell.y]![cell.x] = '.';
+      continue;
+    }
+    placed.push(cell);
   }
 }
 
