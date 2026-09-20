@@ -132,7 +132,7 @@ describe('control lessons', () => {
   });
 
   it('run.map waits for the third room of a floors run', () => {
-    const floors = uiModel({ floor: { run: floor(), biomeName: 'b', biomeTagline: '', pathNames: ['b'], depth: 1, depthCount: 5, roomCount: 10, choice: null } });
+    const floors = uiModel({ floor: { run: floor(), biomeName: 'b', biomeTagline: '', pathNames: ['b'], depth: 1, depthCount: 5, roomCount: 10, roomsVisited: 1, choice: null } });
     expect(lesson('run.map').trigger(context({ model: floors, facts: { roomsEntered: 2 } }))).toBe(false);
     expect(lesson('run.map').trigger(context({ model: floors, facts: { roomsEntered: 3 } }))).toBe(true);
     expect(lesson('run.map').trigger(context({ facts: { roomsEntered: 3 } }))).toBe(false);
