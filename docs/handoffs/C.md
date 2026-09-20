@@ -1,5 +1,18 @@
 # Handoff — Agent C (Devin)
 
+## Stranded-world Anchor totals — 2026-09-20
+
+- Branch: `devin/1789897630-stranded-anchor-totals`, implementation `b68a9e0`, based on `2353463`.
+- **Implemented:** a `stranded` run increments the hub's Anchor total, as required by
+  `BOSS_FINALE.md` §7.5: the world is saved even when the crew fails to escape. Relics still
+  require extraction. Previously the class record counted the Anchor while the lamp total did not.
+- **Verified:** the new regression failed on the original reducer; `npm run check` after
+  the fix passed **900 tests / 76 files**, typecheck and production build. Storage round-trip,
+  replay protection and no stranded relic are covered. `git diff --check` passed.
+- **Mocked:** scripted events and isolated Map storage in the new regression.
+- **Unverified:** browser interaction, live providers and physical LAN. Existing stored
+  undercounts are not backfilled.
+
 ## Overnight hub persistence repair — 2026-09-20
 
 - Branch: `devin/1789894002-hub-replay-scope`, implementation `5a10f45`, based on `dc2c934`.
