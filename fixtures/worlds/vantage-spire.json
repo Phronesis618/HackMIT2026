@@ -1,7 +1,6 @@
 {
   "fixtureId": "vantage-spire",
-  "fixtureNote": "Authored offline fixture. Not generated from player contributions. Used when live generation is disabled, unavailable, or fails.",
-  "plannedRoomCount": 3,
+  "fixtureNote": "Authored offline theme compiled with a fixed seed. Not generated from player contributions.",
   "recipe": {
     "title": "Vantage Spire",
     "tagline": "A relay tower that forgot which world it was built for.",
@@ -41,7 +40,16 @@
         "enemyIds": [
           "husk"
         ],
-        "hazards": true
+        "hazards": true,
+        "terrain": {
+          "features": [
+            "breakable_walls",
+            "bridges",
+            "conduits"
+          ],
+          "layout": "crossroads",
+          "density": "balanced"
+        }
       },
       {
         "name": "Cable Gallery",
@@ -60,7 +68,16 @@
           "husk",
           "sentinel"
         ],
-        "hazards": true
+        "hazards": true,
+        "terrain": {
+          "features": [
+            "bridges",
+            "rubble",
+            "conduits"
+          ],
+          "layout": "barricades",
+          "density": "dense"
+        }
       },
       {
         "name": "Anchor Vault",
@@ -78,31 +95,99 @@
         "enemyIds": [
           "guardian"
         ],
-        "hazards": true
+        "hazards": true,
+        "terrain": {
+          "features": [
+            "breakable_walls",
+            "bridges",
+            "rubble",
+            "conduits"
+          ],
+          "layout": "crossroads",
+          "density": "balanced"
+        }
       }
     ],
     "contributionMappings": [],
     "lore": [
-      { "kind": "relic", "roomIndex": 0, "enemyId": null, "title": "Departures board", "source": "a split-flap departures board, still cycling",
-        "text": "Every line reads DELAYED. The flaps keep turning anyway, trying letters, settling on nothing, like a mouth practising a word. The last line has stopped on NOWHERE and is blinking, patient, as if it expects someone to board." },
-      { "kind": "relic", "roomIndex": 0, "enemyId": null, "title": "Left luggage tag", "source": "a paper tag tied to a locked case",
-        "text": "Hold for collection. Owner will return once the tower decides which world it is in. Do not open; the contents were packed for a different address than this one. Signed in a hurry, and then signed again underneath in a hand that is almost the same." },
-      { "kind": "relic", "roomIndex": 1, "enemyId": null, "title": "Line engineer's chalk note", "source": "chalk on a junction box, smeared by sparks",
-        "text": "Cut trunk 4 before it cuts you. The relay is not routing passengers any more; it is routing itself, room by room, looking for a world that will take it. If the lanterns start answering the cables, do not stay to hear what they say." },
-      { "kind": "relic", "roomIndex": 2, "enemyId": null, "title": "Vault door plaque", "source": "a brass plaque beside the Anchor bay",
-        "text": "Anchor bay. Plant nothing you are not willing to leave behind. The spire keeps what is planted and forgets what is carried through; that is the whole of the arrangement, and it has never once been renegotiated." },
-      { "kind": "remains", "roomIndex": 0, "enemyId": "husk", "title": "Commuter's ticket stub", "source": "a ticket stub punched for platform 9",
-        "text": "There has never been a platform 9. The husks were the last passengers, the ones who stayed on the concourse when the boards went dark, waiting for a train the spire forgot to send. They are still holding their tickets out; they still expect them to be checked." },
-      { "kind": "remains", "roomIndex": 0, "enemyId": "sentinel", "title": "Platform warden's lamp", "source": "a warden's signal lamp, lens cracked",
-        "text": "Wardens kept the crowds in line with these, one flash to hold, two to board. They kept doing it after the crowds were gone, flashing hold at empty platforms, and somewhere along the way the lamp stopped being a lamp and started being an argument." },
-      { "kind": "remains", "roomIndex": 0, "enemyId": "guardian", "title": "Relay core fragment", "source": "a shard of switching core, humming",
-        "text": "Six voices at once, all of them routing, none of them agreeing. The Guardian was the relay's own switching heart, defending the one world it had left to route to. Hold the shard to your ear and it will offer you a connection; do not accept." }
+      {
+        "kind": "relic",
+        "title": "Departures board",
+        "source": "a split-flap departures board, still cycling",
+        "text": "Every line reads DELAYED. The flaps keep turning anyway, trying letters, settling on nothing, like a mouth practising a word. The last line has stopped on NOWHERE and is blinking, patient, as if it expects someone to board.",
+        "roomIndex": 0,
+        "enemyId": null
+      },
+      {
+        "kind": "relic",
+        "title": "Left luggage tag",
+        "source": "a paper tag tied to a locked case",
+        "text": "Hold for collection. Owner will return once the tower decides which world it is in. Do not open; the contents were packed for a different address than this one. Signed in a hurry, and then signed again underneath in a hand that is almost the same.",
+        "roomIndex": 0,
+        "enemyId": null
+      },
+      {
+        "kind": "relic",
+        "title": "Line engineer's chalk note",
+        "source": "chalk on a junction box, smeared by sparks",
+        "text": "Cut trunk 4 before it cuts you. The relay is not routing passengers any more; it is routing itself, room by room, looking for a world that will take it. If the lanterns start answering the cables, do not stay to hear what they say.",
+        "roomIndex": 1,
+        "enemyId": null
+      },
+      {
+        "kind": "relic",
+        "title": "Vault door plaque",
+        "source": "a brass plaque beside the Anchor bay",
+        "text": "Anchor bay. Plant nothing you are not willing to leave behind. The spire keeps what is planted and forgets what is carried through; that is the whole of the arrangement, and it has never once been renegotiated.",
+        "roomIndex": 2,
+        "enemyId": null
+      },
+      {
+        "kind": "remains",
+        "title": "Commuter's ticket stub",
+        "source": "a ticket stub punched for platform 9",
+        "text": "There has never been a platform 9. The husks were the last passengers, the ones who stayed on the concourse when the boards went dark, waiting for a train the spire forgot to send. They are still holding their tickets out; they still expect them to be checked.",
+        "roomIndex": 0,
+        "enemyId": "husk"
+      },
+      {
+        "kind": "remains",
+        "title": "Platform warden's lamp",
+        "source": "a warden's signal lamp, lens cracked",
+        "text": "Wardens kept the crowds in line with these, one flash to hold, two to board. They kept doing it after the crowds were gone, flashing hold at empty platforms, and somewhere along the way the lamp stopped being a lamp and started being an argument.",
+        "roomIndex": 0,
+        "enemyId": "sentinel"
+      },
+      {
+        "kind": "remains",
+        "title": "Relay core fragment",
+        "source": "a shard of switching core, humming",
+        "text": "Six voices at once, all of them routing, none of them agreeing. The Guardian was the relay's own switching heart, defending the one world it had left to route to. Hold the shard to your ear and it will offer you a connection; do not accept.",
+        "roomIndex": 0,
+        "enemyId": "guardian"
+      }
     ],
     "attunements": [
-      { "effectId": "bolt_ward", "name": "Warden's Two Flashes", "description": "Hold, then board: the platform wardens' signal, learned, makes the tower's bolts hesitate around you." },
-      { "effectId": "dash_echo", "name": "Trunk 4, Cut", "description": "A dash through the gallery drags live cable behind it; what follows you gets the charge." },
-      { "effectId": "anchor_grace", "name": "Left for Collection", "description": "The spire keeps what is planted, and it has been waiting to keep something. The Anchor takes faster." },
-      { "effectId": "clear_surge", "name": "Departures Clear", "description": "When the board finally reads a destination, the concourse moves like a crowd that hears its train." }
+      {
+        "effectId": "bolt_ward",
+        "name": "Warden's Two Flashes",
+        "description": "Hold, then board: the platform wardens' signal, learned, makes the tower's bolts hesitate around you."
+      },
+      {
+        "effectId": "dash_echo",
+        "name": "Trunk 4, Cut",
+        "description": "A dash through the gallery drags live cable behind it; what follows you gets the charge."
+      },
+      {
+        "effectId": "anchor_grace",
+        "name": "Left for Collection",
+        "description": "The spire keeps what is planted, and it has been waiting to keep something. The Anchor takes faster."
+      },
+      {
+        "effectId": "clear_surge",
+        "name": "Departures Clear",
+        "description": "When the board finally reads a destination, the concourse moves like a crowd that hears its train."
+      }
     ]
   },
   "art": {
@@ -134,94 +219,70 @@
       "index": 0,
       "name": "Threshold Concourse",
       "description": "The arrival platform. Lanterns still burn over abandoned crates.",
-      "width": 24,
-      "height": 14,
+      "width": 25,
+      "height": 15,
       "tiles": [
-        "########################",
-        "#......................#",
-        "#.....##......##.......#",
-        "#.....##......##.......#",
-        "#......................#",
-        "#P.....................X",
-        "#......................#",
-        "#..........~~..........#",
-        "#.....##...~~...##.....#",
-        "#.....##........##.....#",
-        "#......................#",
-        "#......................#",
-        "#......................#",
-        "########################"
+        "#########################",
+        "#.......................#",
+        "#.......................#",
+        "#...#B##................#",
+        "#.......................#",
+        "#................~~~~...#",
+        "#.......................#",
+        "#P......................X",
+        "#.......................#",
+        "#.........+.............#",
+        "#...+....+++..>.........#",
+        "#..+++....+.B#=#BB###...#",
+        "#...+.........>.........#",
+        "#.......................#",
+        "#########################"
       ],
       "props": [
         {
-          "id": "r0-lantern-a",
+          "id": "room-0-prop-0",
           "propId": "lantern",
-          "x": 3,
-          "y": 2
+          "x": 19,
+          "y": 9
         },
         {
-          "id": "r0-lantern-b",
-          "propId": "lantern",
-          "x": 20,
-          "y": 2
+          "id": "room-0-prop-1",
+          "propId": "crate",
+          "x": 14,
+          "y": 13
         },
         {
-          "id": "r0-terminal",
+          "id": "room-0-prop-2",
           "propId": "terminal",
-          "x": 12,
+          "x": 2,
           "y": 1
         },
         {
-          "id": "r0-crate-a",
-          "propId": "crate",
-          "x": 9,
-          "y": 11
+          "id": "room-0-prop-3",
+          "propId": "pillar",
+          "x": 2,
+          "y": 2
         },
         {
-          "id": "r0-crate-b",
-          "propId": "crate",
-          "x": 10,
-          "y": 11
-        },
-        {
-          "id": "r0-cables",
+          "id": "room-0-prop-4",
           "propId": "cable_bundle",
-          "x": 11,
+          "x": 2,
           "y": 3
-        },
-        {
-          "id": "r0-pillar-a",
-          "propId": "pillar",
-          "x": 3,
-          "y": 10
-        },
-        {
-          "id": "r0-pillar-b",
-          "propId": "pillar",
-          "x": 20,
-          "y": 10
         }
       ],
       "encounters": [
         {
-          "id": "r0-husks-a",
+          "id": "room-0-encounter-0",
           "enemyId": "husk",
-          "x": 15,
+          "x": 2,
           "y": 4,
-          "count": 1
-        },
-        {
-          "id": "r0-husks-b",
-          "enemyId": "husk",
-          "x": 18,
-          "y": 10,
           "count": 1
         }
       ],
       "exits": [
         {
-          "x": 23,
-          "y": 5,
+          "x": 24,
+          "y": 7,
           "toRoomIndex": 1,
           "direction": "east"
         }
@@ -229,8 +290,18 @@
       "isFinal": false,
       "attributions": [],
       "relics": [
-        { "id": "r0-relic-board", "x": 4, "y": 12, "fragmentIndex": 0 },
-        { "id": "r0-relic-luggage", "x": 19, "y": 7, "fragmentIndex": 1 }
+        {
+          "id": "room-0-relic-0",
+          "x": 18,
+          "y": 10,
+          "fragmentIndex": 0
+        },
+        {
+          "id": "room-0-relic-1",
+          "x": 12,
+          "y": 12,
+          "fragmentIndex": 1
+        }
       ]
     },
     {
@@ -238,172 +309,168 @@
       "index": 1,
       "name": "Cable Gallery",
       "description": "A long gallery where severed trunk cables hang and spark.",
-      "width": 26,
-      "height": 14,
+      "width": 28,
+      "height": 15,
       "tiles": [
-        "##########################",
-        "#........................#",
-        "#..###............###....#",
-        "#..#................#....#",
-        "#........................#",
-        "#........~~~~............#",
-        "#P.......~~~~............X",
-        "#........~~~~............#",
-        "#........................#",
-        "#....#............#......#",
-        "#....###........###......#",
-        "#........................#",
-        "#........................#",
-        "##########################"
+        "############################",
+        "#..........................#",
+        "#..::......................#",
+        "#..::.####.................#",
+        "#..::......................#",
+        "#..::..~~~~................#",
+        "#..........................#",
+        "#P.........................X",
+        "#..........................#",
+        "#...........>..............#",
+        "#........###=###..++++++++.#",
+        "#...........>.....#...>....#",
+        "#...........::.....###=###.#",
+        "#...........::....++++>....#",
+        "############################"
       ],
       "props": [
         {
-          "id": "r1-cables-a",
+          "id": "room-1-prop-0",
           "propId": "cable_bundle",
-          "x": 6,
-          "y": 2
+          "x": 18,
+          "y": 12
         },
         {
-          "id": "r1-cables-b",
-          "propId": "cable_bundle",
-          "x": 19,
-          "y": 11
-        },
-        {
-          "id": "r1-lantern-a",
+          "id": "room-1-prop-1",
           "propId": "lantern",
-          "x": 4,
-          "y": 4
-        },
-        {
-          "id": "r1-lantern-b",
-          "propId": "lantern",
-          "x": 22,
-          "y": 4
-        },
-        {
-          "id": "r1-shard",
-          "propId": "monolith_shard",
-          "x": 12,
-          "y": 10
-        },
-        {
-          "id": "r1-crystal",
-          "propId": "crystal_cluster",
           "x": 3,
-          "y": 11
+          "y": 1
+        },
+        {
+          "id": "room-1-prop-2",
+          "propId": "monolith_shard",
+          "x": 7,
+          "y": 12
+        },
+        {
+          "id": "room-1-prop-3",
+          "propId": "crystal_cluster",
+          "x": 14,
+          "y": 3
         }
       ],
       "encounters": [
         {
-          "id": "r1-husks",
+          "id": "room-1-encounter-0",
           "enemyId": "husk",
           "x": 14,
-          "y": 3,
-          "count": 2
+          "y": 2,
+          "count": 1
         },
         {
-          "id": "r1-sentinel",
+          "id": "room-1-encounter-1",
           "enemyId": "sentinel",
-          "x": 20,
-          "y": 9,
+          "x": 7,
+          "y": 10,
           "count": 1
         }
       ],
       "exits": [
         {
-          "x": 25,
-          "y": 6,
+          "x": 27,
+          "y": 7,
           "toRoomIndex": 2,
           "direction": "east"
         }
       ],
       "isFinal": false,
       "attributions": [],
-      "relics": [{ "id": "r1-relic-chalk", "x": 7, "y": 12, "fragmentIndex": 2 }]
+      "relics": [
+        {
+          "id": "room-1-relic-2",
+          "x": 14,
+          "y": 5,
+          "fragmentIndex": 2
+        }
+      ]
     },
     {
       "id": "vantage-spire-room-2",
       "index": 2,
       "name": "Anchor Vault",
       "description": "The spire's core. The Guardian waits between the operatives and the Anchor site.",
-      "width": 22,
-      "height": 16,
+      "width": 25,
+      "height": 12,
       "tiles": [
-        "######################",
-        "#....................#",
-        "#.........A..........#",
-        "#....................#",
-        "#...##........##.....#",
-        "#...##........##.....#",
-        "#....................#",
-        "#....................#",
-        "#......~~~~~~........#",
-        "#......~~~~~~........#",
-        "#....................#",
-        "#...##........##.....#",
-        "#...##........##.....#",
-        "#....................#",
-        "#..........P.........#",
-        "######################"
+        "#########################",
+        "#.............::........#",
+        "#...#.........::..+.B...#",
+        "#...#.........::.+++B...#",
+        "#............~::~.+.....#",
+        "#.......................#",
+        "#P....................A.#",
+        "#.......................#",
+        "#...#........>....+.B...#",
+        "#...#......B#=##.+++#...#",
+        "#............>....+.....#",
+        "#########################"
       ],
       "props": [
         {
-          "id": "r2-pedestal",
+          "id": "room-2-prop-0",
           "propId": "anchor_pedestal",
-          "x": 10,
-          "y": 2
+          "x": 22,
+          "y": 6
         },
         {
-          "id": "r2-lantern-a",
+          "id": "room-2-prop-1",
           "propId": "lantern",
-          "x": 2,
+          "x": 19,
+          "y": 10
+        },
+        {
+          "id": "room-2-prop-2",
+          "propId": "monolith_shard",
+          "x": 22,
           "y": 1
         },
         {
-          "id": "r2-lantern-b",
-          "propId": "lantern",
-          "x": 19,
-          "y": 1
-        },
-        {
-          "id": "r2-shard-a",
-          "propId": "monolith_shard",
-          "x": 2,
-          "y": 13
-        },
-        {
-          "id": "r2-shard-b",
-          "propId": "monolith_shard",
-          "x": 19,
-          "y": 13
-        },
-        {
-          "id": "r2-pillar-a",
+          "id": "room-2-prop-3",
           "propId": "pillar",
-          "x": 5,
-          "y": 7
-        },
-        {
-          "id": "r2-pillar-b",
-          "propId": "pillar",
-          "x": 16,
-          "y": 7
+          "x": 20,
+          "y": 10
         }
       ],
       "encounters": [
         {
-          "id": "r2-guardian",
+          "id": "room-2-encounter-0",
           "enemyId": "guardian",
-          "x": 10,
-          "y": 6,
+          "x": 22,
+          "y": 4,
           "count": 1
         }
       ],
       "exits": [],
       "isFinal": true,
       "attributions": [],
-      "relics": [{ "id": "r2-relic-plaque", "x": 18, "y": 10, "fragmentIndex": 3 }]
+      "relics": [
+        {
+          "id": "room-2-relic-3",
+          "x": 15,
+          "y": 8,
+          "fragmentIndex": 3
+        }
+      ],
+      "anchorRelays": [
+        {
+          "x": 11,
+          "y": 1
+        },
+        {
+          "x": 10,
+          "y": 10
+        },
+        {
+          "x": 18,
+          "y": 1
+        }
+      ]
     }
-  ]
+  ],
+  "plannedRoomCount": 3
 }
