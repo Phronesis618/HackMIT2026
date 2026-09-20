@@ -23,8 +23,8 @@ limit, and a flat short fact is worth more than a long one.
   not imply a culture. Include the person responsible for the collapse.
 - places: 3 or 4, objects: 3 or 4 (max 28 chars each). Named, physical, reusable:
   a numbered machine, a room with a letter on the door, one person's marked tool. These are the nouns all later text reuses.
-- events: 5 or 6 in date order. date (max 20; the world's own calendar: "Day 11",
-  "14 March, 22:10", "Shift 212") and fact (max 120): one flat past-tense sentence naming a person and
+- events: 5 or 6 in date order. date (max 20) is in the world's own calendar: the data
+  carries a `calendar` style to use, with numbers of your own. fact (max 120): one flat past-tense sentence naming a person and
   carrying a number. Events form a chain of cause: each makes the next one possible. If a
   fact could be moved to another world unchanged, make it specific.
 - authors: exactly 3 of the people, the ones who wrote things down. document is the physical
@@ -33,7 +33,7 @@ limit, and a flat short fact is worth more than a long one.
   The three must differ sharply in sentence length and in what they count: a quartermaster
   counts stock, a child counts days, an engineer counts readings. At most one of them is sad.
   At most ONE document is a log, ledger or register with dated entries. The data carries
-  `documentKinds`: take the other two documents from it or from things like it, so the
+  two `documentKinds`: those are the other two documents (adapt them to the place), so the
   world is read through letters, labels, notes to a colleague, a menu board, not three logs.
   At least one author writes to somebody: a person with a name who is expected to answer.
 - enemies: the cast of this world: 4 or 5 registry enemy ids, guardian included, chosen so

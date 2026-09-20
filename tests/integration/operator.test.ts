@@ -84,6 +84,48 @@ describe('operator provider', () => {
     expect(done.some((f) => f.includes('accepted.reply'))).toBe(true);
   });
 
+  it('round-trips a bible-first reply: schema file, floors flag, refs, laws, look and briefs survive validation', async () => {
+    const dir = tmpDir();
+    const provider = createOperatorProvider({ dir, timeoutMs: 5_000, pollMs: 20 });
+    const pending = provider.generate({ ...request('req-operator-bible'), floors: true });
+    const inbox = await awaitInbox(provider.inboxDir, 'req-operator-bible-1.json');
+    expect(inbox.floors).toBe(true);
+    const schema = JSON.parse(fs.readFileSync(path.join(dir, 'world-recipe.schema.json'), 'utf8')) as { properties: Record<string, unknown>; required: string[] };
+    expect(Object.keys(schema.properties)[0]).toBe('bible');
+    expect(schema.required).toEqual(expect.arrayContaining(['bible', 'rooms', 'lore', 'laws', 'look', 'custodian', 'biomes']));
+
+    const ward = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../prompts/exemplars/cinder-ward-9.json'), 'utf8')) as {
+      bible: { premise: string; collapse: string; people: unknown[]; places: string[]; objects: string[]; events: Array<{ date: string; fact: string }>; authors: unknown[]; enemies: Record<string, string> };
+      exemplars: Array<{ kind: string; title?: string; source?: string; text: string; enemyId?: string }>;
+    };
+    const base = fixtureRecipe();
+    const brief = (name: string) => ({
+      name, tagline: 'Twelve beds along one wall. Med trolley 4 blocks the door.', motifIds: ['cables'], enemyPool: ['husk'], propPool: ['crate'], hazards: false,
+      layout: { linearity: 0.5, branchiness: 0.5, specials: { treasure: 1, lore: 1, rest: 1, elite: 1 } }, terrain: null,
+      roomLines: Object.fromEntries(['entrance', 'combat', 'elite', 'treasure', 'lore', 'rest', 'exit'].map((kind) => [kind, 'Two patients in monitor rigs by Bay C. Med trolley 4 gives cover.'])),
+    });
+    const reply = {
+      bible: { ...ward.bible, events: ward.bible.events.map(({ date, fact }) => ({ date, fact })), enemies: Object.entries(ward.bible.enemies).map(([enemyId, formerJob]) => ({ enemyId, formerJob })) },
+      title: 'Cinder Ward 9', tagline: '120-bed quarantine ward. 118 patients and 9 staff locked in.',
+      themeSummary: base.themeSummary, motifIds: base.motifIds, palette: base.palette, rooms: base.rooms, contributionMappings: [],
+      look: { paletteFamily: 'rust', floorMaterial: 'plates', wallStyle: 'panelled', lighting: 'flat', atmosphere: 'none', atmosphereDensity: 0, skylineDepth: 0, grain: 0.2 },
+      laws: [{ lawId: 'long_dark', name: 'Reyes\'s Hold', description: 'Anton Reyes set the discharge hold on 2 March. The ward lights went with it.', intensity: 0.5 }],
+      terrainSkins: [], custodian: null,
+      biomes: Array.from({ length: 8 }, (_, index) => brief(`Bay ${String.fromCharCode(65 + index)}`)),
+      lore: ward.exemplars.filter((e) => e.kind === 'relic').slice(0, 2).map((e, index) => ({ authorIndex: index, eventIndex: index, kind: 'relic', title: e.title, source: e.source, text: e.text, roomIndex: index, enemyId: null })),
+      attunements: [],
+    };
+    fs.writeFileSync(inbox.reply.path, JSON.stringify(reply));
+    const { recipe } = await pending;
+    expect(recipe.bible?.authors).toHaveLength(3);
+    expect(recipe.lore.map((fragment) => [fragment.authorIndex, fragment.eventIndex])).toEqual([[0, 0], [1, 1]]);
+    expect(recipe.laws?.[0]?.lawId).toBe('long_dark');
+    expect(recipe.look?.paletteFamily).toBe('rust');
+    expect(recipe.custodian).toBeUndefined();
+    expect(recipe.biomes).toHaveLength(8);
+    expect(recipe.biomeRoomLines?.[0]?.lines).toHaveLength(7);
+  });
+
   it('re-issues the request with repair feedback after an invalid reply, within the same deadline', async () => {
     const dir = tmpDir();
     const provider = createOperatorProvider({ dir, timeoutMs: 5_000, pollMs: 20 });

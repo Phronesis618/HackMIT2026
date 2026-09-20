@@ -9,13 +9,12 @@
  * the validator owns them and the polish call gets only the advice for what failed.
  */
 import fs from 'node:fs';
-import { hashString } from '../../shared/ids';
 import { custodianRegistry, lawsAndLookRegistry } from '../../shared/laws';
 import {
   ATTUNEMENT_EFFECT_IDS, ATTUNEMENT_EFFECT_INFO, ENEMY_IDS, MOTIF_IDS, PROP_IDS,
   TERRAIN_DENSITIES, TERRAIN_FEATURE_INFO, TERRAIN_LAYOUT_IDS, type EnemyId,
 } from '../../shared/registry';
-import { exemplarBible, exemplarSection, type ExemplarKind } from './exemplars';
+import { exemplarBible, exemplarSection, seededInt, type ExemplarKind } from './exemplars';
 
 export type PromptStage = 'foundation' | 'rooms' | 'laws' | 'relics' | 'remains' | 'biomes' | 'polish' | 'full';
 
@@ -107,21 +106,25 @@ export function namePool(seed: number, count = 10): string[] {
   const pool = JSON.parse(file('names.json')) as { given: string[]; surname: string[] };
   const out: string[] = [];
   for (let i = 0; out.length < count && i < count * 3; i++) {
-    const given = pool.given[hashString(`${seed}:given:${i}`) % pool.given.length]!;
-    const surname = pool.surname[hashString(`${seed}:surname:${i}`) % pool.surname.length]!;
+    const given = pool.given[seededInt(seed, `given:${i}`) % pool.given.length]!;
+    const surname = pool.surname[seededInt(seed, `surname:${i}`) % pool.surname.length]!;
     const name = `${given} ${surname}`;
     if (!out.some((existing) => existing.startsWith(`${given} `) || existing.endsWith(` ${surname}`))) out.push(name);
   }
   return out;
 }
 
-/** Seeded nudges against sameness between worlds: what kind of mistake ended the place, and what its people wrote in. */
-export function worldSeeds(seed: number): { collapseKind: string; documentKinds: string[] } {
-  const pool = JSON.parse(file('names.json')) as { collapseKinds: string[]; documentKinds: string[] };
+/** Seeded nudges against sameness between worlds: what kind of mistake ended the place, what its people wrote in, how they dated things. */
+export function worldSeeds(seed: number): { collapseKind: string; documentKinds: string[]; calendar: string } {
+  const pool = JSON.parse(file('names.json')) as { collapseKinds: string[]; documentKinds: string[]; calendars: string[] };
   const documentKinds: string[] = [];
-  for (let i = 0; documentKinds.length < 4 && i < 16; i++) {
-    const kind = pool.documentKinds[hashString(`${seed}:document:${i}`) % pool.documentKinds.length]!;
+  for (let i = 0; documentKinds.length < 2 && i < 16; i++) {
+    const kind = pool.documentKinds[seededInt(seed, `document:${i}`) % pool.documentKinds.length]!;
     if (!documentKinds.includes(kind)) documentKinds.push(kind);
   }
-  return { collapseKind: pool.collapseKinds[hashString(`${seed}:collapse`) % pool.collapseKinds.length]!, documentKinds };
+  return {
+    collapseKind: pool.collapseKinds[seededInt(seed, 'collapse') % pool.collapseKinds.length]!,
+    documentKinds,
+    calendar: pool.calendars[seededInt(seed, 'calendar') % pool.calendars.length]!,
+  };
 }

@@ -13,7 +13,7 @@ import {
 } from '../../shared/contracts';
 import { BIOME_LINE_KINDS, WorldBibleSchema, clampLoreRefs, type BiomeRoomLines, type WorldBible } from '../../shared/bible';
 import { BIOME_BRIEF_COUNT, BiomeBriefSchema, BiomeTerrainSchema, ROOM_KINDS, type BiomeBrief } from '../../shared/floors';
-import { hashString } from '../../shared/ids';
+import { seededInt } from './exemplars';
 import {
   CustodianSchema, TerrainSkinSchema, WorldLawSchema, WorldLookSchema, sanitizeCustodian, sanitizeLaws, sanitizeTerrainSkins,
   type Custodian, type TerrainSkin, type WorldLaw, type WorldLook,
@@ -142,9 +142,9 @@ export function fitText(text: string, max: number): string {
   if (trimmed.length <= max) return trimmed;
   const head = trimmed.slice(0, max + 1);
   const sentence = Math.max(head.lastIndexOf('. '), head.lastIndexOf('! '), head.lastIndexOf('? '));
-  if (sentence >= max * 0.5) return head.slice(0, sentence + 1);
+  if (sentence >= max * 0.3) return head.slice(0, sentence + 1);
   const clause = Math.max(head.lastIndexOf(', '), head.lastIndexOf('; '), head.lastIndexOf(': '), head.lastIndexOf(' · '), head.lastIndexOf(' ('));
-  if (clause >= max * 0.6) return head.slice(0, clause).replace(/[\s,;:·-]+$/, '');
+  if (clause >= max * 0.5) return head.slice(0, clause).replace(/[\s,;:·-]+$/, '');
   const word = head.lastIndexOf(' ');
   return (word > 0 ? head.slice(0, word) : trimmed.slice(0, max)).replace(/[\s,;:·-]+$/, '');
 }
@@ -405,7 +405,7 @@ export const nonBossKinds = (bible: WorldBible): number => new Set(bible.enemies
 // ---------------------------------------------------------------------------
 
 function shuffled<T>(items: readonly T[], seed: string): T[] {
-  return items.map((item, index) => ({ item, key: hashString(`${seed}:${index}`) })).sort((a, b) => a.key - b.key).map((entry) => entry.item);
+  return items.map((item, index) => ({ item, key: seededInt(0, `${seed}:${index}`) })).sort((a, b) => a.key - b.key).map((entry) => entry.item);
 }
 
 export interface RelicSlot { roomIndex: number; authorIndex: number; eventIndex: number; length: 'short' | 'medium' | 'long' }

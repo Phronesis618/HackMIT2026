@@ -130,7 +130,6 @@
   "Grieve",
   "Gupta",
   "Haddad",
-  
   "Hoang",
   "Holub",
   "Ibarra",
@@ -230,5 +229,17 @@
   "sermons or speeches with crossings-out",
   "invoices with angry covering notes",
   "a training quiz filled in by a new starter"
+ ],
+ "calendars": [
+  "days counted from the opening of the place (a three- or four-digit day number of your choosing)",
+  "ordinary dates: a day and a month, with clock times",
+  "shift numbers and a letter for the watch",
+  "week numbers and weekdays",
+  "the season and year of a contract or lease",
+  "voyage or campaign days, low numbers",
+  "batch or run numbers instead of dates",
+  "school-style terms and weeks",
+  "market days or pay days counted in a year",
+  "tide tables or sunrise times"
  ]
 }
