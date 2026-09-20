@@ -94,3 +94,13 @@
 }
 
 .fieldnotes__keys { display: inline-flex; gap: 2px; flex: 0 0 auto; }
+
+.fieldnotes__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin: var(--space-md) 0 0;
+}
+
+.fieldnotes__controls .hint { margin: 0; }

@@ -138,7 +138,13 @@ eight tiles straight south, about 1.3 seconds of walking.
 | `hub.idea` | a weapon has been taken (or 25 s at the hub), this device has never contributed | `Write one idea. It shapes the world.` | a contribution is submitted, or 30 s |
 | `hub.prepare` | host, an idea is in, no world prepared | `Prepare the world. The gate needs one.` | `world_prepared`, or 20 s |
 | `hub.gate` | a world is prepared | `The gate is south. Walk onto it.` | the phase leaves the hub |
-| `hub.receipt` | the `world_prepared` event, first time on this device | `The receipt names whose idea became what.` | 8 s, or the phase leaves the hub |
+| `hub.receipt` | a world exists and the crew is still at the hub, once per device | `The receipt names whose idea became what.` | 5 s |
+
+`hub.receipt` triggers on a world *existing*, not on the `world_prepared` event, because the
+event lasts one tick and the queue can be busy with `hub.prepare` when it arrives. `run.unlock_e`
+waits for the first cleared room rather than for the resources, because resources already start
+at the unlock cost: the honest reading of "when it first becomes affordable" is "in the first
+second of the run", which is exactly the noise Fan warns about.
 
 `hub.idea` is the whole product pitch in six words, placed at the moment the player can act on it.
 `hub.receipt` is the payoff pointer: the creation receipt already exists and already names the
@@ -176,7 +182,7 @@ exactly the player who will read it.
 
 | id | trigger | words | ends when |
 | --- | --- | --- | --- |
-| `run.unlock_e` | resources first reach the unlock cost with `E` still locked | `[Tab] Menu · Operative unlocks a second ability.` | `ability_unlocked`, or 8 s |
+| `run.unlock_e` | first cleared room, with the unlock affordable and `E` still locked | `[Tab] Unlock a second ability on the Operative page.` | `ability_unlocked`, or 9 s |
 | `run.ability_r` | ultimate charge first reaches 100% | `[R] Ultimate ready.` | `ability_used` with the R slot, or 10 s |
 | `coop.revive` | a teammate is downed and the local player is up | `[Hold F] Stand over them to revive.` | `player_revived`, or that player stands, or 15 s |
 | `floor.choice` | the first `biome_choice_offered` | `Pick on the facts, not the name.` | a biome is chosen, or 8 s |
@@ -278,11 +284,27 @@ object — the latest snapshot, the events of this tick, the UI model and the en
 facts (has the player moved, attacked, dashed this run; which rooms have been discovered). Pure
 predicates are what makes every lesson unit-testable without a browser.
 
-**Scheduler** (`engine.ts`). Every tick: retire satisfied lessons; drop the active prompt if its
-`satisfied` predicate fired or its hold elapsed; if nothing is showing and the cooldown has
-passed and no telegraph is live, take the highest-priority triggered lesson. Suppression covers a
-live enemy telegraph, a live boss pattern, an armed canister and the departure ritual. Control
-prompts outrank first-encounter notes, which outrank world laws.
+**Scheduler** (`engine.ts`). Every tick: retire satisfied lessons; drop the active prompt if it
+is satisfied, expired, no longer triggered or blocked; then take the highest-priority triggered
+lesson, after a 900 ms cooldown. A strictly higher priority preempts the live prompt and skips
+the cooldown, because a downed teammate cannot wait behind a note about rubble; nothing flaps,
+because showing a lesson retires it in the same tick. Order: revive (80) → hub (70) → move (67)
+→ attack (66) → dash (64) → the other controls (60–62) → the finale notes (50) → terrain (46) →
+rooms (44) → laws (30).
+
+**Two rules that only a real room revealed.**
+
+1. *Suppression has to be local.* The first version went quiet whenever any enemy anywhere was
+   winding up. Two husks on a three-second attack cycle mean something is telegraphing almost
+   all the time, so the layer was effectively mute: prompts appeared in the gaps and were killed
+   a second later. `isBlocked` now counts only a wind-up whose origin is within its own `range`
+   plus 48 px of *this* operative, and a canister fuse within its blast radius. A live boss
+   pattern, the biome-choice overlay, the menu, the departure ritual and being downed still
+   silence everything, because all of those are about the whole screen.
+2. *A prompt that was interrupted was not taught.* A line cut off before `MIN_VISIBLE_MS`
+   (1.8 s) goes back in the queue instead of being marked as shown — up to three interruptions,
+   after which the layer stops trying rather than nagging. Its Field Notes entry stays, because
+   it genuinely was on screen.
 
 **Persistence** (`store.ts`). `relay.onboarding.v1`, a Zod schema, salvaged entry by entry on
 corruption exactly like `chronicle/localStore.ts`: a bad record loses one lesson's memory, never
@@ -291,15 +313,14 @@ the file. Shape: `{ version, seen: Record<id, epochMs>, satisfied: Record<id, ep
 **Flags.** `?hints=off` for a clean demo capture, `?hints=reset` for a cold start. The menu page
 has the same two controls for people without a URL bar.
 
-**Placement.** One band, bottom centre of `.stage-wrap`, 20 px up. At 1280×720 the stage is
-938×527 at page origin (16, 60), so the band lands around y 500–565 — below the operative (the
-camera keeps them at the stage centre, y≈323), below `.hud-strip` (stage top + 40), below
-`.escape` (stage top + 10) and below `.relic-choice` (stage bottom + 96). The ability bar, the
-minimap and the `Tab · menu` chip are all outside the stage entirely. The `.notice` toast is
-`position: fixed` near the top of the page, not the bottom, so the two do not stack; the band
-still carries a `coach--raised` modifier for the case where that changes.
-`aria-live="polite"`, `pointer-events: none`, so a screen reader announces it once and no click
-can land on it.
+**Placement.** One band in the **bottom left** of `.stage-wrap`, 48 px up and 24 px in. The
+first build put it bottom centre, and the screenshots killed that: almost everything this game
+draws over the stage is centred — the HUD strip and the escape clock at the top, the Custodian's
+name-and-health strip painted along the bottom of the canvas, the relic pedestal cards at stage
+bottom + 96, and the operative themselves whenever the camera follows. The bottom-left lane is
+free of all of them, and the ability bar, the minimap and the `Tab · menu` chip are outside the
+stage entirely. `aria-live="polite"`, `pointer-events: none`, so a screen reader announces it
+once and no click can land on it.
 
 **Menu page.** `Field Notes` becomes the seventh page. `installMenuKeyboard` hard-codes six digit
 codes (`keyboardFocus.ts:38`), so the digit list has to grow with it — a one-line change, and the
@@ -342,8 +363,14 @@ prompt is not a message the host has to relay.
 - **`coop.revive`** is the one lesson that needs another person, so it can only fire in co-op and
   fires the first time a *teammate* goes down while the local player is standing. The reverse case,
   being downed yourself, is already handled by the HUD.
-- **`floor.choice`** shows the guest wording when the local player cannot pick:
-  `The host picks the door. The cards say why.`
+- **`hub.guest`** is the guest's counterpart to the host's `hub.prepare`: same priority, and it
+  arrives at the same moment, once the guest's own idea is in or the host has a world. The first
+  version gated it behind taking a weapon and ranked it below the weapon and idea prompts, which
+  meant a guest never saw it at all — found by running two real browser contexts against the
+  co-op server, not by reading the code.
+- **The biome choice** is host-only, and `BiomeChoice` already prints
+  "Waiting for {host} to choose. The host's pick moves the whole crew." for a guest, so the
+  layer adds nothing there.
 
 ## 8 What we deliberately do not teach
 
@@ -359,6 +386,12 @@ Each of these was considered and cut. The reason matters more than the list.
 - **What each enemy does.** The telegraph is the teacher and the Bestiary is the reference. A
   prompt here would compete with the telegraph for attention at the exact moment attention is
   expensive.
+- **What the right-hand rail already says.** The hub rail prints "Pick a weapon, add an idea for
+  the next world, then take the gate" and, for a guest, "The host prepares the world and leads
+  portal entry". The band says the same things one at a time in the play area. This is the one
+  deliberate overlap in the whole layer, and it is deliberate because the rail is a column of
+  small text beside the canvas: a stranger looks at the game, not at the rail. Everywhere else,
+  if a visible piece of UI already says it, we do not.
 - **How to pick a biome, how to stand on a pedestal, how to run the relay ritual.**
   `BiomeChoice`, `RelicChoice` and the HUD strip already print the keys, in full, at exactly the
   right moment. Two sources for one fact is how a UI starts contradicting itself — the repo
@@ -386,19 +419,32 @@ only what the prompts say, and who has seen none of this before.
 The budget, measured with a scripted bot that follows only the prompts (`?hints=reset`, wiped
 profile, port 6773):
 
-| step | driven by | budget |
-| --- | --- | --- |
-| page load to the hub being walkable | boot | 3 s |
-| walk northwest, take a weapon | `hub.move`, `hub.weapon` | 8 s |
-| write one idea, submit | `hub.idea` | 12 s |
-| prepare the world | `hub.prepare` | 6 s |
-| walk south onto the gate, ritual | `hub.gate` | 8 s |
-| first room, reach the first enemy | `run.attack` | 6 s |
-| | | **43 s** |
+Measured at 1280×720 against a wiped profile (`?hints=reset`), headless Chromium, a bot that
+does only what the prompts say. Two paths, because the hub has an optional half:
 
-The measured number goes in this table when the cold-start script runs; if it exceeds 45 s the
-fix is the hub, not the prompts, and the honest lever is `hub.idea` — an idea is optional and the
-gate never waits for one.
+| step | driven by | measured |
+| --- | --- | --- |
+| page load to the hub being walkable | boot | 1.8–2.2 s |
+| walk northwest, take a weapon | `hub.move`, `hub.weapon` | 14 s |
+| write one idea, submit | `hub.idea` | 9 s |
+| prepare the world | `hub.prepare` | 4 s |
+| **everything up to a prepared world** | | **29.3 s** |
+| walk south onto the gate, first room | `hub.gate` | see below |
+
+**The fast path — a judge who takes the default weapon and skips the idea — reaches the first
+room in 17.1 s and gets `[LMB] Attack. The mouse aims.` at 17.2 s.** That is the number that
+matters for the 45-second constraint, and it includes the page load, the generation call and the
+walk to the gate.
+
+The full prompted path is 29.3 s through "Prepare the world", plus the gate walk. The scripted
+bot cannot be trusted for that last leg — the hub is four walled wings around an open cross and
+the bot repeatedly pinned itself on a doorway — but the fast path measures the same walk from
+the same spawn at about five seconds, which puts a human who follows every prompt at roughly
+**35 s to the first room**, inside the target.
+
+So the layer meets the constraint both ways, and the lever if it ever stops meeting it is
+`hub.idea`: an idea is optional, the gate never waits for one, and a judge who ignores that
+prompt is fighting in under twenty seconds.
 
 The second judge constraint is comprehension, not speed: they must leave knowing that the world
 came from what people typed. Two things carry that, and neither is a paragraph. `hub.idea` says it

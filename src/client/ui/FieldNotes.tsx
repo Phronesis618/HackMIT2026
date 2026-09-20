@@ -32,6 +32,22 @@ export function FieldNotesPage({ bus = onboardingBus }: { bus?: typeof onboardin
       </div>
       <p className="muted">{FIELD_NOTES_TEXT.lede}</p>
 
+      {/* Above the list, not below it: the off switch must not sit under a long scroll. */}
+      <div className="actions fieldnotes__controls">
+        <button
+          type="button"
+          className="btn"
+          aria-pressed={!view.hintsOff}
+          onClick={() => bus.setHintsOff(!view.hintsOff)}
+        >
+          {view.hintsOff ? FIELD_NOTES_TEXT.hintsOff : FIELD_NOTES_TEXT.hintsOn}
+        </button>
+        <button type="button" className="btn btn--ghost" onClick={() => bus.reset()}>
+          {FIELD_NOTES_TEXT.reset}
+        </button>
+        <span className="hint">{FIELD_NOTES_TEXT.footer}</span>
+      </div>
+
       {groups.length === 0 ? (
         <p className="muted">{FIELD_NOTES_TEXT.empty}</p>
       ) : (
@@ -56,20 +72,6 @@ export function FieldNotesPage({ bus = onboardingBus }: { bus?: typeof onboardin
         </div>
       )}
 
-      <div className="actions">
-        <button
-          type="button"
-          className="btn"
-          aria-pressed={!view.hintsOff}
-          onClick={() => bus.setHintsOff(!view.hintsOff)}
-        >
-          {view.hintsOff ? FIELD_NOTES_TEXT.hintsOff : FIELD_NOTES_TEXT.hintsOn}
-        </button>
-        <button type="button" className="btn btn--ghost" onClick={() => bus.reset()}>
-          {FIELD_NOTES_TEXT.reset}
-        </button>
-      </div>
-      <p className="hint">{FIELD_NOTES_TEXT.footer}</p>
     </>
   );
 }
