@@ -5,18 +5,53 @@ import {
   type GenerationStatus,
   type PreparedWorld,
   type WorldFixture,
+  type WorldRecipe,
 } from '../../shared/contracts';
 import { hashString } from '../../shared/ids';
 import { compileWorldRecipe } from './compiler';
 import { prepareFromFixture } from './fixtureService';
 import { GenerationFailure, type RecipeProvider } from './provider';
+import { DEFAULT_WORLD_BUDGET_MS, generateRecipe, type CallMetric, type GeneratedRecipe, type GenerationMetrics } from './pipeline';
 import { buildReceipt } from './receipt';
+
+/**
+ * The compiler can refuse a model's terrain for a given seed (no safe route, no spawn, no room
+ * for the relays). A finished world is worth more than its terrain choices: retreat once to
+ * the motif-default terrain (same seed, so still deterministic) before giving up on the world.
+ */
+function compileWithRetreat(recipe: WorldRecipe, plannedRoomCount: number, seed: number, notes: string[], log: (message: string) => void) {
+  const plain: WorldRecipe = { ...recipe, rooms: recipe.rooms.map((room) => ({ ...room, terrain: null })) };
+  const attempts: Array<[WorldRecipe, number, string]> = [
+    [recipe, seed, ''],
+    ...(recipe.rooms.some((room) => room.terrain) ? [[plain, seed, 'The compiler refused the generated terrain; motif-default terrain was used instead.'] as [WorldRecipe, number, string]] : []),
+  ];
+  let last: unknown;
+  for (const [candidate, candidateSeed, note] of attempts) {
+    try {
+      const compiled = compileWorldRecipe(candidate, { plannedRoomCount, seed: candidateSeed });
+      if (note) notes.push(note);
+      return compiled;
+    } catch (error) {
+      last = error;
+      log(`Compile attempt failed: ${error instanceof Error ? error.message.slice(0, 200) : 'unknown error'}`);
+    }
+  }
+  throw last;
+}
 
 export function createLiveGenerationService(options: {
   provider: RecipeProvider;
   model: string;
   fixtures: WorldFixture[];
   log: (message: string) => void;
+  /** Floors default when the request does not say (mirrors RELAY_FLOORS): the model then writes the 8 biome briefs. */
+  floors?: boolean;
+  /** Wall-clock budget for all model calls of one world; call-2 work still running at the deadline is dropped. */
+  worldBudgetMs?: number;
+  /** Per-world measurements (latency per call, tokens, lint before/after). Used by scripts/eval-worldgen.ts. */
+  onMetrics?: (metrics: GenerationMetrics) => void;
+  /** Every model call as it finishes, including failed ones and worlds that end in a fallback. */
+  onCall?: (metric: CallMetric) => void;
 }) {
   async function* prepareWorldStream(
     rawRequest: GenerationRequest,
@@ -32,6 +67,7 @@ export function createLiveGenerationService(options: {
     status('queued', 'Preparing live world generation…');
     const notes: string[] = [];
     let attempts = 0;
+    const worldId = `world-live-${hashString(`${request.sessionId}:${request.requestId}`).toString(36)}`;
     const fallback = (): PreparedWorld => {
       const world = prepareFromFixture({
         fixture: options.fixtures[seed % options.fixtures.length]!,
@@ -41,24 +77,28 @@ export function createLiveGenerationService(options: {
       status('fallback', 'Live generation failed; a labelled offline fixture is ready.');
       return world;
     };
-    let repair: string | undefined;
-    let result: Awaited<ReturnType<RecipeProvider['generate']>> | undefined;
-    while (attempts < 2) {
-      attempts++;
-      status('generating', repair ? 'Repairing the generated recipe…' : 'Generating a world from your ideas…');
-      try {
-        result = await options.provider.generate(request, repair, signal);
-        signal?.throwIfAborted();
-        break;
-      } catch (error) {
-        signal?.throwIfAborted();
-        const failure = error instanceof GenerationFailure ? error : new GenerationFailure('Live generation failed.');
-        notes.push(failure.message);
-        if (!failure.repairable || attempts === 2) break;
-        repair = failure.message;
-        status('validating', 'Recipe rejected; requesting one bounded repair…');
-      }
+    let generated: GeneratedRecipe | undefined;
+    try {
+      generated = await generateRecipe({
+        provider: options.provider, request, seed, signal, notes, status,
+        floors: request.floors ?? options.floors ?? false,
+        budgetMs: options.worldBudgetMs ?? DEFAULT_WORLD_BUDGET_MS,
+        startedAt,
+        floorsSeed: request.seed === undefined ? worldId : String(request.seed),
+        countCall: () => { attempts++; },
+        onCall: options.onCall,
+        onRejected: (stage, shape) => options.log(`Rejected ${stage} reply shape: ${shape}`),
+      });
+    } catch (error) {
+      signal?.throwIfAborted();
+      notes.push((error instanceof GenerationFailure ? error : new GenerationFailure('Live generation failed.')).message);
     }
+    if (generated) {
+      options.onMetrics?.(generated.metrics);
+      const { lint } = generated.metrics;
+      options.log(`Prose lint: score ${lint.before.score} -> ${lint.after.score}, failing fields ${lint.before.failedFields} -> ${lint.after.failedFields}, ${attempts} model call(s).`);
+    }
+    const result = generated;
     if (!result) {
       yield fallback();
       return;
@@ -76,7 +116,7 @@ export function createLiveGenerationService(options: {
     try {
       signal?.throwIfAborted();
       status('validating', `Compiling and validating all ${request.plannedRoomCount} planned rooms…`);
-      const compiled = compileWorldRecipe(recipe, { plannedRoomCount: request.plannedRoomCount, seed });
+      const compiled = compileWithRetreat(recipe, request.plannedRoomCount, seed, notes, options.log);
       worlds = compiled.rooms.map((_, index) => {
         const rooms = compiled.rooms.slice(0, index + 1);
         const mappings = rooms.flatMap((room) => room.attributions.map((attribution) => ({
@@ -86,7 +126,7 @@ export function createLiveGenerationService(options: {
           roomIndex: room.index,
         })));
         return PreparedWorldSchema.parse({
-          worldId: `world-live-${hashString(`${request.sessionId}:${request.requestId}`).toString(36)}`,
+          worldId,
           createdAt: generatedAt,
           recipe: { ...recipe, contributionMappings: mappings },
           rooms,
@@ -104,8 +144,9 @@ export function createLiveGenerationService(options: {
           receipt: buildReceipt({ worldTitle: recipe.title, source: 'live', contributions: request.contributions, mappings }),
         });
       });
-    } catch {
+    } catch (error) {
       signal?.throwIfAborted();
+      options.log(`Compiler validation failed: ${error instanceof Error ? error.message.slice(0, 600) : 'unknown error'}`);
       notes.push('Generated world failed compiler validation.');
       yield fallback();
       return;

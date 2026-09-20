@@ -18,10 +18,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { z } from 'zod';
-import { WorldRecipeSchema, type GenerationRequest } from '../../shared/contracts';
+import type { GenerationRequest } from '../../shared/contracts';
+import { hashString } from '../../shared/ids';
 import { ENEMY_IDS, MOTIF_IDS, PROP_IDS } from '../../shared/registry';
-import { assertDisplayText, GenerationFailure, type RecipeProvider } from '../generation/provider';
+import { buildSystemPrompt, namePool, registryText, worldSeeds } from '../generation/prompt';
+import { GenerationFailure, assertDisplayText, type RecipeProvider } from '../generation/provider';
+import { FullRecipeToolSchema, StageParseError, jsonSchema, parseFullRecipe } from '../generation/stages';
 
 /** Shown in provenance labels: "LIVE · cursor-agent". */
 export const OPERATOR_MODEL = 'cursor-agent';
@@ -51,8 +53,15 @@ export interface OperatorRequestFile {
   contributions: Array<{ id: string; playerName: string; text: string }>;
   /** Validation feedback from the previous attempt, or null on the first attempt. */
   repair: string | null;
-  registry: { motifIds: string[]; propIds: string[]; enemyIds: string[] };
-  /** The same runtime instructions an API model receives (prompts/runtime/world-recipe.md). */
+  /** True when the world will be played as floors: write the 8 `biomes` too. */
+  floors: boolean;
+  /** Plain names to draw on for bible people when the ideas imply no culture. */
+  namePool: string[];
+  registry: { motifIds: string[]; propIds: string[]; enemyIds: string[]; full: unknown };
+  /**
+   * The single-call runtime instructions (prompts/runtime/world-recipe.md with the house rules,
+   * every section and this request's rotated exemplars): bible first, then text derived from it.
+   */
   instructions: string;
   reply: { path: string; format: string };
 }
@@ -79,14 +88,12 @@ export function createOperatorProvider(options: OperatorProviderOptions): Operat
   const waiting = new Set<string>();
   let protocolWritten = false;
 
-  const instructions = fs.readFileSync(new URL('../../../prompts/runtime/world-recipe.md', import.meta.url), 'utf8')
-    .replace('{{registry}}', JSON.stringify({ motifIds: MOTIF_IDS, propIds: PROP_IDS, enemyIds: ENEMY_IDS }));
 
   function ensureLayout(): void {
     for (const d of [inboxDir, outboxDir, doneDir]) fs.mkdirSync(d, { recursive: true });
     if (protocolWritten) return;
     protocolWritten = true;
-    atomicWrite(path.join(dir, 'world-recipe.schema.json'), JSON.stringify(z.toJSONSchema(WorldRecipeSchema, { target: 'draft-7' }), null, 2));
+    atomicWrite(path.join(dir, 'world-recipe.schema.json'), JSON.stringify(jsonSchema(FullRecipeToolSchema), null, 2));
     atomicWrite(path.join(dir, 'README.md'), protocolReadme(dir, timeoutMs));
   }
 
@@ -131,6 +138,8 @@ export function createOperatorProvider(options: OperatorProviderOptions): Operat
       const createdAt = now();
       const deadlineAt = createdAt + timeoutMs;
       let feedback: string | null = repair ?? null;
+      const seed = request.seed ?? hashString(request.requestId);
+      const instructions = buildSystemPrompt({ stage: 'full', seed, ideas: request.contributions.map((c) => c.text) });
       // Unlike an API model, the operator can be corrected cheaply: every invalid reply is
       // retired and the request is re-issued (attempt+1, with the validation message as
       // `repair`) until the single deadline passes. The caller sees one attempt.
@@ -150,7 +159,10 @@ export function createOperatorProvider(options: OperatorProviderOptions): Operat
           deadlineAt,
           contributions: request.contributions.map(({ id, playerName, text }) => ({ id, playerName, text })),
           repair: feedback,
-          registry: { motifIds: [...MOTIF_IDS], propIds: [...PROP_IDS], enemyIds: [...ENEMY_IDS] },
+          floors: request.floors === true,
+          namePool: namePool(seed),
+          ...worldSeeds(seed),
+          registry: { motifIds: [...MOTIF_IDS], propIds: [...PROP_IDS], enemyIds: [...ENEMY_IDS], full: JSON.parse(registryText('full')) as unknown },
           instructions,
           reply: {
             path: outboxPath,
@@ -169,15 +181,17 @@ export function createOperatorProvider(options: OperatorProviderOptions): Operat
         let outcome = 'failed';
         try {
           const raw = await waitForReply(outboxPath, deadlineAt, signal);
-          const parsed = WorldRecipeSchema.safeParse(raw);
-          if (!parsed.success) {
-            const issues = parsed.error.issues.slice(0, 4).map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
-            throw new GenerationFailure(`Recipe failed schema validation at ${issues}.`.slice(0, 200), true);
+          let parsed: ReturnType<typeof parseFullRecipe>;
+          try {
+            parsed = parseFullRecipe(raw);
+          } catch (error) {
+            if (error instanceof StageParseError) throw new GenerationFailure(error.message.slice(0, 200), true);
+            throw error;
           }
-          assertDisplayText(parsed.data);
+          assertDisplayText(parsed.recipe);
           outcome = 'accepted';
-          log(`operator: accepted "${parsed.data.title}" after ${Math.round((now() - createdAt) / 1000)}s (attempt ${attempt})`);
-          return { recipe: parsed.data };
+          log(`operator: accepted "${parsed.recipe.title}" after ${Math.round((now() - createdAt) / 1000)}s (attempt ${attempt})`);
+          return { recipe: parsed.recipe, ...(parsed.notes.length ? { notes: parsed.notes } : {}) };
         } catch (error) {
           if (signal?.aborted) outcome = 'cancelled';
           else if (error instanceof GenerationFailure) outcome = error.repairable ? 'rejected' : 'timeout';
@@ -221,8 +235,12 @@ A coding agent watching it plays the role of the world-generation model.
 
 Rules of thumb for the reply: exactly \`plannedRoomCount\` rooms; the last room lists
 \`guardian\` in enemyIds and \`anchor_pedestal\` in propIds; use only registry IDs; map each
-contribution at most once to a feature you actually placed; 6–10 lore fragments including one
-\`remains\` per enemy kind used; keep text under the schema limits.
+contribution at most once to a feature you actually placed; write the \`bible\` first and take
+every name, date and number in the text from it; two relics per room plus one \`remains\` per
+enemy kind used, each with \`authorIndex\` and \`eventIndex\`; keep text under the schema limits.
+The server runs the prose linter (docs/WRITING.md) on a reply that has a bible: rejected lines
+come back once as a \`repair\` message, and the better-scoring of the two replies is used.
+A legacy reply without a bible is still accepted, unlinted.
 
 Root: ${dir}
 `;

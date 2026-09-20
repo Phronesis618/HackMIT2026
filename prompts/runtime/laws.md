@@ -1,0 +1,37 @@
+# This call: look, laws, terrain names, the Custodian
+
+The data holds the world bible and the world's title and tagline.
+
+## look
+look: from the registry pick paletteFamily, floorMaterial, wallStyle, lighting and atmosphere
+to match what the place is physically built from, how it is lit now and what hangs in its
+air, and set atmosphereDensity, skylineDepth (0 interior, 1 open skyline) and grain from 0 to 1.
+Material and motif need not match: a crystal cave with a timber floor is a place someone built.
+
+## laws
+Pick 2 or 3 laws from the registry that follow from the collapse: the law is the mechanical
+consequence of what went wrong here (a flooded station drags; a ward on backup power is dark).
+Respect lawConflicts, at most one combat law and one vision law, and keep the summed
+difficulty between -1 and 3. intensity 0 to 1 (0.5 is normal).
+name (max 36): what the inhabitants called it, from a bible person, place or object.
+description (hard max 160, aim 110): one bible fact, naming a bible person, place or object,
+that explains why this place works this way, then what the crew should expect, plainly. Two short sentences. The player reads this
+before entering.
+
+## terrainSkins
+One entry for each of the four terrain features in the registry: the world's own name for
+that tile mechanic (trusted code keeps the ones the rooms use). name (max 28): a bible object or material, lower case:
+e.g. the stacks or vents of this world. caption (hard max 60, aim 45): the name in capitals,
+a separator, then what it does in five or six plain words that keep the registry's meaning:
+"LEDGER STACKS · break with attacks, rubble slows".
+
+
+## custodian
+The final boss. title (max 40): the bible person responsible or the machine they left
+running, with their title: a name, a comma, the machine or room they hold. phaseTitles: exactly three short
+labels (max 40 each) for the fight's three phases, each a bible fact in two to five words.
+moves: exactly three patternIds from custodianPatterns, in this order: one marked [close],
+one marked [ranged], then one marked [control] or [arena]. Pick summon_choir only if the
+bible casts two or more non-guardian enemy kinds. For each, name (max 32) is the bible object
+doing the damage, and tell (hard max 60, aim 50, capitals) is a callout: the bible object
+about to hurt the crew, a plain verb, and where to stand.

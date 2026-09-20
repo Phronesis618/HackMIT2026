@@ -23,6 +23,7 @@ export function createIdentityPersistence(
     }
   };
   return {
+    scope: key,
     save,
     load(): PlayerIdentity {
       try {

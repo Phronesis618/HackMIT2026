@@ -6,8 +6,8 @@
 - **Implemented:** scope hub replay keys by world; restrict legacy raw keys to the saved
   current/latest run, retaining counters; reject explicitly foreign/training event origins.
   Two real fixture sessions previously produced six Chronicle memories but only one hub run.
-- **Verified:** `npm run check`: **714 tests / 60 files**, typecheck/build and whitespace
-  passed. Five added cases cover repeat expeditions, reload, legacy active/completed stores,
+- **Verified:** after integrating main `71f1dc2`, `npm run check`: **759 tests / 62 files**,
+  typecheck/build and whitespace passed. Five added cases cover repeat expeditions, reload, legacy active/completed stores,
   replay protection and explicit event origins. Three failed against the original reducer.
   Baseline production HTTP smoke passed health/config, HTML, JS/CSS and fixture generation.
 - **Mocked:** device storage uses an isolated Map; reducer-only cases use scripted events.
@@ -16,6 +16,27 @@
   missed the WebSocket `player_attacked` assertion; focused and full reruns passed. Three
   unchanged-base suite runs passed, so the cause is unconfirmed. No existing test was weakened.
   This fix does not reconstruct expeditions already discarded by the old hub reducer.
+
+## Co-op reload readiness — 2026-09-20
+
+- Branch: `devin/1789893771-coop-reconnect`, based on main `dc2c934`.
+- **Implemented:** integrated Curious Droid's `b4842c4` resume-storage and `1d79074`
+  disconnected-seat recovery fixes (cherry-picks `9f60bae`, `67fb1f3`). Preserved the newer
+  identity adapter during the startup conflict. Added a stable validated identity scope for
+  tab credentials: server-assigned IDs and other tabs' localStorage writes no longer change
+  the lookup key. Stored credentials pass schema validation; unavailable storage is tolerated.
+- **Verified:** `npm run check`: **719 tests / 60 files**, typecheck/build and whitespace.
+  Real WebSocket regressions cover named scopes, both ordinary tabs reloading in an
+  expedition after an ID collision, host handoff, stale credentials, malformed storage and
+  blocked storage. A disconnected host's authority transfers to a connected crew member;
+  resuming does not steal it back.
+- **Browser on `1099cdc`:** genuine solo Guardian/three-relay/Anchor victory; correct
+  first-room thumbnail and seven event-derived memories persisted through HQ return/reload.
+  Clear cancel/erase persistence and moving training projectiles with no expedition memories
+  passed. Two co-op tabs duplicated after reload, motivating this integration.
+- **Mocked:** fixture generation and in-memory storage; real HTTP/WebSocket servers in tests.
+- **Unverified:** browser co-op retest, physical LAN, live model output and full responsive/
+  preview/cap sweep. Browser rendering remains slow in this VM. No protocol or dependency changes.
 
 ## Browser readiness follow-up — 2026-09-20
 
@@ -31,9 +52,9 @@
 - **Browser evidence on predecessor PR #21:** native UI keyboard navigation, physical HQ
   portal, honest fixture receipt, ordinary combat clearing two rooms, Guardian damage,
   collapse debrief and five real memories. Found the arrival/late-room thumbnail mismatch.
-  Full victory was not completed. Current revision requires resumed browser verification.
+  Full victory was not completed in that predecessor pass; see the follow-up above.
 - **Mocked:** renderer/capture promises and input event targets in unit regressions.
-- **Unverified:** full victory, physical LAN and live model output. Incoming floor renderer
+- **Unverified at initial PR:** full victory, physical LAN and live model output. Incoming floor renderer
   and memory archive are retained; floors remain disabled in this fixture verification.
 
 ## Readiness corrections — 2026-09-20
@@ -133,6 +154,13 @@
 - No shared contracts, dependencies, simulation or client changes.
 
 ## Current integration — Devin across all roles
+
+## Floors runs
+
+- **Implemented:** floor Chronicle memories derive from real biome, room and clear events; the
+  hub records deepest tier and cleared biomes, with device-local Quartermaster cues and HQ rows.
+- **Mocked:** focused floors event scripts and storage fixtures in presentation tests.
+- **Unverified:** browser floors traversal and live multiplayer floors runs.
 
 - [PR #10](https://github.com/Phronesis618/HackMIT2026/pull/10), code/test revision
   `083d1e0`, includes earlier presentation PRs #5 and #8.

@@ -79,6 +79,8 @@ describe('reduceHubState', () => {
     expect(run.downs).toBe(2);
     expect(run.lastDownedByEnemyId).toBe('warden');
     expect(run.deepestRoomIndex).toBe(2);
+    expect(run.deepestTier).toBe(-1);
+    expect(run.biomesCleared).toBe(0);
     expect(run.roomsEntered).toBe(3);
     expect(run.roomsCleared).toBe(1);
     expect(run.enemiesDefeated).toBe(1);
@@ -105,6 +107,21 @@ describe('reduceHubState', () => {
     expect(state.records.bastion.runs).toBe(0);
     expect(state.records.beacon.runs).toBe(0);
     expect(state.records.weaver.runs).toBe(0);
+  });
+
+  it('tracks floors depth and gatekeeper clears in the last run and class record', () => {
+    const events: GameEvent[] = [
+      ev('world_prepared', { worldId: WORLD, worldTitle: 'Vantage Spire', source: 'fixture', playerIds: [LOCAL] }),
+      ev('biome_entered', { worldId: WORLD, biomeId: 'b1', biomeName: 'Glass Warren', tier: 0, chosenByPlayerId: null, playerIds: [LOCAL] }),
+      ev('room_entered', { worldId: WORLD, roomIndex: 0, roomId: 'b1:r00', roomName: 'Entry', playerIds: [LOCAL], biomeId: 'b1', floorRoomId: 'r00', kind: 'entrance' }),
+      ev('biome_entered', { worldId: WORLD, biomeId: 'b2', biomeName: 'Copper Wall', tier: 1, chosenByPlayerId: LOCAL, playerIds: [LOCAL] }),
+      ev('room_entered', { worldId: WORLD, roomIndex: 1, roomId: 'b2:r00', roomName: 'Gate', playerIds: [LOCAL], biomeId: 'b2', floorRoomId: 'r00', kind: 'exit' }),
+      ev('room_cleared', { worldId: WORLD, roomIndex: 1, roomId: 'b2:r00', playerIds: [LOCAL], reward: 1 }),
+      ev('run_ended', { worldId: WORLD, outcome: 'collapsed', playerIds: [LOCAL] }),
+    ];
+    const state = reduceHubState(createHubState(), events, ctx);
+    expect(state.lastRun).toMatchObject({ deepestTier: 1, biomesCleared: 1 });
+    expect(state.records.shade).toMatchObject({ deepestTier: 1, biomesCleared: 1 });
   });
 
   it('shelves a relic only from an anchored run, one per world, newest-left on the shelf', () => {
@@ -222,6 +239,32 @@ describe('relay.hub.v1 storage', () => {
     const finished = reduceHubState(loaded, events, ctx);
     expect(finished.lastRun).toMatchObject({ roomsEntered: 3, enemiesDefeated: 1, damageDealt: 12 });
     expect(finished.totals.runs).toBe(1);
+  });
+
+  it('loads old stored runs and records with floor fields omitted using defaults', () => {
+    const storage = memoryStorage();
+    const current = reduceHubState(createHubState(), collapsedRun(), ctx);
+    const old = JSON.parse(JSON.stringify(current)) as Record<string, unknown>;
+    const oldLastRun = old.lastRun as Record<string, unknown>;
+    delete oldLastRun.deepestTier;
+    delete oldLastRun.biomesCleared;
+    const oldRecords = old.records as Record<string, Record<string, unknown>>;
+    for (const record of Object.values(oldRecords)) {
+      delete record.deepestTier;
+      delete record.biomesCleared;
+    }
+    const oldCurrent = old.current as Record<string, unknown> | null;
+    if (oldCurrent) {
+      delete oldCurrent.deepestTier;
+      delete oldCurrent.biomesCleared;
+      delete oldCurrent.currentRoomKind;
+    }
+    storage.data.set(HUB_STORAGE_KEY, JSON.stringify(old));
+    const loaded = loadHubState(storage);
+    expect(loaded.lastRun?.deepestTier).toBe(-1);
+    expect(loaded.lastRun?.biomesCleared).toBe(0);
+    expect(loaded.records.shade.deepestTier).toBe(-1);
+    expect(loaded.records.shade.biomesCleared).toBe(0);
   });
 });
 

@@ -289,7 +289,7 @@ export class GameController {
       localPlayerId: session.localPlayerId,
       classByPlayerId: Object.fromEntries((snapshot?.players ?? []).map((p) => [p.id, p.classId])),
       world: world
-        ? { worldId: world.worldId, title: world.recipe.title, provenanceSource: world.provenance.source, receipt: world.receipt }
+        ? { worldId: world.worldId, title: world.recipe.title, provenanceSource: world.provenance.source, receipt: world.receipt, biomes: world.floors?.briefs.map((brief) => ({ id: brief.id, name: brief.name })) }
         : null,
     });
     for (const memory of created) {
