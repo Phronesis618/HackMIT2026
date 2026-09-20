@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import {
   IDLE_GENERATION_STATUS,
   PlayerIdentitySchema,
@@ -25,7 +26,20 @@ export interface RemoteSessionOptions {
   reconnect?: boolean;
   connectTimeoutMs?: number;
   requestTimeoutMs?: number;
+  /**
+   * Where the resume credential lives between page loads. Pass the TAB's sessionStorage so a
+   * reload returns as the same operative instead of leaving a ghost and joining as a new one.
+   */
+  resumeStorage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+  /** Stable tab identity scope, independent of server-assigned player IDs. */
+  resumeScope?: string;
 }
+
+const RESUME_KEY_PREFIX = 'relay.resume.v1.';
+const ResumeCredentialSchema = z.object({
+  playerId: PlayerIdentitySchema.shape.id,
+  token: z.string().min(16).max(128),
+});
 
 interface Pending<T> {
   resolve: (value: T) => void;
@@ -70,6 +84,24 @@ export class RemoteSession implements GameSession {
 
   constructor(private readonly options: RemoteSessionOptions) {
     this.identity = PlayerIdentitySchema.parse(options.identity);
+    this.resumeKey = RESUME_KEY_PREFIX + (options.resumeScope ?? this.identity.id);
+    try {
+      const saved = ResumeCredentialSchema.safeParse(JSON.parse(options.resumeStorage?.getItem(this.resumeKey) ?? 'null'));
+      if (saved.success) {
+        this.identity = { ...this.identity, id: saved.data.playerId };
+        this.resumeToken = saved.data.token;
+      }
+    } catch { /* unreadable storage: join fresh */ }
+  }
+
+  private readonly resumeKey: string;
+
+  private saveResume(token: string | undefined): void {
+    this.resumeToken = token;
+    try {
+      if (token) this.options.resumeStorage?.setItem(this.resumeKey, JSON.stringify({ playerId: this.localPlayerId, token }));
+      else this.options.resumeStorage?.removeItem(this.resumeKey);
+    } catch { /* storage unavailable: in-memory resume still works */ }
   }
 
   get localPlayerId(): string { return this.identity.id; }
@@ -97,6 +129,17 @@ export class RemoteSession implements GameSession {
       };
     });
     this.startPromise = promise;
+    this.openSocket();
+    return promise;
+  }
+
+  private openSocket(): void {
+    const previous = this.socket;
+    if (previous) {
+      previous.onopen = previous.onmessage = previous.onclose = null;
+      previous.onerror = () => {};
+      previous.close();
+    }
     try {
       const url = this.options.url ?? this.defaultUrl();
       const socket = (this.options.createSocket ?? ((address: string) => new WebSocket(address)))(url);
@@ -106,7 +149,8 @@ export class RemoteSession implements GameSession {
         this.send({
           type: 'hello', protocolVersion: PROTOCOL_VERSION, playerId: this.localPlayerId,
           displayName: this.identity.displayName, classId: this.identity.classId,
-          resumeToken: this.resumeToken, lastEventSequence: this.resumeToken ? this.eventSequence : undefined,
+          // A fresh page resuming from storage has seen no events: ask for current state, not a replay.
+          resumeToken: this.resumeToken, lastEventSequence: this.resumeToken && this.hasConnected ? this.eventSequence : undefined,
         });
       };
       socket.onmessage = (event: MessageEvent) => {
@@ -127,7 +171,6 @@ export class RemoteSession implements GameSession {
     } catch (cause) {
       this.disconnect(cause instanceof Error ? cause : new Error('Unable to open WebSocket.'));
     }
-    return promise;
   }
 
   dispose(): void {
@@ -230,7 +273,7 @@ export class RemoteSession implements GameSession {
           return;
         }
         this.identity = { ...this.identity, id: message.playerId };
-        this.resumeToken = message.resumeToken;
+        this.saveResume(message.resumeToken);
         this.intentSequence = 0;
         this.reconnectAttempts = 0;
         this.hasConnected = true;
@@ -284,13 +327,20 @@ export class RemoteSession implements GameSession {
         }
         break;
       case 'error':
+        if (message.action === 'hello' && this.resumeToken && this.pendingStart) {
+          // Stale or in-use resume credential (server restarted, grace expired, second tab): join fresh.
+          this.saveResume(undefined);
+          this.eventSequence = 0;
+          this.openSocket();
+          break;
+        }
         this.notifyError(message.message);
         if (message.action === 'contribution') this.pendingContributions.clear();
         if ((!message.action || message.action === 'request_world') && (!message.requestId || this.pendingWorld?.requestId === message.requestId)) {
           this.rejectWorld(new Error(message.message));
         }
         if (message.action === 'hello' || this.pendingStart) {
-          this.resumeToken = undefined;
+          this.saveResume(undefined);
           this.eventSequence = 0;
           this.disconnect(new Error(message.message), false);
         }

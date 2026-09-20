@@ -2,6 +2,28 @@
 
 Agent C records only work and verification performed in this session.
 
+## Anchored victory and co-op reload correction — 2026-09-20
+
+The delegated run on `1099cdc` completed all three rooms, the Guardian, three relays and
+the Anchor using ordinary controls, without injected state/events. The correct Threshold
+Concourse arrival thumbnail and seven memories survived HQ return and reload. Clear cancel
+preserved records; confirmed erase remained empty after plain reload. Training projectiles
+travelled, the husk died/respawned, and expedition memories stayed at seven.
+
+Two real named co-op tabs shared contributions and persisted acknowledged names/classes,
+but Guest and Host reloads grew the crew from two to four duplicate players. Source
+inspection found that the resume credential lived only in memory. Rather than duplicate
+teammate work, this branch integrated Curious Droid's existing resume-storage and
+disconnected-seat recovery commits. New regressions then covered ordinary tabs sharing
+localStorage: credentials must use a stable tab scope rather than a mutable player ID.
+Stored credentials are schema-validated.
+
+`npm run check` passed **719 tests / 60 files**, typecheck and production build;
+`git diff --check` passed. Tests use real local sockets and fixture generation. The
+current browser co-op retest is pending. Full physical LAN and live provider output remain
+unverified. Low renderer FPS and slow simulation-time progression limited browser timing
+assertions; no new dependencies or infrastructure changes were needed.
+
 ## Browser-found arrival and attack defects — 2026-09-20
 
 The delegated browser pass on PR #21 (`e26b178`) used real controls to submit an idea,
@@ -15,8 +37,8 @@ The existing LMB tooltip promised held attacks, but the input sampler only emitt
 attack per pointerdown. Held primary attacks now issue requests until release/cancel/focus
 loss; authoritative cooldowns remain in the simulation. Twelve new regression cases pass
 alongside incoming floor-renderer and archive work: **679 tests / 58 files**, typecheck,
-production build and whitespace checks. Browser retest is pending; neither victory nor
-physical LAN nor live generation is claimed.
+production build and whitespace checks. The later browser results are recorded above;
+physical LAN and live generation remain unverified.
 
 ## Whole-project readiness — 2026-09-20
 
