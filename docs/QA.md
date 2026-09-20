@@ -258,8 +258,16 @@ two players (unreachable for the same reason it is unreachable solo — see the 
       titles, four written attunements, eight biomes in the recipe. **Nothing derived was labelled
       LIVE**: the fixture runs in the same pass all carried `OFFLINE FIXTURE` and a
       `recorded · not used in this world` receipt line. 9/9 checkpoints,
-      `/tmp/relay-shots/q2/live/`. Not reached: a second live world, and the model's Custodian seen
-      in its own final room (the tier deep link was exercised against fixtures only).
+      `/tmp/relay-shots/q2/live/`.
+      **A second live world was then driven to its own final room** (`/tmp/relay-shots/q2/live2/`):
+      portal-ready in **51.2 s**, `LIVE · claude-sonnet-4-6`, the idea attributed as *cable bundle
+      in "Watch Bunk Room"*, title *Sikora Point Signal Station*, laws `long_dark` /
+      `few_and_terrible` / `committed_strike`, look `sodium`. Its route is named by the model end
+      to end — `lamp-gallery → supply-jetty → watch-bunk-room → relay-room → passage-logger-hall` —
+      and in the Anchor chamber the Custodian the model wrote was fought through **all three** of
+      its own phase titles: **“Florin Dalgaard, Open Equipment Hatch”**, *The Hatch Left
+      Unlatched* / *Relay Board Alight* / *Arc Lamp Cracked Mount*. Two live worlds total, both
+      honestly labelled. Not reached: a live run all the way out (that operative died at phase 3).
 
 - [x] **The local production bundle — built, served and played. Observed.**
       `npm run build && RELAY_FLOORS=1 RELAY_LAWS=1 PORT=6987 npm start`. `GET /` returns **200 in
