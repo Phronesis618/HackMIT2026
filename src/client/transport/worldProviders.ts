@@ -16,7 +16,7 @@ import {
   type GenerationStatus,
   type PreparedWorld,
 } from '../../shared/contracts';
-import { serverFlag } from '../../shared/flags';
+import { DEFAULT_SESSION_FLAGS, readFlagValue, serverFlag } from '../../shared/flags';
 import { floorsSeedFor, upgradeToFloors } from '../../shared/floorgen';
 import { hashString } from '../../shared/ids';
 import fixtureJson from '../../../fixtures/worlds/vantage-spire.json';
@@ -42,14 +42,20 @@ const StreamRecordSchema = z.discriminatedUnion('type', [
 ]);
 
 /**
- * Whether to ask for a floors world. `RELAY_FLOORS=1` on the server turns it on for every
- * client (reported by `/api/config`, see src/shared/flags.ts); `?floors=1` still opts one
- * browser in on its own. Either way the world that arrives carries `floors` or it does not, so
- * client and server cannot end up disagreeing about the world they are both holding.
+ * Whether to ask for a floors world. Floors are ON by default everywhere; `RELAY_FLOORS=0` on the
+ * server turns them off for every client (reported by `/api/config`, see src/shared/flags.ts) and
+ * `?floors=0` opts one browser out on its own. Either way the world that arrives carries `floors`
+ * or it does not, so client and server cannot end up disagreeing about the world they hold.
  */
 function floorsRequested(): boolean {
-  if (serverFlag('floors') === true) return true;
-  return typeof location !== 'undefined' && new URLSearchParams(location.search).get('floors') === '1';
+  // An explicit `?floors=0|1` is this browser's own deliberate override and wins over everything;
+  // otherwise the server decides for the whole session; with no server at all (static Pages
+  // build, offline fixture play) floors are simply the game.
+  const fromUrl = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('floors') : null;
+  if (fromUrl !== null) return readFlagValue(fromUrl, DEFAULT_SESSION_FLAGS.floors);
+  const fromServer = serverFlag('floors');
+  if (fromServer !== null) return fromServer;
+  return DEFAULT_SESSION_FLAGS.floors;
 }
 
 export function parseWorldPrefix(raw: unknown, rawRequest: GenerationRequestInput, previous?: PreparedWorld): PreparedWorld {

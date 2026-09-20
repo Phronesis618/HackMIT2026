@@ -10,6 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DEFAULT_SESSION_FLAGS, readFlagValue } from '../shared/flags';
 
 export type GenerationMode = 'fixture' | 'live';
 /**
@@ -37,9 +38,9 @@ export interface ServerConfig {
     operatorDir: string;
     /** How long the `operator` provider waits for a reply before the labelled fixture fallback. */
     operatorTimeoutMs: number;
-    /** RELAY_FLOORS=1: worlds are floors worlds unless a request says `floors: false`. Default off. */
+    /** Worlds are floors worlds unless a request says `floors: false`. Default ON; `RELAY_FLOORS=0` turns it off. */
     floors: boolean;
-    /** RELAY_LAWS=1: derive laws + a look for worlds whose recipe has none. Default off. */
+    /** Derive laws + a look for worlds whose recipe has none. Default ON; `RELAY_LAWS=0` turns it off. */
     laws: boolean;
   };
   /** Absolute path to the production client bundle, or null if not built. */
@@ -105,8 +106,8 @@ export function loadServerConfig(options: LoadConfigOptions = {}): ServerConfig 
       openaiModel: (env.OPENAI_MODEL ?? '').trim() || 'gpt-5-mini',
       operatorDir: path.resolve(REPO_ROOT, (env.RELAY_OPERATOR_DIR ?? '').trim() || path.join('.relay', 'operator')),
       operatorTimeoutMs: Number.isFinite(operatorTimeoutMs) && operatorTimeoutMs > 0 ? operatorTimeoutMs : DEFAULT_OPERATOR_TIMEOUT_MS,
-      floors: ['1', 'true'].includes((env.RELAY_FLOORS ?? '').trim().toLowerCase()),
-      laws: ['1', 'true'].includes((env.RELAY_LAWS ?? '').trim().toLowerCase()),
+      floors: readFlagValue(env.RELAY_FLOORS, DEFAULT_SESSION_FLAGS.floors),
+      laws: readFlagValue(env.RELAY_LAWS, DEFAULT_SESSION_FLAGS.laws),
     },
     staticDir: fs.existsSync(path.join(staticDir, 'index.html')) ? staticDir : null,
     fixturesDir: path.join(REPO_ROOT, 'fixtures', 'worlds'),

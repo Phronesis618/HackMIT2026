@@ -21,6 +21,31 @@ export interface SessionFlags {
   floors: boolean;
 }
 
+/**
+ * Floors and laws are the shipped game: both are ON unless something explicitly says otherwise.
+ *
+ * The flip happened once the evidence was in (docs/RELEASE_FLOORS_DEFAULT.md): the floors ending
+ * was played end to end in a browser, co-op floors passes, and biome-1 survival measures 99%+.
+ * The legacy 3-room path is still fully playable — it is what `RELAY_FLOORS=0` / `?floors=0` get.
+ */
+export const DEFAULT_SESSION_FLAGS: SessionFlags = { laws: true, floors: true };
+
+const OFF_VALUES = new Set(['0', 'false', 'off', 'no']);
+const ON_VALUES = new Set(['1', 'true', 'on', 'yes']);
+
+/**
+ * Read one env / URL flag value. `undefined` (absent) means "nobody said", so the caller's
+ * fallback wins; anything unrecognised is also treated as "nobody said" rather than as OFF, so a
+ * typo cannot silently disable the headline feature.
+ */
+export function readFlagValue(raw: string | null | undefined, fallback: boolean): boolean {
+  if (raw === undefined || raw === null) return fallback;
+  const value = raw.trim().toLowerCase();
+  if (OFF_VALUES.has(value)) return false;
+  if (ON_VALUES.has(value)) return true;
+  return fallback;
+}
+
 let authority: SessionFlags | null = null;
 
 /** Called once at boot with what `/api/config` reported, or null when no server answered. */

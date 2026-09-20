@@ -16,7 +16,7 @@ import {
   sanitizeLaws, type WorldLaw, type WorldLawId, type WorldLook,
 } from '../shared/laws';
 import type { MotifId } from '../shared/registry';
-import { serverFlag } from '../shared/flags';
+import { DEFAULT_SESSION_FLAGS, readFlagValue, serverFlag } from '../shared/flags';
 
 export interface ResolvedLaws {
   // movement
@@ -186,12 +186,14 @@ export function applyEncounterLaws<T extends Pick<RoomEncounter, 'enemyId' | 'ro
  * was papering over. Env / URL are the fallback for a client that reached no server.
  */
 export function lawsFlagEnabled(): boolean {
+  // An explicit `?laws=0|1` is this browser's own deliberate override and wins over everything.
+  const search = (globalThis as { location?: { search?: string } }).location?.search;
+  const fromUrl = typeof search === 'string' ? new URLSearchParams(search).get('laws') : null;
+  if (fromUrl !== null) return readFlagValue(fromUrl, DEFAULT_SESSION_FLAGS.laws);
   const fromServer = serverFlag('laws');
   if (fromServer !== null) return fromServer;
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.RELAY_LAWS;
-  if (env !== undefined && ['1', 'true'].includes(env.trim().toLowerCase())) return true;
-  const search = (globalThis as { location?: { search?: string } }).location?.search;
-  return typeof search === 'string' && new URLSearchParams(search).get('laws') === '1';
+  return readFlagValue(env, DEFAULT_SESSION_FLAGS.laws);
 }
 
 interface MotifIdentity {
