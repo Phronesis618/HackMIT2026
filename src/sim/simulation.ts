@@ -214,7 +214,7 @@ export interface Simulation {
    * `import.meta.env.DEV` (`?tier=N`). No-op outside a floors expedition or when `tier` is not
    * deeper than the crew already is.
    */
-  devJumpToTier(tier: number): GameEvent[];
+  devJumpToTier(tier: number, at?: 'entrance' | 'exit'): GameEvent[];
   unlockAbility(playerId: string): GameEvent[];
   /**
    * Buys one skill-tree node for one operative with their own resources (S1). Authoritative:
@@ -2061,7 +2061,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       choice.votes[playerId] = biomeId;
       if (playerId === (hostPlayerId ?? playerIds()[0])) choice.chosenBiomeId = biomeId;
     },
-    devJumpToTier(tier) {
+    devJumpToTier(tier, at = 'entrance') {
       const run = floorsRun;
       if (!run || !world || phase !== 'expedition' || !Number.isInteger(tier) || tier <= run.tier) return [];
       const events: GameEvent[] = [];
@@ -2073,7 +2073,12 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         events.push(emit({ type: 'biome_entered', worldId: world.worldId, biomeId: next,
           biomeName: run.provider.brief(next).name, tier: run.tier, chosenByPlayerId: null, playerIds: playerIds() }));
       }
-      if (events.length) enterFloorRoom(run.provider.getRoom(run.provider.biomeEntranceRef(run.biomeId)), undefined, events);
+      if (!events.length) return events;
+      // `at: 'exit'` lands on the biome's exit room (tier 4 = the Anchor room), so the ending
+      // itself can be played. The walk home is planned from the biome's floor plan, not from
+      // the rooms the crew visited, so the collapse still has a real route out.
+      const ref = at === 'exit' ? run.provider.exitRef(run.biomeId) : run.provider.biomeEntranceRef(run.biomeId);
+      enterFloorRoom(run.provider.getRoom(ref), undefined, events);
       return events;
     },
     applyIntent(intent) {

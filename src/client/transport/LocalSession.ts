@@ -345,9 +345,9 @@ export class LocalSession implements GameSession {
    * DEV/QA helper: skip a floors run forward to tier `tier` (used by `?tier=N`, which the
    * controller only honours in a dev build). Everything after the jump is played normally.
    */
-  devJumpToTier(tier: number): void {
+  devJumpToTier(tier: number, at?: 'entrance' | 'exit'): void {
     if (this.disposed || !this.world) return;
-    const events = this.sim.devJumpToTier(tier);
+    const events = this.sim.devJumpToTier(tier, at);
     if (!events.length) return;
     this.snapshot = this.sim.getSnapshot();
     this.emitEvents(events);

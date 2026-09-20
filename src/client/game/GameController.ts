@@ -34,6 +34,8 @@ export interface PreviewFlags {
    * first biome and play from there. Null in a production bundle, whatever the URL says.
    */
   devTier?: number | null;
+  /** DEV/QA only (`?at=exit`): land on the tier's exit room (tier 4 = the Anchor) instead of r00. */
+  devTierAt?: 'entrance' | 'exit';
 }
 
 export function parsePreviewFlags(search: string): PreviewFlags {
@@ -42,11 +44,13 @@ export function parsePreviewFlags(search: string): PreviewFlags {
   const startRoom = room !== null && /^\d$/.test(room) ? Number(room) : null;
   const tier = params.get('tier');
   const devTier = import.meta.env.DEV && tier !== null && /^[1-4]$/.test(tier) ? Number(tier) : null;
+  const devTierAt = params.get('at') === 'exit' ? 'exit' : 'entrance';
   return {
     fixtureWorld: params.get('world') === 'fixture',
     startRoom,
     autoEnter: params.get('autoenter') === '1' || startRoom !== null,
     devTier,
+    devTierAt,
   };
 }
 
@@ -401,10 +405,11 @@ export class GameController {
       // tier so the last biome and the ending can be *played* without walking five biomes.
       // Deferred a tick so the jump never re-enters the session mid-transition; it is a no-op
       // if the crew is already that deep, so re-entering expedition cannot double-jump.
-      const session = this.deps.session as { devJumpToTier?: (tier: number) => void };
+      const session = this.deps.session as { devJumpToTier?: (tier: number, at?: 'entrance' | 'exit') => void };
       if (typeof session.devJumpToTier === 'function') {
         const tier = this.deps.flags.devTier;
-        setTimeout(() => session.devJumpToTier?.(tier), 0);
+        const at = this.deps.flags.devTierAt ?? 'entrance';
+        setTimeout(() => session.devJumpToTier?.(tier, at), 0);
       }
     }
   }

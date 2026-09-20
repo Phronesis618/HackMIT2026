@@ -48,6 +48,7 @@ const HELP = `solo-e2e.mjs — scripted single-player verification (real input o
   --finale-entry <how>  deeplink (?room=2, fast) | play (walk rooms 1-3 so the collapse has a route home)
   --minutes <n>         Time budget for the "deep" group. Default 10
   --tier <n>            DEV ONLY: ?tier=N deep link - start a floors run, skip to tier N, play on
+  --tier-at <where>     entrance (default) | exit - with --tier 4, exit is the Anchor room
   --debug               Add ?debug (a production bundle only exposes window.relay with it)
   --port <n>            Vite client port. Default 6973
   --server-port <n>     API/WS port. Default port + 3614
@@ -60,7 +61,7 @@ const HELP = `solo-e2e.mjs — scripted single-player verification (real input o
 function parseArgs(argv) {
   const args = {
     port: 6973, serverPort: null, base: null, outDir: '/tmp/relay-shots/q1', depsDir: '/tmp/relay-shot-deps',
-    only: null, legacy: false, klass: 'bastion', minutes: 10, hints: 'off', finaleEntry: 'deeplink', tier: 0, debug: false,
+    only: null, legacy: false, klass: 'bastion', minutes: 10, hints: 'off', finaleEntry: 'deeplink', tier: 0, tierAt: 'entrance', debug: false,
     gl: process.platform === 'darwin' ? 'metal' : 'swiftshader', env: {}, width: 1440, height: 900, help: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -78,6 +79,7 @@ function parseArgs(argv) {
       case '--finale-entry': args.finaleEntry = argv[++i]; break;
       case '--minutes': args.minutes = Number(argv[++i]); break;
       case '--tier': args.tier = Number(argv[++i]); break;
+      case '--tier-at': args.tierAt = argv[++i]; break;
       case '--debug': args.debug = true; break;
       case '--gl': args.gl = argv[++i]; break;
       case '--width': args.width = Number(argv[++i]); break;
@@ -664,6 +666,7 @@ function q(args, extra = {}) {
   if (args.hints && args.hints !== 'on') params.set('hints', args.hints);
   // DEV-only floors deep link: start the run, then skip it to tier N and play from there.
   if (args.tier) params.set('tier', String(args.tier));
+  if (args.tier && args.tierAt === 'exit') params.set('at', 'exit');
   // `window.relay` is DEV-only unless `?debug` is present, so a production bundle needs it.
   if (args.debug) params.set('debug', '1');
   const s = params.toString();
@@ -1329,6 +1332,23 @@ async function groupFullRun(ctx) {
   }
 }
 
+/**
+ * The ending of a floors run, reached by the DEV `?tier=4&at=exit` deep link: the hub flow is
+ * played normally (class, idea, Prepare, the departure ritual), the run then starts at the
+ * tier-4 biome's Anchor room, and everything from the Custodian onwards is played with real
+ * input -- the ritual, the collapse escape through terrain, the relic choice, the debrief and
+ * the hub afterwards.
+ */
+async function groupFloorsEnd(ctx) {
+  await groupHub(ctx);
+  const s = await ctx.player.read();
+  ctx.report.check('X1', 'the DEV tier deep link lands the run in the tier-4 Anchor room',
+    s?.snap.phase === 'expedition' && s.room?.isFinal === true && s.snap.floor?.tier === 4,
+    `phase=${s?.snap.phase}; floor=${J(s?.snap.floor ? { biomeId: s.snap.floor.biomeId, roomId: s.snap.floor.roomId, tier: s.snap.floor.tier, path: s.snap.floor.path } : null)}; isFinal=${s?.room?.isFinal}; room="${s?.room?.name ?? ''}"`);
+  if (s?.snap.phase !== 'expedition' || s.room?.isFinal !== true) return;
+  await finaleTail(ctx);
+}
+
 /** Legacy mode: flags off, the three-room world and the Guardian. */
 async function groupLegacy(ctx) {
   const { report, player, args } = ctx;
@@ -1566,7 +1586,7 @@ async function groupOnboarding(ctx) {
 // Main
 // ---------------------------------------------------------------------------------------------
 
-const GROUPS = { hub: groupHub, biome: groupBiome, attune: groupAttune, deep: groupDeep, finale: groupFinale, legacy: groupLegacy, fixtures: groupFixtures, audio: groupAudio, onboarding: groupOnboarding, fullrun: groupFullRun };
+const GROUPS = { hub: groupHub, biome: groupBiome, attune: groupAttune, deep: groupDeep, finale: groupFinale, legacy: groupLegacy, fixtures: groupFixtures, audio: groupAudio, onboarding: groupOnboarding, fullrun: groupFullRun, floorsend: groupFloorsEnd };
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
