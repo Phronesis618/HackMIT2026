@@ -23,9 +23,11 @@ no threat: say what is on the table. The ids you put in enemyPool are engine wor
 appear in no line: every creature is named by its former job from the bible, singular or
 plural as the sentence needs ("one of the brine divers", "four Deck 4 loaders").
 Seven lines, seven different openings, and at most two of them may open on a count.
-Work down this list and use each opening once: a count of enemies; the fixture the room
-was built around; what is underfoot; a name from the bible; the door or the way out; a
-date or a number on a sign; the job being done when it stopped. Reading the seven in a
-row, no two should start with the same word.
+Each line starts on a different thing: one on how many are in the room, one on the
+machine or fixture the room was built around, one on the state of the floor, one on a
+person named in the bible, one on the way out, one on a number painted or printed in the
+room, one on the work that was going on when it stopped. Start on the thing itself, in
+this world's nouns; these are categories, not words to reuse. Reading the seven in a row,
+no two should start with the same word.
 Rest and treasure rooms differ from floor to floor:
 name what this particular room was used for and the one object left on its table.

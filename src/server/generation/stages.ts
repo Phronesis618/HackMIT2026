@@ -777,7 +777,7 @@ export function lintWorld(parts: Lintable, bible: WorldBible | undefined): World
     });
   }
   const known = new Set(failures.map((failure) => failure.path));
-  for (const failure of [...lawFailures(parts), ...remainsNameFailures(parts, bible), ...openerFailures(parts)]) {
+  for (const failure of [...lawFailures(parts), ...remainsNameFailures(parts, bible), ...openerFailures(parts), ...calloutFailures(parts)]) {
     if (known.has(failure.path)) continue;
     known.add(failure.path);
     rules.add(/^Rule ([a-z-]+):/.exec(failure.notes[0] ?? '')?.[1] ?? 'house-rule');
@@ -844,6 +844,23 @@ function remainsNameFailures(parts: Lintable, bible: WorldBible | undefined): Li
       path: `lore[${index}].text`, kind: 'remains' as const, text: fragment.text,
       maxChars: Math.min(POLISH_MAX.remains ?? Infinity, KIND_SPECS.remains.max),
       notes: [`Rule remains-author-name: "${hit[0]}" is one of the three authors, and the person this object belonged to is one of the many, not one of the three. Give the tag an ordinary name of your own, and keep the author's name only if they wrote a note on it.`],
+    }];
+  });
+}
+
+/**
+ * The engine's own wording for how to beat a pattern (`CUSTODIAN_PATTERNS[...].counter`).
+ * Seen live in 3 of 4 worlds: the tell paraphrased the registry instead of the room, so three
+ * different bosses shouted "DASH THROUGH THE GAP". The counter is right; the words are ours.
+ */
+const STOCK_CALLOUT = /\bdash (?:a|the|through the) gap\b|\bstep off the mark\b|\bwalk off it\b|\bsidestep one tile\b|\bstand off the vents\b|\bwalk with the sweep\b/i;
+function calloutFailures(parts: Lintable): LintFailure[] {
+  return (parts.custodian?.moves ?? []).flatMap((move, index) => {
+    const hit = STOCK_CALLOUT.exec(move.tell);
+    if (!hit) return [];
+    return [{
+      path: `custodian.moves[${index}].tell`, kind: 'bossCallout' as const, text: move.tell, maxChars: KIND_SPECS.bossCallout.max,
+      notes: [`Rule stock-callout: "${hit[0]}" is the engine's own wording for beating this pattern, and every world that uses it shouts the same line. Name the thing in this room to get behind, off or between.`],
     }];
   });
 }

@@ -743,7 +743,7 @@
         {
           "patternId": "shatter_step",
           "name": "Lens mount",
-          "tell": "THE LENS MOUNT SWINGS TO THE MARK. WALK OFF IT."
+          "tell": "THE LENS MOUNT SWINGS TO THE BRIGHT PATCH. LEAVE IT."
         }
       ]
     }

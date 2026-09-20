@@ -715,7 +715,7 @@
         {
           "patternId": "ring_bloom",
           "name": "Handrail current",
-          "tell": "12 BOLTS OFF THE HANDRAILS, THEN 12 MORE. DASH A GAP."
+          "tell": "HANDRAIL BOLTS, TWO RINGS. CROSS ON THE FIRST ONE."
         },
         {
           "patternId": "gravity_well",

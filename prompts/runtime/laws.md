@@ -22,9 +22,10 @@ sentences, and both are needed.
 The game prints the engine's own exact effect beside this name, so your second sentence
 carries NO numbers of its own: no percentages, no multipliers, no seconds, no Integrity
 totals. They would only argue with the number printed next to them. Write the rule the way
-one operative tells another: "Dashes carry farther here, and take longer to come back."
-"Fewer of them per room, and each one takes much more killing." A description that gives
-the fact and never gives the rule is sent back.
+one operative tells another on the way in, in the nouns of this world: what the crew will
+notice in the first fight, and what to do about it. Use your own words for it; a sentence
+that would fit any world with this law is the wrong sentence. A description that gives the
+fact and never gives the rule is sent back.
 
 ## terrainSkins
 One entry for each of the four terrain features in the registry: the world's own name for
@@ -46,6 +47,9 @@ non-guardian enemy kinds. For each move, name (hard max 32, four words at most) 
 damage, and tell (hard max 60, aim 50, capitals, nine words at most, counted) is a callout:
 the bible object about to hurt the crew, a plain verb, and where to stand. It is shouted
 across a room mid-fight, so it is short: "PUMP 6 SPINS UP. GET BEHIND THE CASING."
-"BULKHEADS CLOSING IN 5".
+"BULKHEADS CLOSING IN 5". Safety is named with a thing in this world, never with the
+registry's own wording for the counter: "dash the gap", "step off the mark", "sidestep one
+tile" and "walk off it" are engine phrasing and are rejected. Say what the crew should get
+behind, get off, or get between.
 A move set that breaks these rules is replaced wholesale, and its names and tells are lost
 with it.
