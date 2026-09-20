@@ -2082,10 +2082,21 @@ body { font-size: var(--fs-body); }
 /* ---- round 3: stage hugs its 16:9 canvas (no black bands), bar sits right under it ---- */
 :root { --top-h: 44px; }
 .stage-col { grid-template-rows: auto auto; align-content: start; justify-items: center; }
-.stage-wrap {
+:root {
   --stage-max-h: calc(100vh - var(--top-h) - 2 * var(--space-md) - var(--bar-h) - var(--space-sm));
+  --stage-w: min(100vw - var(--rail-w) - 3 * var(--space-md), var(--stage-max-h) * 16 / 9);
+  --stage-h: calc(var(--stage-w) * 9 / 16);
+}
+.stage-wrap {
   aspect-ratio: 16 / 9;
-  width: min(100%, calc(var(--stage-max-h) * 16 / 9));
+  width: min(100%, var(--stage-w));
+}
+/* notice: inside the foot of the stage, never over the command bar or the rail */
+.notice {
+  top: calc(var(--top-h) + var(--space-md) + var(--stage-h) - var(--space-md));
+  bottom: auto;
+  position: fixed; /* the frame rule above resets .notice to relative, which put it in the app grid */
+  transform: translate(-50%, -100%);
 }
 .commandbar { width: 100%; }
 .vitals__id { flex: 1 0 96px; }
@@ -2093,3 +2104,11 @@ body { font-size: var(--fs-body); }
 @media (min-width: 1600px) { .vitals__class { display: inline; } }
 .btn { white-space: nowrap; }
 .panel--hq .field .panel__row .btn { flex: none; }
+/* vitals identity: class stamp when narrow, name from 1440, both from 1600 */
+.vitals__id { flex: initial; }
+.vitals__name { display: none; }
+.vitals__class { display: inline; }
+@media (min-width: 1440px) { .vitals__name { display: inline; } .vitals__class { display: none; } }
+@media (min-width: 1600px) { .vitals__class { display: inline; } }
+.notice { top: calc(var(--top-h) + 2 * var(--space-md)); transform: translate(-50%, 0); }
+.hud-strip { top: calc(var(--space-md) + 48px); }
