@@ -20,8 +20,9 @@ import { buildSkillTree, skillPurchaseCheck } from '../../src/shared/skills';
 import {
   ANCHOR_GRACE_MUL, BOLT_WARD_MUL, CLEAR_SURGE_HASTE_MS, DASH_TRAIL_DAMAGE, DASH_TRAIL_MS, DASH_TRAIL_TICK_MS, FIRST_STRIKE_MUL,
   GUARDIAN_BANE_MUL, HASTE_ATTACK_COOLDOWN_MUL, HASTE_MOVE_MUL, HAZARD_WARD_MUL, MELEE_WARD_MUL, NO_EFFECTS, RELIC_MEND_HP,
-  REMAINS_CHARGE, anchorRateMul, effectsFor, incomingDamageMul, outgoingDamageMul,
+  OPENING_STRIKE_MAX_MUL, REMAINS_CHARGE, anchorRateMul, effectsFor, incomingDamageMul, openingStrikeMul, outgoingDamageMul,
 } from '../../src/sim/effects';
+import { DEMO_TUNING } from '../../src/sim/tuning';
 import { createSimulation, type Simulation } from '../../src/sim';
 
 const fixture = WorldFixtureSchema.parse(fixtureJson);
@@ -69,11 +70,11 @@ function arena(index: number, options: RoomOptions = {}): RoomSpec {
 /** Room 0 is an empty pay-room (stepping into it clears it for ROOM_CLEAR_REWARD); the test room is 1; room 2 is the final. */
 const PAY_ROOMS = 1;
 
-function world(testRooms: RoomOptions[], attunements: Attunement[]) {
+function world(testRooms: RoomOptions[], attunements: Attunement[], recipeExtra: Record<string, unknown> = {}) {
   const rooms = [arena(0), ...testRooms.map((options, i) => arena(PAY_ROOMS + i, options))];
   if (rooms.length < 3) rooms.push(arena(2, { isFinal: true, encounters: [{ id: 'gate', enemyId: 'guardian', x: 10, y: 7, count: 1 }] }));
   return PreparedWorldSchema.parse({
-    worldId: 'effects-world', createdAt: 0, recipe: { ...fixture.recipe, attunements }, art: fixture.art, rooms,
+    worldId: 'effects-world', createdAt: 0, recipe: { ...fixture.recipe, attunements, ...recipeExtra }, art: fixture.art, rooms,
     plannedRoomCount: rooms.length,
     provenance: { source: 'fixture', label: 'TEST FIXTURE', generatedAt: 0, durationMs: 0, attempts: 0, notes: [] },
     receipt: { worldTitle: fixture.recipe.title, source: 'fixture', headline: 'Effects arena', lines: [] },
@@ -124,10 +125,13 @@ function earn(sim: Simulation, rooms: number) {
  * A sim with `players` in a world whose attunements are `ids`; `buy` lists the node ids P1
  * buys after earning enough. Ends inside test room 0 (`PAY_ROOMS`).
  */
-function scenario(rooms: RoomOptions[], ids: AttunementEffectId[], buy: string[], players: string[] = [P1], classId: 'bastion' | 'beacon' = 'bastion') {
+function scenario(
+  rooms: RoomOptions[], ids: AttunementEffectId[], buy: string[], players: string[] = [P1],
+  classId: 'bastion' | 'beacon' = 'bastion', recipeExtra: Record<string, unknown> = {},
+) {
   const sim = createSimulation();
   for (const id of players) sim.addPlayer({ id, displayName: id, classId });
-  sim.setWorld(world(rooms, attunementsFor(ids)));
+  sim.setWorld(world(rooms, attunementsFor(ids), recipeExtra));
   earn(sim, PAY_ROOMS);
   for (const node of buy) expect(sim.purchaseSkill(P1, node), `buy ${node}`).toBe(true);
   sim.enterRoom(PAY_ROOMS);
@@ -140,6 +144,24 @@ function pair(rooms: RoomOptions[], ids: AttunementEffectId[], buy: string[], pl
 }
 
 const husk = (x: number, y = 7, id = 'husk'): RoomEncounter => ({ id, enemyId: 'husk', x, y, count: 1 });
+
+/**
+ * Walks P1 into melee reach of the first living enemy and returns the damage of the next hit
+ * they land. A Guardian holds at its own 120 px range, so the crew has to close the gap.
+ */
+function closeAndSwing(sim: Simulation, max = 900): number {
+  for (let i = 0; i < max; i++) {
+    const p = me(sim);
+    const enemy = sim.getSnapshot().enemies.find((e) => e.hp > 0)!;
+    const gap = Math.hypot(enemy.x - p.x, enemy.y - p.y) || 1;
+    const close = gap <= 46;
+    for (const e of frames(sim, 1, {
+      moveX: close ? 0 : (enemy.x - p.x) / gap, moveY: close ? 0 : (enemy.y - p.y) / gap,
+      attack: close, aimX: enemy.x, aimY: enemy.y,
+    })) if (e.type === 'enemy_damaged') return e.amount;
+  }
+  throw new Error('never hit the enemy');
+}
 
 function firstPlayerHit(sim: Simulation, from: (e: Extract<GameEvent, { type: 'player_damaged' }> & { sourceEnemyId: string }) => boolean, max = 1200, drive: Partial<PlayerIntent> = {}): number {
   for (let i = 0; i < max; i++) {
@@ -202,9 +224,17 @@ describe('effectsFor', () => {
     expect(incomingDamageMul(meleeOnly, 'custodian-0', false, 'terrain')).toBe(1);
     const bane = effectsFor({ classId: 'bastion', skillNodeIds: ['core.salvage', 'attune.0.guardian_bane', 'attune.1.first_strike'] },
       { title: 'T', attunements: attunementsFor(['guardian_bane', 'first_strike']) });
-    expect(outgoingDamageMul(bane, { enemyId: 'guardian', hp: 100, maxHp: 100 })).toBe(2.4);
-    expect(outgoingDamageMul(bane, { enemyId: 'guardian', hp: 99, maxHp: 100 })).toBe(1.2);
-    expect(outgoingDamageMul(bane, { enemyId: 'husk', hp: 99, maxHp: 100 })).toBe(1);
+    expect(outgoingDamageMul(bane, { enemyId: 'guardian' })).toBe(1.2);
+    expect(outgoingDamageMul(bane, { enemyId: 'husk' })).toBe(1);
+    // The opening strike is its own multiplier now, keyed on the first PLAYER hit, and the law
+    // and the attunement do not multiply: the larger of the two, capped (A22).
+    expect(openingStrikeMul(bane, 1, false)).toBe(FIRST_STRIKE_MUL);
+    expect(openingStrikeMul(bane, 1, true)).toBe(1);
+    expect(openingStrikeMul(NO_EFFECTS, 2.5, false)).toBe(2.5);
+    expect(openingStrikeMul(bane, 2.5, false)).toBe(2.5);
+    expect(openingStrikeMul(bane, 3, false)).toBe(OPENING_STRIKE_MAX_MUL);
+    expect(openingStrikeMul(bane, 4, false)).toBe(OPENING_STRIKE_MAX_MUL);
+    expect(OPENING_STRIKE_MAX_MUL).toBe(DEMO_TUNING.openingStrikeMaxMul);
     expect(anchorRateMul([NO_EFFECTS, bane])).toBe(1);
     expect(anchorRateMul([NO_EFFECTS, effectsFor({ classId: 'bastion', skillNodeIds: ['core.salvage', 'attune.0.anchor_grace'] },
       { title: 'T', attunements: attunementsFor(['anchor_grace']) })])).toBe(2);
@@ -324,6 +354,55 @@ describe('attunement effects in the simulation', () => {
     const [firstBoosted, secondBoosted] = hits(boosted);
     expect(firstBoosted).toBe(Math.round(first! * FIRST_STRIKE_MUL));
     expect(secondBoosted).toBe(second);
+  });
+
+  /**
+   * A22. `first_strike` (x2) and the `first_light` LAW (x2–3) both name the crew's opening hit.
+   * They used to multiply — up to x6 on one swing — and the attunement keyed on the enemy being
+   * at full health, so the room could spend it. One opening strike now: the larger of the two,
+   * capped at `DEMO_TUNING.openingStrikeMaxMul`, keyed on the first PLAYER hit.
+   */
+  it('first_strike does not multiply with the first_light law: one opening strike, the larger of the two', () => {
+    const ids: AttunementEffectId[] = ['first_strike'];
+    // A guardian (240 Integrity): big enough that a x3 opening strike is not clipped by its health.
+    const rooms = [{ encounters: [{ id: 'gate', enemyId: 'guardian' as const, x: 8, y: 7, count: 1 }] }];
+    // Only `first_light`, so the two runs face the same guardian: the fixture's own laws include
+    // `wardens_watch`, which would make it an elite in one run and not the other.
+    const noLaws = { laws: [] };
+    const firstLight = { laws: [{ lawId: 'first_light', name: 'First Light', description: 'The first cut is the deep one.', intensity: 1 }] };
+    const opening = (buy: string[], recipeExtra: Record<string, unknown>): number =>
+      closeAndSwing(scenario(rooms, ids, buy, undefined, undefined, recipeExtra));
+    const buy = buyFirst(ids, 'first_strike');
+    const plain = opening([], noLaws);
+    expect(plain).toBeGreaterThan(0);
+    expect(opening(buy, noLaws)).toBe(Math.round(plain * FIRST_STRIKE_MUL)); // attunement alone: x2
+    expect(opening([], firstLight)).toBe(Math.round(plain * 3)); // the law alone, at intensity 1: x3
+    // Together: still x3 — not x6, and never past the cap.
+    expect(opening(buy, firstLight)).toBe(Math.round(plain * OPENING_STRIKE_MAX_MUL));
+  });
+
+  /**
+   * A22. The `dash_echo` trail is the crew's damage, but it is not a strike: it must not take the
+   * opening-strike bonus on a 2-point tick, nor spend the one the swing is waiting for.
+   */
+  it('dash_echo: a trail tick neither takes the opening strike nor spends it', () => {
+    const ids: AttunementEffectId[] = ['dash_echo'];
+    const rooms = [{ encounters: [{ id: 'gate', enemyId: 'guardian' as const, x: 8, y: 7, count: 1 }] }];
+    const firstLight = { laws: [{ lawId: 'first_light', name: 'First Light', description: 'The first cut is the deep one.', intensity: 1 }] };
+    // Dash across the guardian until the trail burns it, then swing.
+    const sim = scenario(rooms, ids, buyFirst(ids, 'dash_echo'), undefined, undefined, firstLight);
+    let burn: number | null = null;
+    for (let i = 0; i < 900 && burn === null; i++) {
+      const p = me(sim);
+      const enemy = sim.getSnapshot().enemies[0]!;
+      const gap = Math.hypot(enemy.x - p.x, enemy.y - p.y);
+      for (const e of frames(sim, 1, { moveX: (enemy.x - p.x) / (gap || 1), moveY: (enemy.y - p.y) / (gap || 1), dash: true, aimX: enemy.x, aimY: enemy.y })) {
+        if (e.type === 'enemy_damaged') burn ??= e.amount;
+      }
+    }
+    expect(burn).toBe(DASH_TRAIL_DAMAGE); // 2, not 6: the trail is not the opening strike
+    // ...and the swing that follows still gets the law's full x3, exactly as with no trail at all.
+    expect(closeAndSwing(sim)).toBe(closeAndSwing(scenario(rooms, ids, [], undefined, undefined, firstLight)));
   });
 
   it('guardian_bane: a gatekeeper-grade Guardian takes 20% more from you; a husk does not', () => {

@@ -52,7 +52,7 @@ import { DOOR_SIDES, FLOOR_ENTRANCE_ROOM_ID } from '../shared/floors';
 import { NEUTRAL_LAWS, applyEncounterLaws, lawsSpareEncounter, resolveLaws, worldLawsView, type ResolvedLaws } from './laws';
 import {
   NO_EFFECTS, anchorRateMul, clearBonusResources, clearHasteMs, dashCooldownMul, dashInvulnerableBonusMs, dropTrailPoint, effectsFor,
-  hasteAttackCooldownMul, hasteMoveMul, incomingDamageMul, outgoingDamageMul, relicMendHp, remainsCharge, skillWorldContext, stepDashTrail,
+  hasteAttackCooldownMul, hasteMoveMul, incomingDamageMul, openingStrikeMul, outgoingDamageMul, relicMendHp, remainsCharge, skillWorldContext, stepDashTrail,
   DASH_TRAIL_DAMAGE, type DashTrail, type EffectSet, type IncomingKind,
 } from './effects';
 import { buildSkillTree, skillPurchaseCheck } from '../shared/skills';
@@ -148,7 +148,12 @@ interface LoreNodeRuntime {
 
 /** Who to bill for an enemy's death. See `damageEnemyFrom` and docs/design/TILES.md §1.1. */
 type DamageSource =
-  | { kind: 'player'; player: PlayerRuntime }
+  /**
+   * A hit the crew landed. `lingering` marks damage that keeps ticking after the strike — the
+   * `dash_echo` trail — which is crew damage but not a strike: it neither takes the opening-strike
+   * bonus nor spends it.
+   */
+  | { kind: 'player'; player: PlayerRuntime; lingering?: boolean }
   /** A hazard floor, a vent, a canister, a pit: the room did it and nobody is credited. */
   | { kind: 'terrain'; tile: TerrainDamageSource }
   /** Knocked or pulled into something lethal; `by` is whoever displaced it, if anyone. */
@@ -782,17 +787,21 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const s = e.state;
     if (s.hp <= 0) return;
     // World laws scale what the CREW hits for. A vent is not a player: it neither gets
-    // `playerDamageMul` nor spends the `first_light` opening strike on a burn tick — and, because
-    // the bonus is keyed on the first PLAYER hit rather than on full health, a hazard that has
-    // already taken a sliver off an enemy cannot quietly cancel it either.
-    const lawMul = source.kind === 'player' ? laws.playerDamageMul * (e.struckByPlayer === true ? 1 : laws.firstStrikeMul) : 1;
+    // `playerDamageMul` nor spends the opening strike on a burn tick — and, because the bonus is
+    // keyed on the first PLAYER hit rather than on full health, a hazard that has already taken a
+    // sliver off an enemy cannot quietly cancel it either.
+    const strike = source.kind === 'player' && source.lingering !== true;
+    const lawMul = source.kind === 'player' ? laws.playerDamageMul : 1;
+    // The `first_light` law and the `first_strike` attunement share ONE opening strike: the larger
+    // of the two, capped, never their product (`openingStrikeMul`, docs/TUNING.md).
+    const openingMul = strike ? openingStrikeMul(source.player.effects, laws.firstStrikeMul, e.struckByPlayer === true) : 1;
     const fxMul = source.kind === 'player' ? outgoingDamageMul(source.player.effects, s) : 1;
-    const marked = Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1) * lawMul * fxMul);
+    const marked = Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1) * lawMul * openingMul * fxMul);
     // The Custodian caps single hits at 12% of its health, applies its phase-3 shield and any
     // vulnerability window it has opened (BOSS_FINALE §3.2, §4.2).
     const amount = Math.min(s.hp, e.custodian ? custodianIncomingDamage(e.custodian, s, marked) : marked);
     if (amount <= 0) return;
-    if (source.kind === 'player') e.struckByPlayer = true;
+    if (strike) e.struckByPlayer = true;
     const by = source.kind === 'player' ? source.player : source.kind === 'displaced' ? source.by : null;
     // An environmental kill pays half: attractive to aim for, never better than fighting.
     const credit = source.kind === 'player' ? 1 : ENV_KILL_CREDIT;
@@ -1346,7 +1355,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     p.trail = trail;
     for (const id of burned) {
       const e = progress.enemies.find((it) => it.state.id === id);
-      if (e) damageEnemyFrom(e, { kind: 'player', player: p }, DASH_TRAIL_DAMAGE, events);
+      if (e) damageEnemyFrom(e, { kind: 'player', player: p, lingering: true }, DASH_TRAIL_DAMAGE, events);
     }
   }
 
