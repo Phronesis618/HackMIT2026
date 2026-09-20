@@ -702,14 +702,14 @@
       {
         "lawId": "glass_lattice",
         "name": "Aalto's Tables",
-        "description": "Aalto's tables: brine boils under the beam in 20 minutes, skin in 4 seconds. Operatives have half their Integrity and hit far harder.",
-        "intensity": 0.5
+        "description": "Aalto's tables: brine boils under the beam in 20 minutes. Operatives carry much less Integrity, and hit harder for it.",
+        "intensity": 0
       },
       {
-        "lawId": "few_and_terrible",
-        "name": "Eleven on the Roster",
-        "description": "The Petrel carried 11 crew and each has 2 cm of crystal in the seams. Fewer enemies per room; each is tougher and hits harder.",
-        "intensity": 0.5
+        "lawId": "committed_strike",
+        "name": "Boots in the Salt",
+        "description": "The wet salt on Gauge Pier drags at a boot. Operatives slow during their own attack, and hit harder for it.",
+        "intensity": 0
       }
     ],
     "look": {

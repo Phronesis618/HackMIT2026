@@ -207,3 +207,73 @@ a lower bound on flair:
 
 A human demoing under stage pressure is plausibly worse than this bot at dodging and better at
 deciding. Treat 90 % here as "reliable enough to demo", not as "cannot lose".
+
+---
+
+## 5. Crystal Tide law softening (release/floors-default, 2026-09-20)
+
+Crystal Tide was the one fixture whose authored laws made it a bad demo. Measured with the demo
+preset already applied, on `npx tsx scripts/difficulty-report.ts` (10 seeds x 4 classes x 3
+fixtures). Only `fixtures/worlds/crystal-tide.json` changed — no sim or tuning constants.
+
+### The change
+
+| Law | Before | After |
+| --- | --- | --- |
+| `tidal_drag` "Salt Underfoot" | intensity 0.5 | unchanged |
+| `glass_lattice` "Aalto's Tables" | intensity 0.5 — Integrity capped at **48**, damage x1.8 | intensity **0** — Integrity **60**, damage x1.5 |
+| `few_and_terrible` "Eleven on the Roster" | intensity 0.5 — enemy HP **x2.2**, count x0.55 | **replaced** by `committed_strike` "Boots in the Salt", intensity 0 — no enemy multiplier at all; operatives slow during their own attack and hit ~15 % harder |
+
+`few_and_terrible` was the dominant problem: its `enemyHpMul` of 2.2 applies to the **Custodian
+itself**, so the solo boss carried more than double health on this fixture alone. `committed_strike`
+is an implemented law in the `movement` group (`glass_lattice` already occupies the `combat` group,
+which is capped at one), it conflicts with nothing Crystal Tide uses, and it fits the world's own
+fiction of wet salt setting around a boot on Gauge Pier. Law names and descriptions were rewritten
+to stay truthful to the rule and now pass `tests/generation/fixture-prose.test.ts` and
+`tests/sim/law-honesty.test.ts` (the linter rejected an earlier draft for printing the engine's own
+number, "60 Integrity", and for a missing bible noun).
+
+### Before / after, Crystal Tide
+
+| Metric | Before | After | Target | Verdict |
+| --- | --- | --- | --- | --- |
+| Biome-1 survival, every class | 100 % | **100 %** | >= 90 % | **MET** |
+| Biome-1 survival, worst class across all 3 fixtures | 90 % | **90 %** | >= 90 % | **MET** |
+| Solo Custodian, bastion | 60 % | 50 % | >= 60 % | not met |
+| Solo Custodian, shade | 20 % | **80 %** | >= 60 % | met |
+| Solo Custodian, beacon | 30 % | 40 % | >= 60 % | not met |
+| Solo Custodian, weaver | 50 % | **60 %** | >= 60 % | met |
+| Solo Custodian, overall all fixtures | 78 % | **83 %** | — | improved |
+| Solo Custodian, worst class/fixture | 20 % | **40 %** | >= 60 % | improved, short |
+
+### Why the >= 60 %-per-class target was not reached, and why that is not a law problem
+
+**The laws are no longer the binding constraint.** With the authored laws stripped entirely
+(`lawsOFF` column), Crystal Tide still measures bastion 70 %, shade 40 %, beacon **30 %**, weaver
+50 %. A fixture whose Custodian beacon wins 30 % of the time with *no laws at all* cannot be brought
+to 60 % by editing law intensities. The remaining difficulty lives in the tier-4 encounter and the
+finale bot, not in `crystal-tide.json`.
+
+Three law variants were measured before settling; the worst class plateaus at 40 % in both
+`committed_strike` variants, and at 10 seeds a single class/fixture cell is +/- 15 %, so the
+differences between the last two rows are inside the noise:
+
+| Variant | bastion | shade | beacon | weaver | overall | worst |
+| --- | --- | --- | --- | --- | --- | --- |
+| authored (glass 0.5, few 0.5) | 60 % | 20 % | 30 % | 50 % | 78 % | 20 % |
+| glass 0, few 0 | 50 % | 50 % | 30 % | 40 % | 78 % | 30 % |
+| glass 0, committed 0.5 | 40 % | 60 % | 70 % | 60 % | 83 % | 40 % |
+| **glass 0, committed 0 (shipped)** | 50 % | 80 % | 40 % | 60 % | **83 %** | **40 %** |
+
+The shipped variant was chosen because intensity 0 is the gentlest form of the law (operatives are
+slowed during their own attack rather than rooted outright), which avoids systematically punishing
+the melee classes the way the 0.5 variant punished bastion.
+
+**What is demo-safe today:** biome 1 — the part of Crystal Tide a demo actually plays — is 100 %
+survivable for all four classes. The solo tier-4 Custodian on this one fixture is still a coin flip
+for bastion and beacon. Anyone driving the finale on stage should pick Vantage Spire or Root
+Archive (90-100 % for every class), or run the Custodian in co-op.
+
+**Next lever if someone wants the per-class target met:** it is a tier-4 encounter or finale-bot
+question (`bossHpBase`, the phase-3 pattern, or the `custodian phase 3` death cluster that accounts
+for nearly every loss), not a fixture-law question.
