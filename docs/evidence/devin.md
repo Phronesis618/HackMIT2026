@@ -2,6 +2,22 @@
 
 Agent C records only work and verification performed in this session.
 
+## Browser-found arrival and attack defects — 2026-09-20
+
+The delegated browser pass on PR #21 (`e26b178`) used real controls to submit an idea,
+read the labelled fixture receipt, enter the physical HQ portal, clear two rooms, damage
+the Guardian and collapse. The debrief's first-room arrival image visibly depicted the
+later Guardian room. Source inspection confirmed the delayed capture only checked world
+identity, and its asynchronous completion had no view validation. It now checks the
+originating event's room and invalidates captures across view changes/disposal.
+
+The existing LMB tooltip promised held attacks, but the input sampler only emitted one
+attack per pointerdown. Held primary attacks now issue requests until release/cancel/focus
+loss; authoritative cooldowns remain in the simulation. Twelve new regression cases pass
+alongside incoming floor-renderer and archive work: **679 tests / 58 files**, typecheck,
+production build and whitespace checks. Browser retest is pending; neither victory nor
+physical LAN nor live generation is claimed.
+
 ## Whole-project readiness — 2026-09-20
 
 At jonapplehe's request, Devin reviewed gameplay, generation, network sessions,

@@ -1,5 +1,24 @@
 # Handoff — Agent C (Devin)
 
+## Browser readiness follow-up — 2026-09-20
+
+- Branch: `devin/1789892664-arrival-capture`, based on merged main `aed78b6`.
+- **Implemented:** arrival thumbnails require the originating event's world/room before
+  requesting and attaching the asynchronous capture. Room/phase changes and disposal
+  invalidate in-flight results, even after returning to the same room. Text memories survive
+  missing images. LMB now repeats primary attack requests while held, matching its existing
+  tooltip; release outside the stage, cancellation, lost focus and disposal stop repeats.
+  The simulation retains authority over weapon cooldowns.
+- **Verified:** `npm run check`: **679 tests / 58 files**, typecheck/build and whitespace
+  passed, including 12 new timer/capture/input lifecycle regressions.
+- **Browser evidence on predecessor PR #21:** native UI keyboard navigation, physical HQ
+  portal, honest fixture receipt, ordinary combat clearing two rooms, Guardian damage,
+  collapse debrief and five real memories. Found the arrival/late-room thumbnail mismatch.
+  Full victory was not completed. Current revision requires resumed browser verification.
+- **Mocked:** renderer/capture promises and input event targets in unit regressions.
+- **Unverified:** full victory, physical LAN and live model output. Incoming floor renderer
+  and memory archive are retained; floors remain disabled in this fixture verification.
+
 ## Readiness corrections — 2026-09-20
 
 - Branch: `devin/1789890936-readiness-fixes`, integrated over `main` at `6b31828`.
