@@ -112,6 +112,24 @@ function intent(playerId: string, seq: number, moveX = 0, moveY = 0, attack = fa
   return { type: 'intent', intent: { playerId, seq, moveX, moveY, aimX: 1000, aimY: 80, attack, dash: false, ability: null } };
 }
 
+/**
+ * A17. Real clients send their intent every frame; the server ignores input older than 250 ms
+ * (`realtime.ts`), so ONE send can be thrown away when the machine stalls — which is how this
+ * file flaked under load. Hold the intent, with a fresh sequence each time (a replayed sequence
+ * is refused by design), until the thing we are waiting for has happened.
+ */
+async function holdingIntent<T>(peer: Peer, playerId: string, seq: number, moveX: number, moveY: number, attack: boolean, wait: () => Promise<T>): Promise<T> {
+  let next = seq;
+  const send = () => peer.send(intent(playerId, next++, moveX, moveY, attack));
+  send();
+  const timer = setInterval(send, 30);
+  try {
+    return await wait();
+  } finally {
+    clearInterval(timer);
+  }
+}
+
 async function compactWorld(): Promise<PreparedWorld> {
   const world = await fixtureService.prepareWorld({ requestId: 'fixture-request', sessionId: 'test-session', contributions: [], plannedRoomCount: 3 });
   return PreparedWorldSchema.parse({
@@ -221,10 +239,11 @@ describe('authoritative realtime room', () => {
     host.send({ type: 'enter_portal' });
     const entry = await guest.next('snapshot', (message) => message.snapshot.phase === 'expedition');
     const before = entry.snapshot.players.find((player) => player.id === first.playerId)!;
-    host.send(intent(first.playerId, 1, 1, 0, true));
-    const moved = await host.next('snapshot', (message) => message.snapshot.players.some((player) => player.id === first.playerId && player.x > before.x));
+    const moved = await holdingIntent(host, first.playerId, 1, 1, 0, true, () =>
+      host.next('snapshot', (message) => message.snapshot.players.some((player) => player.id === first.playerId && player.x > before.x)));
     expect(await guest.next('snapshot', (message) => message.snapshot.tick === moved.snapshot.tick)).toEqual(moved);
-    const attacked = await host.next('events', (message) => message.events.some((event) => event.type === 'player_attacked'));
+    const attacked = await holdingIntent(host, first.playerId, 1000, 0, 0, true, () =>
+      host.next('events', (message) => message.events.some((event) => event.type === 'player_attacked')));
     expect(await guest.next('events', (message) => message.eventSequence === attacked.eventSequence)).toEqual(attacked);
     expect(host.events().map((event) => event.type)).toEqual(expect.arrayContaining(['contribution_submitted', 'world_prepared', 'room_entered', 'player_attacked']));
     const sequences = host.history.filter((message) => message.type === 'events').map((message) => message.eventSequence);
@@ -323,10 +342,11 @@ describe('authoritative realtime room', () => {
     await host.next('world');
     host.send({ type: 'enter_portal' });
     await host.next('snapshot', (message) => message.snapshot.phase === 'expedition');
-    host.send(intent('host', 1, 0, 1));
-    guest.send(intent('guest', 1, 0, 1));
-    await host.next('generation_status', (message) => message.status.message.includes('Waiting for room'));
-    const waiting = await guest.next('snapshot', (message) => message.snapshot.phase === 'expedition' && message.snapshot.players.some((player) => player.y >= 96));
+    const waiting = await holdingIntent(host, 'host', 1, 0, 1, false, () =>
+      holdingIntent(guest, 'guest', 1, 0, 1, false, async () => {
+        await host.next('generation_status', (message) => message.status.message.includes('Waiting for room'));
+        return guest.next('snapshot', (message) => message.snapshot.phase === 'expedition' && message.snapshot.players.some((player) => player.y >= 96));
+      }));
     expect(waiting.snapshot.roomIndex).toBe(0);
     release.release();
     const next = await host.next('snapshot', (message) => message.snapshot.roomIndex === 1);
@@ -495,8 +515,12 @@ describe('RemoteSession over real sockets', () => {
     expect(first.rooms).toHaveLength(1);
     host.enterPortal();
     await vi.waitFor(() => expect(guest.getPhase()).toBe('expedition'));
-    host.setIntent({ moveX: 1, moveY: 0, aimX: 1000, aimY: 80, attack: true, dash: false, ability: null });
-    await vi.waitFor(() => expect(host.getSnapshot()?.players.find((player) => player.id === host.localPlayerId)?.x).toBeGreaterThan(80));
+    // Held, not sent once: the server ignores input older than 250 ms, so a stalled machine can
+    // drop a single send (A17). A real client sends this every frame.
+    await vi.waitFor(() => {
+      host.setIntent({ moveX: 1, moveY: 0, aimX: 1000, aimY: 80, attack: true, dash: false, ability: null });
+      expect(host.getSnapshot()?.players.find((player) => player.id === host.localPlayerId)?.x).toBeGreaterThan(80);
+    });
     host.setIntent({ moveX: 0, moveY: 0, aimX: 1000, aimY: 80, attack: false, dash: false, ability: null });
     const beforeAppend = host.getSnapshot()!.players.find((player) => player.id === host.localPlayerId)!.x;
     release.release();

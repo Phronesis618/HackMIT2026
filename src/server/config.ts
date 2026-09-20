@@ -43,6 +43,8 @@ export interface ServerConfig {
     operatorTimeoutMs: number;
     /** RELAY_FLOORS=1: worlds are floors worlds unless a request says `floors: false`. Default off. */
     floors: boolean;
+    /** RELAY_LAWS=1: derive laws + a look for worlds whose recipe has none. Default off. */
+    laws: boolean;
   };
   /** Absolute path to the production client bundle, or null if not built. */
   staticDir: string | null;
@@ -108,14 +110,22 @@ export function loadServerConfig(options: LoadConfigOptions = {}): ServerConfig 
       operatorDir: path.resolve(REPO_ROOT, (env.RELAY_OPERATOR_DIR ?? '').trim() || path.join('.relay', 'operator')),
       operatorTimeoutMs: Number.isFinite(operatorTimeoutMs) && operatorTimeoutMs > 0 ? operatorTimeoutMs : DEFAULT_OPERATOR_TIMEOUT_MS,
       floors: ['1', 'true'].includes((env.RELAY_FLOORS ?? '').trim().toLowerCase()),
+      laws: ['1', 'true'].includes((env.RELAY_LAWS ?? '').trim().toLowerCase()),
     },
     staticDir: fs.existsSync(path.join(staticDir, 'index.html')) ? staticDir : null,
     fixturesDir: path.join(REPO_ROOT, 'fixtures', 'worlds'),
   };
 }
 
-/** Safe, non-secret subset for GET /api/config. */
-export function describeForClient(config: ServerConfig): { generationMode: GenerationMode; liveGenerationAvailable: boolean } {
+/**
+ * Safe, non-secret subset for GET /api/config.
+ *
+ * `floors` and `laws` are here so the SERVER decides them for every client in the session:
+ * a crew must not play one game while half their screens draw another (see src/shared/flags.ts).
+ */
+export function describeForClient(config: ServerConfig): {
+  generationMode: GenerationMode; liveGenerationAvailable: boolean; floors: boolean; laws: boolean;
+} {
   const { provider, anthropicApiKey, openaiApiKey } = config.generation;
   const apiKey = provider === 'anthropic' ? anthropicApiKey : openaiApiKey;
   return {
@@ -124,6 +134,8 @@ export function describeForClient(config: ServerConfig): { generationMode: Gener
     // when its key is present, otherwise by the offline composer (see app.ts). Keyless API
     // providers are therefore still 'available'; the provenance label says which one built it.
     liveGenerationAvailable: config.generation.mode === 'live' && (KEYLESS_PROVIDERS.has(provider) || Boolean(apiKey?.trim()) || provider === 'anthropic' || provider === 'openai'),
+    floors: config.generation.floors,
+    laws: config.generation.laws,
   };
 }
 

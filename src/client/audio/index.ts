@@ -13,6 +13,7 @@ import type { ArtRecipe, GameEvent } from '../../shared/contracts';
 export const AUDIO_CUE_IDS = [
   'ui_confirm', 'portal_open', 'room_enter', 'room_clear', 'dash', 'attack', 'ability', 'enemy_shot',
   'hit', 'player_hit', 'player_down', 'revive', 'enemy_down', 'lore', 'anchor', 'memory_saved',
+  'terrain_blast', 'departure',
 ] as const;
 export type AudioCueId = (typeof AUDIO_CUE_IDS)[number];
 
@@ -363,6 +364,29 @@ export function createBrowserAudio(): AudioPort {
       ]);
     },
     memory_saved: () => play([...bell(0, 4, 0.05, 0.3), ...bell(4, 4, 0.05, 0.4, 0.1)]),
+    // A canister goes up (TILES.md T1): a hard noise-colour crack, a 90 Hz sub that drops out of
+    // the room, and debris. Louder and lower than `hit` so it reads as the room, not a sword.
+    terrain_blast: () => {
+      const c = noiseColour();
+      play([
+        { kind: 'noise', filter: { type: c.type, q: Math.max(0.6, c.q * 0.7) }, freq: c.freq * 2.2, to: c.freq * 0.35, gain: 0.22, attack: 0.002, decay: 0.26, send: 0.5 },
+        { kind: 'osc', type: 'sine', freq: 90, to: 32, gain: 0.3, decay: 0.34 },
+        { kind: 'osc', type: 'sawtooth', freq: note(0, 1), to: note(0, 0), gain: 0.07, decay: 0.2, filter: { type: 'lowpass', q: 2 } },
+        // debris: a short scatter after the crack
+        { kind: 'noise', filter: { type: 'highpass', q: 0.5 }, freq: 1800, to: 4200, gain: 0.05, attack: 0.02, decay: 0.3, delay: 0.09, send: 0.4 },
+      ]);
+    },
+    // The departure ritual (HUB.md §8): 2.4 s of the gate opening. A slow swell that arrives at
+    // the root as the flash does, so the cue and the picture end together.
+    departure: () => {
+      play([
+        { kind: 'osc', type: 'sawtooth', freq: note(0, 0), to: note(0, 1), gain: 0.07, attack: 1.2, decay: 2.2, filter: { type: 'lowpass', q: 2.5 }, send: 0.6 },
+        { kind: 'noise', filter: { type: 'bandpass', q: 0.8 }, freq: 300, to: 2600, gain: 0.07, attack: 1.6, decay: 1.9 },
+        ...bell(0, 2, 0.07, 1.1, 0.2),
+        ...bell(4, 2, 0.06, 1.1, 1.0),
+        ...bell(0, 3, 0.07, 1.4, 1.9),
+      ]);
+    },
   };
 
   // ---- ambient bed -----------------------------------------------------------------------
@@ -517,6 +541,8 @@ export function cueForEvent(event: GameEvent): AudioCueId | null {
       return 'player_down';
     case 'enemy_defeated':
       return 'enemy_down';
+    case 'terrain_detonated':
+      return 'terrain_blast';
     default:
       return null;
   }

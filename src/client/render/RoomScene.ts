@@ -752,7 +752,11 @@ export class RoomScene extends Phaser.Scene {
       view.facing.lineStyle(1.5, hexInt(theme.primary), 0.55).beginPath().arc(0, 0, PLAYER_RADIUS + 12, -0.35, 0.35, false).strokePath();
     }
     view.facing.setRotation(player.facing);
-    if (view.label.text !== player.displayName) view.label.setText(player.displayName);
+    // A seat whose client has dropped still stands in the room for the reconnect grace. Say so
+    // on the nameplate rather than letting the crew wonder why nobody is moving (QA_COOP.md).
+    const name = player.connected === false ? `${player.displayName} · offline` : player.displayName;
+    if (view.label.text !== name) view.label.setText(name);
+    view.label.setAlpha(player.connected === false ? 0.6 : 0.95);
     this.drawHpBar(view.hpBar, player.hp, player.maxHp, PLAYER_RADIUS, hexToInt(tokens.color.success));
   }
 

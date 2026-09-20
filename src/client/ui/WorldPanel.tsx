@@ -37,17 +37,27 @@ export function Codex({ world, discovered }: { world: UiWorldSummary; discovered
   );
 }
 
+/** Exported so a test can lint it: the one line that keeps derived laws honestly labelled. */
+export const DERIVED_LAWS_DISCLOSURE =
+  'No model wrote laws for this world. The engine picked these from its motifs and named them.';
+
 /**
  * World laws: the world's own name for each rule beside the engine's plain effect. The name and
  * line are the world's; the effect sentence is trusted code and carries the real numbers, so a
  * law is announced before the portal and never discovered by dying to it.
+ *
+ * When no model wrote laws the engine picks two from the world's motifs. Those names and lines
+ * are the engine's, and the panel says so rather than passing them off as the world's writing.
  */
 export function WorldLaws({ world }: { world: UiWorldSummary }) {
   const laws = world.laws ?? [];
   if (laws.length === 0) return null;
   return (
     <section aria-label="World laws">
-      <p className="eyebrow">Laws of this world · {laws.length}</p>
+      <p className="eyebrow">Laws of this world · {laws.length}{world.lawsDerived ? ' · engine-chosen' : ''}</p>
+      {world.lawsDerived && (
+        <p className="receipt__disclosure">{DERIVED_LAWS_DISCLOSURE}</p>
+      )}
       <ul className="list">
         {laws.map((law) => (
           <li key={law.lawId} className={`list__item ${law.active ? 'list__item--used' : 'list__item--unused'}`}>

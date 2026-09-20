@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { createRng, seedKey } from './floorgen/rng';
 import { lintProse } from './prose';
 import type { EnemyId } from './registry';
+import { DEMO_TUNING } from '../sim/tuning';
 
 export const CUSTODIAN_PATTERN_IDS = [
   'sweep_arc', 'siege_charge', 'ring_bloom', 'summon_choir', 'tether_haul',
@@ -102,10 +103,11 @@ export function patternSpec(id: CustodianPatternId): CustodianPatternSpec {
 // Health, caps and the phase-3 shield
 // ---------------------------------------------------------------------------
 
-export const CUSTODIAN_BASE_HP = 1200;
-export const CUSTODIAN_HP_PER_EXTRA_PLAYER = 400;
-export const GATEKEEPER_BASE_HP = 320;
-export const GATEKEEPER_HP_PER_EXTRA_PLAYER = 80;
+// Values live in src/sim/tuning.ts (DEMO_TUNING); these names stay so nothing else has to move.
+export const CUSTODIAN_BASE_HP = DEMO_TUNING.bossHpBase;
+export const CUSTODIAN_HP_PER_EXTRA_PLAYER = DEMO_TUNING.bossHpPerExtraPlayer;
+export const GATEKEEPER_BASE_HP = DEMO_TUNING.gatekeeperHpBase;
+export const GATEKEEPER_HP_PER_EXTRA_PLAYER = DEMO_TUNING.gatekeeperHpPerExtraPlayer;
 
 /** Living players, recomputed when someone goes down (RoR2's trick); `maxHp` itself never moves. */
 export function custodianMaxHp(players: number): number {
@@ -116,7 +118,7 @@ export function custodianMaxHp(players: number): number {
  * Dead Cells' Conjunctivius caps a single hit at 15% of her max HP, which is what keeps her
  * phase structure intact whatever the player's build does. Ours is 12%.
  */
-export const CUSTODIAN_HIT_CAP = 0.12;
+export const CUSTODIAN_HIT_CAP = DEMO_TUNING.bossHitCap;
 
 export function capCustodianHit(amount: number, maxHp: number): number {
   return Math.min(amount, Math.round(maxHp * CUSTODIAN_HIT_CAP));

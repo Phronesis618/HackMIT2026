@@ -38,6 +38,8 @@ export interface UiPlayer {
   hp?: number;
   maxHp?: number;
   state?: PlayerActionState;
+  /** Co-op: false while this operative's client is away and the server is holding their seat. */
+  connected?: boolean;
 }
 
 export interface UiWorldSummary {
@@ -62,6 +64,12 @@ export interface UiWorldSummary {
   roomNames?: string[];
   /** Floors biomes (regions) with the rooms committed in each, for the reveal card. */
   biomes?: Array<{ name: string; roomNames: string[]; palette: Palette }>;
+  /**
+   * True when the ENGINE chose these laws from the world's motifs because no model wrote any.
+   * The panel says so: a derived law's name and line are the engine's, not the world's writing
+   * (docs/PRODUCT.md — never present engine output as the model's).
+   */
+  lawsDerived?: boolean;
 }
 
 export interface UiWorldLaw {
@@ -147,6 +155,8 @@ export interface UiFloor {
   depthCount: number;
   /** Rooms in the current biome (its budget; shown on the choice card before entering, so not a spoiler). */
   roomCount: number;
+  /** Rooms of the current biome the crew has stood in, including this one. Never above `roomCount`. */
+  roomsVisited: number;
   choice: UiBiomeChoice | null;
 }
 

@@ -22,8 +22,8 @@ describe('AI provider configuration', () => {
     expect(openai.generation).toMatchObject({
       provider: 'openai', openaiApiKey: 'openai-test-key', openaiModel: 'gpt-5-mini',
     });
-    expect(describeForClient(claude)).toEqual({ generationMode: 'live', liveGenerationAvailable: true });
-    expect(describeForClient(openai)).toEqual({ generationMode: 'live', liveGenerationAvailable: true });
+    expect(describeForClient(claude)).toEqual({ generationMode: 'live', liveGenerationAvailable: true, floors: false, laws: false });
+    expect(describeForClient(openai)).toEqual({ generationMode: 'live', liveGenerationAvailable: true, floors: false, laws: false });
   });
 
   it('uses model overrides and keeps fixture mode opt-in to live calls', () => {
@@ -32,7 +32,7 @@ describe('AI provider configuration', () => {
       argv: [],
     });
     expect(config.generation).toMatchObject({ anthropicModel: 'claude-custom', openaiModel: 'gpt-custom' });
-    expect(describeForClient(config)).toEqual({ generationMode: 'fixture', liveGenerationAvailable: false });
+    expect(describeForClient(config)).toEqual({ generationMode: 'fixture', liveGenerationAvailable: false, floors: false, laws: false });
   });
 
   it.each(['anthropic', 'openai'])('never borrows the other key when the selected %s key is missing; the offline composer covers live mode', (provider) => {
@@ -44,7 +44,7 @@ describe('AI provider configuration', () => {
     expect(provider === 'anthropic' ? config.generation.anthropicApiKey : config.generation.openaiApiKey).toBeNull();
     // ...yet live mode still produces a world from the crew's ideas: app.ts substitutes the
     // composer (labelled COMPOSED, never live). The client flag reflects that.
-    expect(describeForClient(config)).toEqual({ generationMode: 'live', liveGenerationAvailable: true });
+    expect(describeForClient(config)).toEqual({ generationMode: 'live', liveGenerationAvailable: true, floors: false, laws: false });
   });
 
   it('rejects a misspelled provider instead of silently using a different paid service', () => {
@@ -68,7 +68,7 @@ describe('AI provider configuration', () => {
       const { port } = await server.listen();
       const base = `http://127.0.0.1:${port}`;
       const clientConfig = await (await nativeFetch(`${base}/api/config`)).json();
-      expect(clientConfig).toEqual({ generationMode: 'live', liveGenerationAvailable: true });
+      expect(clientConfig).toEqual({ generationMode: 'live', liveGenerationAvailable: true, floors: false, laws: false });
       const health = await (await nativeFetch(`${base}/api/health`)).text();
       expect(health).not.toMatch(/claude-test-key|openai-test-key/);
       const response = await nativeFetch(`${base}/api/world`, {

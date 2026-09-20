@@ -16,6 +16,7 @@ import {
   sanitizeLaws, type WorldLaw, type WorldLawId, type WorldLook,
 } from '../shared/laws';
 import type { MotifId } from '../shared/registry';
+import { serverFlag } from '../shared/flags';
 
 export interface ResolvedLaws {
   // movement
@@ -55,7 +56,7 @@ export const NEUTRAL_LAWS: Readonly<ResolvedLaws> = Object.freeze({
 /** Laws the sim or renderer actually applies today. The rest resolve to numbers nobody reads yet. */
 export const IMPLEMENTED_LAW_IDS: readonly WorldLawId[] = [
   'thin_air', 'tidal_drag', 'committed_strike', 'glass_lattice', 'long_echo', 'first_light',
-  'few_and_terrible', 'the_many', 'long_dark',
+  'few_and_terrible', 'the_many', 'unstable_matter', 'long_dark',
 ];
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
@@ -178,8 +179,15 @@ export function applyEncounterLaws<T extends Pick<RoomEncounter, 'enemyId' | 'ro
 /**
  * `RELAY_LAWS=1` (Node) or `?laws=1` (browser), mirroring `RELAY_FLOORS` / `?floors=1`. Only gates
  * DERIVED laws and look: picks present in a live recipe are always honoured.
+ *
+ * A server's answer WINS outright. Nothing in a `PreparedWorld` says whether its laws were
+ * derived, so a browser that guessed differently from the server would render and describe a
+ * different game from the one the server is simulating — which is what `?laws=1` on every client
+ * was papering over. Env / URL are the fallback for a client that reached no server.
  */
 export function lawsFlagEnabled(): boolean {
+  const fromServer = serverFlag('laws');
+  if (fromServer !== null) return fromServer;
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.RELAY_LAWS;
   if (env !== undefined && ['1', 'true'].includes(env.trim().toLowerCase())) return true;
   const search = (globalThis as { location?: { search?: string } }).location?.search;
@@ -266,20 +274,33 @@ export function deriveWorldLaws(art: Pick<ArtRecipe, 'motifIds' | 'fog' | 'glowI
   };
 }
 
-export interface WorldLawsView { laws: WorldLaw[]; look: WorldLook | null; derived: boolean }
+export interface WorldLawsView {
+  laws: WorldLaw[];
+  look: WorldLook | null;
+  /** True when the engine chose these LAWS from the motifs; false when the model wrote them. */
+  lawsDerived: boolean;
+  /** Same question for the look. Tracked separately: a recipe may carry one and not the other. */
+  lookDerived: boolean;
+}
 
 /**
  * What a world's laws and look ARE, for the sim, the renderer and the UI alike. Picks in the
  * recipe always win (sanitized). Without them, the offline derivation applies only when
  * `derive` is on, so default legacy output is untouched.
+ *
+ * `lawsDerived` / `lookDerived` are the provenance half: anything the engine chose must be
+ * labelled as the engine's, never as the world's own writing (docs/PRODUCT.md).
  */
 export function worldLawsView(world: Pick<PreparedWorld, 'worldId' | 'recipe' | 'art'> | null | undefined, derive: boolean = lawsFlagEnabled()): WorldLawsView {
-  if (!world) return { laws: [], look: null, derived: false };
+  if (!world) return { laws: [], look: null, lawsDerived: false, lookDerived: false };
   const picked = world.recipe.laws && world.recipe.laws.length > 0 ? sanitizeLaws(world.recipe.laws).laws : null;
   const look = world.recipe.look ?? null;
-  if ((picked && look) || !derive) return { laws: picked ?? [], look, derived: false };
+  if ((picked && look) || !derive) return { laws: picked ?? [], look, lawsDerived: false, lookDerived: false };
   const derived = deriveWorldLaws(world.art, hashString(world.worldId));
-  return { laws: picked ?? derived.laws, look: look ?? derived.look, derived: true };
+  return {
+    laws: picked ?? derived.laws, look: look ?? derived.look,
+    lawsDerived: picked === null, lookDerived: look === null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -298,9 +319,13 @@ export function lawEffectText(law: WorldLaw): string {
     case 'committed_strike': return `${r.attackMoveMul === 0 ? 'No movement' : `Movement at ${Math.round(r.attackMoveMul * 100)}%`} during a basic attack. Damage dealt +${pct(r.playerDamageMul)}.`;
     case 'glass_lattice': return `Integrity ${r.playerMaxHp} instead of ${PLAYER_MAX_HP}. Damage dealt ${times(r.playerDamageMul)}.`;
     case 'long_echo': return `Q and E cooldowns -${pct(r.abilityCooldownMul)}. Ultimate charges ${pct(r.ultChargeMul)} slower.`;
-    case 'first_light': return `First hit on an undamaged enemy deals ${times(r.firstStrikeMul)} damage.`;
+    case 'first_light': return `The crew's first hit on an enemy deals ${times(r.firstStrikeMul)} damage. The room's own damage does not count.`;
     case 'few_and_terrible': return `Enemy groups ${times(r.enemyCountMul)} size. Enemy health ${times(r.enemyHpMul)}, damage +${pct(r.enemyDamageMul)}.`;
     case 'the_many': return `Enemy groups ${times(r.enemyCountMul)} size, up to ${LAW_ROOM_ENEMY_CAP} per room. Enemy health ${times(r.enemyHpMul)}, damage -${pct(r.enemyDamageMul)}.`;
+    case 'unstable_matter': {
+      const blast = r.deathBlast!;
+      return `Every enemy bursts when it dies: ${blast.enemyDamage} to enemies and ${blast.playerDamage} to the crew within ${blast.radius} px, less at the edge.`;
+    }
     case 'long_dark': return `Hazard tiles and attack warnings always show. Everything else, enemies included, is hidden past ${r.lightRadius} px from each operative.`;
     default: return LAW_INFO[law.lawId].summary;
   }

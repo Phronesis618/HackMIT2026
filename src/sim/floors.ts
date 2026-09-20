@@ -9,13 +9,19 @@ import { ROOM_CLEAR_REWARD, tileToWorld } from '../shared/conventions';
 import { DOOR_SIDES, type BiomeChoiceState, type FloorMapRoom, type FloorRunState, type RoomAddress, type RoomKind } from '../shared/floors';
 import { isSolidAt, type SolidGrid } from './collision';
 import type { RoomProvider } from './floorProvider';
+import { DEMO_TUNING } from './tuning';
 
 /** Every floors tuning number lives here. */
 export const FLOOR_TUNING = {
   /** Enemy HP and damage grow by this much per biome tier (tier 0 = legacy numbers). */
-  tierScalePerTier: 0.18,
-  /** A rest site restores this share of max HP to every living operative, once per room. */
-  restHealFraction: 0.4,
+  tierScalePerTier: DEMO_TUNING.tierScalePerTier,
+  /**
+   * A rest site restores this share of max HP to every living operative. ONCE PER RUN, not
+   * once per visit: `FloorsRun.usedFeatures` remembers the room for as long as the crew is in
+   * that biome, so walking out and back in does not refill it. Every player-facing line says so
+   * (docs/design/FLOORS.md §12).
+   */
+  restHealFraction: DEMO_TUNING.restHealFraction,
   /** Touch range (px) of rest sites and treasure caches; F-range of the biome choice site. */
   featureRange: 44,
   eliteRewardMultiplier: 2,

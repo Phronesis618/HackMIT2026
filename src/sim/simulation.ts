@@ -111,7 +111,16 @@ interface EnemyRuntime {
   waveTag?: string;
   /** Mirror-shade decoys: they telegraph, they deal nothing, they hold one point. */
   decoy?: boolean;
+  /**
+   * True once a PLAYER's hit has landed on it. `first_light` keys its opening-strike bonus on
+   * this rather than on full health, so a burn tick from the room cannot spend the crew's
+   * opening strike before anyone has swung (docs/design/WORLD_MUTATORS.md).
+   */
+  struckByPlayer?: boolean;
 }
+
+/** `unstable_matter`: a pack shoulder to shoulder must not chain for ever. */
+const DEATH_BLAST_MAX_CHAIN = 8;
 
 /** Floors: the crew arrives through a door, on its `entry` tile, facing `inward`. */
 interface DoorArrival {
@@ -171,6 +180,12 @@ export interface Simulation {
   returnToHeadquarters(): GameEvent[];
   /** From HQ only: the practice range (respawning targets, all abilities, no run). */
   enterTraining(): GameEvent[];
+  /**
+   * Co-op: the transport tells the sim when a client goes away and when it comes back. An
+   * operative with nobody behind them is not a target and not a participant; their seat is
+   * still held (see PlayerState.connected).
+   */
+  setPlayerConnected(playerId: string, connected: boolean): void;
   /** Floors co-op: whose `chooseBiome` decides. Null = the first operative (solo). */
   setHostPlayerId(playerId: string | null): void;
   /** Floors: vote while the biome choice is open; the host's vote moves the crew on the next step. */
@@ -230,6 +245,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   let collapse: CollapseRun | null = null;
   /** Written when the Custodian falls; the extraction offers it as a thing to carry out. */
   let custodianLog: { title: string; detail: string } | null = null;
+  /** `unstable_matter` chain guard: how deep the current burst chain is. */
+  let deathBlastDepth = 0;
 
   function emit(data: GameEventInput): GameEvent {
     return { ...data, id: `${tick}:${eventCounter++}`, tick, timeMs: tick * TICK_MS };
@@ -241,6 +258,15 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
 
   function playerIds(): string[] {
     return orderedPlayers().map((p) => p.state.id);
+  }
+
+  /**
+   * Operatives with somebody behind them. A co-op seat whose client has dropped keeps its body
+   * in the room for the reconnect grace, but it is nobody's target, it triggers nothing, and it
+   * does not keep a downed crew alive (docs/QA_COOP.md, "ghost seats are invisible as such").
+   */
+  function presentPlayers(): PlayerRuntime[] {
+    return orderedPlayers().filter((p) => p.state.connected !== false);
   }
 
   function findTile(ch: string): Point | null {
@@ -365,7 +391,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   function bossContext(events: GameEvent[]): BossContext {
     return {
       room,
-      players: () => orderedPlayers().filter((p) => p.state.hp > 0)
+      players: () => presentPlayers().filter((p) => p.state.hp > 0)
         .map((p) => ({ id: p.state.id, x: p.state.x, y: p.state.y, hp: p.state.hp, hidden: (p.state.shroudMs ?? 0) > 0 })),
       damagePlayer: (playerId, sourceEnemyId, damage, ranged, floor) => {
         const p = players.get(playerId);
@@ -459,8 +485,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       worldId: world?.worldId ?? '',
       room,
       roomKey: escapeKey(room),
-      players: () => orderedPlayers().map((p) => ({ id: p.state.id, x: p.state.x, y: p.state.y, hp: p.state.hp })),
-      crewSize: () => players.size,
+      // A dropped seat is not part of the escape either: it cannot bleed out and it cannot vote.
+      players: () => presentPlayers().map((p) => ({ id: p.state.id, x: p.state.x, y: p.state.y, hp: p.state.hp })),
+      crewSize: () => presentPlayers().length,
       damagePlayer: (playerId, source, damage) => {
         const p = players.get(playerId);
         return p ? damagePlayer(p, source, damage, false, events, 350, false) : false;
@@ -606,6 +633,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       e.cooldownMs = 600;
       e.hitMs = 0;
       e.hazard = createHazardClock();
+      e.struckByPlayer = false; // a fresh target is a fresh opening strike
     }
   }
 
@@ -754,14 +782,17 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const s = e.state;
     if (s.hp <= 0) return;
     // World laws scale what the CREW hits for. A vent is not a player: it neither gets
-    // `playerDamageMul` nor spends the `first_light` opening strike's multiplier on a burn tick.
-    const lawMul = source.kind === 'player' ? laws.playerDamageMul * (s.hp === s.maxHp ? laws.firstStrikeMul : 1) : 1;
+    // `playerDamageMul` nor spends the `first_light` opening strike on a burn tick — and, because
+    // the bonus is keyed on the first PLAYER hit rather than on full health, a hazard that has
+    // already taken a sliver off an enemy cannot quietly cancel it either.
+    const lawMul = source.kind === 'player' ? laws.playerDamageMul * (e.struckByPlayer === true ? 1 : laws.firstStrikeMul) : 1;
     const fxMul = source.kind === 'player' ? outgoingDamageMul(source.player.effects, s) : 1;
     const marked = Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1) * lawMul * fxMul);
     // The Custodian caps single hits at 12% of its health, applies its phase-3 shield and any
     // vulnerability window it has opened (BOSS_FINALE §3.2, §4.2).
     const amount = Math.min(s.hp, e.custodian ? custodianIncomingDamage(e.custodian, s, marked) : marked);
     if (amount <= 0) return;
+    if (source.kind === 'player') e.struckByPlayer = true;
     const by = source.kind === 'player' ? source.player : source.kind === 'displaced' ? source.by : null;
     // An environmental kill pays half: attractive to aim for, never better than fighting.
     const credit = source.kind === 'player' ? 1 : ENV_KILL_CREDIT;
@@ -786,6 +817,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: by?.state.id ?? null,
         worldId: phase === 'expedition' ? world?.worldId ?? null : null }));
       dropRemains(e);
+      detonateBody(e, events);
       // The fight writes its own record: the world's name for the Custodian, its three moves, how
       // long it took and who landed the last hit. The extraction may offer it as a thing to carry.
       if (e.custodian && e.maxBossPhase === undefined) {
@@ -796,6 +828,49 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
           detail: `${e.custodian.custodian.title}: ${moves}. ${Math.round(tick * TICK_MS / 1000)} seconds. Last hit by ${by?.state.displayName ?? 'the room'}.`.slice(0, 200),
         };
       }
+    }
+  }
+
+  /**
+   * `unstable_matter` (WORLD_MUTATORS.md): a body that comes apart takes the room with it.
+   *
+   * The blast IS the canister's (TILES.md T1) with the law's numbers: linear falloff to 0.35 at
+   * the rim, line of sight required, and any `*` inside the circle lights its fuse. A chain is
+   * capped so one pack standing shoulder to shoulder cannot recurse for ever.
+   *
+   * The crew's damage is credited to the enemy that burst, because that is what happened; the
+   * enemy-side damage is the room's, so nobody is paid full price for a kill they did not make.
+   */
+  function detonateBody(dead: EnemyRuntime, events: GameEvent[]): void {
+    const blast = laws.deathBlast;
+    if (!blast || deathBlastDepth >= DEATH_BLAST_MAX_CHAIN) return;
+    const at = { x: dead.state.x, y: dead.state.y };
+    deathBlastDepth++;
+    try {
+      progress.terrain = armCanistersInCircle(room, progress.terrain, at.x, at.y, blast.radius,
+        roomTerrainTuning(room).canisterFuseMs).state;
+      const hitEnemyIds: string[] = [];
+      const hitPlayerIds: string[] = [];
+      for (const e of progress.enemies) {
+        if (e.state.hp <= 0) continue;
+        const falloff = blastFalloff(distance(at, e.state) - ENEMY_INFO[e.state.enemyId].radius, blast.radius);
+        if (falloff <= 0 || !clearPath(grid, at, e.state)) continue;
+        hitEnemyIds.push(e.state.id);
+        damageEnemyFrom(e, { kind: 'terrain', tile: TERRAIN_DAMAGE_SOURCE.canister },
+          Math.max(1, Math.round(blast.enemyDamage * falloff)), events);
+      }
+      for (const p of orderedPlayers()) {
+        if (p.state.hp <= 0) continue;
+        const falloff = blastFalloff(distance(at, p.state) - PLAYER_RADIUS, blast.radius);
+        if (falloff <= 0 || !clearPath(grid, at, p.state)) continue;
+        if (damagePlayer(p, dead.state.id, Math.max(1, Math.round(blast.playerDamage * falloff)), false, events)) {
+          hitPlayerIds.push(p.state.id);
+        }
+      }
+      // The renderer's blast effect; `terrain_detonated` is the cue it already knows how to draw.
+      events.push(emit({ type: 'terrain_detonated', x: at.x, y: at.y, radius: blast.radius, hitPlayerIds, hitEnemyIds }));
+    } finally {
+      deathBlastDepth--;
     }
   }
 
@@ -852,7 +927,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         continue;
       }
       const reader = living.find((p) => !busy.has(p.state.id) && p.interacting && !p.damagedThisTick &&
-        distance(p.state, node.state) <= LORE_READ_RANGE && clearPath(grid, p.state, node.state));
+        distance(p.state, node.state) <= LORE_READ_RANGE && canReach(p.state, node.state));
       if (!reader) {
         node.holdMs = 0;
         node.state.state = 'sealed';
@@ -1007,7 +1082,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   function arcTargets(origin: Point, facing: number, range: number, arc: number): EnemyRuntime[] {
     return livingEnemies().filter((e) =>
       inArc(origin, e.state, facing, range, arc, ENEMY_INFO[e.state.enemyId].radius) &&
-      canStrike(origin, e.state),
+      canStrike(origin, e.state, ENEMY_INFO[e.state.enemyId].radius),
     ).sort((a, b) => distance(origin, a.state) - distance(origin, b.state));
   }
 
@@ -1016,9 +1091,24 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
    * movement layer, where '-' cover is open but walls are not: you can hit the thing standing
    * on the other side of a barricade, and still not the thing behind a wall (TILES.md T4).
    */
-  function canStrike(origin: Point, target: Point): boolean {
+  function canStrike(origin: Point, target: Point, radius = 0): boolean {
     if (clearPath(grid, origin, target)) return true;
-    return distance(origin, target) <= TILE_SIZE && clearPath(grid, origin, target, 1, 'solid');
+    // Measured to the target's BODY, not its centre: a Warden is 18 px across its half, so it can
+    // stand with its shoulder against the far side of a barricade while its centre is more than a
+    // tile away. Without the radius the crew could never touch a big enemy holding cover, and
+    // neither side could shoot the other — a stand-off that ends the room only when the clock does.
+    return distance(origin, target) <= TILE_SIZE + radius && clearPath(grid, origin, target, 1, 'solid');
+  }
+
+  /**
+   * Line of REACH, for the things an operative does with their hands at arm's length: pulling a
+   * teammate up, reading a relic, planting the Anchor, hitting a relay. It reads the MOVEMENT
+   * layer, so a '-' barricade is open — low cover stops what travels and nothing else
+   * (TILES.md T4). A wall, a prop or a pit between the two still refuses; if you could not walk
+   * the last half-tile, you cannot reach across it either.
+   */
+  function canReach(from: Point, to: Point): boolean {
+    return clearPath(grid, from, to, 1, 'solid');
   }
 
   function basicAttack(p: PlayerRuntime, events: GameEvent[]): void {
@@ -1499,7 +1589,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       }
       return;
     }
-    const target = orderedPlayers().filter((p) => p.state.hp > 0 && p.state.shroudMs === 0)
+    const target = presentPlayers().filter((p) => p.state.hp > 0 && p.state.shroudMs === 0)
       .sort((a, b) => distance(s, a.state) - distance(s, b.state))[0];
     if (!target || (phase === 'training' && distance(s, target.state) > TRAINING_WAKE_RANGE)) {
       // Training targets doze in their pens until an operative walks up to them.
@@ -1549,17 +1639,18 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
 
   function updateObjectives(events: GameEvent[]): void {
     if (phase !== 'expedition' || !world) return;
-    const living = orderedPlayers().filter((p) => p.state.hp > 0);
+    const present = presentPlayers();
+    const living = present.filter((p) => p.state.hp > 0);
     // During the collapse a downed crew is escape.ts's business: a solo last stand, or a bleed-out
     // that ends the run as `stranded` rather than as a wipe.
-    if (players.size > 0 && living.length === 0 && collapse === null) {
+    if (present.length > 0 && living.length === 0 && collapse === null) {
       finishRun('collapsed', events);
       return;
     }
     const busy = new Set<string>();
     for (const downed of orderedPlayers().filter((p) => p.state.hp === 0)) {
       const rescuer = living.find((p) => !busy.has(p.state.id) && p.interacting && !p.damagedThisTick &&
-        distance(p.state, downed.state) <= REVIVE_RANGE && clearPath(grid, p.state, downed.state));
+        distance(p.state, downed.state) <= REVIVE_RANGE && canReach(p.state, downed.state));
       if (!rescuer) {
         downed.state.reviveProgress = 0;
         continue;
@@ -1600,7 +1691,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       return;
     }
     const planters = living.filter((p) => p.interacting && !p.damagedThisTick && !busy.has(p.state.id) &&
-      distance(p.state, anchor) <= ANCHOR_RANGE && clearPath(grid, p.state, anchor));
+      distance(p.state, anchor) <= ANCHOR_RANGE && canReach(p.state, anchor));
     if (planters.length === 0) {
       anchor.state = 'dormant';
       anchor.progress = 0;
@@ -1664,7 +1755,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const target = ritual.stage === 'core' ? anchor : ritual.relays[ritual.activeRelay];
     if (!target) return;
     const actor = living.find((p) => !busy.has(p.state.id) && p.state.hp > 0 && p.interactPressed && !p.damagedThisTick &&
-      distance(p.state, target) <= RELAY_ACTIVATION_RANGE && clearPath(grid, p.state, target));
+      distance(p.state, target) <= RELAY_ACTIVATION_RANGE && canReach(p.state, target));
     if (!actor) return;
     anchor.state = 'planting';
     if (ritual.stage === 'core') {
@@ -1874,6 +1965,13 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       p.unlockedClasses.add(p.state.classId);
       return [emit({ type: 'ability_unlocked', playerId, abilityId: CLASS_ABILITIES[p.state.classId].e,
         cost: ABILITY_UNLOCK_COST, remainingResources: p.state.resources })];
+    },
+    setPlayerConnected(playerId, connected) {
+      const p = players.get(playerId);
+      if (!p) return;
+      // Absent means present: a solo snapshot and every legacy snapshot stay byte-identical.
+      if (connected) delete p.state.connected;
+      else p.state.connected = false;
     },
     purchaseSkill(playerId, nodeId) {
       const p = players.get(playerId);
