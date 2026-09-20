@@ -19,6 +19,7 @@ import type { AudioPort } from '../audio';
 import { cueForEvent } from '../audio';
 import type { BrowserChronicle } from '../chronicle';
 import type { LocalSession } from '../transport/LocalSession';
+import { departureBus, isDeparting } from '../ui/HeadquartersDeparture';
 import { createKeyboardMouseInput, type InputSampler } from './input';
 import { stageOwnsInput } from './keyboardFocus';
 import type { UiStore } from './uiStore';
@@ -179,7 +180,9 @@ export class GameController {
       const me = snapshot.players.find((p) => p.id === session.localPlayerId);
       const pointer = this.input.getPointer();
       const aim = pointer ? renderer.screenToWorld(pointer.x, pointer.y) : me ? { x: me.x + Math.cos(me.facing), y: me.y + Math.sin(me.facing) } : { x: 0, y: 0 };
-      const intent = this.input.sample(aim);
+      const sampled = this.input.sample(aim);
+      // Departure ritual (HUB.md §8): inputs lock while the gate opens; F / Escape only skip the wait.
+      const intent = isDeparting(departureBus.get()) ? { ...sampled, moveX: 0, moveY: 0, attack: false, dash: false, ability: null, interact: false } : sampled;
       if (intent.interact && !this.interactHeld) this.activateHeadquartersStation();
       this.interactHeld = intent.interact === true;
       session.setIntent(intent);

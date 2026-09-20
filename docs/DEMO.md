@@ -1,8 +1,11 @@
 # RELAY demo runbook
 
-Public solo fixture build: https://client-gzffunxf.devinapps.com/ — anyone with the URL can
-access it. This static host has no generation API or co-op server; its explicit offline
-fallback is expected. Use the Node host below for shared play and live generation.
+Public solo fixture build: https://phronesis618.github.io/HackMIT2026/ (GitHub Pages, redeployed
+from `main` by `pages.yml`; older mirror: https://client-gzffunxf.devinapps.com/). A static host
+has no generation API or co-op server; its explicit offline notice and **OFFLINE FIXTURE**
+label are expected. Full game (live generation + co-op): https://relay-a3yv.onrender.com —
+see “Public hosts” below for what is and is not verified. Use the Node host below for local
+shared play.
 
 ## Start a solo or LAN host
 
@@ -124,6 +127,55 @@ the receipt already say what it is.
 - Do not clear the memory wall while demonstrating persistence.
 - For an offline solo rehearsal, use `/?world=fixture`. Preview room jumps
   (`&room=1` or `&room=2`) are inspection aids, not evidence of completing an expedition.
+
+## Public hosts
+
+Status as of 2026-09-20 09:20 UTC (`main` `c1abe97`); details in `docs/QA.md` → “Public
+deployment verification”.
+
+| Host | Verified | Unverified |
+| --- | --- | --- |
+| Pages `https://phronesis618.github.io/HackMIT2026/` | Pages enabled + last 5 deploy runs green (GitHub API); the exact artifact boots under `/HackMIT2026/`, shows the offline notice, labels OFFLINE FIXTURE, plays room 1, keeps memories across reload, `?world=fixture&floors=1` works (browser, static emulation) | The hosted URL itself was network-blocked for the QA session |
+| Render `https://relay-a3yv.onrender.com` | Only PR #17's earlier record: health/config, one live Claude world after manual redeploy, wss welcome/pong | Whether it is live now, its commit, live-generation config, two-context wss co-op, provenance labels |
+
+### Human checklist for the Render service (≈5 minutes)
+
+If the service still exists (Render Dashboard → `relay`):
+
+1. Open https://relay-a3yv.onrender.com/api/health. Expect `ok: true`. Note
+   `generation.effectiveMode`: `live` means the key is configured, `fixture` means it is not.
+   Record the JSON and the time in `docs/QA.md`. If the first request takes ~1 min, the free
+   instance was asleep — that is normal.
+2. Live generation needs three env vars. `RELAY_GENERATION_MODE=live` and
+   `RELAY_AI_PROVIDER=anthropic` come from `render.yaml`; `ANTHROPIC_API_KEY` must be added
+   by hand: service → **Environment** → **Add Environment Variable** (or **Add Secret**) →
+   key `ANTHROPIC_API_KEY`, paste the key → save; Render redeploys with the new value (exact
+   button labels may differ by dashboard version). Never put the key
+   in Git, in `render.yaml`, or in a `VITE_` variable.
+3. Confirm the deployed commit: service → **Events**. If it lags `main`, use
+   **Manual Deploy → Deploy latest commit** (PR #17 found commit-triggered deploys were not
+   firing; check the Render GitHub app is authorised for `Phronesis618/HackMIT2026`).
+4. Co-op over wss: open `https://relay-a3yv.onrender.com/?mode=coop` in two browser
+   profiles (or one normal + one private window). Both should show the same crew and the
+   sidebar connection state should read connected, not offline. DevTools → Network → WS
+   should show `wss://relay-a3yv.onrender.com/ws` with status 101.
+5. Provenance: from HQ, prepare a world and read the receipt aloud. `LIVE · claude-sonnet-4-6`
+   only with a working key; `FALLBACK FIXTURE` if the provider failed/timed out;
+   `OFFLINE FIXTURE` if no server. Any other wording is a bug — file it.
+
+If no service exists, create one from the Blueprint (≈5 minutes, no code changes):
+
+1. Sign in at https://dashboard.render.com → **New +** → **Blueprint**.
+2. Connect GitHub and pick `Phronesis618/HackMIT2026` (authorise the Render GitHub app for
+   the repo if prompted; the repo owner may need to approve).
+3. Render reads `render.yaml`: one **Free** Docker web service `relay`, branch `main`,
+   health check `/api/health`, auto-deploy on commit. Click **Apply**.
+4. While it builds (~3–4 min), open the new service → **Environment** and add the secret
+   `ANTHROPIC_API_KEY` (step 2 above). Skip this for a fixture-only host; the game then
+   labels every world OFFLINE/FALLBACK FIXTURE honestly.
+5. When the deploy is live, run the five-step checklist above and paste the results into
+   `docs/QA.md`. The URL will be `https://relay-<hash>.onrender.com`; update `README.md`
+   and this file if it differs from the one recorded here.
 
 ## Evidence
 

@@ -58,6 +58,69 @@ export const HEADQUARTERS_RECORD_PLINTHS: readonly { classId: ClassId; x: number
 
 export const HEADQUARTERS_RETURNS_BENCH: readonly { x: number; y: number }[] = [{ x: 14, y: 6 }, { x: 16, y: 6 }];
 
+/** Warm lamps that light the sanctuary; lamp tiers grow their glow (HUB.md §6c). */
+export const HEADQUARTERS_LANTERNS: ReadonlyArray<{ id: string; x: number; y: number }> = [
+  { id: 'hq-lantern-a', x: 12, y: 8 },
+  { id: 'hq-lantern-b', x: 18, y: 8 },
+  { id: 'hq-lantern-c', x: 12, y: 16 },
+  { id: 'hq-lantern-d', x: 18, y: 16 },
+  { id: 'hq-archive-light', x: 21, y: 7 },
+];
+
+export const HEADQUARTERS_LAMP_MAX_TIER = 3;
+export const HEADQUARTERS_LAMP_GLOW_STEP = 0.15;
+export const HEADQUARTERS_LAMP_RADIUS_STEP = 0.08;
+
+/** Cosmetic, device-local, derived: one tier per anchored run recorded on this browser, capped. */
+export function headquartersLampTier(anchors: number): number {
+  if (!Number.isFinite(anchors) || anchors <= 0) return 0;
+  return Math.min(HEADQUARTERS_LAMP_MAX_TIER, Math.floor(anchors));
+}
+
+export function headquartersLampGlow(baseGlowIntensity: number, tier: number): { glowIntensity: number; radiusScale: number } {
+  const t = headquartersLampTier(tier);
+  return { glowIntensity: baseGlowIntensity + HEADQUARTERS_LAMP_GLOW_STEP * t, radiusScale: 1 + HEADQUARTERS_LAMP_RADIUS_STEP * t };
+}
+
+/** Departure ritual (HUB.md §8): the skippable 2.4 s sequence when the crew leaves through the gate. */
+export const DEPARTURE_COUNTDOWN_MS = 2400;
+export const DEPARTURE_FLASH_HOLD_MS = 120;
+export const DEPARTURE_RETURN_FADE_MS = 600;
+
+export interface DepartureStage {
+  /** 0..1 across the whole ritual. */
+  progress: number;
+  /** Portal ring scale: 1 → 1.6 over the first 400 ms, then collapses toward 0 from 1.6 s. */
+  ringScale: number;
+  /** Lamp level: 1 → 0.4 over the first 800 ms. */
+  lampLevel: number;
+  /** Tether lines from each operative to the portal, from 0.4 s. */
+  tethers: boolean;
+  /** The quartermaster turns to face the gate at 1.0 s. */
+  quartermasterFacesGate: boolean;
+  /** White flash 0..1, rising from 1.6 s to full at 2.4 s. */
+  flash: number;
+  done: boolean;
+}
+
+const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
+
+export function departureStage(elapsedMs: number): DepartureStage {
+  const ms = Math.max(0, elapsedMs);
+  const done = ms >= DEPARTURE_COUNTDOWN_MS;
+  const brighten = clamp01(ms / 400);
+  const collapse = clamp01((ms - 1600) / 800);
+  return {
+    progress: clamp01(ms / DEPARTURE_COUNTDOWN_MS),
+    ringScale: (1 + 0.6 * brighten) * (1 - collapse),
+    lampLevel: 1 - 0.6 * clamp01(ms / 800),
+    tethers: ms >= 400 && !done,
+    quartermasterFacesGate: ms >= 1000,
+    flash: collapse,
+    done,
+  };
+}
+
 export function headquartersStation(id: HeadquartersStationId | null | undefined): HeadquartersStation | null {
   return HEADQUARTERS_STATIONS.find((station) => station.id === id) ?? null;
 }
