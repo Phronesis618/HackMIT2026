@@ -8,7 +8,7 @@ import { createGenerationService } from '../../src/server/generation';
 import { loadWorldFixtures } from '../../src/server/generation/fixtureService';
 
 const fixturesDir = path.resolve(__dirname, '../../fixtures/worlds');
-const recipe = loadWorldFixtures(fixturesDir)[0]!.recipe;
+const { bible: _bible, ...recipe } = loadWorldFixtures(fixturesDir)[0]!.recipe; // legacy single-call shape: no bible
 const request: GenerationRequest = {
   requestId: 'claude-request', sessionId: 'claude-session', contributions: sampleContributions, plannedRoomCount: 3,
 };
