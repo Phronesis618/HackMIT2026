@@ -15,4 +15,5 @@ roomLines: one line under each key entrance, combat, elite, treasure, lore, rest
 (max 100 chars each). What is visible from the door of that kind of room in this biome:
 threat first with where it is, then one usable feature. Rest, lore and treasure rooms have
 no threat: say what is on the table. Enemies are named by their former job from the bible.
-Seven lines, seven different openings.
+Seven lines, seven different openings. Rest and treasure rooms differ from floor to floor:
+name what this particular room was used for and the one object left on its table.

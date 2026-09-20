@@ -224,7 +224,8 @@ export function parseFoundation(raw: unknown): { legacy: z.infer<typeof WorldRec
     if (!legacy.success) throw new StageParseError(`Recipe failed schema validation at ${issuesText(legacy.error)}.`);
     return { legacy: legacy.data };
   }
-  const core = parseWithFit(z.object({ bible: WorldBibleSchema, title: foundationShape.title, tagline: foundationShape.tagline }), raw);
+  // Over-long header lines are kept here and sent to the polish call (see `headerOverflow`); `fitHeader` is the last resort.
+  const core = parseWithFit(z.object({ bible: WorldBibleSchema, title: z.string().trim().min(1).max(120), tagline: z.string().trim().min(1).max(240) }), raw);
   if (!core.success) throw new StageParseError(`Recipe failed schema validation at ${issuesText(core.error)}.`);
   const { bible, ...header } = core.data;
   return { foundation: { bible, header } };
@@ -314,6 +315,17 @@ export function parseFullRecipe(raw: unknown): { recipe: WorldRecipe; notes: str
   };
 }
 
+const HEADER_MAX = { title: 40, tagline: 80 } as const;
+export function headerOverflow(header: Foundation['header']): LintFailure[] {
+  return (['title', 'tagline'] as const).filter((key) => header[key].length > HEADER_MAX[key]).map((key) => ({
+    path: key, kind: key === 'title' ? 'worldTitle' as const : 'tagline' as const, maxChars: HEADER_MAX[key], text: header[key],
+    notes: [`${header[key].length} characters; the hard limit is ${HEADER_MAX[key]}. Keep the one fact that matters and end on it.`],
+  }));
+}
+export function fitHeader(header: Foundation['header']): Foundation['header'] {
+  return { title: fitText(header.title, HEADER_MAX.title), tagline: fitText(header.tagline, HEADER_MAX.tagline) };
+}
+
 export const nonBossKinds = (bible: WorldBible): number => new Set(bible.enemies.map((enemy) => enemy.enemyId).filter((id) => id !== 'guardian')).size;
 
 // ---------------------------------------------------------------------------
@@ -324,37 +336,60 @@ function shuffled<T>(items: readonly T[], seed: string): T[] {
   return items.map((item, index) => ({ item, key: hashString(`${seed}:${index}`) })).sort((a, b) => a.key - b.key).map((entry) => entry.item);
 }
 
-export interface RelicSlot { roomIndex: number; authorIndex: number; length: 'short' | 'medium' | 'long' }
-/** Two relics per legacy room; authors rotate and lengths are mixed so no two worlds share a rhythm. */
-export function planRelicSlots(plannedRoomCount: number, seed: number): RelicSlot[] {
+export interface RelicSlot { roomIndex: number; authorIndex: number; eventIndex: number; length: 'short' | 'medium' | 'long' }
+/**
+ * Two relics per legacy room. Trusted code deals the author, the event and the length of each,
+ * so the six fragments cover the whole chain of events in three voices and no two worlds
+ * share a rhythm. An author who was not present reports the event as it reached them.
+ */
+export function planRelicSlots(plannedRoomCount: number, seed: number, eventCount = 6): RelicSlot[] {
   const count = Math.min(6, plannedRoomCount * 2);
-  const lengths = shuffled(['short', 'medium', 'long', 'medium', 'short', 'long'] as const, `${seed}:relic-length`);
+  const lengths = shuffled(['short', 'medium', 'long', 'medium', 'short', 'medium'] as const, `${seed}:relic-length`);
   const authors = shuffled([0, 1, 2, 0, 1, 2], `${seed}:relic-author`);
-  return Array.from({ length: count }, (_, index) => ({
-    roomIndex: Math.min(plannedRoomCount - 1, Math.floor(index / 2)), authorIndex: authors[index]!, length: lengths[index]!,
+  const events = shuffled(Array.from({ length: Math.max(1, eventCount) }, (_, index) => index), `${seed}:relic-event`);
+  const slots = Array.from({ length: count }, (_, index) => ({ authorIndex: authors[index]!, eventIndex: events[index % events.length]!, length: lengths[index]! }));
+  // found in roughly the order things happened: early events lie near the entrance
+  return slots.sort((a, b) => a.eventIndex - b.eventIndex).map((slot, index) => ({ roomIndex: Math.min(plannedRoomCount - 1, Math.floor(index / 2)), ...slot }));
+}
+
+export interface RemainsSlot { enemyId: EnemyId; formerJob: string; eventIndex: number; shape: string }
+const REMAINS_SHAPES = [
+  'one sentence: the object and the mark on it',
+  'what is printed or written on it, quoted, then who it belonged to',
+  'the object, its wear, then the dated bible fact',
+  'a short list of what was in the pockets or on the belt',
+  'the object and a note one of the authors left on it',
+];
+/** One remains fragment per enemy kind the bible casts, each dated by a different event and given a different shape. */
+export function planRemainsSlots(bible: WorldBible, relicCount: number, seed: number): RemainsSlot[] {
+  const ids = new Set<EnemyId>(bible.enemies.map((enemy) => enemy.enemyId));
+  ids.add('guardian');
+  const events = shuffled(bible.events.map((_, index) => index), `${seed}:remains-event`);
+  const shapes = shuffled(REMAINS_SHAPES, `${seed}:remains-shape`);
+  return [...ids].slice(0, Math.max(1, 12 - relicCount)).map((enemyId, index) => ({
+    enemyId,
+    formerJob: bible.enemies.find((enemy) => enemy.enemyId === enemyId)?.formerJob ?? 'the person responsible',
+    eventIndex: enemyId === 'guardian' ? bible.events.length - 1 : events[index % events.length]!,
+    shape: shapes[index % shapes.length]!,
   }));
 }
 
-/** One remains fragment per enemy kind the bible casts (the rooms and biomes draw from the same cast). */
-export function planRemainsEnemies(bible: WorldBible, relicCount: number): EnemyId[] {
-  const ids = new Set<EnemyId>(bible.enemies.map((enemy) => enemy.enemyId));
-  ids.add('guardian');
-  return [...ids].slice(0, Math.max(1, 12 - relicCount));
-}
-
-export interface BiomeSlot { index: number; position: 'opener' | 'middle' | 'finale'; setting: string; focusEvent: string }
+export interface BiomeSlot { index: number; position: 'opener' | 'middle' | 'finale'; setting: string; focusEvent: string; focusDate: string; namesTaken: string[] }
 const SLOT_TIERS = [0, 1, 1, 2, 2, 3, 3, 4] as const;
 /**
- * Slots 0..7. Each gets a bible place and event so parallel calls do not name the same biome
- * twice. The six middle briefs are dealt onto tiers 1-3 by the route seed (FLOORS.md section 12),
- * so the model is told only opener / middle / finale.
+ * Slots 0..7. The calls that write briefs run in parallel and cannot see each other, so
+ * trusted code deals each slot a different bible place (then objects) and a different
+ * event, and tells it which settings the other floors took. The six middle briefs are dealt
+ * onto tiers 1-3 by the route seed (FLOORS.md section 12), so the model is told only
+ * opener / middle / finale.
  */
 export function planBiomeSlots(bible: WorldBible, seed: number): BiomeSlot[] {
-  const places = shuffled([...bible.places, ...bible.objects], `${seed}:biome-place`);
+  const settings = [...shuffled(bible.places, `${seed}:biome-place`), ...shuffled(bible.objects, `${seed}:biome-object`)];
   return SLOT_TIERS.map((tier, index) => {
     const position = tier === 0 ? 'opener' as const : tier === 4 ? 'finale' as const : 'middle' as const;
     const event = bible.events[Math.min(bible.events.length - 1, Math.round((index / 7) * (bible.events.length - 1)))]!;
-    return { index, position, setting: places[index % places.length]!, focusEvent: `${event.date}: ${event.fact}` };
+    const setting = settings[index % settings.length]!;
+    return { index, position, setting, focusEvent: `${event.date}: ${event.fact}`, focusDate: event.date, namesTaken: settings.filter((other) => other !== setting) };
   });
 }
 
@@ -393,6 +428,8 @@ export function assembleRecipe(parts: {
   attunements: WorldRecipe['attunements'];
   /** Present only in floors mode: 8 entries, undefined where the model's brief was missing or invalid. */
   briefs?: Array<ParsedBrief | undefined>;
+  /** In-world date of each slot's focus event, used to tell apart two briefs the model gave one name. */
+  briefDates?: string[];
   deriveBriefs?: (recipe: WorldRecipe) => BiomeBrief[];
   onDerived?: (indices: number[]) => void;
 }): WorldRecipe {
@@ -420,7 +457,12 @@ export function assembleRecipe(parts: {
   const names = new Set<string>();
   const briefs = Array.from({ length: BIOME_BRIEF_COUNT }, (_, index) => {
     let parsed = parts.briefs![index];
-    if (parsed && names.has(parsed.brief.name.toLowerCase())) parsed = undefined; // a duplicate door name is a useless choice
+    if (parsed && names.has(parsed.brief.name.toLowerCase())) {
+      // Two doors with one name is no choice. Parallel calls can collide: date the later one, else derive it.
+      const dated = `${parsed.brief.name}, ${parts.briefDates?.[index] ?? ''}`;
+      parsed = parts.briefDates?.[index] && dated.length <= 40 && !names.has(dated.toLowerCase())
+        ? { ...parsed, brief: { ...parsed.brief, name: dated } } : undefined;
+    }
     if (parsed) {
       names.add(parsed.brief.name.toLowerCase());
       return parsed;
@@ -479,6 +521,11 @@ export function lintWorld(parts: Lintable, bible: WorldBible | undefined): World
   let weight = 0;
   let total = 0;
   const failures: LintFailure[] = [];
+  const engineWords: Array<{ path: string; kind: ProseKind; text: string; word: string }> = [];
+  for (const field of fields) {
+    const word = ENGINE_WORDS.exec(field.text)?.[0];
+    if (word && !field.result.hardFail) engineWords.push({ path: field.path, kind: field.kind, text: field.text, word });
+  }
   const rules = new Set<string>();
   for (const field of fields) {
     const words = Math.max(field.result.words, 3);
@@ -492,6 +539,13 @@ export function lintWorld(parts: Lintable, bible: WorldBible | undefined): World
       maxChars: Math.min(POLISH_MAX[field.kind] ?? Infinity, KIND_SPECS[field.kind].max),
     });
   }
+  for (const hit of engineWords) {
+    rules.add('engine-word');
+    failures.push({
+      path: hit.path, kind: hit.kind, text: hit.text, maxChars: Math.min(POLISH_MAX[hit.kind] ?? Infinity, KIND_SPECS[hit.kind].max),
+      notes: [`Rule engine-word: "${hit.word}" is the engine's id for that enemy and players never see it. Call the creature by its former job from the bible.`],
+    });
+  }
   return {
     score: weight ? Math.round((total / weight) * 10) / 10 : 0,
     hardFail: failures.length > 0, failedFields: failures.length, fieldCount: fields.length, rules: [...rules],
@@ -499,6 +553,8 @@ export function lintWorld(parts: Lintable, bible: WorldBible | undefined): World
   };
 }
 
+/** Registry enemy ids that are not ordinary job words (`warden`, `guardian` and `sentinel` can be real titles). */
+const ENGINE_WORDS = /\b(?:husks?|lurkers?|spewers?|swarmlings?|channell?ers?)\b/i;
 const UNSAFE_TEXT = /[<>]|```|(?:https?:\/\/|www\.|data:|javascript:)|\b(?:eval|function)\s*\(/i;
 export const isUnsafeText = (value: string): boolean => UNSAFE_TEXT.test(value);
 
@@ -538,10 +594,12 @@ export function applyFixes(parts: Lintable, bible: WorldBible | undefined, failu
     const failure = failures.find((candidate) => candidate.path === fix.path);
     const field = failure && access(parts, fix.path);
     const text = fix.text.trim();
-    if (!failure || !field || !text || isUnsafeText(text) || text.length > KIND_SPECS[failure.kind].max) continue;
+    if (!failure || !field || !text || isUnsafeText(text) || text.length > Math.max(failure.maxChars, KIND_SPECS[failure.kind].max)) continue;
     const before = lintProse(failure.text, { kind: failure.kind, ...(bible ? { bible } : {}) });
     const after = lintProse(text, { kind: failure.kind, ...(bible ? { bible } : {}) });
-    const better = (before.hardFail && !after.hardFail) || (before.hardFail === after.hardFail && after.score < before.score);
+    // Failures raised outside prose.ts (an engine word, a header over its hard limit) are fixed when the cause is gone.
+    const causeFixed = !before.hardFail && !after.hardFail && !ENGINE_WORDS.test(text) && text.length <= failure.maxChars;
+    const better = causeFixed || (before.hardFail && !after.hardFail && !ENGINE_WORDS.test(text)) || (before.hardFail === after.hardFail && after.score < before.score);
     if (!better) continue;
     field.set(text);
     applied++;
