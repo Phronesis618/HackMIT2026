@@ -386,7 +386,7 @@ function finishRun(
     relics,
     totals: {
       runs: state.totals.runs + 1,
-      anchors: state.totals.anchors + (event.outcome === 'anchored' ? 1 : 0),
+      anchors: state.totals.anchors + (event.outcome === 'anchored' || event.outcome === 'stranded' ? 1 : 0),
       worldsVisited: worldIdsVisited.length,
       relics: relics.length,
     },
