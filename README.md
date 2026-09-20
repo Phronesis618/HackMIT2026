@@ -71,6 +71,42 @@ Static hosting supports the solo fixture demo: if the generation server is unava
 client displays an explicit offline notice and uses a bundled fixture. Live generation and
 LAN co-op require the Node server.
 
+### Host the full game on Render
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Phronesis618/HackMIT2026)
+
+1. Open the button, sign in to Render, and authorize access to this repository if prompted.
+2. Review the Blueprint and create its **Free** web service. `render.yaml` uses the existing
+   Dockerfile to serve the game, `/api`, and `/ws` together. No database is required.
+3. Once the deploy is live, open the service's Render URL. Share that URL for solo play or
+   append `/?mode=coop` for the shared crew.
+
+The initial deployment works without an AI key and clearly labels its offline fixtures.
+To activate Claude, add `ANTHROPIC_API_KEY` in the service's **Environment** settings, then
+save and redeploy. Create a key at [Claude Console](https://platform.claude.com/settings/keys)
+if needed. The Blueprint already selects live mode, Anthropic, and `claude-sonnet-4-6`.
+Keep the key in Render's environment settings; never put it in Git or a `VITE_` variable.
+For GPT instead, use the [provider configuration below](#switch-back-to-gpt).
+
+Verify the deployed service:
+
+- `/api/health` should report `ok: true`. Without a key, `generation.effectiveMode` is
+  `fixture`; with the selected key configured, it is `live`.
+- `/api/config` should report `liveGenerationAvailable: true` after adding the key.
+  This confirms configuration, not that the provider accepted a request.
+- Prepare a world from HQ and check its receipt for `LIVE · claude-sonnet-4-6`.
+  A fixture/fallback receipt means no fresh AI world was produced; inspect Render's logs.
+- Open `/?mode=coop` in two browsers to join the same crew.
+
+Keep **one service instance**: the current backend has one in-memory crew of up to four
+players. Restarts/redeploys reset that crew; saved memories remain in each browser's local
+storage. Auto-deploys are off so commits do not interrupt a demo; deploy later updates
+manually from Render.
+
+Render's [free instance](https://render.com/docs/free) sleeps after 15 minutes without
+inbound traffic and takes about a minute to wake. Open the site before presenting, or
+choose a paid instance for an always-on demo. AI provider usage is billed separately.
+
 ## Team and ownership
 
 Three humans, three agents, one repo. **Read [`AGENTS.md`](AGENTS.md) first.**
