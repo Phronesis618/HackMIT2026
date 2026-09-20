@@ -66,8 +66,8 @@ export function incomingKind(sourceId: string, ranged: boolean): IncomingKind {
 }
 
 /** Multiplier on damage the player takes, after laws and tier scaling. */
-export function incomingDamageMul(fx: EffectSet, sourceId: string, ranged: boolean): number {
-  switch (incomingKind(sourceId, ranged)) {
+export function incomingDamageMul(fx: EffectSet, sourceId: string, ranged: boolean, kind?: IncomingKind): number {
+  switch (kind ?? incomingKind(sourceId, ranged)) {
     case 'terrain': return fx.has('hazard_ward') ? HAZARD_WARD_MUL : 1;
     case 'ranged': return fx.has('bolt_ward') ? BOLT_WARD_MUL : 1;
     case 'melee': return fx.has('melee_ward') ? MELEE_WARD_MUL : 1;

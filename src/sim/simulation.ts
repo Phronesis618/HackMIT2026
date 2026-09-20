@@ -53,7 +53,7 @@ import { NEUTRAL_LAWS, applyEncounterLaws, lawsSpareEncounter, resolveLaws, worl
 import {
   NO_EFFECTS, anchorRateMul, clearBonusResources, clearHasteMs, dashCooldownMul, dashInvulnerableBonusMs, dropTrailPoint, effectsFor,
   hasteAttackCooldownMul, hasteMoveMul, incomingDamageMul, outgoingDamageMul, relicMendHp, remainsCharge, skillWorldContext, stepDashTrail,
-  DASH_TRAIL_DAMAGE, type DashTrail, type EffectSet,
+  DASH_TRAIL_DAMAGE, type DashTrail, type EffectSet, type IncomingKind,
 } from './effects';
 import { buildSkillTree, skillPurchaseCheck } from '../shared/skills';
 import { createRoomProvider, type RoomProvider } from './floorProvider';
@@ -367,10 +367,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       room,
       players: () => orderedPlayers().filter((p) => p.state.hp > 0)
         .map((p) => ({ id: p.state.id, x: p.state.x, y: p.state.y, hp: p.state.hp, hidden: (p.state.shroudMs ?? 0) > 0 })),
-      damagePlayer: (playerId, sourceEnemyId, damage, ranged) => {
+      damagePlayer: (playerId, sourceEnemyId, damage, ranged, floor) => {
         const p = players.get(playerId);
         // Boss numbers are absolute: the tier curve scales the biome's enemies, never the Custodian.
-        return p ? damagePlayer(p, sourceEnemyId, damage, ranged, events, 350, false) : false;
+        return p ? damagePlayer(p, sourceEnemyId, damage, ranged, events, 350, false, floor ? 'terrain' : undefined) : false;
       },
       pushPlayer: (playerId, dx, dy) => {
         const p = players.get(playerId);
@@ -872,7 +872,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
    */
   function damagePlayer(
     p: PlayerRuntime, sourceEnemyId: string, damage: number, ranged: boolean, events: GameEvent[],
-    invulnerableMsAfter = 350, scaled = true,
+    invulnerableMsAfter = 350, scaled = true, wardKind?: IncomingKind,
   ): boolean {
     const s = p.state;
     if (s.hp <= 0 || s.invulnerableMs > 0 || (ranged && s.shieldMs > 0)) return false;
@@ -880,7 +880,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (scaled && enemyDamageScale !== 1 && sourceEnemyId !== 'anchor-pulse' && !isTerrainDamageSource(sourceEnemyId)) {
       damage = Math.round(damage * enemyDamageScale);
     }
-    const wardMul = incomingDamageMul(p.effects, sourceEnemyId, ranged);
+    const wardMul = incomingDamageMul(p.effects, sourceEnemyId, ranged, wardKind);
     if (wardMul !== 1) damage = Math.round(damage * wardMul);
     let amount = Math.min(s.hp, s.shieldMs > 0 ? Math.ceil(damage * 0.2) : damage);
     // Training range: hits land (so the telegraphs teach), but nobody goes down.

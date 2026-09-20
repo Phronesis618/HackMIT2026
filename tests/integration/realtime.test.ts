@@ -271,6 +271,39 @@ describe('authoritative realtime room', () => {
     expect(first.resumeToken).not.toBe(second.resumeToken);
   });
 
+  it('skill purchases: each socket buys only for itself, the server refuses bad buys, and a resume keeps them', async () => {
+    const server = await serve({ generation: fixtureService });
+    const host = await new Peer(server.url).open();
+    await host.hello('host');
+    const guest = await new Peer(server.url).open();
+    const seat = await guest.hello('guest');
+    const start = seat.snapshot.players.find((player) => player.id === 'guest')!.resources ?? 0;
+    expect(start).toBeGreaterThanOrEqual(2);
+    const owns = (id: string, nodes: string[] | undefined, resources: number) => (message: Extract<ServerMessage, { type: 'snapshot' }>) => {
+      const player = message.snapshot.players.find((candidate) => candidate.id === id)!;
+      return JSON.stringify(player.skillNodeIds) === JSON.stringify(nodes) && player.resources === resources;
+    };
+    // The guest buys: the guest pays, the host's purse and tree are untouched, and BOTH clients see it.
+    guest.send({ type: 'purchase_skill', nodeId: 'core.salvage' });
+    const seenByHost = await host.next('snapshot', owns('guest', ['core.salvage'], start - 2));
+    expect(owns('host', undefined, start)(seenByHost)).toBe(true);
+    await guest.next('snapshot', owns('guest', ['core.salvage'], start - 2));
+    // Refused: a second copy, a planned node, an unknown node, one the guest can no longer afford.
+    // The message carries no player id, so there is no way to name the host as the buyer.
+    for (const nodeId of ['core.salvage', 'core.plating', 'attune.0.hazard_ward', 'core.wind']) guest.send({ type: 'purchase_skill', nodeId });
+    guest.socket.send(JSON.stringify({ type: 'purchase_skill', nodeId: 'core.wind', playerId: 'host' }));
+    await guest.next('error');
+    // The host buys next; ordering proves the refused guest messages were processed first.
+    host.send({ type: 'purchase_skill', nodeId: 'core.wind' });
+    const after = await guest.next('snapshot', owns('host', ['core.wind'], start - 2));
+    expect(owns('guest', ['core.salvage'], start - 2)(after)).toBe(true);
+    // Reconnect: the purchase lives in sim state, so a resumed seat still owns it.
+    await guest.close();
+    const resumed = await new Peer(server.url).open();
+    const recovery = await resumed.hello(seat.playerId, { resumeToken: seat.resumeToken });
+    expect(recovery.snapshot.players.find((player) => player.id === 'guest')).toMatchObject({ skillNodeIds: ['core.salvage'], resources: start - 2 });
+  });
+
   it('keeps a requested exit pending until its room commits, then moves the group once', async () => {
     const full = await compactWorld();
     const release = gate();

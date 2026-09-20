@@ -194,6 +194,12 @@ describe('effectsFor', () => {
     expect(incomingDamageMul(all, 'husk-0', false)).toBe(0.75);
     expect(incomingDamageMul(all, 'anchor-pulse', false)).toBe(1);
     expect(incomingDamageMul(NO_EFFECTS, 'terrain:hazard', false)).toBe(1);
+    // The Custodian's flood and corrupted floor hit under the boss's own id, flagged as floor:
+    // hazard_ward covers them, and melee_ward must not stack a second reduction on top.
+    expect(incomingDamageMul(all, 'custodian-0', false, 'terrain')).toBe(0.6);
+    const meleeOnly = effectsFor({ classId: 'bastion', skillNodeIds: ['attune.2.melee_ward'] }, ctx);
+    expect(incomingDamageMul(meleeOnly, 'custodian-0', false)).toBe(0.75);
+    expect(incomingDamageMul(meleeOnly, 'custodian-0', false, 'terrain')).toBe(1);
     const bane = effectsFor({ classId: 'bastion', skillNodeIds: ['core.salvage', 'attune.0.guardian_bane', 'attune.1.first_strike'] },
       { title: 'T', attunements: attunementsFor(['guardian_bane', 'first_strike']) });
     expect(outgoingDamageMul(bane, { enemyId: 'guardian', hp: 100, maxHp: 100 })).toBe(2.4);
