@@ -49,6 +49,11 @@ a flat short fact is worth more than a long one.
   or the machine they left running. Rooms and floors written later use only this cast.
 
 ## title, tagline
-- title (max 40, aim 28): the name the inhabitants painted on the door. A place name, or
-  facility type plus a number or proper noun. No "of the", no abstract nouns.
-- tagline (max 80, aim 60): what it was, then one number that shows the damage.
+- title (max 40, aim 28, four words at most): the name the inhabitants painted on the
+  door. A place name, or facility type plus a number or proper noun. No "of the", no
+  abstract nouns. "Halloran Deep". "Pump Station Six".
+- tagline (hard max 80, aim 60): eleven words at most, counted. What it was, then one
+  number that shows the damage. Two short sentences are better than one long one:
+  "Seabed pump station. 260 on the roster, 48 accounted for." (57 characters, ten words.)
+  "Pump 6 ran at 140% for 19 days. Then Deck 4 flooded." (52 characters.) A twelfth word
+  is a fact you should have dropped.

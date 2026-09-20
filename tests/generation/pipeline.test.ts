@@ -18,7 +18,7 @@ import type { GenerationMetrics } from '../../src/server/generation/pipeline';
 import { buildSystemPrompt, namePool, worldSeeds } from '../../src/server/generation/prompt';
 import { GenerationFailure, assembleAnthropicStream, type RecipeProvider, type StageCall } from '../../src/server/generation/provider';
 import {
-  coerceJson, fitOverlong, fitText, lintWorld, parseBrief, parseFoundation, parseFullRecipe, parseLooseJson, parseWithFit,
+  applyFixes, coerceJson, cutFailures, fitOverlong, fitText, lintWorld, parseBrief, parseFoundation, parseFullRecipe, parseLooseJson, parseWithFit,
   planBiomeSlots, planRelicSlots, replaceEngineWords, swapEngineWords,
 } from '../../src/server/generation/stages';
 
@@ -72,12 +72,23 @@ const remainsRaw = {
   })),
   attunements: of('boonDescription').map((exemplar) => ({ effectId: exemplar.effectId!, name: exemplar.name!, description: exemplar.text })),
 };
-const lines = of('roomLine').map((exemplar) => exemplar.text);
+/**
+ * Seven room lines with seven different openings: the bank holds three, so four more are
+ * written here in the same ward. A floor whose lines repeat an opening is a lint failure of
+ * its own (`opener-repeat`), which is exercised on purpose further down.
+ */
+const lines = [
+  ...of('roomLine').map((exemplar) => exemplar.text),
+  'Bay C hatch is open. Two beds block the aisle behind it.',
+  'Med trolley 4 lies across the lane. The ward clock reads 22:10.',
+  "Wren's desk faces the door, 118 final notices stacked on it.",
+  'Four dispensers along the far wall, one still holding 40 doses.',
+];
 const briefRaw = (name: string, tagline = of('biomeTagline')[0]!.text) => ({
   name, tagline, motifIds: ['cables'], enemyPool: ['husk', 'sentinel'], propPool: ['crate', 'terminal'], hazards: false,
   layout: { linearity: 0.7, branchiness: 0.2, specials: { treasure: 1, lore: 2, rest: 1, elite: 1 } },
   terrain: { features: ['rubble'], layout: 'barricades', density: 'sparse' },
-  roomLines: { entrance: lines[0], combat: lines[1], elite: lines[2], treasure: lines[0], lore: lines[1], rest: lines[2], exit: lines[0] },
+  roomLines: { entrance: lines[0], combat: lines[1], elite: lines[2], treasure: lines[3], lore: lines[4], rest: lines[5], exit: lines[6] },
 });
 
 type Reply = unknown | ((call: StageCall) => unknown);
@@ -172,7 +183,11 @@ describe('runtime prompts', () => {
     }
     expect(buildSystemPrompt({ stage: 'full', seed: 9, ideas: [] })).toContain('## bible');
     expect(buildSystemPrompt({ stage: 'relics', seed: 9, ideas: [] })).toMatch(/max 520/);
-    expect(buildSystemPrompt({ stage: 'rooms', seed: 9, ideas: [] })).toMatch(/max 100 chars/);
+    expect(buildSystemPrompt({ stage: 'rooms', seed: 9, ideas: [] })).toMatch(/fourteen words at most/);
+    // every stage that writes prose gives the model a word budget, not just a character limit
+    for (const stage of ['foundation', 'rooms', 'laws', 'relics', 'remains', 'biomes'] as const) {
+      expect(buildSystemPrompt({ stage, seed: 9, ideas: [] }), stage).toMatch(/words at most|word budget/);
+    }
   });
 
   it('are deterministic per seed and rotate names, collapse kinds and documents between worlds', () => {
@@ -473,6 +488,50 @@ describe('lenient parsing and transport helpers', () => {
     expect(fitOverlong(parts, bible)).toBe(1);
     expect(parts.biomes[0]!.tagline).toBe('Twelve beds along one wall of Bay C.');
     expect(lintWorld(parts, bible).rules).not.toContain('too-long');
+  });
+
+  it('sends a line trusted code had to cut back to be written short, instead of shipping the cut', () => {
+    const cuts: Array<{ path: string; length: number; max: number }> = [];
+    const long = `${'Beds bolted down along the whole left wall of Bay C, 31 of them, '.repeat(3)}and the door.`;
+    const parsed = parseWithFit(WorldLawSchema, { lawId: 'long_dark', name: "Reyes's Hold", description: long, intensity: 0.5 }, cuts);
+    expect(parsed.success).toBe(true);
+    expect(cuts).toEqual([{ path: 'description', length: long.length, max: 160 }]);
+    const parts = { laws: [parsed.data as WorldLaw] };
+    const failures = cutFailures(parts, bible, cuts.map((cut) => ({ ...cut, path: `laws[0].${cut.path}` })));
+    expect(failures).toHaveLength(1);
+    expect(failures[0]!.notes[0]).toMatch(/Rule cut-short: this was written at \d+ characters .* at most \d+ words/);
+    // and the polish reply is taken even though the cut line no longer breaks any line-level rule
+    expect(applyFixes(parts, bible, failures, [{ path: 'laws[0].description', text: "Reyes locked Bay C on 2 March. Nothing shows beyond a step or two from each operative." }])).toBe(1);
+    expect(parts.laws[0]!.description).toMatch(/^Reyes locked Bay C/);
+  });
+
+  it('rejects a law that states the fact and never gives the rule, and one that repeats the engine\'s numbers', () => {
+    const law = (description: string): WorldLaw => ({ lawId: 'long_dark', name: "Reyes's Hold", description, intensity: 0.5 });
+    const rules = (description: string) => lintWorld({ laws: [law(description)] }, bible).rules;
+    expect(rules('Reyes cut the lights in Bay C on 2 March and kept 118 patients in the dark.')).toContain('law-needs-rule');
+    expect(rules('Reyes cut the lights in Bay C on 2 March. Sight ends 215 px from each operative.')).toContain('law-engine-numbers');
+    expect(rules('Reyes cut the lights in Bay C on 2 March. Sight ends a short way out; hazards still show.')).toEqual([]);
+  });
+
+  it('rejects a remains fragment that puts one of the three authors on the tag', () => {
+    const author = bible.authors[0]!.name;
+    const remains = (title: string, text: string) => lintWorld({ lore: [{
+      kind: 'remains' as const, title, source: 'linen tag', text, roomIndex: 0, enemyId: 'husk' as const, authorIndex: 0, eventIndex: 0,
+    }] }, bible);
+    expect(remains(`Wristband, ${author}`, 'Ward wristband, Bay C, 14 March. 118 were issued that night.').rules).toContain('remains-author-name');
+    expect(remains('Wristband, size M', `Ward wristband, Bay C, 14 March. ${author} wrote the bed number on the back.`).rules).not.toContain('remains-author-name');
+  });
+
+  it('rejects a floor whose room lines keep opening the same way', () => {
+    const repeated = ['Two beds block the aisle.', 'Three rigged patients by the hatch.', 'Four dispensers on the wall, 40 doses left.'];
+    const brief = parseBrief({ ...briefRaw('Bay C'), roomLines: {
+      entrance: repeated[0], combat: repeated[1], elite: repeated[2], treasure: lines[0], lore: lines[1], rest: lines[2], exit: lines[3],
+    } }, 0)!;
+    const parts = { biomes: [brief.brief], biomeRoomLines: [{ biomeId: brief.brief.id, lines: brief.lines }] };
+    const failure = lintWorld(parts, bible).failures.find((entry) => entry.notes[0]!.startsWith('Rule opener-repeat'));
+    expect(failure?.path).toBe('biomes[0].rooms[2].description');
+    expect(failure?.notes[0]).toContain('open the same way (on a count)');
+    expect(lintWorld({ biomes: [brief.brief], biomeRoomLines: [{ biomeId: brief.brief.id, lines: parseBrief(briefRaw('Bay C'), 0)!.lines }] }, bible).rules).not.toContain('opener-repeat');
   });
 
   it('deals every relic slot an author, an event and a length, and every biome slot its own setting', () => {
