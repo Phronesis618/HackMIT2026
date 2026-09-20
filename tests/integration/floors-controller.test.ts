@@ -34,29 +34,35 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/** One floors-world GameController over a LocalSession, with the rooms the renderer was shown. */
+async function harness() {
+  const data = new Map<string, string>();
+  const chronicle = createBrowserChronicle({
+    getItem: (key) => data.get(key) ?? null, setItem: (key, value) => { data.set(key, value); }, removeItem: (key) => { data.delete(key); },
+  });
+  const session = new LocalSession({
+    identity: { id: 'solo', displayName: 'Solo', classId: 'bastion' },
+    worldProvider: {
+      ...fixtureWorldProvider, prepareWorldStream: undefined,
+      prepareWorld: (request, options) => fixtureWorldProvider.prepareWorld({ ...request, floors: true }, options),
+    },
+  });
+  const shown: RoomSpec[] = [];
+  const renderer: WorldRenderer = {
+    mount: vi.fn(async () => {}), showHeadquarters: vi.fn(), showRoom: vi.fn((room: RoomSpec) => { shown.push(room); }),
+    renderSnapshot: vi.fn(), playEvents: vi.fn(), screenToWorld: (x, y) => ({ x, y }),
+    captureThumbnail: vi.fn(async () => null), destroy: vi.fn(),
+  };
+  const flags = { fixtureWorld: true, startRoom: null, autoEnter: false };
+  const store = createUiStore(GameController.initialModel(session, flags, chronicle, false));
+  controller = new GameController({ session, renderer, store, chronicle, flags, audio: createSilentAudio(), liveGenerationAvailable: false });
+  await controller.attachStage({} as HTMLElement);
+  return { session, store, shown, controller };
+}
+
 describe('GameController in floors mode', () => {
   it('shows each floors room once, compiled locally from the snapshot ref', async () => {
-    const data = new Map<string, string>();
-    const chronicle = createBrowserChronicle({
-      getItem: (key) => data.get(key) ?? null, setItem: (key, value) => { data.set(key, value); }, removeItem: (key) => { data.delete(key); },
-    });
-    const session = new LocalSession({
-      identity: { id: 'solo', displayName: 'Solo', classId: 'bastion' },
-      worldProvider: {
-        ...fixtureWorldProvider, prepareWorldStream: undefined,
-        prepareWorld: (request, options) => fixtureWorldProvider.prepareWorld({ ...request, floors: true }, options),
-      },
-    });
-    const shown: RoomSpec[] = [];
-    const renderer: WorldRenderer = {
-      mount: vi.fn(async () => {}), showHeadquarters: vi.fn(), showRoom: vi.fn((room: RoomSpec) => { shown.push(room); }),
-      renderSnapshot: vi.fn(), playEvents: vi.fn(), screenToWorld: (x, y) => ({ x, y }),
-      captureThumbnail: vi.fn(async () => null), destroy: vi.fn(),
-    };
-    const flags = { fixtureWorld: true, startRoom: null, autoEnter: false };
-    const store = createUiStore(GameController.initialModel(session, flags, chronicle, false));
-    controller = new GameController({ session, renderer, store, chronicle, flags, audio: createSilentAudio(), liveGenerationAvailable: false });
-    await controller.attachStage({} as HTMLElement);
+    const { session, store, shown } = await harness();
     const world = await session.requestWorld();
     const provider = createRoomProvider(world)!;
     session.enterPortal();
@@ -77,5 +83,34 @@ describe('GameController in floors mode', () => {
     const next = provider.getRoom({ biomeId: entrance.biomeId!, roomId: door.toRoomId! });
     expect(shown).toEqual([entrance, next]);
     expect(store.get().room).toMatchObject({ name: next.name, isFinal: false });
+  });
+
+  // A2 / docs/QA_COOP.md "still open": the biome-choice prompt sat on the guest's screen after
+  // the host had already moved the crew on. Info notices belong to a moment, so they end with it.
+  it('drops an info notice when the crew changes room, and keeps an error until it is dismissed', async () => {
+    const { session, store, controller: game } = await harness();
+    game.actions.enterPortal(); // no world yet: raises the info prompt
+    expect(store.get().notice).toMatchObject({ kind: 'info' });
+    session.advance(TICK_MS);
+    expect(store.get().notice).toMatchObject({ kind: 'info' }); // standing still does not clear it
+
+    const world = await session.requestWorld();
+    const provider = createRoomProvider(world)!;
+    session.enterPortal();
+    session.advance(TICK_MS);
+    expect(store.get().notice).toBeNull();
+
+    // An error is not transient: walking into the next room must not swallow it.
+    store.set({ notice: { kind: 'error', text: 'Failed to start.' } });
+    const entrance = provider.getRoom(provider.entranceRef());
+    const door = entrance.exits[0]!;
+    for (let i = 0; i < 1500 && session.getSnapshot()!.floor!.roomId === 'r00'; i++) {
+      const snapshot = session.getSnapshot()!;
+      Object.assign(input, steerIntent(entrance, snapshot, snapshot.players[0]!, tileToWorld(door.x, door.y), false));
+      frame();
+      session.advance(TICK_MS);
+    }
+    expect(session.getSnapshot()!.floor!.roomId).not.toBe('r00');
+    expect(store.get().notice).toMatchObject({ kind: 'error' });
   });
 });

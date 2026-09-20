@@ -231,7 +231,15 @@ export class GameController {
       this.latestSnapshot?.worldId !== snapshot.worldId ||
       this.latestSnapshot?.roomId !== snapshot.roomId ||
       this.latestSnapshot?.phase !== snapshot.phase
-    ) this.viewVersion++;
+    ) {
+      this.viewVersion++;
+      // An info notice is about the moment it was raised. Once the crew is somewhere else the
+      // prompt is stale, so it goes with the room — nobody should have to dismiss yesterday's
+      // offer on their own screen (docs/QA_COOP.md, the biome choice on a guest's screen).
+      // Errors are not transient and stay until they are dismissed. The very first snapshot is
+      // not a move: it is the session catching up, and it must not eat a prompt raised before it.
+      if (this.latestSnapshot !== null && this.deps.store.get().notice?.kind === 'info') this.deps.store.set({ notice: null });
+    }
     this.latestSnapshot = snapshot;
     const { session, store, renderer, audio } = this.deps;
     const nearbyStationId = nearbyHeadquartersStation(snapshot, session.localPlayerId)?.id ?? null;
