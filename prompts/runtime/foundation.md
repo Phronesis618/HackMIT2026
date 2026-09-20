@@ -1,10 +1,14 @@
 # This call: the foundation
 
-Write the fields in schema order. The bible comes first because everything after it must
-use its names. The bible is never shown to players; it is a list of things that happened.
-Other writers are waiting on this call, so be brief: every field has a tight character
-limit, and a flat short fact is worth more than a long one. `bible` is a JSON object
-with nested lists, never a string.
+Write the fields in schema order, all ten of them, each at the top level of the tool input:
+`premise`, `collapse`, `people`, `places`, `objects`, `events`, `authors`, `enemies`, then
+`title` and `tagline`. There is no wrapper key. A list is a list and an object is an object;
+never send one as a string.
+
+The first eight fields are the world bible: everything written after this call must use its
+names. The bible is never shown to players; it is a list of things that happened. Other
+writers are waiting on this call, so be brief: every field has a tight character limit, and
+a flat short fact is worth more than a long one.
 
 ## bible
 - Take every idea literally and build it into the premise, the people, the places or the
@@ -13,11 +17,12 @@ with nested lists, never a string.
   pattern and a line in the budget. No idea is quietly replaced by something more sensible.
 - premise (max 120 chars): one flat sentence, what this place was for. A working place
   with a purpose, staff and a budget. Build it from the players' ideas.
-- collapse (max 200): one cause. A named person did something on a date; give the number
-  that went wrong and how many people were caught by it. No unknown forces. The data
-  carries a `collapseKind`: build the cause on it unless the ideas clearly point elsewhere.
-  Paperwork (a form nobody signed, an order countersigned unread) is the cause only if the
-  collapseKind says so.
+- collapse (max 200): one cause. A named person did one physical thing on a date: they
+  moved, opened, overfilled, swapped, wedged, switched off, held back or let in a named
+  object. Give the number that went wrong and how many people were caught by it. No unknown
+  forces. The data carries a `collapseKind`: build the act on it unless the ideas clearly
+  point elsewhere. A signature, a countersigned order or an unread form can be the evidence
+  the crew finds afterwards; the act itself is something done with hands, to a thing.
 - people: 3 or 4. name, job (max 36), want (max 56). The want is small and concrete: a transfer, a count that
   balances, a letter answered. Names are ordinary, the kind found on a payroll: mix origins,
   given name plus surname; the data includes a `namePool` you may draw from when the ideas do

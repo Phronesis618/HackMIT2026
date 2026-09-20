@@ -14,6 +14,8 @@ world must differ from each other in shape, enemy pool and motifs.
 roomLines: one line under each key entrance, combat, elite, treasure, lore, rest, exit
 (max 100 chars each). What is visible from the door of that kind of room in this biome:
 threat first with where it is, then one usable feature. Rest, lore and treasure rooms have
-no threat: say what is on the table. Enemies are named by their former job from the bible.
+no threat: say what is on the table. The ids you put in enemyPool are engine words and
+appear in no line: every creature is named by its former job from the bible, singular or
+plural as the sentence needs ("one of the brine divers", "four Deck 4 loaders").
 Seven lines, seven different openings. Rest and treasure rooms differ from floor to floor:
 name what this particular room was used for and the one object left on its table.

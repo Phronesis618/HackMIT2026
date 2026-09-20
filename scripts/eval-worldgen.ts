@@ -7,6 +7,11 @@
  * never written to the output). Saves one JSON per world plus summary.json under
  * /tmp/relay-eval/<run>/ and prints per world: latency per call, tokens, model calls,
  * lint score before/after repair, hard-fail rules hit, derived briefs.
+ *
+ * It also saves `raw-<id>.jsonl`: the tool input of every model call exactly as it arrived,
+ * before any parsing. That is the only way to see the shape of a reply the parser rejected
+ * (a whole run was lost to `bible` arriving as a string that nobody had ever looked at).
+ * The file holds world text only: no key, no prompt, no request headers.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { loadWorldFixtures } from '../src/server/generation/fixtureService';
 import { createLiveGenerationService } from '../src/server/generation/liveService';
 import type { GenerationMetrics } from '../src/server/generation/pipeline';
-import { createAnthropicProvider } from '../src/server/generation/provider';
+import { createAnthropicProvider, type RecipeProvider } from '../src/server/generation/provider';
 import { lintWorld } from '../src/server/generation/stages';
 import type { Contribution } from '../src/shared/contracts';
 
@@ -67,9 +72,20 @@ async function main(): Promise<void> {
     let metrics: GenerationMetrics | undefined;
     const began0 = Date.now();
     const usage = { input: 0, output: 0 };
+    const base = createAnthropicProvider({ apiKey, model: MODEL, onUsage: (u) => { usage.input += u.inputTokens; usage.output += u.outputTokens; } });
+    const rawFile = path.join(outDir, `raw-${set.id}.jsonl`);
+    /** Records what the model actually sent, so a rejected reply can be read afterwards. */
+    const provider: RecipeProvider = {
+      ...base,
+      callStage: async (call, signal) => {
+        const result = await base.callStage!(call, signal);
+        fs.appendFileSync(rawFile, `${JSON.stringify({ stage: call.stage, atMs: Date.now() - began0, raw: result.raw })}\n`);
+        return result;
+      },
+    };
     const service = createLiveGenerationService({
-      provider: createAnthropicProvider({ apiKey, model: MODEL, onUsage: (u) => { usage.input += u.inputTokens; usage.output += u.outputTokens; } }),
-      model: MODEL, fixtures, log: (message) => { if (/fail|Fallback/i.test(message)) console.log(`   [${set.id}] LOG ${message}`); }, floors, ...(arg('budget') ? { worldBudgetMs: Number(arg('budget')) * 1000 } : {}), onMetrics: (m) => { metrics = m; },
+      provider,
+      model: MODEL, fixtures, log: (message) => { if (/fail|Fallback|Rejected|reject/i.test(message)) console.log(`   [${set.id}] LOG ${message}`); }, floors, ...(arg('budget') ? { worldBudgetMs: Number(arg('budget')) * 1000 } : {}), onMetrics: (m) => { metrics = m; },
       onCall: (call) => console.log(`   [${set.id}] ${call.stage} ${call.ok ? 'ok' : `FAILED (${call.error ?? ''})`} ${(call.ms / 1000).toFixed(1)}s (done at +${((Date.now() - began0) / 1000).toFixed(1)}s) in=${call.inputTokens ?? '?'} out=${call.outputTokens ?? '?'}`),
     });
     const contributions: Contribution[] = set.ideas.map(([playerName, text], index) => ({
@@ -84,6 +100,7 @@ async function main(): Promise<void> {
     const row = {
       id: set.id, source: world.provenance.source, title: world.recipe.title, wallMs,
       call1Ms: metrics?.calls.find((call) => call.stage === 'foundation' && call.ok)?.ms ?? null,
+      foundationCalls: metrics?.calls.filter((call) => call.stage === 'foundation').length ?? 0,
       foundationMs: metrics?.foundationMs ?? null,
       calls: metrics?.calls.map((call) => `${call.stage}${call.ok ? '' : '!'}:${(call.ms / 1000).toFixed(1)}s/${call.outputTokens ?? '?'}t`).join(' ') ?? '',
       modelCalls: world.provenance.attempts, inputTokens: usage.input, outputTokens: usage.output,
@@ -120,6 +137,9 @@ async function main(): Promise<void> {
   const summary = {
     run, model: MODEL, floors, worlds: rows.length, live: live.length,
     zeroHardFails: live.filter((row) => row.failingAfter === 0).length,
+    /** Worlds where call 1 needed a second round: the single biggest term in time to first room. */
+    call1Repaired: live.filter((row) => Number(row.foundationCalls) > 1).length,
+    wallUnder60s: live.filter((row) => Number(row.wallMs) < 60_000).length,
     meanLintBefore: mean(live.map((row) => Number(row.lintBefore))), meanLintAfter: mean(live.map((row) => Number(row.lintAfter))),
     call1P50Ms: p50(live.map((row) => Number(row.call1Ms))), wallP50Ms: p50(live.map((row) => Number(row.wallMs))), wallMaxMs: Math.max(0, ...live.map((row) => Number(row.wallMs))),
     meanInputTokens: mean(live.map((row) => Number(row.inputTokens))), meanOutputTokens: mean(live.map((row) => Number(row.outputTokens))),

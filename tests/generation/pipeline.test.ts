@@ -17,7 +17,10 @@ import { createLiveGenerationService } from '../../src/server/generation/liveSer
 import type { GenerationMetrics } from '../../src/server/generation/pipeline';
 import { buildSystemPrompt, namePool, worldSeeds } from '../../src/server/generation/prompt';
 import { GenerationFailure, assembleAnthropicStream, type RecipeProvider, type StageCall } from '../../src/server/generation/provider';
-import { coerceJson, fitOverlong, fitText, lintWorld, parseBrief, parseFullRecipe, parseLooseJson, parseWithFit, planBiomeSlots, planRelicSlots } from '../../src/server/generation/stages';
+import {
+  coerceJson, fitOverlong, fitText, lintWorld, parseBrief, parseFoundation, parseFullRecipe, parseLooseJson, parseWithFit,
+  planBiomeSlots, planRelicSlots, replaceEngineWords, swapEngineWords,
+} from '../../src/server/generation/stages';
 
 const fixtures = loadWorldFixtures(path.resolve(__dirname, '../../fixtures/worlds'));
 const legacyRecipe = fixtures.find((fixture) => fixture.fixtureId === 'vantage-spire')!.recipe;
@@ -188,7 +191,7 @@ describe('two-call flow', () => {
     expect(PreparedWorldSchema.safeParse(world).success).toBe(true);
     expect(world.provenance).toMatchObject({ source: 'live', model: 'mock-model' });
     expect(calls[0]!.stage).toBe('foundation');
-    expect(Object.keys((calls[0]!.schema as { properties: object }).properties)[0]).toBe('bible');
+    expect(Object.keys((calls[0]!.schema as { properties: object }).properties).slice(0, 3)).toEqual(['premise', 'collapse', 'people']);
     expect(calls.slice(1).map((call) => call.stage).sort()).toEqual(['biomes:1', 'biomes:2', 'biomes:3', 'biomes:4', 'laws', 'relics', 'remains', 'rooms']);
     for (const call of calls.slice(1)) expect((call.input as { bible: unknown }).bible).toEqual(bible);
     expect(JSON.stringify(calls.map((call) => call.input))).not.toContain(sampleContributions[0]!.playerName);
@@ -333,7 +336,20 @@ describe('linter in the repair loop', () => {
   it('flags engine words and header lines over their hard limit even when prose.ts passes them', () => {
     const lint = lintWorld({ rooms: [{ ...roomsRaw.rooms[0]!, description: 'Two husks by the Pharmacy Hatch. Med trolley 4 blocks the left aisle.' }] }, bible);
     expect(lint.rules).toContain('engine-word');
-    expect(lint.failures[0]!.notes[0]).toContain('former job');
+    // The note names the replacement. The same advice without it survived two polish rounds live.
+    expect(lint.failures[0]!.notes[0]).toContain(bible.enemies.find((enemy) => enemy.enemyId === 'husk')!.formerJob);
+  });
+
+  it('replaces an engine word left after polish with the bible former job, singular or plural', () => {
+    expect(swapEngineWords('Two husks by the Pharmacy Hatch.', bible)).toBe(`Two ${bible.enemies.find((e) => e.enemyId === 'husk')!.formerJob} by the Pharmacy Hatch.`);
+    expect(swapEngineWords('A husk holds the door.', bible)).toBe(`One of the ${bible.enemies.find((e) => e.enemyId === 'husk')!.formerJob} holds the door.`);
+    expect(swapEngineWords('Behind the husk, med trolley 4.', bible)).toBe(`Behind one of the ${bible.enemies.find((e) => e.enemyId === 'husk')!.formerJob}, med trolley 4.`);
+    // A creature the bible never cast keeps its word: trusted code does not invent a job.
+    expect(swapEngineWords('Two lurkers wait.', { ...bible, enemies: [] })).toBe('Two lurkers wait.');
+
+    const parts = { rooms: [{ ...roomsRaw.rooms[0]!, description: 'Two husks by the Pharmacy Hatch. Med trolley 4 blocks the left aisle.' }] };
+    expect(replaceEngineWords(parts, bible)).toBe(1);
+    expect(lintWorld(parts, bible).rules).not.toContain('engine-word');
   });
 });
 
@@ -398,6 +414,30 @@ describe('lenient parsing and transport helpers', () => {
     expect(parseBrief({ ...briefRaw('Bay C'), roomLines: { ...briefRaw('x').roomLines, rest: null } }, 1)!.lines.map((line) => line.kind)).not.toContain('rest');
     expect(parseBrief({ ...briefRaw('Bay C'), hazards: 'yes' }, 1)).toBeUndefined();
     expect(parseWithFit(WorldBibleSchema, { ...bible, places: [...bible.places, 'Sixth Place'] }).success).toBe(true);
+  });
+
+  it('reads call 1 flat (the bible fields at the top level) and nested alike', () => {
+    const flat = { ...bible, title: foundationRaw.title, tagline: foundationRaw.tagline };
+    const fromFlat = parseFoundation(flat);
+    expect('foundation' in fromFlat && fromFlat.foundation).toMatchObject({ bible, header: { title: foundationRaw.title } });
+    const fromNested = parseFoundation(foundationRaw);
+    expect('foundation' in fromNested && fromNested.foundation.bible).toEqual(bible);
+    // A complete pre-bible recipe still goes through untouched.
+    expect('legacy' in parseFoundation(legacyRecipe)).toBe(true);
+    // The flat reply never saw a `bible` key, so its repair note must not invent one.
+    expect(() => parseFoundation({ ...flat, events: [] })).toThrow(/at events/);
+    expect(() => parseFoundation({ ...foundationRaw, bible: 'a quarantine ward' })).toThrow(/at bible/);
+  });
+
+  it('keeps a floor whose room lines are unusable, and fits the ones that are', () => {
+    const long = `${'Twelve beds along one wall of Bay C, med trolley 4 across the door. '.repeat(3)}`;
+    const parsed = parseBrief({ ...briefRaw('Bay C'), roomLines: { ...briefRaw('x').roomLines, rest: null, combat: long, elite: 12 } }, 3);
+    expect(parsed).toBeDefined();
+    expect(parsed!.lines.map((line) => line.kind)).not.toContain('rest');
+    expect(parsed!.lines.map((line) => line.kind)).not.toContain('elite');
+    expect(parsed!.lines.find((line) => line.kind === 'combat')!.text.length).toBeLessThanOrEqual(100);
+    // roomLines that are not an object at all cost the lines, never the floor
+    expect(parseBrief({ ...briefRaw('Bay C'), roomLines: 'entrance: the airlock' }, 4)!.lines).toEqual([]);
   });
 
   it('reads a bible that arrived as a JSON string and strips Markdown emphasis', () => {

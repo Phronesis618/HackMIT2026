@@ -39,16 +39,24 @@ export const ModelLoreFragmentSchema = z.object({
 });
 export type ModelLoreFragment = z.infer<typeof ModelLoreFragmentSchema>;
 
-const roomLineText = z.string().trim().min(1).max(140);
+/**
+ * The house limits, not the storage limits: `BiomeRoomLineSchema` stores 140 characters and
+ * the linter fails a room line over 100, so a schema that advertised 140 bought three
+ * over-long lines per run that then needed a polish call to cut. The schema now says 100.
+ */
+const roomLineText = z.string().trim().min(1).max(100);
 /** One line per room kind, as fixed keys: cheaper in output tokens than a list of {kind, text}. */
 const ModelRoomLinesSchema = z.object({
   entrance: roomLineText, combat: roomLineText, elite: roomLineText, treasure: roomLineText, lore: roomLineText, rest: roomLineText, exit: roomLineText,
 });
+export const MODEL_ROOM_LINE_MAX = 100;
 
 /** BiomeBrief (same bounds as src/shared/floors.ts) plus the per-kind room lines. */
 export const ModelBriefSchema = z.object({
   name: z.string().trim().min(1).max(40),
-  tagline: z.string().trim().min(1).max(140),
+  // 80 is the linter's biomeTagline limit; every over-long tagline in the last live run was
+  // between 95 and 113 characters, i.e. written to the old 140 the schema advertised.
+  tagline: z.string().trim().min(1).max(80),
   motifIds: z.array(z.enum(MOTIF_IDS)).min(1).max(3),
   enemyPool: z.array(z.enum(ENEMY_IDS)).min(1).max(5),
   propPool: z.array(z.enum(PROP_IDS)).min(1).max(5),
@@ -76,16 +84,27 @@ export const ModelBibleSchema = z.object({
   enemies: z.array(z.object({ enemyId: z.enum(ENEMY_IDS), formerJob: tight(48) })).min(3).max(5),
 });
 
-/** Parsing accepts a missing or null room line (seen live: `rest: null` for a floor with no rest room). */
-const LenientBriefSchema = ModelBriefSchema.extend({
-  roomLines: z.object(Object.fromEntries(Object.keys(ModelRoomLinesSchema.shape).map((key) => [key, roomLineText.nullish().catch(undefined)])) as unknown as Record<keyof typeof ModelRoomLinesSchema.shape, z.ZodType<string | null | undefined>>).nullish(),
-});
+/**
+ * Room lines are validated OUTSIDE the brief schema (see `parseBrief`): a floor is worth more
+ * than its seven room lines, and a single over-long one used to cost the whole brief, which
+ * trusted code then had to derive (seen live: one floor lost to four lines over the limit).
+ * Missing and null lines are normal too (`rest: null` for a floor with no rest room).
+ */
+const LenientBriefSchema = ModelBriefSchema.omit({ roomLines: true });
 
 const foundationShape = {
   bible: ModelBibleSchema,
   title: WorldRecipeSchema.shape.title,
   tagline: WorldRecipeSchema.shape.tagline,
 };
+/**
+ * Call 1 asks for the bible's fields at the TOP level, with no `bible` wrapper.
+ * Measured: with a nested `bible` object, 4 of 8 live worlds sent it as one JSON string and
+ * paid a 22 s repair round for it (the single largest term in time to first room). A field
+ * that is a plain string, list or list-of-objects is not a thing the model can stringify by
+ * mistake. `parseFoundation` still reads the nested form, which the single-call tool uses.
+ */
+const flatFoundationShape = { ...ModelBibleSchema.shape, title: foundationShape.title, tagline: foundationShape.tagline };
 const roomsShape = {
   themeSummary: z.string().trim().min(1).max(200),
   motifIds: z.array(MotifIdSchema).min(1).max(4),
@@ -99,7 +118,7 @@ const lawsShape = {
   terrainSkins: z.array(TerrainSkinSchema).max(4),
   custodian: CustodianSchema,
 };
-export const FoundationToolSchema = z.object(foundationShape);
+export const FoundationToolSchema = z.object(flatFoundationShape);
 export const RoomsToolSchema = z.object(roomsShape);
 export const LawsToolSchema = z.object(lawsShape);
 export const RelicsToolSchema = z.object({ lore: z.array(ModelLoreFragmentSchema).max(8) });
@@ -257,28 +276,38 @@ export const briefRejections = new Map<number, string>();
 export function parseBrief(raw: unknown, index: number): ParsedBrief | undefined {
   briefRejections.delete(index);
   const value = coerceJson(raw);
+  let roomLines: unknown;
   if (isRecord(value)) {
     for (const key of ['motifIds', 'enemyPool', 'propPool'] as const) {
       if (Array.isArray(value[key])) value[key] = [...new Set(value[key] as unknown[])];
     }
     if (Array.isArray(value.propPool)) value.propPool = (value.propPool as unknown[]).filter((id) => id !== 'anchor_pedestal');
+    roomLines = coerceJson(value.roomLines);
+    delete value.roomLines;
   }
   const model = parseWithFit(LenientBriefSchema, value);
   if (!model.success) {
     briefRejections.set(index, issuesText(model.error));
     return undefined;
   }
-  const { roomLines, terrain, ...rest } = model.data;
+  const { terrain, ...rest } = model.data;
   const brief = BiomeBriefSchema.safeParse({ ...rest, ...(terrain ? { terrain } : {}), id: `b${index}-${slug(rest.name)}` });
   if (!brief.success) {
     briefRejections.set(index, issuesText(brief.error));
     return undefined;
   }
-  const lines = BIOME_LINE_KINDS.flatMap((kind) => {
-    const text = roomLines?.[kind as keyof typeof roomLines];
+  return { brief: brief.data, lines: parseRoomLines(roomLines) };
+}
+
+/** One line per room kind, each fitted to the house limit; anything that is not text is dropped. */
+export function parseRoomLines(raw: unknown): ParsedBrief['lines'] {
+  if (!isRecord(raw)) return [];
+  return BIOME_LINE_KINDS.flatMap((kind) => {
+    const value = raw[kind];
+    if (typeof value !== 'string') return [];
+    const text = fitText(value, MODEL_ROOM_LINE_MAX);
     return text ? [{ kind, text }] : [];
   });
-  return { brief: brief.data, lines };
 }
 
 export interface Foundation {
@@ -300,18 +329,33 @@ export interface LawsPart {
   notes: string[];
 }
 
-/** `legacy` = a complete pre-bible recipe (old model output): accepted as-is, no second call. */
+/**
+ * Accepts three shapes, in this order:
+ *   - call 1's flat reply: the bible's own fields at the top level beside `title`/`tagline`;
+ *   - a nested `bible` object (the single-call tool, and anything older);
+ *   - `legacy` = a complete pre-bible recipe (old model output), accepted as-is, no second call.
+ */
 export function parseFoundation(input: unknown): { legacy: z.infer<typeof WorldRecipeSchema> } | { foundation: Foundation } {
   const raw = coerceJson(input);
   if (!isRecord(raw)) throw new StageParseError('Recipe failed schema validation at (root): expected an object.');
-  if (raw.bible == null) {
+  // `coerceJson` has already tried to parse a stringified value back; a nested bible that is
+  // still not an object falls through to the flat reading, whose error names the real field.
+  const nested = raw.bible == null ? undefined : coerceJson(raw.bible);
+  const flat = raw.premise !== undefined || raw.events !== undefined;
+  const bibleSource = isRecord(nested) ? nested : flat ? raw : undefined;
+  if (!bibleSource) {
+    if (raw.bible != null) throw new StageParseError(`Recipe failed schema validation at bible: expected the bible's fields at the top level, received ${typeof raw.bible}.`);
     const legacy = WorldRecipeSchema.safeParse(raw);
     if (!legacy.success) throw new StageParseError(`Recipe failed schema validation at ${issuesText(legacy.error)}.`);
     return { legacy: legacy.data };
   }
   // Over-long header lines are kept here and sent to the polish call (see `headerOverflow`); `fitHeader` is the last resort.
-  const core = parseWithFit(z.object({ bible: WorldBibleSchema, title: z.string().trim().min(1).max(120), tagline: z.string().trim().min(1).max(240) }), raw);
-  if (!core.success) throw new StageParseError(`Recipe failed schema validation at ${issuesText(core.error)}.`);
+  const core = parseWithFit(
+    z.object({ bible: WorldBibleSchema, title: z.string().trim().min(1).max(120), tagline: z.string().trim().min(1).max(240) }),
+    { ...raw, bible: bibleSource },
+  );
+  // A flat reply never saw a `bible` key, so the repair note must name the field it did see.
+  if (!core.success) throw new StageParseError(`Recipe failed schema validation at ${flat && !isRecord(nested) ? issuesText(core.error).replaceAll('bible.', '') : issuesText(core.error)}.`);
   const { bible, ...header } = core.data;
   return { foundation: { bible, header } };
 }
@@ -631,9 +675,12 @@ export function lintWorld(parts: Lintable, bible: WorldBible | undefined): World
   }
   for (const hit of engineWords) {
     rules.add('engine-word');
+    // Naming the replacement is the whole note: the same advice without the former job in it
+    // survived two polish rounds twice in the last live run.
+    const job = formerJobFor(hit.word, bible);
     failures.push({
       path: hit.path, kind: hit.kind, text: hit.text, maxChars: Math.min(POLISH_MAX[hit.kind] ?? Infinity, KIND_SPECS[hit.kind].max),
-      notes: [`Rule engine-word: "${hit.word}" is the engine's id for that enemy and players never see it. Call the creature by its former job from the bible.`],
+      notes: [`Rule engine-word: "${hit.word}" is the engine's id for that enemy and no player ever reads it.${job ? ` In this world those creatures are ${job}: use that, in whatever wording the sentence needs.` : ' Call the creature by its former job from the bible.'}`],
     });
   }
   return {
@@ -645,6 +692,40 @@ export function lintWorld(parts: Lintable, bible: WorldBible | undefined): World
 
 /** Registry enemy ids that are not ordinary job words (`warden`, `guardian` and `sentinel` can be real titles). */
 const ENGINE_WORDS = /\b(?:husks?|lurkers?|spewers?|swarmlings?|channell?ers?)\b/i;
+const ENGINE_WORDS_ALL = /\b(husks?|lurkers?|spewers?|swarmlings?|channell?ers?)\b/gi;
+/** "Swarmlings" / "Channellers" -> the registry id the bible casts a former job against. */
+const engineWordId = (word: string): string => word.toLowerCase().replace(/s$/, '').replace(/^channeller$/, 'channeler');
+const formerJobFor = (word: string, bible: WorldBible | undefined): string | undefined =>
+  bible?.enemies.find((enemy) => enemy.enemyId === engineWordId(word))?.formerJob;
+
+/**
+ * Last resort, after two polish rounds have declined to do it: swap a registry id still
+ * sitting in a player-facing line for the bible's former job for that creature. A former job
+ * is a plural group ("Deck 4 loaders"), so a singular use becomes "one of the …".
+ * Runs on the assembled recipe, next to `fitOverlong`, and is reported in provenance.
+ */
+export function swapEngineWords(text: string, bible: WorldBible | undefined): string {
+  return text.replace(ENGINE_WORDS_ALL, (word) => {
+    const job = formerJobFor(word, bible);
+    if (!job) return word;
+    const replacement = /s$/i.test(word) ? job : `one of the ${job}`;
+    return /^[A-Z]/.test(word) ? replacement.charAt(0).toUpperCase() + replacement.slice(1) : replacement;
+  }).replace(/\b(?:an?|the)\s+(?=one of the )/gi, '').replace(/^\s*one of the /, 'One of the ');
+}
+
+export function replaceEngineWords(parts: Lintable, bible: WorldBible | undefined): number {
+  if (!bible) return 0;
+  let replaced = 0;
+  for (const failure of lintWorld(parts, bible).failures) {
+    if (!failure.notes.some((note) => note.startsWith('Rule engine-word'))) continue;
+    const field = access(parts, failure.path);
+    const text = swapEngineWords(failure.text, bible);
+    if (!field || text === failure.text) continue;
+    field.set(fitText(text, Math.min(failure.maxChars, KIND_SPECS[failure.kind].max)));
+    replaced++;
+  }
+  return replaced;
+}
 const UNSAFE_TEXT = /[<>]|```|(?:https?:\/\/|www\.|data:|javascript:)|\b(?:eval|function)\s*\(/i;
 export const isUnsafeText = (value: string): boolean => UNSAFE_TEXT.test(value);
 
