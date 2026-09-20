@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { BestiaryPage, CodexPage, GameMenu, OperativePage, SkillsPage } from '../../src/client/ui/GameMenu';
+import { BestiaryPage, CodexPage, ControlsPage, GameMenu, MENU_PAGES, OperativePage, SkillsPage } from '../../src/client/ui/GameMenu';
 import { IDLE_GENERATION_STATUS, WorldFixtureSchema } from '../../src/shared/contracts';
 import { samplePlayers } from '../../src/shared/samples';
 import type { UiActions, UiModel } from '../../src/shared/ui';
@@ -37,6 +37,13 @@ function model(discoveredLore: number[] = []): UiModel {
 const render = (element: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(element);
 
 describe('Tab menu', () => {
+  it('owns the controls and the memory wall so the HUD does not have to', () => {
+    expect(MENU_PAGES).toContain('controls');
+    expect(MENU_PAGES).toContain('memories');
+    const html = render(createElement(ControlsPage));
+    for (const key of ['W', 'Shift', 'LMB', 'Q', 'E', 'R', 'F', 'Tab']) expect(html).toContain(`>${key}</kbd>`);
+  });
+
   it('is closed by default and only shows the key hint', () => {
     const html = render(createElement(GameMenu, { model: model(), actions }));
     expect(html).toContain('Tab · menu');
