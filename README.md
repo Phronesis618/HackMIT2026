@@ -157,7 +157,7 @@ The bridge checks out no repository code and has no GitHub token permissions.
 **Legacy opt-out (`RELAY_FLOORS=0 RELAY_LAWS=0`):** HQ contributions → honest creation receipt →
 departure gate → three combat rooms → Guardian and Anchor → debrief and persistent memories.
 
-**Default with `.env.example` or the Render Blueprint (`RELAY_FLOORS=1 RELAY_LAWS=1`):
+**Default with `.env.example`, Docker, or the Render Blueprint (`RELAY_FLOORS=1 RELAY_LAWS=1`):
 the full loop.** The same hub, then a
 five-tier route of biomes instead of three rooms — sealing doors, a minimap and a hold-`M` floor
 map, room kinds (`entrance`, `combat`, `elite`, `treasure`, `lore`, `rest`, `exit`), a gatekeeper
@@ -171,12 +171,16 @@ exits; hold F to revive a nearby teammate, read a relic, open a biome gate or pl
 
 ### Flags
 
-Both are **on** in `.env.example` and the Render Blueprint. Set `RELAY_FLOORS=0` and
+Both are **on** in `.env.example`, the Docker image, and the Render Blueprint. Set `RELAY_FLOORS=0` and
 `RELAY_LAWS=0` in your `.env` or hosting environment, then restart/redeploy, to opt out.
 When the variables are absent, the low-level server defaults remain **off** for legacy
 setups. The **server is the authority**: it reads the environment and reports its answer on
 `GET /api/config`, and every client adopts that, so a crew cannot play one game while their
 screens draw another (`src/shared/flags.ts`).
+
+Existing Render services inherit the image defaults after deploying this revision unless
+their environment explicitly overrides the flags. Confirm both are `true` at `/api/config`
+after deployment; set both variables to `1` in the service environment if needed.
 
 | Flag | Server env | Per-browser fallback | What it turns on |
 | --- | --- | --- | --- |

@@ -1,5 +1,21 @@
 # Handoff — Agent C (Devin)
 
+## Dungeon demo defaults — 2026-09-20
+
+- Branch: `devin/1789915925-dungeon-demo-defaults`, based on `1c1ac50`.
+- **Implemented:** floors and derived laws enabled in the Docker image, Render Blueprint,
+  and environment example. Runtime `0` overrides and explicit legacy requests remain supported.
+  The configuration subagent's `3b19840` was integrated as `ee7a246`.
+- **Verified:** `npm run check`: **1103 tests / 93 files**, typecheck and build passed.
+  Docker build and network-isolated HTTP checks passed for fixture and composer generation:
+  flags, static HTML, eight biomes / 160 validated rooms each, laws, honest provenance,
+  legacy request overrides, and Docker environment opt-outs.
+- **Deferred:** the separate demo balance candidate (`48dd181`) fails eight existing
+  assertions and was not integrated. No tests or gameplay constants changed.
+- **Unverified:** browser play, live AI generation, and public rollout. Existing service env
+  overrides can suppress image defaults; confirm `/api/config` after deploy and reload tabs.
+  A cold-start config timeout remains a known co-op flag-adoption gap.
+
 ## Startup with blocked session storage — 2026-09-20
 
 - Branch: `devin/1789915588-startup-storage`, implementation `7e456d6`, based on `972bb06`.

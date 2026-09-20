@@ -2,6 +2,22 @@
 
 Agent C records only work and verification performed in this session.
 
+## Dungeon default rollout — 2026-09-20
+
+Three child sessions prepared hosted defaults, evaluated the isolated demo balance preset,
+and reviewed flag/generation rollout paths. The combined change enables floors and derived
+laws in Docker, Render, and the environment example; raw server defaults remain unchanged.
+The balance candidate was excluded after its focused suite produced 50 passes / 8 failures.
+
+Parent validation: `npm run check` passed **1103 tests / 93 files**, typecheck and build;
+`git diff --check` and a production Docker build passed. Network-isolated container HTTP
+checks served static HTML and generated schema-valid fixture and composer worlds without
+credentials. Each default world built all eight biome candidates / 160 rooms and applied
+laws. Provenance stayed fixture/procedural; explicit legacy requests returned three rooms.
+Docker environment overrides `RELAY_FLOORS=0 RELAY_LAWS=0` disabled both flags.
+
+No browser play, public deployment, or live model output is claimed by these checks.
+
 ## Startup storage failure — 2026-09-20
 
 The overnight monitor reproduced a thrown `SecurityError` from `shouldShowStart` on
