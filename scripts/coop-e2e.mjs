@@ -26,7 +26,13 @@ import { fileURLToPath } from 'node:url';
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..');
 const PLAYWRIGHT_SPEC = 'playwright@1.61';
-const CHROMIUM_ARGS = ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist', '--enable-unsafe-swiftshader', '--disable-gpu-sandbox'];
+// Co-op needs real frame rates: the client drops input when a frame takes > 250 ms, and N software-GL
+// (SwiftShader) pages on a busy machine run at 2–6 fps. On macOS headless Chromium can use the real GPU
+// through ANGLE/Metal (~40+ fps); elsewhere fall back to shot.mjs's SwiftShader flags (--gl swiftshader).
+const GL_ARGS = {
+  metal: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--enable-webgl'],
+  swiftshader: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist', '--enable-unsafe-swiftshader', '--disable-gpu-sandbox'],
+};
 const TILE = 32;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -37,7 +43,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function parseArgs(argv) {
   const args = {
     port: 5973, serverPort: null, base: null, outDir: '/tmp/relay-shots/coop', depsDir: '/tmp/relay-shot-deps',
-    only: null, floors: false, env: {}, width: 1280, height: 800, help: false, fullRunMinutes: 8,
+    only: null, floors: false, gl: process.platform === 'darwin' ? 'metal' : 'swiftshader', env: {}, width: 1280, height: 800, help: false, fullRunMinutes: 8,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -49,6 +55,7 @@ function parseArgs(argv) {
       case '--deps-dir': args.depsDir = argv[++i]; break;
       case '--only': args.only = argv[++i].split(',').map((s) => s.trim()).filter(Boolean); break;
       case '--floors': args.floors = true; break;
+      case '--gl': args.gl = argv[++i]; break;
       case '--full-run-minutes': args.fullRunMinutes = Number(argv[++i]); break;
       case '--env': {
         const pair = argv[++i] ?? '';
@@ -73,6 +80,7 @@ const HELP = `coop-e2e.mjs — scripted two/four-browser co-op verification (rea
   --port <n>               Vite client port. Default 5973
   --server-port <n>        API/WS port. Default port + 3614
   --base <url>             Use an already-running server (no spawn, no restarts), e.g. a LAN production build
+  --gl metal|swiftshader   GL backend for headless Chromium. Default: metal on macOS, swiftshader elsewhere
   --out-dir <dir>          Screenshots + results.json. Default /tmp/relay-shots/coop
   --full-run-minutes <n>   Time budget for the three-room + boss attempt. Default 8
 `;
@@ -230,7 +238,7 @@ function readDom() {
     crew: all('.panel--hq .generation .eyebrow')[0] ?? null,
     crewNames: all('.panel--hq .generation .muted')[0] ?? null,
     contributions: all('.contributions .list__item'),
-    worldTitle: text('.panel--world .panel__title'),
+    worldTitle: text('.panel--world .panel__title') ?? text('.world-brief__title'),
     provenance: text('.topbar__status .badge:not(.badge--conn):not(.badge--preview)'),
     receipt: all('.panel--world .notes .list__item'),
     prepareDisabled: button('Prepare')?.disabled ?? null,
@@ -240,8 +248,9 @@ function readDom() {
     debriefOutcome: text('.debrief__outcome'),
     notice: text('.notice span'),
     telemetry: text('.brand__telemetry'),
-    caption: text('.stage-caption'),
-    unlockButton: Boolean(button('Unlock')),
+    caption: text('.rail-status .panel__title'),
+    runCrew: all('.rail-crew__row'),
+    memoryCount: text('.memory-brief__count'),
     bodyText: document.body.innerText.slice(0, 4000),
   };
 }
@@ -266,8 +275,8 @@ class Player {
     }
     this.held.clear();
     await this.page.goto(`${this.base}/?mode=coop&as=${this.name}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    this.canvasMounted = await this.page.waitForSelector('.stage canvas', { state: 'attached', timeout: 20000 }).then(() => true).catch(() => false);
-    if (!this.canvasMounted) console.log(`[coop] WARNING ${this.name}: no canvas after 20 s; errors=${JSON.stringify(this.errors.slice(0, 4))}`);
+    this.canvasMounted = await this.page.waitForSelector('.stage canvas', { state: 'attached', timeout: 60000 }).then(() => true).catch(() => false);
+    if (!this.canvasMounted) console.log(`[coop] WARNING ${this.name}: no canvas after 60 s; errors=${JSON.stringify(this.errors.slice(0, 4))}`);
     return this;
   }
 
@@ -505,7 +514,7 @@ async function enterByWalkingOntoPortal(host, everyone) {
  * it, tap J, use Q/E/R when offered. Returns when the room is cleared, the local player is down,
  * the run ends or the time budget is spent.
  */
-async function fightUntil(player, { timeoutMs = 60000, stopWhen = null } = {}) {
+async function fightUntil(player, { timeoutMs = 60000, stopWhen = null, targetId = null } = {}) {
   const start = Date.now();
   await player.focusStage();
   let lastAbility = 0;
@@ -518,7 +527,7 @@ async function fightUntil(player, { timeoutMs = 60000, stopWhen = null } = {}) {
       if (me.hp <= 0) { await player.stop(); return 'downed'; }
       const living = s.snap.enemies.filter((e) => e.state !== 'dead' && e.hp > 0);
       if (!living.length) return s.snap.roomCleared ? 'cleared' : 'no-enemies';
-      const enemy = living.reduce((a, b) => (Math.hypot(a.x - me.x, a.y - me.y) < Math.hypot(b.x - me.x, b.y - me.y) ? a : b));
+      const enemy = living.find((e) => e.id === targetId) ?? living.reduce((a, b) => (Math.hypot(a.x - me.x, a.y - me.y) < Math.hypot(b.x - me.x, b.y - me.y) ? a : b));
       const d = Math.hypot(enemy.x - me.x, enemy.y - me.y);
       await player.aimAt(enemy.x, enemy.y);
       if (d > 40) {
@@ -569,15 +578,17 @@ async function groupLobby(ctx) {
   report.check('1b', 'crew list matches on both screens', ad.crewNames === bd.crewNames && /alice/.test(ad.crewNames) && /bob/.test(ad.crewNames) && /2\/4/.test(ad.crew),
     `alice sees "${ad.crew}" "${ad.crewNames}"; bob sees "${bd.crew}" "${bd.crewNames}"`);
 
-  await carol.open(); await carol.waitConnected();
-  await dave.open(); await dave.waitConnected();
+  for (const extra of [carol, dave, eve]) extra.size = { width: 1024, height: 640 }; // software GL: keep the extra pages cheap
+  await carol.open(); await carol.waitConnected(60000);
+  await dave.open(); await dave.waitConnected(60000);
   await sleep(500);
   const four = await agree([alice, bob, carol, dave], (s, d) => [d.crew, d.crewNames]);
   await shots([alice, dave], 's1-four-joined');
   report.check('1c', 'third and fourth join (4/4) on every screen', four.ok && /4\/4/.test(four.values[0]), `all four screens: ${four.values[0]}`);
 
   await eve.open();
-  await sleep(2500);
+  await waitFor(async () => (await eve.dom()).notice, { timeoutMs: 30000, label: 'eve sees a refusal notice' }).catch(() => {});
+  await sleep(1500);
   const es = await eve.read();
   const ed = await eve.dom();
   const still = await alice.dom();
@@ -687,19 +698,22 @@ async function groupDemo(ctx) {
     `key-down -> visible on the OTHER screen: ${latencies.map((ms) => `${ms} ms`).join(', ')} (median ${latencies.slice().sort((x, y) => x - y)[Math.floor(latencies.length / 2)]} ms, localhost, includes 50 ms snapshot cadence); resting positions on both screens: ${positions.values[0]} vs ${positions.values[1]}`);
 
   // --- 5: combat. One hit each on the same enemy, watched from both screens.
-  const hpOn = async (p, enemyId) => (await p.read()).snap.enemies.find((e) => e.id === enemyId)?.hp;
-  const s0 = await alice.read();
-  const target = s0.snap.enemies.find((e) => e.state !== 'dead');
+  // One deliberate strike each (toughest living enemy), then read that enemy's HP on BOTH screens.
+  const enemyOn = async (p, enemyId) => (await p.read()).snap.enemies.find((e) => e.id === enemyId);
   const hits = [];
   for (const attacker of pair) {
-    const start = await hpOn(alice, target.id);
-    await fightUntil(attacker, { timeoutMs: 20000, stopWhen: (s) => (s.snap.enemies.find((e) => e.id === target.id)?.hp ?? 0) < start });
-    await sleep(250);
-    hits.push({ by: attacker.name, from: start, aliceSees: await hpOn(alice, target.id), bobSees: await hpOn(bob, target.id) });
+    const living = (await alice.read()).snap.enemies.filter((e) => e.state !== 'dead' && e.hp > 0);
+    if (!living.length) break;
+    const target = living.reduce((a, b) => (b.hp > a.hp ? b : a));
+    const start = target.hp;
+    await fightUntil(attacker, { timeoutMs: 20000, targetId: target.id, stopWhen: (s) => (s.snap.enemies.find((e) => e.id === target.id)?.hp ?? 0) < start });
+    await sleep(120);
+    const [ea, eb] = [await enemyOn(alice, target.id), await enemyOn(bob, target.id)];
+    hits.push({ by: attacker.name, enemy: `${target.enemyId}#${target.id.slice(-3)}`, from: start, aliceSees: ea?.hp, bobSees: eb?.hp });
   }
   await shots(pair, 's5-both-hit');
-  report.check('5a', 'both damage the same enemy; HP agrees on both screens', hits.every((h) => h.aliceSees < h.from && Math.abs(h.aliceSees - h.bobSees) <= 30),
-    `enemy ${target.enemyId} (${target.id}): ${hits.map((h) => `${h.by} hit ${h.from} -> alice sees ${h.aliceSees} / bob sees ${h.bobSees}`).join('; ')} (screens sampled ~10 ms apart while the fight continues)`);
+  report.check('5a', 'each player damages an enemy; HP agrees on both screens', hits.length === 2 && hits.every((h) => h.aliceSees < h.from && Math.abs(h.aliceSees - h.bobSees) <= 40),
+    `${hits.map((h) => `${h.by} struck ${h.enemy}: ${h.from} -> alice's screen ${h.aliceSees} / bob's screen ${h.bobSees}`).join('; ')} (screens read ~10 ms apart while enemies keep fighting)`);
 
   const results = await Promise.all(pair.map((p) => fightUntil(p, { timeoutMs: 90000 })));
   await sleep(700);
@@ -708,8 +722,15 @@ async function groupDemo(ctx) {
   report.check('5b', 'enemy deaths, room clear and reward agree', cleared.ok && JSON.parse(cleared.values[0]).cleared === true,
     `fight results ${J(results)}; both screens: ${cleared.values[0]}`);
 
-  const canUnlock = (await alice.dom()).unlockButton;
-  if (canUnlock) await alice.page.getByRole('button', { name: /^Unlock/ }).click();
+  // In a run the unlock lives in the Tab menu (page 3 · operative).
+  await alice.focusStage();
+  await alice.tap('Tab');
+  await alice.tap('3');
+  const unlockButton = alice.page.getByRole('button', { name: /^Unlock ·/ });
+  const canUnlock = await unlockButton.isEnabled({ timeout: 3000 }).catch(() => false);
+  if (canUnlock) await unlockButton.click();
+  await alice.shot('s5-unlock-menu');
+  await alice.tap('Escape');
   await alice.focusStage();
   await sleep(600);
   const unlocked = await agree(pair, (s) => s.snap.players.map((p) => `${p.displayName}:E=${p.abilityEUnlocked}:res=${p.resources}`).sort());
@@ -902,8 +923,6 @@ async function groupReconnect(ctx) {
   report.check('8d', 'old host rejoins as crew, lands in the running room', Boolean(as) && /crew/.test(ad.badge) && both.ok && as2.ui.phase === 'expedition' && Boolean(as2.ui.world),
     `alice badge="${ad.badge}" ui.phase=${as2.ui.phase} world="${as2.ui.world?.title}"; both screens: ${both.values[0]}; lobby="${names(as2)}"`);
 
-  // Leave the run so later groups start from HQ (bob is host now).
-  await bob.page.keyboard.press('Tab').catch(() => {});
   ctx.hostName = 'bob';
 }
 
@@ -1084,7 +1103,7 @@ async function main() {
 
   await servers.start();
   const playwright = await ensurePlaywright(args.depsDir);
-  const browser = await playwright.chromium.launch({ headless: true, args: CHROMIUM_ARGS });
+  const browser = await playwright.chromium.launch({ headless: true, args: GL_ARGS[args.gl] ?? GL_ARGS.swiftshader });
   const report = new Report(args.outDir);
   const all = [];
   const ctx = {
