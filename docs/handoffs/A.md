@@ -2,9 +2,9 @@
 
 ## Overnight (Sep 20, 02:40–05:30 ET) — composer, world rules, overlay, party frames, start screen
 
-Local commits on Jeffrey's machine, merged with `origin/main` through `dc2c934` (floors,
-writing, hub, tiles, UI audit, memory integration); `npm run check` green at **733 tests / 63
-files**. Pushing was deferred to a human (the agent's pushes need approval).
+Local commits on Jeffrey's machine, merged with `origin/main` through `c1abe97` (floors,
+writing pipeline, hub, tiles, boss finale, co-op verify, UI audit); `npm run check` green at
+**819 tests / 70 files**. Pushing was deferred to a human (the agent's pushes need approval).
 
 - **Implemented — offline composer (`src/server/composer/`, "Jeffrey's area" per the overnight
   plan):** `RELAY_AI_PROVIDER=composer` builds a validated `WorldRecipe` from the crew's ideas in
@@ -31,6 +31,22 @@ files**. Pushing was deferred to a human (the agent's pushes need approval).
   `?start=0/1`); bigger pop-in damage/heal numbers and an in-world exit label in `RoomScene`;
   `GameController` syncs connection status on a timer (no false "offline" in throttled tabs) and
   publishes crew vitals + world palette/rooms/rules to the UI model.
+- **Implemented — skill tree goes live:** `Simulation.learnSkill(playerId, skillId)` (protocol
+  `learn_skill`, `GameSession.learnSkill`, `UiActions.learnSkill`, event `skill_learned`,
+  `PlayerState.skills`). Seven nodes have real effects (`IMPLEMENTED_SKILLS` in `skills.ts`):
+  core.plating / core.wind / core.salvage, bastion.sweep, shade.edge, beacon.reach, weaver.loom.
+  The Tab menu's Skills page has a Learn button (sanctuary/debrief/training only); learned nodes
+  tick, live nodes glow. Spends the same `resources` ECONOMY.md calls Salvage; kills now pay
+  `ENEMY_INFO.shards` (1–8) on expeditions — an earn source to add to ECONOMY §3's table.
+- **Bridge — laws → rules:** W2's model-facing `recipe.laws` (`src/shared/laws.ts`, unimplemented)
+  map onto the nearest implemented rule in the sim (`LAW_TO_RULE` in `simulation.ts`: the_many→
+  dense_swarm, few_and_terrible→bulwark, restless→frenzy, long_dark→low_visibility, slow_fire→
+  unstable_ground, thin_air→gravity_well, wardens_watch→scavenger) so a chosen law is never
+  silent. M1 should replace the bridge with the real bands and can then retire `rules`.
+- **Composer ↔ W2 pipeline:** composed text passes `lintRecipeText` with zero hard failures
+  (test in `tests/integration/composer.test.ts`); composer recipes carry no `bible`, so the
+  pipeline keeps them without a repair round. `RELAY_FLOORS=1` + composer = floors world on
+  the composer's eight briefs (tested).
 - **Dropped during the merge:** an interim 3-biome recipe extension of mine (superseded by floors).
 - **Verified:** unit/integration tests above; composer output inspected for ~20 prompts;
   browser: HQ + composed world + party frames + start screen screenshots on the merged build.
