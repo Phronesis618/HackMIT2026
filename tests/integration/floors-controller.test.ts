@@ -6,9 +6,10 @@ import { GameController } from '../../src/client/game/GameController';
 import { createUiStore } from '../../src/client/game/uiStore';
 import { LocalSession } from '../../src/client/transport/LocalSession';
 import { fixtureWorldProvider } from '../../src/client/transport/worldProviders';
-import type { RoomSpec } from '../../src/shared/contracts';
+import { IDLE_GENERATION_STATUS, type GameEvent, type RoomSpec } from '../../src/shared/contracts';
 import { TICK_MS, tileToWorld } from '../../src/shared/conventions';
 import type { WorldRenderer } from '../../src/shared/render';
+import type { GameSession } from '../../src/shared/session';
 import { createRoomProvider } from '../../src/sim';
 import { steerIntent } from '../sim/floorsBot';
 
@@ -112,5 +113,39 @@ describe('GameController in floors mode', () => {
     }
     expect(session.getSnapshot()!.floor!.roomId).not.toBe('r00');
     expect(store.get().notice).toMatchObject({ kind: 'error' });
+  });
+
+  // A3: the BiomeChoice screen replaced the 1 / 2 key stopgap and its notice.
+  it('raises no notice for an offered biome choice, and still exposes chooseBiome to the UI', async () => {
+    let emit: (events: GameEvent[]) => void = () => {};
+    const chooseBiome = vi.fn();
+    const identity = { id: 'guest', displayName: 'Guest', classId: 'bastion' as const };
+    const off = () => {};
+    const session = {
+      mode: 'remote', localPlayerId: identity.id, chooseBiome,
+      start: async () => {}, dispose: off, getLocalPlayer: () => identity,
+      getContributions: () => [], getGenerationStatus: () => IDLE_GENERATION_STATUS,
+      getConnectionStatus: () => 'connected', getIsHost: () => false,
+      getWorld: () => null, getSnapshot: () => null, setIntent: off,
+      onSnapshot: () => off, onWorld: () => off, onGenerationStatus: () => off, onPhase: () => off,
+      onEvents: (listener: (events: GameEvent[]) => void) => { emit = listener; return off; },
+    } as unknown as GameSession;
+    const chronicle = createBrowserChronicle({ getItem: () => null, setItem: off, removeItem: off });
+    const flags = { fixtureWorld: false, startRoom: null, autoEnter: false };
+    const store = createUiStore(GameController.initialModel(session, flags, chronicle, false));
+    controller = new GameController({
+      session, store, chronicle, flags, audio: createSilentAudio(), liveGenerationAvailable: false,
+      renderer: {
+        mount: vi.fn(async () => {}), showHeadquarters: vi.fn(), showRoom: vi.fn(), renderSnapshot: vi.fn(),
+        playEvents: vi.fn(), screenToWorld: (x, y) => ({ x, y }), captureThumbnail: vi.fn(async () => null), destroy: vi.fn(),
+      },
+    });
+    await controller.attachStage({} as HTMLElement);
+
+    emit([{ id: '1:0', tick: 1, timeMs: 50, type: 'biome_choice_offered', worldId: 'w', fromBiomeId: 'biome-1', options: ['biome-2', 'biome-3'] }]);
+    expect(store.get().notice).toBeNull();
+
+    controller.actions.chooseBiome!('biome-3');
+    expect(chooseBiome).toHaveBeenCalledWith('biome-3');
   });
 });

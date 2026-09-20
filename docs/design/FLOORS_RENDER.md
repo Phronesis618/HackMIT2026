@@ -102,4 +102,4 @@ From memory; not re-fetched during this work.
 - Treasure and rest rooms have no dedicated prop art beyond the focus feature.
 - Shop rooms are reserved in the contracts; they get the treasure colour and a coin icon, nothing else.
 - The spire overhead light shafts are still rectangles and can brush the void in non-rectangular rooms (alpha 0.02).
-- `GameController` still has the 1 / 2 key stopgap and the "The way on is open" notice; both are harmless next to the choice screen (`chooseBiome` is idempotent) and can be removed by F2.
+- ~~`GameController` still has the 1 / 2 key stopgap and the "The way on is open" notice~~ — both removed (Z1, A3). The choice screen is the only path: it owns 1 / 2 / arrows / Enter / click, and `GameController.actions.chooseBiome` is what it calls.
