@@ -233,6 +233,28 @@
         "description": "Clearing a room grants 4 s of haste. Brandt's split-flap board took 4 s to cycle from DELAYED to a platform number, on the days it did."
       }
     ],
+    "terrainSkins": [
+      {
+        "featureId": "breakable_walls",
+        "name": "kiosk shutters",
+        "caption": "KIOSK SHUTTERS · break with attacks, rubble slows"
+      },
+      {
+        "featureId": "bridges",
+        "name": "gantry bridges",
+        "caption": "GANTRY BRIDGES · cross the shaft, ramps both ends"
+      },
+      {
+        "featureId": "rubble",
+        "name": "counterweight rubble",
+        "caption": "COUNTERWEIGHT RUBBLE · walking slows, dashes do not"
+      },
+      {
+        "featureId": "conduits",
+        "name": "handrail conduits",
+        "caption": "HANDRAIL CONDUITS · walking speeds up 25%"
+      }
+    ],
     "biomes": [
       {
         "id": "b0-threshold-concourse",
@@ -677,28 +699,6 @@
       "skylineDepth": 0.8,
       "grain": 0.2
     },
-    "terrainSkins": [
-      {
-        "featureId": "breakable_walls",
-        "name": "kiosk shutters",
-        "caption": "KIOSK SHUTTERS · break with attacks, rubble slows"
-      },
-      {
-        "featureId": "bridges",
-        "name": "gantry bridges",
-        "caption": "GANTRY BRIDGES · cross the shaft, ramps both ends"
-      },
-      {
-        "featureId": "rubble",
-        "name": "counterweight rubble",
-        "caption": "COUNTERWEIGHT RUBBLE · walking slows, dashes do not"
-      },
-      {
-        "featureId": "conduits",
-        "name": "handrail conduits",
-        "caption": "HANDRAIL CONDUITS · walking speeds up 25%"
-      }
-    ],
     "custodian": {
       "title": "Osei, Winch House 40",
       "phaseTitles": [
@@ -951,7 +951,7 @@
         "#..........................#",
         "#P.......................A.#",
         "#..........................#",
-        "#.............~~~~.........#",
+        "#..........................#",
         "#......................+...#",
         "#.....B::.........+..B+++..#",
         "#.....B::........+++.B.+...#",

@@ -42,7 +42,9 @@
         "terrain": {
           "features": [
             "breakable_walls",
-            "rubble"
+            "rubble",
+            "pits",
+            "vents"
           ],
           "layout": "scattered",
           "density": "balanced"
@@ -69,7 +71,9 @@
         "terrain": {
           "features": [
             "bridges",
-            "conduits"
+            "conduits",
+            "canisters",
+            "cover"
           ],
           "layout": "barricades",
           "density": "balanced"
@@ -95,8 +99,9 @@
         "terrain": {
           "features": [
             "breakable_walls",
-            "bridges",
-            "conduits"
+            "canisters",
+            "conduits",
+            "cover"
           ],
           "layout": "crossroads",
           "density": "balanced"
@@ -226,6 +231,48 @@
         "effectId": "guardian_bane",
         "name": "31 Degrees",
         "description": "The Custodian takes 20% more damage. Aalto tilted the 4-metre lens to 31 degrees; at 32 the beam falls short of Berth 2 and the mount jams."
+      }
+    ],
+    "terrainSkins": [
+      {
+        "featureId": "breakable_walls",
+        "name": "salt shelves",
+        "caption": "SALT SHELVES · break with attacks, rubble slows"
+      },
+      {
+        "featureId": "bridges",
+        "name": "pier catwalks",
+        "caption": "PIER CATWALKS · cross the brine, ramps both ends"
+      },
+      {
+        "featureId": "rubble",
+        "name": "crystal scree",
+        "caption": "CRYSTAL SCREE · walking slows, dashes do not"
+      },
+      {
+        "featureId": "conduits",
+        "name": "brine channels",
+        "caption": "BRINE CHANNELS · walking speeds up 25%"
+      },
+      {
+        "featureId": "pits",
+        "name": "boiled-out sluices",
+        "caption": "BOILED-OUT SLUICES · dash across, or knock something in"
+      },
+      {
+        "featureId": "vents",
+        "name": "tide-gauge vents",
+        "caption": "TIDE-GAUGE VENTS · steam on a beat you can watch"
+      },
+      {
+        "featureId": "canisters",
+        "name": "torch gas bottles",
+        "caption": "TORCH GAS BOTTLES · one hit and it blows, both ways"
+      },
+      {
+        "featureId": "cover",
+        "name": "gauge housings",
+        "caption": "GAUGE HOUSINGS · stop shots, not footsteps"
       }
     ],
     "biomes": [
@@ -675,28 +722,6 @@
       "skylineDepth": 0.4,
       "grain": 0.35
     },
-    "terrainSkins": [
-      {
-        "featureId": "breakable_walls",
-        "name": "salt shelves",
-        "caption": "SALT SHELVES · break with attacks, rubble slows"
-      },
-      {
-        "featureId": "bridges",
-        "name": "pier catwalks",
-        "caption": "PIER CATWALKS · cross the brine, ramps both ends"
-      },
-      {
-        "featureId": "rubble",
-        "name": "crystal scree",
-        "caption": "CRYSTAL SCREE · walking slows, dashes do not"
-      },
-      {
-        "featureId": "conduits",
-        "name": "brine channels",
-        "caption": "BRINE CHANNELS · walking speeds up 25%"
-      }
-    ],
     "custodian": {
       "title": "Aalto, the 4-metre lens",
       "phaseTitles": [
@@ -756,44 +781,44 @@
       "height": 12,
       "tiles": [
         "#######################",
-        "#.....................#",
-        "#...BB................#",
-        "#...B...........::....#",
-        "#....~~~~.......::....#",
+        "#...ooo.....::........#",
+        "#...BB......::..^^....#",
+        "#...B.......::..^^....#",
+        "#....~~~~...::........#",
         "#.....................#",
         "#P....................X",
         "#.....................#",
-        "#.................#...#",
-        "#....::..........B#...#",
-        "#....::...............#",
+        "#....^^...........#...#",
+        "#....^^..........B#...#",
+        "#..oo.................#",
         "#######################"
       ],
       "props": [
         {
           "id": "room-0-prop-0",
           "propId": "crystal_cluster",
-          "x": 5,
-          "y": 1
+          "x": 16,
+          "y": 4
         },
         {
           "id": "room-0-prop-1",
           "propId": "crystal_cluster",
-          "x": 3,
-          "y": 10
+          "x": 16,
+          "y": 1
         },
         {
           "id": "room-0-prop-2",
           "propId": "monolith_shard",
-          "x": 16,
-          "y": 1
+          "x": 4,
+          "y": 8
         }
       ],
       "encounters": [
         {
           "id": "room-0-encounter-0",
           "enemyId": "sentinel",
-          "x": 5,
-          "y": 8,
+          "x": 2,
+          "y": 10,
           "count": 1
         }
       ],
@@ -810,14 +835,14 @@
       "relics": [
         {
           "id": "room-0-relic-0",
-          "x": 2,
-          "y": 10,
+          "x": 16,
+          "y": 9,
           "fragmentIndex": 0
         },
         {
           "id": "room-0-relic-1",
-          "x": 16,
-          "y": 9,
+          "x": 4,
+          "y": 4,
           "fragmentIndex": 1
         }
       ]
@@ -831,17 +856,17 @@
       "height": 13,
       "tiles": [
         "############################",
-        "#..........................#",
-        "#....##..............##....#",
-        "#..........................#",
-        "#..........................#",
+        "#.................++++.....#",
+        "#....##...........*..##....#",
+        "#..........-...............#",
+        "#..........-...............#",
         "#..........................#",
         "#P.........................X",
         "#..........................#",
-        "#......++++.....~~~>.......#",
-        "#......++++.....###=###....#",
-        "#....##............>.......#",
-        "#..........................#",
+        "#......-........~~~>.......#",
+        "#......-........###=###....#",
+        "#....##.......*....>.......#",
+        "#.............++++.........#",
         "############################"
       ],
       "props": [
@@ -849,40 +874,40 @@
           "id": "room-1-prop-0",
           "propId": "pillar",
           "x": 18,
-          "y": 1
+          "y": 3
         },
         {
           "id": "room-1-prop-1",
           "propId": "crystal_cluster",
           "x": 18,
-          "y": 2
+          "y": 4
         },
         {
           "id": "room-1-prop-2",
           "propId": "monolith_shard",
-          "x": 18,
-          "y": 3
+          "x": 21,
+          "y": 4
         },
         {
           "id": "room-1-prop-3",
           "propId": "crystal_cluster",
-          "x": 14,
-          "y": 11
+          "x": 11,
+          "y": 9
         }
       ],
       "encounters": [
         {
           "id": "room-1-encounter-0",
           "enemyId": "sentinel",
-          "x": 14,
-          "y": 10,
+          "x": 11,
+          "y": 8,
           "count": 1
         },
         {
           "id": "room-1-encounter-1",
           "enemyId": "lurker",
           "x": 21,
-          "y": 4,
+          "y": 3,
           "count": 1
         }
       ],
@@ -899,13 +924,13 @@
       "relics": [
         {
           "id": "room-1-relic-2",
-          "x": 11,
-          "y": 9,
+          "x": 21,
+          "y": 8,
           "fragmentIndex": 2
         },
         {
           "id": "room-1-relic-3",
-          "x": 21,
+          "x": 11,
           "y": 1,
           "fragmentIndex": 3
         }
@@ -921,16 +946,16 @@
       "tiles": [
         "#########################",
         "#.......................#",
-        "#..#B........+......B#..#",
+        "#..#B........+......BB..#",
         "#...........+++.........#",
         "#............+..........#",
         "#.......................#",
         "#P....................A.#",
         "#.......................#",
-        "#.........~~~~.>........#",
-        "#.....+......B#=##......#",
-        "#..##+++.......>....#B..#",
-        "#.....+.................#",
+        "#..............+........#",
+        "#.............+++.......#",
+        "#..##..........+....#B..#",
+        "#.......................#",
         "#########################"
       ],
       "props": [
@@ -957,7 +982,7 @@
         {
           "id": "room-2-encounter-0",
           "enemyId": "guardian",
-          "x": 11,
+          "x": 6,
           "y": 10,
           "count": 1
         },

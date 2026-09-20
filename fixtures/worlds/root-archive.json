@@ -44,7 +44,8 @@
         "terrain": {
           "features": [
             "breakable_walls",
-            "rubble"
+            "rubble",
+            "cover"
           ],
           "layout": "scattered",
           "density": "sparse"
@@ -71,8 +72,9 @@
         "terrain": {
           "features": [
             "breakable_walls",
-            "bridges",
-            "conduits"
+            "canisters",
+            "conduits",
+            "cover"
           ],
           "layout": "crossroads",
           "density": "balanced"
@@ -99,8 +101,8 @@
         "terrain": {
           "features": [
             "breakable_walls",
-            "bridges",
-            "rubble"
+            "rubble",
+            "bridges"
           ],
           "layout": "barricades",
           "density": "balanced"
@@ -230,6 +232,38 @@
         "effectId": "first_strike",
         "name": "Lantern 10",
         "description": "The first hit on an untouched enemy deals double. Lind lit 9 lanterns a night on the Dry Path and never lantern 10."
+      }
+    ],
+    "terrainSkins": [
+      {
+        "featureId": "breakable_walls",
+        "name": "card cabinets",
+        "caption": "CARD CABINETS · break with attacks, rubble slows"
+      },
+      {
+        "featureId": "bridges",
+        "name": "stack ladders",
+        "caption": "STACK LADDERS · cross the root, ramps both ends"
+      },
+      {
+        "featureId": "rubble",
+        "name": "dry root",
+        "caption": "DRY ROOT · walking slows, dashes do not"
+      },
+      {
+        "featureId": "conduits",
+        "name": "coolant lines",
+        "caption": "COOLANT LINES · walking speeds up 25%"
+      },
+      {
+        "featureId": "canisters",
+        "name": "coolant cylinders",
+        "caption": "COOLANT CYLINDERS · one hit and it blows, both ways"
+      },
+      {
+        "featureId": "cover",
+        "name": "reading desks",
+        "caption": "READING DESKS · stop shots, not footsteps"
       }
     ],
     "biomes": [
@@ -681,28 +715,6 @@
       "skylineDepth": 0.1,
       "grain": 0.3
     },
-    "terrainSkins": [
-      {
-        "featureId": "breakable_walls",
-        "name": "card cabinets",
-        "caption": "CARD CABINETS · break with attacks, rubble slows"
-      },
-      {
-        "featureId": "bridges",
-        "name": "stack ladders",
-        "caption": "STACK LADDERS · cross the root, ramps both ends"
-      },
-      {
-        "featureId": "rubble",
-        "name": "dry root",
-        "caption": "DRY ROOT · walking slows, dashes do not"
-      },
-      {
-        "featureId": "conduits",
-        "name": "coolant lines",
-        "caption": "COOLANT LINES · walking speeds up 25%"
-      }
-    ],
     "custodian": {
       "title": "Adjei, the Seed Vault door",
       "phaseTitles": [
@@ -771,8 +783,8 @@
         "#..........................#",
         "#P.........................X",
         "#..........................#",
-        "#..........................#",
-        "#..........................#",
+        "#.............-............#",
+        "#.............-............#",
         "#....#........::......B....#",
         "#....#........::......B....#",
         "#..........................#",
@@ -782,41 +794,41 @@
         {
           "id": "room-0-prop-0",
           "propId": "root_mass",
-          "x": 14,
-          "y": 10
-        },
-        {
-          "id": "room-0-prop-1",
-          "propId": "root_mass",
-          "x": 14,
-          "y": 11
-        },
-        {
-          "id": "room-0-prop-2",
-          "propId": "lantern",
           "x": 9,
           "y": 1
         },
         {
-          "id": "room-0-prop-3",
-          "propId": "terminal",
+          "id": "room-0-prop-1",
+          "propId": "root_mass",
           "x": 9,
           "y": 3
+        },
+        {
+          "id": "room-0-prop-2",
+          "propId": "lantern",
+          "x": 14,
+          "y": 14
+        },
+        {
+          "id": "room-0-prop-3",
+          "propId": "terminal",
+          "x": 24,
+          "y": 11
         }
       ],
       "encounters": [
         {
           "id": "room-0-encounter-0",
           "enemyId": "lurker",
-          "x": 14,
-          "y": 14,
+          "x": 9,
+          "y": 2,
           "count": 1
         },
         {
           "id": "room-0-encounter-1",
           "enemyId": "husk",
           "x": 24,
-          "y": 11,
+          "y": 10,
           "count": 1
         }
       ],
@@ -834,13 +846,13 @@
         {
           "id": "room-0-relic-0",
           "x": 9,
-          "y": 2,
+          "y": 5,
           "fragmentIndex": 0
         },
         {
           "id": "room-0-relic-1",
-          "x": 9,
-          "y": 5,
+          "x": 24,
+          "y": 13,
           "fragmentIndex": 1
         }
       ]
@@ -855,57 +867,57 @@
       "tiles": [
         "############################",
         "#..........................#",
-        "#.....>....................#",
-        "#...B#=##..................#",
-        "#.....>....................#",
+        "#....BB*...................#",
+        "#....#.-...................#",
+        "#......-...................#",
         "#..........................#",
         "#P.........................X",
         "#..........................#",
-        "#......+.....+.............#",
-        "#.....+++...+++.......B....#",
-        "#......+.....+.......BB....#",
-        "#..........................#",
+        "#.......-....+.............#",
+        "#...+..*-...+++.......B....#",
+        "#..+++.......+.......#B....#",
+        "#...+......................#",
         "############################"
       ],
       "props": [
         {
           "id": "room-1-prop-0",
           "propId": "terminal",
-          "x": 7,
-          "y": 1
+          "x": 6,
+          "y": 3
         },
         {
           "id": "room-1-prop-1",
           "propId": "root_mass",
           "x": 7,
-          "y": 2
+          "y": 1
         },
         {
           "id": "room-1-prop-2",
           "propId": "crate",
-          "x": 7,
-          "y": 4
+          "x": 23,
+          "y": 8
         },
         {
           "id": "room-1-prop-3",
           "propId": "lantern",
           "x": 23,
-          "y": 8
+          "y": 9
         }
       ],
       "encounters": [
         {
           "id": "room-1-encounter-0",
           "enemyId": "channeler",
-          "x": 23,
-          "y": 9,
+          "x": 13,
+          "y": 1,
           "count": 1
         },
         {
           "id": "room-1-encounter-1",
           "enemyId": "husk",
-          "x": 13,
-          "y": 1,
+          "x": 23,
+          "y": 4,
           "count": 1
         }
       ],
@@ -922,14 +934,14 @@
       "relics": [
         {
           "id": "room-1-relic-2",
-          "x": 23,
-          "y": 4,
+          "x": 13,
+          "y": 3,
           "fragmentIndex": 2
         },
         {
           "id": "room-1-relic-3",
-          "x": 4,
-          "y": 10,
+          "x": 5,
+          "y": 1,
           "fragmentIndex": 3
         }
       ]
