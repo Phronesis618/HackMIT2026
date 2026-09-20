@@ -76,6 +76,52 @@ afterEach(() => {
 });
 
 describe('production keyboard listeners', () => {
+  function pointerDown(game: ElementStub, button = 0): void {
+    const event = new Event('pointerdown');
+    Object.defineProperty(event, 'target', { value: game });
+    Object.assign(event, { button, clientX: 10, clientY: 20 });
+    game.dispatchEvent(event);
+  }
+
+  it('repeats held mouse attacks until release outside the stage without repeating dash or abilities', () => {
+    const game = stage();
+    const sampler = createKeyboardMouseInput(element(game));
+    disposers.push(sampler.dispose);
+    pointerDown(game);
+    keyboard(game, 'Space');
+    keyboard(game, 'KeyQ');
+    expect(sampler.sample({ x: 0, y: 0 })).toMatchObject({ attack: true, dash: true, ability: 'q' });
+    expect(sampler.sample({ x: 0, y: 0 })).toMatchObject({ attack: true, dash: false, ability: null });
+    dispatch('pointerup', dom.body, { button: 2 });
+    expect(sampler.sample({ x: 0, y: 0 }).attack).toBe(true);
+    dispatch('pointerup', dom.body, { button: 0 });
+    expect(sampler.sample({ x: 0, y: 0 }).attack).toBe(false);
+  });
+
+  it('retains a fast click between samples without treating right click as attack', () => {
+    const game = stage();
+    const sampler = createKeyboardMouseInput(element(game));
+    disposers.push(sampler.dispose);
+    pointerDown(game, 2);
+    expect(sampler.sample({ x: 0, y: 0 }).attack).toBe(false);
+    pointerDown(game);
+    dispatch('pointerup', dom.body, { button: 0 });
+    expect(sampler.sample({ x: 0, y: 0 }).attack).toBe(true);
+    expect(sampler.sample({ x: 0, y: 0 }).attack).toBe(false);
+  });
+
+  it.each(['blur', 'pointercancel', 'focus', 'dispose'])('stops held attacks on %s', (action) => {
+    const game = stage();
+    const sampler = createKeyboardMouseInput(element(game));
+    disposers.push(sampler.dispose);
+    pointerDown(game);
+    expect(sampler.sample({ x: 0, y: 0 }).attack).toBe(true);
+    if (action === 'focus') dom.body.append(new ElementStub('BUTTON')).focus();
+    else if (action === 'dispose') sampler.dispose();
+    else dispatch(action, game);
+    expect(sampler.sample({ x: 0, y: 0 }).attack).toBe(false);
+  });
+
   it('preserves initial body focus and native button Tab/Shift+Tab, opening only from the stage', () => {
     const game = stage();
     const button = dom.body.append(new ElementStub('BUTTON'));
