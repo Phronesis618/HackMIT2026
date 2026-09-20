@@ -280,3 +280,21 @@ describe('offline derivation', () => {
     }
   });
 });
+
+describe('player-facing law text', () => {
+  it('states the real numbers at the world intensity and passes the house prose linter', async () => {
+    const { lawEffectText, IMPLEMENTED_LAW_IDS } = await import('../../src/sim/laws');
+    const { lintProse } = await import('../../src/shared/prose');
+    expect(lawEffectText(law('glass_lattice'))).toBe('Integrity 48 instead of 100. Damage dealt 1.8x.');
+    expect(lawEffectText(law('glass_lattice', 1))).toBe('Integrity 35 instead of 100. Damage dealt 2.1x.');
+    expect(lawEffectText(law('long_dark'))).toContain('215 px');
+    for (const lawId of IMPLEMENTED_LAW_IDS) {
+      const result = lintProse(lawEffectText(law(lawId)), { kind: 'boonDescription' });
+      expect(result.hardFail, `${lawId}: ${JSON.stringify(result.issues)}`).toBe(false);
+    }
+    for (const motif of MOTIF_IDS) for (const derived of deriveWorldLaws({ motifIds: [motif], fog: 0.4, glowIntensity: 0.5 }, 3).laws) {
+      expect(derived.description).not.toMatch(/\d/); // the engine's effect text owns the numbers
+      expect(derived.name.length).toBeLessThanOrEqual(36);
+    }
+  });
+});

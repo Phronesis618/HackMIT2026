@@ -22,7 +22,7 @@ import type { LocalSession } from '../transport/LocalSession';
 import { createKeyboardMouseInput, type InputSampler } from './input';
 import { stageOwnsInput } from './keyboardFocus';
 import type { UiStore } from './uiStore';
-import { resolveLaws, worldLawsView } from '../../sim/laws';
+import { IMPLEMENTED_LAW_IDS, lawEffectText, resolveLaws, worldLawsView } from '../../sim/laws';
 import { withLookOverrides } from '../render/lookOverrides';
 
 export interface PreviewFlags {
@@ -349,6 +349,9 @@ export class GameController {
         plannedRoomCount: world.plannedRoomCount,
         lore: world.recipe.lore,
         attunements: world.recipe.attunements,
+        laws: withLookOverrides(worldLawsView(world)).laws.map((law) => ({
+          lawId: law.lawId, name: law.name, description: law.description, effect: lawEffectText(law), active: IMPLEMENTED_LAW_IDS.includes(law.lawId),
+        })),
       },
       notice: null,
     });

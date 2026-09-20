@@ -212,6 +212,19 @@ const MOTIF_IDENTITY: Record<MotifId, MotifIdentity> = {
     look: { paletteFamily: 'sodium', floorMaterial: 'boards', wallStyle: 'panelled', lighting: 'underlit', atmosphere: 'fireflies' } },
 };
 
+/** The derived (no-model) in-world line per law. No numbers: the engine's effect text carries those. */
+const LAW_LINE: Record<WorldLawId, string> = {
+  thin_air: 'Dashes carry further here.', tidal_drag: 'Everything moves through something.',
+  committed_strike: 'Nobody walks out of their own swing.', glass_lattice: 'Thin walls, bright light.',
+  long_echo: 'The place remembers a gesture and gives it back early.', bleeding_light: 'Only what is read will mend.',
+  first_light: 'The first cut is the deep one.', few_and_terrible: 'Fewer things, and each one worse.',
+  the_many: 'Crowded with small failures.', wardens_watch: 'Everything here has a rank.',
+  restless: 'Nothing here stays down.', unstable_matter: 'Matter here does not let go quietly.',
+  hollow_ground: 'This place was built hollow.', slow_fire: 'Time thickens near the burning parts.',
+  sealed_halls: 'The doors here have opinions.', long_dark: 'Bring your own light.',
+  mirror_halls: 'The map will not hold still.', held_breath: 'No sound it does not have to make.',
+};
+
 function hashString(text: string): number {
   let h = 2166136261;
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
@@ -232,7 +245,7 @@ export function deriveWorldLaws(art: Pick<ArtRecipe, 'motifIds' | 'fog' | 'glowI
   const unit = (salt: number) => ((Math.imul(seed ^ salt, 2654435761) >>> 0) % 1000) / 1000;
   const make = (identity: MotifIdentity, lawId: WorldLawId, salt: number): WorldLaw => ({
     lawId, name: identity.names[lawId] ?? lawId.replace(/_/g, ' '),
-    description: LAW_INFO[lawId].summary.slice(0, 160), intensity: Math.round((0.35 + unit(salt) * 0.4) * 100) / 100,
+    description: LAW_LINE[lawId], intensity: Math.round((0.35 + unit(salt) * 0.4) * 100) / 100,
   });
   const first = make(lead, lead.laws[0], 11);
   let laws: WorldLaw[] = [first];
@@ -267,6 +280,30 @@ export function worldLawsView(world: Pick<PreparedWorld, 'worldId' | 'recipe' | 
   if ((picked && look) || !derive) return { laws: picked ?? [], look, derived: false };
   const derived = deriveWorldLaws(world.art, hashString(world.worldId));
   return { laws: picked ?? derived.laws, look: look ?? derived.look, derived: true };
+}
+
+// ---------------------------------------------------------------------------
+// Player-facing effect text: game terms and the real numbers, nothing else (docs/WRITING.md 5.12)
+// ---------------------------------------------------------------------------
+
+const pct = (mul: number): string => `${Math.round(Math.abs(mul - 1) * 100)}%`;
+const times = (mul: number): string => `${Math.round(mul * 100) / 100}x`;
+
+/** One sentence for one law at ITS intensity. Laws the engine does not apply yet fall back to the registry summary. */
+export function lawEffectText(law: WorldLaw): string {
+  const r = resolveLaws([law]);
+  switch (law.lawId) {
+    case 'thin_air': return `Dash goes ${pct(r.dashSpeedMul * r.dashDurationMul)} farther. Dash cooldown +${pct(r.dashCooldownMul)}.`;
+    case 'tidal_drag': return `Crew and enemies walk ${pct(r.walkSpeedMul)} slower. Dash cooldown -${pct(r.dashCooldownMul)}.`;
+    case 'committed_strike': return `${r.attackMoveMul === 0 ? 'No movement' : `Movement at ${Math.round(r.attackMoveMul * 100)}%`} during a basic attack. Damage dealt +${pct(r.playerDamageMul)}.`;
+    case 'glass_lattice': return `Integrity ${r.playerMaxHp} instead of ${PLAYER_MAX_HP}. Damage dealt ${times(r.playerDamageMul)}.`;
+    case 'long_echo': return `Q and E cooldowns -${pct(r.abilityCooldownMul)}. Ultimate charges ${pct(r.ultChargeMul)} slower.`;
+    case 'first_light': return `First hit on an undamaged enemy deals ${times(r.firstStrikeMul)} damage.`;
+    case 'few_and_terrible': return `Enemy groups ${times(r.enemyCountMul)} size. Enemy health ${times(r.enemyHpMul)}, damage +${pct(r.enemyDamageMul)}.`;
+    case 'the_many': return `Enemy groups ${times(r.enemyCountMul)} size, up to ${LAW_ROOM_ENEMY_CAP} per room. Enemy health ${times(r.enemyHpMul)}, damage -${pct(r.enemyDamageMul)}.`;
+    case 'long_dark': return `Hazard tiles and attack warnings always show. Everything else, enemies included, is hidden past ${r.lightRadius} px from each operative.`;
+    default: return LAW_INFO[law.lawId].summary;
+  }
 }
 
 // Re-exported so look consumers need one import.
