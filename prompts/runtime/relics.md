@@ -28,7 +28,9 @@ as a trace in it: a name missing from the list, a delivery that did not come.
   date, heading and status in every entry: a found page often starts halfway down.
 - What a fragment IS varies with who wrote it. A letter has somebody it is to and
   something it asks for. A verse rhymes and scans, roughly. A slate has names and what is
-  owed. Graffiti is answered by a second hand. Only a log has a timestamp and quantities in
+  owed. Graffiti has an answer written under it by somebody who counts differently, or spells
+  a name wrong, or signs it: never "in a different hand", which is how every world says it and
+  tells the reader nothing about either person. Only a log has a timestamp and quantities in
   a row, and at most a third of the fragments in this call may be shaped like that. The
   number a fragment must carry can be a child's count of sleeps as well as a reading.
 - title (max 40): labels the object as the finder would: what it is and where it starts

@@ -15,6 +15,9 @@ a flat short fact is worth more than a long one.
   cast. A strange idea stays strange and is treated as routine by the people who worked
   there: if geese run quality control, the quality inspectors are geese, with names, a shift
   pattern and a line in the budget. No idea is quietly replaced by something more sensible.
+- The humour here is dry and comes from a fact: a number, a job title, a delay, a rule somebody
+  followed exactly. It never comes from an animal that behaves like a person, from a pun, or
+  from a narrator winking at the reader. The geese are funny because of the budget line.
 - premise (max 120 chars): one flat sentence, what this place was for. A working place
   with a purpose and people who turned up to it; it may be as small as a pub, a ferry or
   a school kitchen, and it does not need a head office. Build it from the players' ideas.
@@ -49,7 +52,10 @@ a flat short fact is worth more than a long one.
   a world with none at all is welcome. At least ONE author is not writing for the
   institution in any sense: a child's letters, a verse painted on a wall, a bet chalked on a
   slate, a recipe with remarks, words somebody said that somebody else took down. The data
-  carries two `documentKinds`: those are the other two documents (adapt them to the place).
+  carries two `documentKinds`. Each is a CATEGORY, a colon, then worn examples of it: those
+  two categories are the other two documents, and the examples are spent. Write a fourth
+  example of each category in this world's own nouns, with whose it is and what it is kept in;
+  re-using an example's words is rejected by the checker.
   Places like this one are mostly remembered through what people wrote to each other and
   on things, and hardly at all through their paperwork.
   At least one author writes to somebody: a person with a name who is expected to answer.
