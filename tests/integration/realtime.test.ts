@@ -108,6 +108,7 @@ async function compactWorld(): Promise<PreparedWorld> {
     ...world,
     rooms: world.rooms.map((room) => ({
       ...room, width: 8, height: 6, props: [], encounters: [], attributions: [], relics: [],
+      anchorRelays: room.isFinal ? [{ x: 1, y: 1 }, { x: 6, y: 1 }, { x: 6, y: 4 }] : undefined,
       tiles: ['########', '#......#', '#.P....#', room.isFinal ? '#...A..#' : '#XX....#', '#......#', '########'],
       exits: room.isFinal ? [] : [1, 2].map((x) => ({ x, y: 3, toRoomIndex: room.index + 1, direction: 'south' })),
     })),

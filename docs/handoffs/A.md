@@ -14,15 +14,13 @@
 - Shared changes are additive: optional recipe terrain, room relay sites, boss phase/recovery,
   Anchor ritual, snapshot terrain, and UI station state/actions. Registry adds five tile
   characters. No dependency changes.
-- Verified: typecheck and production build pass. Integrated suite: 282 passed, 6 failed
-  across 30 files. All new tests pass. Existing failures are stale fixtures/mocks:
-  `tests/sim/simulation.test.ts` hardcodes the former HQ pillar; `compactWorld` in
-  `tests/integration/realtime.test.ts` replaces geometry but retains fixture relay sites;
-  `tests/presentation/room-scene.test.ts` lacks Phaser `strokeEllipse` and `fillTriangle`.
-  Existing tests are unchanged pending approval to update that setup without weakening assertions.
+- Verified: `npm run check` passes: 288 tests across 30 files, typecheck and production build.
+  Following approval on PR #16 (comment 5748345520), the existing collision test walks to
+  the Stillpoint pillar and outer walls with the same bounded assertions; `compactWorld`
+  supplies local relay coordinates; the Phaser mock adds `strokeEllipse` and `fillTriangle`.
 - Mocked: renderer unit tests use Phaser display mocks; no new gameplay stubs.
 - Unverified: live model generation and browser/co-op playthrough of the integrated expansion.
-  Do not merge while the full suite is failing. Demo instructions are in `docs/DEMO.md`.
+  The team requested to handle the merge of PR #16. Demo instructions are in `docs/DEMO.md`.
 
 ## Operator mode + world dressing (Sep 20, early morning)
 

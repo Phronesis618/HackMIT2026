@@ -59,22 +59,31 @@ describe('simulation basics', () => {
   it('is blocked by walls and blocking props', () => {
     const sim = createSimulation();
     sim.addPlayer(localPlayer);
-    // Row 5 has a pillar prop at column 6: walking left from spawn (10,5) stops at it.
+    const ticksPerTile = TILE_SIZE / (PLAYER_SPEED * TICK_MS / 1000);
+    // Walk from spawn (15,10) to row 3, then left into the pillar at (13,3).
+    for (let i = 0; i < Math.round(7 * ticksPerTile); i++) {
+      sim.applyIntent(intent({ moveY: -1 }));
+      sim.step();
+    }
     for (let i = 0; i < 300; i++) {
       sim.applyIntent(intent({ moveX: -1 }));
       sim.step();
     }
     const blockedByPillar = sim.getSnapshot().players[0]!;
-    expect(blockedByPillar.x).toBeGreaterThan(TILE_SIZE * 7);
-    expect(blockedByPillar.x).toBeLessThan(TILE_SIZE * 8);
+    expect(blockedByPillar.x).toBeGreaterThan(TILE_SIZE * 14);
+    expect(blockedByPillar.x).toBeLessThan(TILE_SIZE * 15);
 
-    // Go up to row 1 (no props), then left: the outer wall at column 0 stops us.
-    for (let i = 0; i < 300; i++) {
-      sim.applyIntent(intent({ moveY: -1 }));
+    // Cross the armory doorway on row 6, then reach the northwest outer walls.
+    for (let i = 0; i < Math.round(3 * ticksPerTile); i++) {
+      sim.applyIntent(intent({ moveY: 1 }));
       sim.step();
     }
     for (let i = 0; i < 600; i++) {
       sim.applyIntent(intent({ moveX: -1 }));
+      sim.step();
+    }
+    for (let i = 0; i < 300; i++) {
+      sim.applyIntent(intent({ moveY: -1 }));
       sim.step();
     }
     const p = sim.getSnapshot().players[0]!;

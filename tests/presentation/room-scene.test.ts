@@ -35,6 +35,8 @@ const stage = vi.hoisted(() => {
     strokeRect = vi.fn(() => this);
     fillCircle = vi.fn(() => this);
     fillEllipse = vi.fn(() => this);
+    strokeEllipse = vi.fn(() => this);
+    fillTriangle = vi.fn(() => this);
     fillRoundedRect = vi.fn(() => this);
     strokeCircle = vi.fn(() => this);
     strokeTriangle = vi.fn(() => this);

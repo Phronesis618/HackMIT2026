@@ -10,12 +10,12 @@ implemented compiler/terrain helpers and sanctuary UI/layout; the parent impleme
 boss/finale, authoritative terrain runtime, renderer integration, and runtime regression tests.
 Commits include `cae7051`, `d3227f7`, `8405164`, `dac0c50`, `ae2d6db`, and `e1e43c2`.
 
-Typecheck and production build pass. The integrated test run reports 282 passed / 6 failed:
-three co-op tests inherit relay coordinates after shrinking their test room, one collision
-test references the former HQ layout, and two RoomScene tests use a Phaser mock missing the
-new drawing methods. No existing tests were altered. New terrain, finale, station, records,
-controller, and renderer tests pass. Browser testing and live generation were not performed;
-no screenshot or recording is claimed.
+Final `npm run check`: 288 tests / 30 files, typecheck and production build pass.
+The first integrated run had six failures from outdated fixtures and mocks. After approval
+in PR #16 comment 5748345520, Devin updated the HQ collision route and pillar coordinates,
+provided compact-room relay sites, and added two Phaser mock methods. The collision bounds
+retain their one-tile width; outer-wall assertions and all other assertions are unchanged.
+Browser testing and live generation were not performed; no screenshot or recording is claimed.
 
 ## Claude provider integration — 2026-09-20
 
