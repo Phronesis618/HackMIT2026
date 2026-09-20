@@ -6,8 +6,9 @@
  *  - One option (the finale): a confirm, not a choice.
  * Copy follows docs/WRITING.md: facts, counts, plain verbs.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { UiBiomeChoice, UiBiomeOption } from '../../shared/ui';
+import { stageOwnsInput } from '../game/keyboardFocus';
 
 export interface BiomeChoiceProps {
   choice: UiBiomeChoice;
@@ -82,15 +83,19 @@ function Door({ option, index, choice, highlighted, onHighlight, onChoose }: {
 
 export function BiomeChoice({ choice, fromBiomeName, onChoose }: BiomeChoiceProps) {
   const [highlight, setHighlight] = useState(0);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const { canPick, options } = choice;
 
   useEffect(() => {
     if (!canPick) return undefined;
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.repeat) return;
-      if (event.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) return;
+      if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      if (!(event.target instanceof HTMLElement)) return;
+      if (event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
+      if (!dialogRef.current?.contains(event.target) && !stageOwnsInput(event.target, document.querySelector('[data-game-stage]'))) return;
       const action = choiceKeyAction(choice, event.code, highlight);
       if (!action) return;
+      event.preventDefault();
       if ('choose' in action) pickBiome(choice, action.choose, onChoose);
       else setHighlight(action.highlight);
     };
@@ -100,7 +105,7 @@ export function BiomeChoice({ choice, fromBiomeName, onChoose }: BiomeChoiceProp
 
   const hostLabel = choice.hostName ?? 'the host';
   return (
-    <div className="biome-choice" role="dialog" aria-label="Choose the next biome">
+    <div ref={dialogRef} className="biome-choice" role="dialog" aria-label="Choose the next biome">
       <header className="biome-choice__head">
         <p className="biome-choice__from">{fromBiomeName} is clear</p>
         <h2>{choice.confirmOnly ? 'One way on' : 'Two ways on. Pick one.'}</h2>

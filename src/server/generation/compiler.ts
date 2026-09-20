@@ -140,9 +140,9 @@ function compileRoom(
   room.encounters = placeEncounters(room, grid, blueprint, candidates, mappings, notes);
   room.attributions = buildAttributions(grid, blueprint, index, pathY, mappings, room.props, room.encounters);
   if (room.attributions.length < mappings.length) notes.push(`Room ${index + 1} omitted mappings without an observable target.`);
-  room.relics = placeRelics(grid, recipe, index, candidates, room.props, room.encounters, notes);
-  if (isFinal) room.anchorRelays = placeAnchorRelays(room);
   const reached = reachableTiles(room);
+  room.relics = placeRelics(grid, recipe, index, candidates.filter(({ x, y }) => reached.has(`${x},${y}`)), room.props, room.encounters, notes);
+  if (isFinal) room.anchorRelays = placeAnchorRelays(room);
   const objective = findTile(grid, isFinal ? 'A' : 'X')!;
   if (!reached.has(`${objective.x},${objective.y}`)) throw new Error(`Room ${index + 1} has no safe route to its objective.`);
   const solid = buildSolidGrid(room);

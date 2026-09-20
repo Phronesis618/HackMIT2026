@@ -25,6 +25,7 @@ body {
 
 .app {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto 1fr auto;
   height: 100%;
 }
@@ -2110,6 +2111,22 @@ body { font-size: var(--fs-body); }
   background: rgba(7, 9, 15, 0.96);
   z-index: 6;
   max-width: min(640px, 60vw);
+}
+
+@media (min-width: 961px) and (max-width: 1360px) {
+  :root { --bar-h: 168px; }
+  .commandbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    height: auto;
+    min-height: var(--bar-h);
+    padding-block: 12px;
+    gap: 12px var(--space-md);
+  }
+  .commandbar > .abilitybar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: center;
+  }
 }
 
 @media (max-width: 960px) {
