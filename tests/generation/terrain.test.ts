@@ -47,7 +47,9 @@ function assertRelays(room: RoomSpec): void {
   for (const relay of relays) {
     expect(room.tiles[relay.y]![relay.x]).toBe('.');
     expect(reached.has(`${relay.x},${relay.y}`)).toBe(true);
-    expect(room.relics.some((relic) => relic.x === relay.x && relic.y === relay.y)).toBe(false);
+    for (const relic of room.relics) {
+      expect(Math.hypot(relic.x - relay.x, relic.y - relay.y) * TILE_SIZE).toBeGreaterThan(LORE_READ_RANGE + ANCHOR_RANGE);
+    }
     for (const prop of room.props) {
       const { w, h } = PROP_INFO[prop.propId].footprint;
       expect(relay.x >= prop.x && relay.x < prop.x + w && relay.y >= prop.y && relay.y < prop.y + h).toBe(false);
@@ -105,6 +107,20 @@ describe('terrain schema boundary', () => {
 });
 
 describe('deterministic terrain compiler', () => {
+  it('keeps three relic interaction zones clear of every relay and the central Anchor', () => {
+    const crowded = {
+      ...recipe,
+      rooms: recipe.rooms.map((room) => ({ ...room, terrain: { ...allTerrain, density: 'dense' as const } })),
+      lore: recipe.lore.filter((fragment) => fragment.kind === 'relic').slice(0, 3)
+        .map((fragment) => ({ ...fragment, roomIndex: 2 })),
+    };
+    for (let seed = 0; seed < 40; seed++) {
+      const room = compileWorldRecipe(crowded, { plannedRoomCount: 3, seed }).rooms[2]!;
+      expect(room.relics).toHaveLength(3);
+      assertRelays(room);
+    }
+  });
+
   it('implements every selected mechanic while retaining safe corridors, props and spread relays', () => {
     for (const motif of MOTIF_IDS) {
       for (const layout of TERRAIN_LAYOUT_IDS) {

@@ -485,7 +485,6 @@ function placeAnchorRelays(room: RoomSpec): Coord[] {
   const queue = [spawn];
   const seen = new Set<string>([`${spawn.x},${spawn.y}`]);
   const occupied = new Set<string>();
-  for (const relic of room.relics) occupied.add(`${relic.x},${relic.y}`);
   for (const prop of room.props) {
     const { w, h } = PROP_INFO[prop.propId].footprint;
     markOccupied(occupied, prop.x, prop.y, w, h);
@@ -494,7 +493,11 @@ function placeAnchorRelays(room: RoomSpec): Coord[] {
   for (let i = 0; i < queue.length; i++) {
     const point = queue[i]!;
     const tile = room.tiles[point.y]![point.x]!;
-    if (tile === '.' && !occupied.has(`${point.x},${point.y}`)) candidates.push(point);
+    if (tile === '.' && !occupied.has(`${point.x},${point.y}`) &&
+      room.relics.every((relic) =>
+        Math.hypot(point.x - relic.x, point.y - relic.y) * TILE_SIZE > LORE_READ_RANGE + ANCHOR_RANGE)) {
+      candidates.push(point);
+    }
     for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]] as const) {
       const x = point.x + dx;
       const y = point.y + dy;
