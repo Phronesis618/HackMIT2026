@@ -834,7 +834,7 @@ export const GameEventSchema = z.discriminatedUnion('type', [
     hitEnemyIds: z.array(IdString),
   }),
   z.object({ ...eventBase, type: z.literal('enemy_damaged'), enemyId: IdString, byPlayerId: IdString, amount: z.number(), remainingHp: z.number() }),
-  z.object({ ...eventBase, type: z.literal('enemy_defeated'), enemyId: IdString, byPlayerId: IdString }),
+  z.object({ ...eventBase, type: z.literal('enemy_defeated'), enemyId: IdString, byPlayerId: IdString, worldId: IdString.nullable().optional() }),
   z.object({ ...eventBase, type: z.literal('player_damaged'), playerId: IdString, amount: z.number(), remainingHp: z.number(), sourceEnemyId: IdString.nullable() }),
   z.object({ ...eventBase, type: z.literal('player_downed'), playerId: IdString }),
   z.object({ ...eventBase, type: z.literal('player_revived'), playerId: IdString, byPlayerId: IdString, hp: z.number().positive() }),
@@ -857,7 +857,7 @@ export const GameEventSchema = z.discriminatedUnion('type', [
     x: z.number(), y: z.number(), facing: z.number(), hitPlayerIds: z.array(IdString),
   }),
   z.object({
-    ...eventBase, type: z.literal('lore_discovered'), playerId: IdString,
+    ...eventBase, type: z.literal('lore_discovered'), playerId: IdString, worldId: IdString.nullable().optional(),
     fragmentIndex: z.number().int().min(0), kind: z.enum(['relic', 'remains']),
     title: z.string().max(40), source: z.string().max(60), text: z.string().max(520), x: z.number(), y: z.number(),
   }),
