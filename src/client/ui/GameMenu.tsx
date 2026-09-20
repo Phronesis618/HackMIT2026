@@ -1,11 +1,10 @@
-import { ATTRIBUTING_SOURCES } from '../../shared/contracts';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ABILITY_UNLOCK_COST } from '../../shared/conventions';
 import {
   ABILITY_DETAILS, CLASS_ABILITIES, CLASS_INFO, CLASS_THEME, ENEMY_IDS, ENEMY_INFO, type EnemyId,
 } from '../../shared/registry';
-import { buildSkillTree, type SkillNode } from '../../shared/skills';
+import { buildSkillTree, ownsSkillNode, skillPurchaseCheck, type SkillNode, type SkillPurchaseRefusal } from '../../shared/skills';
 import { tokens } from '../../shared/tokens';
 import type { UiActions, UiModel } from '../../shared/ui';
 import { ENEMY_LORE } from '../../sim/training';
@@ -104,7 +103,7 @@ export function CodexPage({ model }: { model: UiModel }) {
         <ProvenanceBadge provenance={world.provenance} />
       </div>
       <p className="tagline">{world.tagline}</p>
-      {!ATTRIBUTING_SOURCES.has(world.provenance.source) && (
+      {world.provenance.source !== 'live' && (
         <p className="receipt__disclosure">
           {world.provenance.source === 'fixture' ? 'Offline fixture.' : 'Live generation failed; using an offline fixture.'}
           {' '}Your ideas are recorded, but did not shape this world.
@@ -118,9 +117,9 @@ export function CodexPage({ model }: { model: UiModel }) {
         {r.lines.length > 0 ? (
           <ul className="list">
             {r.lines.map((line) => (
-              <li key={line.contributionId} className={`list__item ${ATTRIBUTING_SOURCES.has(world.provenance.source) && line.used ? 'list__item--used' : 'list__item--unused'}`}>
+              <li key={line.contributionId} className={`list__item ${world.provenance.source === 'live' && line.used ? 'list__item--used' : 'list__item--unused'}`}>
                 <span className="list__who">{line.playerName}</span> “{line.text}”
-                <div className="list__meta">{ATTRIBUTING_SOURCES.has(world.provenance.source) && line.used ? `→ ${line.featureDescription ?? 'Attributed by the generation receipt'}` : 'recorded · not used in this world'}</div>
+                <div className="list__meta">{world.provenance.source === 'live' && line.used ? `→ ${line.featureDescription ?? 'Attributed by the generation receipt'}` : 'recorded · not used in this world'}</div>
               </li>
             ))}
           </ul>
@@ -291,12 +290,31 @@ const TIER_H = 118;
 /**
  * Vertical tree, Nine Sols style: root at the bottom, tiers climb; hairline connectors
  * drawn in SVG behind circular nodes; selecting a node opens its detail beside the tree.
- * Nothing is purchasable yet — the data is the design, the effects are a later pass.
+ * Implemented nodes are bought here with resources (`skillPurchaseCheck` is the same rule the
+ * sim enforces); planned nodes say so and cannot be bought.
  */
-export function SkillsPage({ model, actions }: { model: UiModel; actions?: UiActions }) {
+const REFUSAL_LABEL: Record<SkillPurchaseRefusal, string> = {
+  unknown: 'Unavailable',
+  planned: 'Not yet in the game',
+  owned: 'Owned',
+  requires: 'Needs the node below it',
+  resources: 'Not enough resources',
+};
+
+function selectedState(node: SkillNode, owned: readonly string[]): string {
+  if (node.status === 'planned') return 'Planned · not in the game yet';
+  if (node.cost === 0) return 'Innate';
+  if (ownsSkillNode(node, owned)) return 'Active';
+  return 'Available · not bought';
+}
+
+export function SkillsPage({ model, actions, selectedId: initialId = 'core.root' }: {
+  model: UiModel; actions?: Pick<UiActions, 'purchaseSkill'>; selectedId?: string;
+}) {
   const world = model.world ? { title: model.world.title, attunements: model.world.attunements } : null;
   const tree = buildSkillTree(model.localPlayer.classId, world);
-  const [selectedId, setSelectedId] = useState<string>('core.root');
+  const owned = model.hud?.skillNodeIds ?? [];
+  const [selectedId, setSelectedId] = useState<string>(initialId);
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = scrollRef.current;
@@ -313,10 +331,6 @@ export function SkillsPage({ model, actions }: { model: UiModel; actions?: UiAct
   const selected = byId.get(selectedId) ?? tree.nodes[0]!;
   const theme = CLASS_THEME[model.localPlayer.classId];
   const resources = model.hud?.resources ?? 0;
-  const owned = new Set(model.players.find((p) => p.isLocal)?.skills ?? []);
-  const canLearn = (n: SkillNode): boolean => n.status === 'implemented' && n.cost > 0 && !owned.has(n.id)
-    && n.requires.every((r) => r === 'core.root' || owned.has(r)) && resources >= n.cost
-    && (model.phase === 'headquarters' || model.phase === 'debrief' || model.phase === 'training') && !!actions?.learnSkill;
 
   return (
     <div className="skills" style={{ ['--class-color' as string]: theme.primary }}>
@@ -327,7 +341,7 @@ export function SkillsPage({ model, actions }: { model: UiModel; actions?: UiAct
         </div>
         <span className="badge">{resources} resources</span>
       </div>
-      <p className="skills__note">Bright nodes are live: learn them between runs with resources earned from hostiles and cleared rooms. Dimmed nodes are design previews, not wired to the simulation yet. Attunements are written by the world you are in.</p>
+      <p className="skills__note">Buy a node and its effect applies at once, for you only. Attunements are written by the world you are in. Nodes marked planned are not in the game yet.</p>
       <div className="skills__body">
         <div className="skilltree__scroll" ref={scrollRef}>
           <div className="skilltree" style={{ width, height }}>
@@ -350,11 +364,12 @@ export function SkillsPage({ model, actions }: { model: UiModel; actions?: UiAct
             {tree.nodes.map((n) => {
               const { x, y } = pos(n);
               const capstone = n.kind === 'class' && n.tier === 5;
+              const active = n.status === 'implemented' && ownsSkillNode(n, owned);
               return (
                 <button
                   key={n.id}
                   type="button"
-                  className={`skillnode skillnode--${n.kind} skillnode--${n.status} ${owned.has(n.id) ? 'skillnode--owned' : ''} ${capstone ? 'skillnode--capstone' : ''} ${selected.id === n.id ? 'skillnode--selected' : ''}`}
+                  className={`skillnode skillnode--${n.kind} skillnode--${n.status} ${active ? 'skillnode--owned' : ''} ${capstone ? 'skillnode--capstone' : ''} ${selected.id === n.id ? 'skillnode--selected' : ''}`}
                   style={{ left: x, top: y }}
                   onClick={() => setSelectedId(n.id)}
                   aria-pressed={selected.id === n.id}
@@ -371,24 +386,23 @@ export function SkillsPage({ model, actions }: { model: UiModel; actions?: UiAct
           <span className={`skilltree__kind skilltree__kind--${selected.kind}`}>{selected.kind === 'attunement' ? 'World attunement' : selected.kind === 'core' ? 'Operative core' : CLASS_INFO[model.localPlayer.classId].name}</span>
           <h3 className="skilltree__name">{selected.name}</h3>
           <p className="skilltree__desc">{selected.description}</p>
+          {selected.lore && <p className="skilltree__desc muted">{selected.lore}</p>}
           <dl className="skilltree__meta">
             <dt>Cost</dt><dd>{selected.cost === 0 ? 'Innate' : `${selected.cost} resources`}</dd>
             <dt>Tier</dt><dd>{selected.tier === 0 ? 'Root' : selected.tier}</dd>
             <dt>Requires</dt><dd>{selected.requires.length ? selected.requires.map((r) => byId.get(r)?.name ?? r).join(', ') : '—'}</dd>
-            <dt>State</dt><dd>{owned.has(selected.id) || selected.cost === 0 ? 'Learned' : selected.status === 'planned' ? 'Design preview · not yet wired' : 'Available'}</dd>
+            <dt>State</dt><dd>{selectedState(selected, owned)}</dd>
           </dl>
-          {selected.cost > 0 && selected.status === 'implemented' && !owned.has(selected.id) && (
-            <button
-              type="button"
-              className="btn btn--primary"
-              disabled={!canLearn(selected)}
-              onClick={() => actions?.learnSkill?.(selected.id)}
-              title={model.phase === 'expedition' ? 'Skills are learned between runs, in the sanctuary' : undefined}
-            >
-              Learn · {selected.cost} resources
-            </button>
-          )}
           {selected.effectId && <p className="hint">Engine effect: <code>{selected.effectId}</code></p>}
+          {selected.cost > 0 && selected.status === 'implemented' && !ownsSkillNode(selected, owned) && (() => {
+            const refusal = skillPurchaseCheck(tree, selected.id, owned, resources);
+            const canBuy = refusal === null && !!actions?.purchaseSkill && model.connection.status === 'connected' && model.hud?.state !== 'down';
+            return (
+              <button type="button" className="btn btn--primary" disabled={!canBuy} onClick={() => actions?.purchaseSkill?.(selected.id)}>
+                {refusal === null ? `Buy · ${selected.cost} resources` : REFUSAL_LABEL[refusal]}
+              </button>
+            );
+          })()}
         </aside>
       </div>
     </div>

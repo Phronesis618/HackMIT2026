@@ -11,7 +11,6 @@ import {
 } from '../shared/conventions';
 import { CLASS_ABILITIES, ENEMY_INFO, ULT_CHARGE_MAX, ULT_CHARGE_PER_DAMAGE, ULT_CHARGE_PER_KILL, type ClassId, type EnemyId } from '../shared/registry';
 import { buildSolidGrid, circleHitsSolid, moveCircle, type SolidGrid } from './collision';
-import { buildSkillTree } from '../shared/skills';
 import {
   CHANNEL_PATTERN, CLASS_COMBAT, ENEMY_COMBAT, ENEMY_PROJECTILE_PATTERN,
   GUARDIAN_RING_DAMAGE, GUARDIAN_RING_PATTERN, GUARDIAN_VOLLEY_DAMAGE, GUARDIAN_VOLLEY_PATTERN,
@@ -51,6 +50,12 @@ import {
 import { TRAINING_REGEN_PER_TICK, TRAINING_RESPAWN_MS, TRAINING_WAKE_RANGE, trainingRoom } from './training';
 import { DOOR_SIDES, FLOOR_ENTRANCE_ROOM_ID } from '../shared/floors';
 import { NEUTRAL_LAWS, applyEncounterLaws, lawsSpareEncounter, resolveLaws, worldLawsView, type ResolvedLaws } from './laws';
+import {
+  NO_EFFECTS, anchorRateMul, clearBonusResources, clearHasteMs, dashCooldownMul, dashInvulnerableBonusMs, dropTrailPoint, effectsFor,
+  hasteAttackCooldownMul, hasteMoveMul, incomingDamageMul, outgoingDamageMul, relicMendHp, remainsCharge, skillWorldContext, stepDashTrail,
+  DASH_TRAIL_DAMAGE, type DashTrail, type EffectSet, type IncomingKind,
+} from './effects';
+import { buildSkillTree, skillPurchaseCheck } from '../shared/skills';
 import { createRoomProvider, type RoomProvider } from './floorProvider';
 import {
   FLOOR_TUNING, TREASURE_REWARD, advanceBiome, clearReward, connectedTiles, createFloorsRun, doorArrival, floorRunState, focusPoint,
@@ -77,6 +82,11 @@ interface PlayerRuntime {
   history: Array<Point & { hp: number }>;
   /** T1: damaging-tile bookkeeping; derived from sim state, never serialised. */
   hazard: HazardClock;
+  /** S1: `effectsFor(state, world)`, cached; refreshed on purchase, class change and world change. */
+  effects: EffectSet;
+  /** S1: clear_surge haste left, and the dash_echo burn trail; both derived, never serialised. */
+  hasteMs: number;
+  trail: DashTrail | null;
 }
 
 interface EnemyRuntime {
@@ -167,12 +177,11 @@ export interface Simulation {
   chooseBiome(playerId: string, biomeId: string): void;
   unlockAbility(playerId: string): GameEvent[];
   /**
-   * Spend resources on a skill-tree node (src/shared/skills.ts). Only nodes whose status is
-   * `implemented` can be learned; requirements must be owned. Allowed outside combat phases.
+   * Buys one skill-tree node for one operative with their own resources (S1). Authoritative:
+   * refuses unknown, planned, owned, unmet-prerequisite or unaffordable nodes. Returns whether
+   * the purchase happened; the result is visible in `PlayerState.skillNodeIds` and `resources`.
    */
-  learnSkill(playerId: string, skillId: string): GameEvent[];
-  /** Credit resources directly (tests, future shop/debug tools). Never emits events. */
-  grantResources(playerId: string, amount: number): void;
+  purchaseSkill(playerId: string, nodeId: string): boolean;
   /** Buttons are pressed this tick; interact is held this tick. */
   applyIntent(intent: PlayerIntent): void;
   step(): GameEvent[];
@@ -191,8 +200,6 @@ export interface SimulationOptions {
 export function createSimulation(options: SimulationOptions = {}): Simulation {
   const hq = options.headquarters ?? headquartersRoom;
   let world: PreparedWorld | null = null;
-  /** Learned skill-tree node (see learnSkill). */
-  const hasSkill = (p: PlayerRuntime, id: string): boolean => p.state.skills.includes(id);
   let room = hq;
   let grid: SolidGrid = buildSolidGrid(room);
   let phase: GamePhase = 'headquarters';
@@ -262,6 +269,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     p.history = [];
     p.onExit = false;
     p.hazard = createHazardClock();
+    p.hasteMs = 0;
+    p.trail = null;
   }
 
   function doorsLocked(): boolean {
@@ -358,10 +367,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       room,
       players: () => orderedPlayers().filter((p) => p.state.hp > 0)
         .map((p) => ({ id: p.state.id, x: p.state.x, y: p.state.y, hp: p.state.hp, hidden: (p.state.shroudMs ?? 0) > 0 })),
-      damagePlayer: (playerId, sourceEnemyId, damage, ranged) => {
+      damagePlayer: (playerId, sourceEnemyId, damage, ranged, floor) => {
         const p = players.get(playerId);
         // Boss numbers are absolute: the tier curve scales the biome's enemies, never the Custodian.
-        return p ? damagePlayer(p, sourceEnemyId, damage, ranged, events, 350, false) : false;
+        return p ? damagePlayer(p, sourceEnemyId, damage, ranged, events, 350, false, floor ? 'terrain' : undefined) : false;
       },
       pushPlayer: (playerId, dx, dy) => {
         const p = players.get(playerId);
@@ -711,13 +720,17 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         // New operatives start with exactly one unlock's worth of resources so the E ability
         // can be unlocked at HQ before the first expedition.
         resources: ABILITY_UNLOCK_COST, abilityEUnlocked: false, abilityQCooldownMs: 0, abilityECooldownMs: 0,
-        shieldMs: 0, shroudMs: 0, rallyMs: 0, reviveProgress: 0, ultCharge: 0, abilityRCooldownMs: 0, skills: [],
+        shieldMs: 0, shroudMs: 0, rallyMs: 0, reviveProgress: 0, ultCharge: 0, abilityRCooldownMs: 0,
       },
       intent: null, unlockedClasses: new Set(), dashRemainingMs: 0,
       dashDirection: { x: 1, y: 0 }, attackRemainingMs: 0, hitRemainingMs: 0,
       onExit: false, interacting: false, interactHeld: false, interactPressed: false, damagedThisTick: false, history: [],
-      hazard: createHazardClock(),
+      hazard: createHazardClock(), effects: NO_EFFECTS, hasteMs: 0, trail: null,
     };
+  }
+
+  function refreshEffects(p: PlayerRuntime): void {
+    p.effects = effectsFor(p.state, world);
   }
 
   function livingEnemies(): EnemyRuntime[] {
@@ -743,7 +756,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     // World laws scale what the CREW hits for. A vent is not a player: it neither gets
     // `playerDamageMul` nor spends the `first_light` opening strike's multiplier on a burn tick.
     const lawMul = source.kind === 'player' ? laws.playerDamageMul * (s.hp === s.maxHp ? laws.firstStrikeMul : 1) : 1;
-    const marked = Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1) * lawMul);
+    const fxMul = source.kind === 'player' ? outgoingDamageMul(source.player.effects, s) : 1;
+    const marked = Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1) * lawMul * fxMul);
     // The Custodian caps single hits at 12% of its health, applies its phase-3 shield and any
     // vulnerability window it has opened (BOSS_FINALE §3.2, §4.2).
     const amount = Math.min(s.hp, e.custodian ? custodianIncomingDamage(e.custodian, s, marked) : marked);
@@ -817,6 +831,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     node.holdMs = 0;
     if (!fragment || discoveredLore.has(node.state.fragmentIndex)) return;
     discoveredLore.add(node.state.fragmentIndex);
+    if (node.state.kind === 'relic') by.state.hp = Math.min(by.state.maxHp, by.state.hp + relicMendHp(by.effects));
+    else by.state.ultCharge = Math.min(ULT_CHARGE_MAX, by.state.ultCharge + remainsCharge(by.effects));
     events.push(emit({
       type: 'lore_discovered', worldId: world.worldId, playerId: by.state.id, fragmentIndex: node.state.fragmentIndex, kind: fragment.kind,
       title: fragment.title, source: fragment.source, text: fragment.text, x: node.state.x, y: node.state.y,
@@ -859,7 +875,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
    */
   function damagePlayer(
     p: PlayerRuntime, sourceEnemyId: string, damage: number, ranged: boolean, events: GameEvent[],
-    invulnerableMsAfter = 350, scaled = true,
+    invulnerableMsAfter = 350, scaled = true, wardKind?: IncomingKind,
   ): boolean {
     const s = p.state;
     if (s.hp <= 0 || s.invulnerableMs > 0 || (ranged && s.shieldMs > 0)) return false;
@@ -867,6 +883,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (scaled && enemyDamageScale !== 1 && sourceEnemyId !== 'anchor-pulse' && !isTerrainDamageSource(sourceEnemyId)) {
       damage = Math.round(damage * enemyDamageScale);
     }
+    const wardMul = incomingDamageMul(p.effects, sourceEnemyId, ranged, wardKind);
+    if (wardMul !== 1) damage = Math.round(damage * wardMul);
     let amount = Math.min(s.hp, s.shieldMs > 0 ? Math.ceil(damage * 0.2) : damage);
     // Training range: hits land (so the telegraphs teach), but nobody goes down.
     if (phase === 'training') amount = Math.min(amount, Math.max(0, s.hp - 1));
@@ -1005,28 +1023,18 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
 
   function basicAttack(p: PlayerRuntime, events: GameEvent[]): void {
     const s = p.state;
-    const base = CLASS_COMBAT[s.classId];
-    // Learned skills adjust the weapon: Wider Sweep (arc +30%, up to three targets), Keen Edge
-    // (+4 damage, cadence +10%), Far Lantern (range 240 -> 300), Tight Loom (slow 1.5 s).
-    const spec = {
-      ...base,
-      arc: base.arc * (hasSkill(p, 'bastion.sweep') ? 1.3 : 1),
-      damage: base.damage + (hasSkill(p, 'shade.edge') ? 4 : 0),
-      cooldown: base.cooldown * (hasSkill(p, 'shade.edge') ? 0.9 : 1),
-      range: hasSkill(p, 'beacon.reach') ? 300 : base.range,
-    };
+    const spec = CLASS_COMBAT[s.classId];
     let targets = arcTargets(s, s.facing, spec.range, spec.arc);
     if (s.classId === 'beacon' || s.classId === 'shade') targets = targets.slice(0, 1);
-    else if (s.classId === 'bastion' && hasSkill(p, 'bastion.sweep')) targets = targets.slice(0, 3);
     const bonus = s.shroudMs > 0 ? 18 : 0;
     s.shroudMs = 0;
     p.attackRemainingMs = ATTACK_DURATION_MS;
-    s.attackCooldownMs = spec.cooldown * (s.rallyMs > 0 ? 0.75 : 1);
+    s.attackCooldownMs = spec.cooldown * (s.rallyMs > 0 ? 0.75 : 1) * hasteAttackCooldownMul(p.hasteMs);
     events.push(emit({ type: 'player_attacked', playerId: s.id, x: s.x, y: s.y, facing: s.facing,
       range: spec.range, arcRad: spec.arc, hitEnemyIds: targets.map((e) => e.state.id) }));
     for (const e of targets) {
       damageEnemy(e, p, spec.damage + bonus, events);
-      if (s.classId === 'weaver') e.state.slowMs = Math.max(e.state.slowMs ?? 0, hasSkill(p, 'weaver.loom') ? 1500 : 1000);
+      if (s.classId === 'weaver') e.state.slowMs = Math.max(e.state.slowMs ?? 0, 1000);
     }
     const terrainStrike = strikeTerrain(room, grid, progress.terrain, {
       x: s.x, y: s.y, facing: s.facing, range: spec.range, arc: spec.arc, damage: spec.damage + bonus,
@@ -1085,7 +1093,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     p.hazard = createHazardClock();
     // Applied directly rather than through damagePlayer: you cannot i-frame or shield a hole,
     // and the fall must never take the last point of health.
-    const amount = Math.min(PIT_FALL_DAMAGE, Math.max(0, s.hp - 1));
+    const amount = Math.min(Math.round(PIT_FALL_DAMAGE * incomingDamageMul(p.effects, TERRAIN_DAMAGE_SOURCE.pit, false)), Math.max(0, s.hp - 1));
     if (amount > 0) {
       s.hp -= amount;
       s.reviveProgress = 0;
@@ -1245,11 +1253,22 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     }
   }
 
+  function burnDashTrail(p: PlayerRuntime, events: GameEvent[]): void {
+    const enemies = progress.enemies.filter((e) => !e.decoy).map((e) => e.state);
+    const { trail, burned } = stepDashTrail(p.trail!, TICK_MS, enemies);
+    p.trail = trail;
+    for (const id of burned) {
+      const e = progress.enemies.find((it) => it.state.id === id);
+      if (e) damageEnemyFrom(e, { kind: 'player', player: p }, DASH_TRAIL_DAMAGE, events);
+    }
+  }
+
   function stepPlayer(p: PlayerRuntime, events: GameEvent[]): void {
     const s = p.state;
     for (const key of ['dashCooldownMs', 'attackCooldownMs', 'invulnerableMs', 'abilityQCooldownMs', 'abilityECooldownMs', 'abilityRCooldownMs', 'shieldMs', 'shroudMs', 'rallyMs'] as const) s[key] = decay(s[key]);
     p.hitRemainingMs = decay(p.hitRemainingMs);
     s.slowMs = decay(s.slowMs ?? 0);
+    p.hasteMs = decay(p.hasteMs);
     p.damagedThisTick = false;
     const intent = p.intent;
     p.intent = null;
@@ -1273,9 +1292,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       p.dashDirection = length > 0 ? { x: moveX / length, y: moveY / length } : { x: Math.cos(s.facing), y: Math.sin(s.facing) };
       p.dashRemainingMs = DASH_DURATION_MS * laws.dashDurationMul;
       p.attackRemainingMs = 0;
-      const wind = hasSkill(p, 'core.wind');
-      s.dashCooldownMs = Math.round(DASH_COOLDOWN_MS * laws.dashCooldownMul * (wind ? 0.75 : 1));
-      s.invulnerableMs = Math.max(s.invulnerableMs, DASH_INVULNERABLE_MS + (wind ? 50 : 0));
+      s.dashCooldownMs = DASH_COOLDOWN_MS * laws.dashCooldownMul * dashCooldownMul(p.effects);
+      s.invulnerableMs = Math.max(s.invulnerableMs, DASH_INVULNERABLE_MS + dashInvulnerableBonusMs(p.effects));
       // The event's facing is the direction of travel (renderers draw the trail behind it),
       // not the aim direction — you can dash sideways while looking at an enemy.
       events.push(emit({ type: 'player_dashed', playerId: s.id, x: s.x, y: s.y, facing: Math.atan2(p.dashDirection.y, p.dashDirection.x) }));
@@ -1289,7 +1307,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       s.vy = p.dashDirection.y * DASH_SPEED * laws.dashSpeedMul;
     } else {
       const speed = CLASS_COMBAT[s.classId].speed * laws.walkSpeedMul * (p.attackRemainingMs > 0 ? laws.attackMoveMul : 1) *
-        (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1) * ((s.slowMs ?? 0) > 0 ? 0.6 : 1) *
+        (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1) * ((s.slowMs ?? 0) > 0 ? 0.6 : 1) * hasteMoveMul(p.hasteMs) *
         terrainSpeedMultiplier(room, s.x, s.y, progress.terrain.brokenWalls);
       s.vx = length > 0 ? moveX / length * speed : 0;
       s.vy = length > 0 ? moveY / length * speed : 0;
@@ -1303,6 +1321,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (moved.blockedY) s.vy = 0;
     s.state = p.dashRemainingMs > 0 ? 'dashing' : p.attackRemainingMs > 0 ? 'attacking' :
       p.hitRemainingMs > 0 ? 'hit' : s.vx !== 0 || s.vy !== 0 ? 'moving' : 'idle';
+    if (p.dashRemainingMs > 0) p.trail = dropTrailPoint(p.trail, p.effects, s.x, s.y);
+    if (p.trail) burnDashTrail(p, events);
     p.dashRemainingMs = decay(p.dashRemainingMs);
     p.attackRemainingMs = decay(p.attackRemainingMs);
     if (p.dashRemainingMs === 0 && overPit(s)) resolvePlayerPitFall(p, events);
@@ -1558,7 +1578,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (!progress.cleared && living.length > 0 && livingEnemies().length === 0) {
       progress.cleared = true;
       const reward = environmentalShare(floorsRun ? clearReward(room) : ROOM_CLEAR_REWARD);
-      for (const p of players.values()) p.state.resources += reward + (hasSkill(p, 'core.salvage') ? 1 : 0);
+      for (const p of players.values()) {
+        p.state.resources += reward + clearBonusResources(p.effects);
+        p.hasteMs = Math.max(p.hasteMs, clearHasteMs(p.effects));
+      }
       events.push(emit({ type: 'room_cleared', worldId: world.worldId, roomIndex: room.index, roomId: room.id, playerIds: playerIds(), reward }));
       if (floorsRun && room.roomId !== undefined) {
         markCleared(floorsRun, room.roomId);
@@ -1584,7 +1607,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       return;
     }
     anchor.state = 'planting';
-    anchor.progress = Math.min(1, anchor.progress + TICK_MS / ANCHOR_HOLD_MS);
+    anchor.progress = Math.min(1, anchor.progress + TICK_MS * anchorRateMul(planters.map((p) => p.effects)) / ANCHOR_HOLD_MS);
     if (anchor.progress >= 1 - 1e-7) {
       anchor.progress = 1;
       anchor.state = 'planted';
@@ -1603,7 +1626,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (ritual.stage === 'discharging') {
       // Every relic the crew actually read takes 150 ms off the discharge (BOSS_FINALE §6).
       const dischargeMs = anchorDischargeMs(relicsRead([...discoveredLore], world.recipe.lore));
-      ritual.dischargeMs = Math.min(dischargeMs, ritual.dischargeMs + TICK_MS);
+      ritual.dischargeMs = Math.min(dischargeMs, ritual.dischargeMs + TICK_MS * anchorRateMul(living.map((p) => p.effects)));
       anchor.progress = 0.75 + 0.25 * ritual.dischargeMs / dischargeMs;
       if (ritual.dischargeMs >= dischargeMs - 1e-7) {
         anchor.state = 'planted';
@@ -1770,6 +1793,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         p.state.classId = identity.classId;
         p.state.abilityEUnlocked = p.unlockedClasses.has(identity.classId);
         resetTransient(p);
+        refreshEffects(p);
       }
     },
     getPlayerIds: playerIds,
@@ -1783,6 +1807,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       }
       world = next;
       worldLaws = resolveLaws(worldLawsView(next, options.deriveLaws).laws);
+      for (const p of players.values()) refreshEffects(p);
       // Outside a run the provider follows the latest copy of the world (briefs may arrive late).
       if (!floorsRun) roomProvider = next?.floors ? (options.roomProvider ?? createRoomProvider)(next) : null;
     },
@@ -1850,26 +1875,16 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       return [emit({ type: 'ability_unlocked', playerId, abilityId: CLASS_ABILITIES[p.state.classId].e,
         cost: ABILITY_UNLOCK_COST, remainingResources: p.state.resources })];
     },
-    grantResources(playerId, amount) {
+    purchaseSkill(playerId, nodeId) {
       const p = players.get(playerId);
-      if (p && Number.isFinite(amount) && amount > 0) p.state.resources += Math.floor(amount);
-    },
-    learnSkill(playerId, skillId) {
-      const p = players.get(playerId);
-      if (!p || phase === 'expedition' || p.state.hp <= 0 || p.state.skills.includes(skillId)) return [];
-      const tree = buildSkillTree(p.state.classId, world ? { title: world.recipe.title, attunements: world.recipe.attunements } : null);
-      const node = tree.nodes.find((n) => n.id === skillId);
-      if (!node || node.status !== 'implemented' || node.cost <= 0) return [];
-      if (node.requires.some((req) => req !== 'core.root' && !p.state.skills.includes(req))) return [];
-      if (p.state.resources < node.cost) return [];
-      p.state.resources -= node.cost;
-      p.state.skills = [...p.state.skills, skillId];
-      // Immediate effects; the rest are read where they apply (attack, dash, room clear).
-      if (skillId === 'core.plating') {
-        p.state.maxHp += 20;
-        p.state.hp = Math.min(p.state.maxHp, p.state.hp + 20);
-      }
-      return [emit({ type: 'skill_learned', playerId, skillId, skillName: node.name, cost: node.cost, remainingResources: p.state.resources })];
+      if (!p || phase === 'debrief' || p.state.hp <= 0) return false;
+      const tree = buildSkillTree(p.state.classId, skillWorldContext(world));
+      const owned = p.state.skillNodeIds ?? [];
+      if (skillPurchaseCheck(tree, nodeId, owned, p.state.resources) !== null) return false;
+      p.state.resources -= tree.nodes.find((n) => n.id === nodeId)!.cost;
+      p.state.skillNodeIds = [...owned, nodeId];
+      refreshEffects(p);
+      return true;
     },
     setHostPlayerId(playerId) {
       hostPlayerId = playerId;
@@ -1913,7 +1928,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         tick, timeMs: tick * TICK_MS, phase,
         worldId: phase === 'headquarters' ? null : world?.worldId ?? null,
         roomIndex: phase === 'headquarters' ? null : room.index,
-        roomId: room.id, players: orderedPlayers().map((p) => ({ ...p.state })),
+        roomId: room.id, players: orderedPlayers().map((p) => ({ ...p.state, ...(p.state.skillNodeIds ? { skillNodeIds: [...p.state.skillNodeIds] } : {}) })),
         enemies: progress.enemies.map((e) => ({ ...e.state, telegraph: e.state.telegraph ? { ...e.state.telegraph } : null })),
         projectiles: projectiles.map((pr): ProjectileState => ({
           id: pr.id, ownerEnemyId: pr.ownerEnemyId, x: pr.x, y: pr.y, vx: pr.vx, vy: pr.vy, radius: pr.radius,

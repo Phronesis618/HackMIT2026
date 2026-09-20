@@ -216,11 +216,9 @@ export class LocalSession implements GameSession {
     for (const listener of this.snapshotListeners) listener(this.snapshot);
   }
 
-  learnSkill(skillId: string): void {
-    if (this.disposed) return;
-    const events = this.sim.learnSkill(this.localPlayerId, skillId);
+  purchaseSkill(nodeId: string): void {
+    if (this.disposed || !this.sim.purchaseSkill(this.localPlayerId, nodeId)) return;
     this.snapshot = this.sim.getSnapshot();
-    if (events.length) this.emitEvents(events);
     for (const listener of this.snapshotListeners) listener(this.snapshot);
   }
 

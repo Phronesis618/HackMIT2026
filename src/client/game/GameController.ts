@@ -201,6 +201,7 @@ export class GameController {
           prev.maxHp !== hud.maxHp ||
           prev.resources !== hud.resources ||
           prev.abilityEUnlocked !== hud.abilityEUnlocked ||
+          (prev.skillNodeIds?.length ?? 0) !== (hud.skillNodeIds?.length ?? 0) ||
           prev.abilityQCooldownMs !== hud.abilityQCooldownMs ||
           prev.abilityECooldownMs !== hud.abilityECooldownMs ||
           prev.reviveProgress !== hud.reviveProgress ||
@@ -222,13 +223,12 @@ export class GameController {
       }
       const players = snapshot.players.map((p) => ({
         id: p.id, displayName: p.displayName, classId: p.classId, isLocal: p.id === session.localPlayerId,
-        hp: Math.round(p.hp), maxHp: p.maxHp, state: p.state, skills: p.skills,
+        hp: Math.round(p.hp), maxHp: p.maxHp, state: p.state,
       }));
       const prevPlayers = store.get().players;
       if (prevPlayers.length !== players.length || prevPlayers.some((p, i) => {
         const next = players[i]!;
-        return p.id !== next.id || p.displayName !== next.displayName || p.classId !== next.classId || p.hp !== next.hp || p.maxHp !== next.maxHp || p.state !== next.state
-          || (p.skills?.length ?? 0) !== (next.skills?.length ?? 0);
+        return p.id !== next.id || p.displayName !== next.displayName || p.classId !== next.classId || p.hp !== next.hp || p.maxHp !== next.maxHp || p.state !== next.state;
       })) {
         store.set({ players });
       }
@@ -493,7 +493,7 @@ export class GameController {
         store.set({ audioMuted: audio.isMuted() });
       },
       unlockAbility: () => session.unlockAbility?.(),
-      learnSkill: (skillId: string) => session.learnSkill?.(skillId),
+      purchaseSkill: (nodeId) => session.purchaseSkill?.(nodeId),
       enterTraining: () => {
         const ok = session.enterTraining?.() ?? false;
         if (!ok) this.notice('info', 'The training range is available in solo play from headquarters.');
@@ -519,6 +519,7 @@ function hudFrom(me: PlayerState, snapshot: GameSnapshot): NonNullable<UiModel['
     enemiesRemaining: snapshot.enemies.filter((e) => e.state !== 'dead').length,
     resources: me.resources ?? 0,
     abilityEUnlocked: me.abilityEUnlocked ?? false,
+    ...(me.skillNodeIds ? { skillNodeIds: me.skillNodeIds } : {}),
     abilityQCooldownMs: Math.ceil((me.abilityQCooldownMs ?? 0) / 100) * 100,
     abilityECooldownMs: Math.ceil((me.abilityECooldownMs ?? 0) / 100) * 100,
     reviveProgress: me.reviveProgress ?? 0,

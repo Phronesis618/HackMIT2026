@@ -4,7 +4,7 @@
 
 Local commits on Jeffrey's machine, merged with `origin/main` through `c1abe97` (floors,
 writing pipeline, hub, tiles, boss finale, co-op verify, UI audit); `npm run check` green at
-**838 tests / 71 files** (merged through `8843860`, M1 world laws). Pushing was deferred to a human (the agent's pushes need approval): the work sits on the local branch `integrate` on Jeffrey's laptop; `git push origin integrate:main` after a final `git merge origin/main` + `npm run check`.
+**943 tests / 80 files** (merged through `e1efbfb`, S1 skill tree). Pushing was deferred to a human (the agent's pushes need approval): the work sits on the local branch `integrate` on Jeffrey's laptop; `git push origin integrate:main` after a final `git merge origin/main` + `npm run check`.
 
 - **Implemented — offline composer (`src/server/composer/`, "Jeffrey's area" per the overnight
   plan):** `RELAY_AI_PROVIDER=composer` builds a validated `WorldRecipe` from the crew's ideas in
@@ -20,9 +20,8 @@ writing pipeline, hub, tiles, boss finale, co-op verify, UI audit); `npm run che
   failure in its notes) instead of a canned fixture. `.env` on this laptop runs the composer. Live mode with a missing API key now composes instead of serving fixtures (public deploy is safe before secrets are added).
 - **Retired — my interim world rules.** I had shipped 8 implemented `rules` overnight; when M1's
   laws harness landed (`src/sim/laws.ts`, 8 laws in the sim + long_dark in the renderer) I removed
-  the duplicate system rather than stack two modifier layers. What survives from it: hostiles pay
-  `ENEMY_INFO.shards` (1–8) on defeat (environmental kills at T1's reduced credit). Hazard-floor
-  damage is T1's now (`src/sim/hazards.ts`); my interim bite was removed. The composer writes 1–2 **laws** per theme in the world's
+  the duplicate system rather than stack two modifier layers. Hazard-floor damage is T1's now
+  (`src/sim/hazards.ts`); my interim bite was removed. The composer writes 1–2 **laws** per theme in the world's
   voice (`THEME_LAWS` / `LAW_VOICE` in `compose.ts`, through `sanitizeLaws`), drawn only from the
   in-force set, so composed worlds show real laws on the world panel and HUD chips.
 - **Implemented — app shell:** `GenerationOverlay` (forming ring with the crew's ideas orbiting →
@@ -33,13 +32,12 @@ writing pipeline, hub, tiles, boss finale, co-op verify, UI audit); `npm run che
   `?start=0/1`); bigger pop-in damage/heal numbers and an in-world exit label in `RoomScene`;
   `GameController` syncs connection status on a timer (no false "offline" in throttled tabs) and
   publishes crew vitals + world palette/rooms/rules to the UI model.
-- **Implemented — skill tree goes live:** `Simulation.learnSkill(playerId, skillId)` (protocol
-  `learn_skill`, `GameSession.learnSkill`, `UiActions.learnSkill`, event `skill_learned`,
-  `PlayerState.skills`). Seven nodes have real effects (`IMPLEMENTED_SKILLS` in `skills.ts`):
-  core.plating / core.wind / core.salvage, bastion.sweep, shade.edge, beacon.reach, weaver.loom.
-  The Tab menu's Skills page has a Learn button (sanctuary/debrief/training only); learned nodes
-  tick, live nodes glow. Spends the same `resources` ECONOMY.md calls Salvage; kills now pay
-  `ENEMY_INFO.shards` (1–8) on expeditions — an earn source to add to ECONOMY §3's table.
+- **Retired — my interim skill-tree purchases.** I had wired `learnSkill` + seven live nodes
+  overnight; S1 (PR #40) landed the team's full version an hour later (`purchase_skill`,
+  `src/sim/effects.ts`, attunement effects, skills page buying), so I dropped mine at the merge.
+  What survives: hostiles pay `ENEMY_INFO.shards` (1–8) on defeat on expeditions (environmental
+  kills at T1's reduced credit) — the earn source that makes S1's purchases affordable; accounted
+  for in `tests/sim/effects.test.ts`. ECONOMY §3's earn table should list it.
 - **Composer ↔ W2 pipeline:** composed text passes `lintRecipeText` with zero hard failures
   (test in `tests/integration/composer.test.ts`); composer recipes carry no `bible`, so the
   pipeline keeps them without a repair round. `RELAY_FLOORS=1` + composer = floors world on
