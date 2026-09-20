@@ -472,6 +472,27 @@ const tileOf = (p) => ({ col: Math.floor(p.x / TILE), row: Math.floor(p.y / TILE
 const centre = (t) => ({ x: t.col * TILE + TILE / 2, y: t.row * TILE + TILE / 2 });
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
+/** The nearest tile that is neither solid nor damaging, for stepping out of a hazard. */
+function nearestSafeTile(room, snap, from) {
+  const { solid } = grids(room, snap);
+  for (let r = 1; r <= 4; r++) {
+    let best = null;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const col = from.col + dx;
+        const row = from.row + dy;
+        const ch = room.tiles[row]?.[col];
+        if (ch === undefined || solid[row]?.[col] !== false || PAINFUL.has(ch)) continue;
+        const d = Math.hypot(dx, dy);
+        if (!best || d < best.d) best = { col, row, d };
+      }
+    }
+    if (best) return best;
+  }
+  return null;
+}
+
 function steerKeys(room, snap, me, target, arriveDist) {
   if (dist(target, me) <= arriveDist) return { keys: new Set(), arrived: true };
   const g = grids(room, snap);
@@ -566,6 +587,18 @@ async function fightUntil(player, { timeoutMs = 60000, stopWhen = null, stats = 
         if (stats) stats.dodges = (stats.dodges ?? 0) + 1;
         await dashOut(player, me, threat, s.room, s.snap);
         continue;
+      }
+      // 2. a human does not stand in the fire to swing. If the tile under our feet hurts,
+      //    step to the nearest tile that does not before doing anything else.
+      const here = tileOf(me);
+      if (PAINFUL.has(s.room.tiles[here.row]?.[here.col] ?? '#')) {
+        const safeTile = nearestSafeTile(s.room, s.snap, here);
+        if (safeTile) {
+          if (stats) stats.stepOffs = (stats.stepOffs ?? 0) + 1;
+          await player.setKeys(steerKeys(s.room, s.snap, me, centre(safeTile), 6).keys);
+          await sleep(90);
+          continue;
+        }
       }
       const enemy = living.reduce((a, b) => (dist(a, me) < dist(b, me) ? a : b));
       const d = dist(enemy, me);
@@ -1034,7 +1067,10 @@ async function groupDeep(ctx) {
   ctx.tilesSeen = tilesSeen;
   ctx.deepest = { rooms, biomes: [...biomes], tier: deepest, outcome, mins };
   const notes = ctx.kindNotes ?? [];
-  report.check('D4', 'the first-encounter note for each room kind was seen on screen',
+  if (args.hints === 'off') {
+    report.add('D4', 'the first-encounter note for each room kind was seen on screen', 'SKIP',
+      `this run used ?hints=off, which is exactly what silences those notes; room kinds entered: ${J([...kinds])}. Run --hints on to capture them.`);
+  } else report.check('D4', 'the first-encounter note for each room kind was seen on screen',
     notes.filter((n) => n.coach).length >= 2,
     notes.length ? notes.map((n) => `${n.kind}: ${n.coach ? `"${n.coach}"` : 'no note on screen'} [${n.shot}.png]`).join(' | ') : 'no room kinds entered');
 }
