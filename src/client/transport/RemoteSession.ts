@@ -51,6 +51,7 @@ interface Pending<T> {
 export class RemoteSession implements GameSession {
   readonly mode = 'remote' as const;
   private identity: PlayerIdentity;
+  private pendingIdentities: PlayerIdentity[] = [];
   private socket: WebSocket | null = null;
   private connection: ConnectionStatus = 'offline';
   private world: PreparedWorld | null = null;
@@ -193,11 +194,11 @@ export class RemoteSession implements GameSession {
 
   setDisplayName(name: string): void {
     const displayName = name.trim().slice(0, 24);
-    if (displayName) this.updateIdentity({ ...this.identity, displayName });
+    if (displayName) this.updateIdentity({ ...(this.pendingIdentities.at(-1) ?? this.identity), displayName });
   }
 
   setClass(classId: PlayerIdentity['classId']): void {
-    this.updateIdentity({ ...this.identity, classId });
+    this.updateIdentity({ ...(this.pendingIdentities.at(-1) ?? this.identity), classId });
   }
 
   private updateIdentity(identity: PlayerIdentity): void {
@@ -205,7 +206,12 @@ export class RemoteSession implements GameSession {
       this.identity = PlayerIdentitySchema.parse(identity);
       return;
     }
-    this.send({ type: 'identity', displayName: identity.displayName, classId: identity.classId });
+    const previous = this.pendingIdentities.at(-1) ?? this.identity;
+    if (identity.displayName === previous.displayName && identity.classId === previous.classId) return;
+    this.pendingIdentities.push(PlayerIdentitySchema.parse(identity));
+    if (!this.send({ type: 'identity', displayName: identity.displayName, classId: identity.classId })) {
+      this.pendingIdentities.pop();
+    }
   }
 
   submitContribution(text: string): Contribution | null {
@@ -338,6 +344,9 @@ export class RemoteSession implements GameSession {
           this.openSocket();
           break;
         }
+        if (message.action === 'identity') {
+          this.pendingIdentities.shift();
+        }
         this.notifyError(message.message);
         if (message.action === 'contribution') this.pendingContributions.clear();
         if ((!message.action || message.action === 'request_world') && (!message.requestId || this.pendingWorld?.requestId === message.requestId)) {
@@ -364,6 +373,10 @@ export class RemoteSession implements GameSession {
     this.lobby = lobby;
     const identity = lobby.players.find((player) => player.identity.id === this.localPlayerId)?.identity;
     if (identity) this.identity = identity;
+    const pending = this.pendingIdentities[0];
+    if (identity && identity.displayName === pending?.displayName && identity.classId === pending.classId) {
+      this.pendingIdentities.shift();
+    }
     for (const listener of this.lobbyListeners) listener(lobby);
   }
 
@@ -457,6 +470,7 @@ export class RemoteSession implements GameSession {
     this.startPromise = null;
     this.rejectWorld(error);
     this.pendingIntent = null;
+    this.pendingIdentities = [];
     this.pendingContributions.clear();
     this.setConnection('offline');
     if (notify && !this.disposed) this.notifyError(error.message);
