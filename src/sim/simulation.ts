@@ -405,13 +405,15 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     events.push(emit({ type: 'enemy_damaged', enemyId: s.id, byPlayerId: p.state.id, amount, remainingHp: s.hp }));
     if (s.hp === 0) {
       s.telegraph = null;
-      events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: p.state.id }));
+      events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: p.state.id,
+        worldId: phase === 'expedition' ? world?.worldId ?? null : null }));
       dropRemains(e);
     }
   }
 
   /** The first kill of each enemy kind leaves its lore behind where it fell. */
   function dropRemains(e: EnemyRuntime): void {
+    if (phase !== 'expedition') return;
     const lore = world?.recipe.lore ?? [];
     const fragmentIndex = lore.findIndex((f) => f.kind === 'remains' && f.enemyId === e.state.enemyId);
     if (fragmentIndex < 0 || discoveredLore.has(fragmentIndex)) return;
@@ -423,14 +425,15 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   }
 
   function discoverLore(node: LoreNodeRuntime, by: PlayerRuntime, events: GameEvent[]): void {
-    const fragment = world?.recipe.lore[node.state.fragmentIndex];
+    if (phase !== 'expedition' || !world) return;
+    const fragment = world.recipe.lore[node.state.fragmentIndex];
     node.state.state = 'collected';
     node.state.progress = 1;
     node.holdMs = 0;
+    if (!fragment || discoveredLore.has(node.state.fragmentIndex)) return;
     discoveredLore.add(node.state.fragmentIndex);
-    if (!fragment) return;
     events.push(emit({
-      type: 'lore_discovered', playerId: by.state.id, fragmentIndex: node.state.fragmentIndex, kind: fragment.kind,
+      type: 'lore_discovered', worldId: world.worldId, playerId: by.state.id, fragmentIndex: node.state.fragmentIndex, kind: fragment.kind,
       title: fragment.title, source: fragment.source, text: fragment.text, x: node.state.x, y: node.state.y,
     }));
   }
@@ -1266,6 +1269,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         updateObjectives(events);
       } else if (phase === 'training') {
         for (const e of progress.enemies) stepEnemy(e, events);
+        stepProjectiles(events);
         respawnTrainingTargets();
       }
       updateExits(events);
