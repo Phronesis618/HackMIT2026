@@ -10,7 +10,7 @@ import { hashString } from '../../shared/ids';
 import { compileWorldRecipe } from './compiler';
 import { prepareFromFixture } from './fixtureService';
 import { GenerationFailure, type RecipeProvider } from './provider';
-import { DEFAULT_WORLD_BUDGET_MS, generateRecipe, type GeneratedRecipe, type GenerationMetrics } from './pipeline';
+import { DEFAULT_WORLD_BUDGET_MS, generateRecipe, type CallMetric, type GeneratedRecipe, type GenerationMetrics } from './pipeline';
 import { buildReceipt } from './receipt';
 
 export function createLiveGenerationService(options: {
@@ -24,6 +24,8 @@ export function createLiveGenerationService(options: {
   worldBudgetMs?: number;
   /** Per-world measurements (latency per call, tokens, lint before/after). Used by scripts/eval-worldgen.ts. */
   onMetrics?: (metrics: GenerationMetrics) => void;
+  /** Every model call as it finishes, including failed ones and worlds that end in a fallback. */
+  onCall?: (metric: CallMetric) => void;
 }) {
   async function* prepareWorldStream(
     rawRequest: GenerationRequest,
@@ -58,6 +60,7 @@ export function createLiveGenerationService(options: {
         startedAt,
         floorsSeed: request.seed === undefined ? worldId : String(request.seed),
         countCall: () => { attempts++; },
+        onCall: options.onCall,
       });
     } catch (error) {
       signal?.throwIfAborted();

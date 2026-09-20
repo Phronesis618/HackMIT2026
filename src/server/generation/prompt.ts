@@ -1,8 +1,8 @@
 /**
  * Runtime prompt builder (agent W2). Prompts live in prompts/runtime/*.md:
  *   common.md      framing, injection guard, the house rules as positive instructions
- *   foundation.md  call 1: bible first, then title/tagline/palette/look/laws/rooms/opener biome
- *   relics.md, remains.md, biomes.md   call 2 (run in parallel, conditioned on the bible)
+ *   foundation.md  call 1: the bible, then title/tagline/summary/motifs/palette
+ *   rooms.md, relics.md, remains.md, biomes.md   call 2 (run in parallel, conditioned on the bible)
  *   polish.md      linter-driven rewrite of specific rejected lines
  *   world-recipe.md  the whole recipe in one call (operator inbox, custom providers)
  * Ban lists are deliberately absent (they prime the words; see docs/WRITING.md section 7):
@@ -10,14 +10,14 @@
  */
 import fs from 'node:fs';
 import { hashString } from '../../shared/ids';
-import { lawsAndLookRegistry } from '../../shared/laws';
+import { custodianRegistry, lawsAndLookRegistry } from '../../shared/laws';
 import {
   ATTUNEMENT_EFFECT_IDS, ATTUNEMENT_EFFECT_INFO, ENEMY_IDS, MOTIF_IDS, PROP_IDS,
   TERRAIN_DENSITIES, TERRAIN_FEATURE_INFO, TERRAIN_LAYOUT_IDS, type EnemyId,
 } from '../../shared/registry';
-import { exemplarSection, type ExemplarKind } from './exemplars';
+import { exemplarBible, exemplarSection, type ExemplarKind } from './exemplars';
 
-export type PromptStage = 'foundation' | 'relics' | 'remains' | 'biomes' | 'polish' | 'full';
+export type PromptStage = 'foundation' | 'rooms' | 'laws' | 'relics' | 'remains' | 'biomes' | 'polish' | 'full';
 
 const read = (name: string): string => fs.readFileSync(new URL(`../../../prompts/runtime/${name}`, import.meta.url), 'utf8').trim();
 const files = new Map<string, string>();
@@ -42,15 +42,19 @@ export function registryText(stage: PromptStage): string {
   const ids = { motifIds: MOTIF_IDS, propIds: PROP_IDS, enemyIds: Object.fromEntries(ENEMY_IDS.map((id) => [id, ENEMY_BEHAVIOUR[id]])) };
   const terrain = { terrainFeatures: TERRAIN_FEATURE_INFO, terrainLayouts: TERRAIN_LAYOUT_IDS, terrainDensities: TERRAIN_DENSITIES };
   const attunements = { attunementEffects: Object.fromEntries(ATTUNEMENT_EFFECT_IDS.map((id) => [id, ATTUNEMENT_EFFECT_INFO[id].summary])) };
-  if (stage === 'foundation') return JSON.stringify({ ...ids, ...terrain, ...lawsAndLookRegistry() });
+  if (stage === 'foundation') return JSON.stringify(ids);
+  if (stage === 'rooms') return JSON.stringify({ ...ids, ...terrain });
+  if (stage === 'laws') return JSON.stringify({ ...lawsAndLookRegistry(), terrainFeatures: TERRAIN_FEATURE_INFO, custodianPatterns: custodianRegistry() });
   if (stage === 'biomes') return JSON.stringify(ids);
   if (stage === 'remains') return JSON.stringify({ enemyIds: ids.enemyIds, ...attunements });
-  if (stage === 'full') return JSON.stringify({ ...ids, ...terrain, ...attunements, ...lawsAndLookRegistry() });
+  if (stage === 'full') return JSON.stringify({ ...ids, ...terrain, ...attunements, ...lawsAndLookRegistry(), custodianPatterns: custodianRegistry() });
   return '';
 }
 
 const STAGE_EXEMPLARS: Record<PromptStage, ExemplarKind[]> = {
-  foundation: ['roomLine', 'biomeTagline'],
+  foundation: [],
+  rooms: ['roomLine'],
+  laws: ['boonDescription', 'bossCallout'],
   relics: ['relic'],
   remains: ['remains', 'boonDescription'],
   biomes: ['biomeTagline', 'roomLine'],
@@ -79,6 +83,8 @@ export function buildSystemPrompt(options: PromptOptions): string {
     return file('world-recipe.md')
       .replace('{{common}}', file('common.md'))
       .replace('{{foundation}}', section('foundation.md'))
+      .replace('{{rooms}}', section('rooms.md'))
+      .replace('{{laws}}', section('laws.md'))
       .replace('{{relics}}', section('relics.md'))
       .replace('{{remains}}', section('remains.md'))
       .replace('{{biomes}}', section('biomes.md'))
@@ -86,10 +92,12 @@ export function buildSystemPrompt(options: PromptOptions): string {
       .replace('{{exemplars}}', exemplars);
   }
   const registry = registryText(stage);
+  const bibleExample = stage === 'foundation' && options.exemplars !== false ? exemplarBible(options.seed, options.ideas) : '';
   return [
     file('common.md'),
     section(`${stage}.md`),
     registry ? `Use only the allowed registry IDs below:\n${registry}` : '',
+    bibleExample,
     exemplars,
   ].filter(Boolean).join('\n\n');
 }

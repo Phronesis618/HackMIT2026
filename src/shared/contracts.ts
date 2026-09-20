@@ -40,7 +40,7 @@ import {
   WorldFloorsSchema,
 } from './floors';
 import { BiomeRoomLinesListSchema, LoreRefsShape, WorldBibleSchema } from './bible';
-import { WorldLawListSchema, WorldLookSchema } from './laws';
+import { CustodianSchema, TerrainSkinListSchema, WorldLawListSchema, WorldLookSchema } from './laws';
 
 // ---------------------------------------------------------------------------
 // Primitives
@@ -535,6 +535,10 @@ export const FloorsWorldRecipeSchema = WorldRecipeSchema.extend({
   laws: WorldLawListSchema.optional(),
   /** Bounded renderer parameters beyond the palette. NOT yet implemented by the renderer. */
   look: WorldLookSchema.optional(),
+  /** The world's names for the terrain mechanics it uses (TILES.md 4.1). NOT yet read by the renderer. */
+  terrainSkins: TerrainSkinListSchema.optional(),
+  /** Final-boss title, phase titles and three named moves from the closed registry (BOSS_FINALE.md 2). NOT yet read by the sim. */
+  custodian: CustodianSchema.optional(),
 });
 export type WorldRecipe = z.infer<typeof FloorsWorldRecipeSchema>;
 

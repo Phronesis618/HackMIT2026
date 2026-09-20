@@ -115,7 +115,7 @@ export function createGenerationService(options: GenerationServiceOptions): Gene
         apiKey: apiKey!, model, fetch: options.fetch, timeoutMs: options.timeoutMs,
         onUsage: options.onUsage ?? ((usage) => log(`Provider tokens: input=${usage.inputTokens}, output=${usage.outputTokens}, total=${usage.totalTokens}`)),
       }),
-      model, fixtures, log,
+      model, fixtures, log, floors: options.floors ?? false,
     })
     : {
       ...fixtureService,

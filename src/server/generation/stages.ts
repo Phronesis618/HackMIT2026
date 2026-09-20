@@ -14,9 +14,12 @@ import {
 import { BIOME_LINE_KINDS, WorldBibleSchema, clampLoreRefs, type BiomeRoomLines, type WorldBible } from '../../shared/bible';
 import { BIOME_BRIEF_COUNT, BiomeBriefSchema, BiomeTerrainSchema, ROOM_KINDS, type BiomeBrief } from '../../shared/floors';
 import { hashString } from '../../shared/ids';
-import { WorldLawSchema, WorldLookSchema, sanitizeLaws, type WorldLaw, type WorldLook } from '../../shared/laws';
+import {
+  CustodianSchema, TerrainSkinSchema, WorldLawSchema, WorldLookSchema, sanitizeCustodian, sanitizeLaws, sanitizeTerrainSkins,
+  type Custodian, type TerrainSkin, type WorldLaw, type WorldLook,
+} from '../../shared/laws';
 import { KIND_SPECS, lintProse, lintRecipeText, formatRepairFeedback, type ProseKind } from '../../shared/prose';
-import { ENEMY_IDS, MOTIF_IDS, PROP_IDS, type EnemyId } from '../../shared/registry';
+import { ENEMY_IDS, MOTIF_IDS, PROP_IDS, TERRAIN_FEATURE_IDS, type EnemyId } from '../../shared/registry';
 
 // ---------------------------------------------------------------------------
 // Model-facing schemas
@@ -36,11 +39,14 @@ export const ModelLoreFragmentSchema = z.object({
 });
 export type ModelLoreFragment = z.infer<typeof ModelLoreFragmentSchema>;
 
-const ModelRoomLineSchema = z.object({ kind: z.enum(ROOM_KINDS), text: z.string().trim().min(1).max(140) });
+const roomLineText = z.string().trim().min(1).max(140);
+/** One line per room kind, as fixed keys: cheaper in output tokens than a list of {kind, text}. */
+const ModelRoomLinesSchema = z.object({
+  entrance: roomLineText, combat: roomLineText, elite: roomLineText, treasure: roomLineText, lore: roomLineText, rest: roomLineText, exit: roomLineText,
+});
 
 /** BiomeBrief (same bounds as src/shared/floors.ts) plus the per-kind room lines. */
 export const ModelBriefSchema = z.object({
-  id: z.string().min(1).max(64),
   name: z.string().trim().min(1).max(40),
   tagline: z.string().trim().min(1).max(140),
   motifIds: z.array(z.enum(MOTIF_IDS)).min(1).max(3),
@@ -49,23 +55,48 @@ export const ModelBriefSchema = z.object({
   hazards: z.boolean(),
   layout: BiomeBriefSchema.shape.layout,
   terrain: BiomeTerrainSchema.nullable(),
-  roomLines: z.array(ModelRoomLineSchema).max(ROOM_KINDS.length),
+  roomLines: ModelRoomLinesSchema,
+});
+
+const tight = (max: number) => z.string().trim().min(1).max(max);
+/**
+ * The bible as the MODEL sees it: same shape as WorldBibleSchema with tighter character
+ * bounds, because call 1 gates the portal and output tokens are the whole latency
+ * (measured: ~54 tokens/s on claude-sonnet-4-6). Parsing still uses WorldBibleSchema, so a
+ * line a few characters over is not a failed world.
+ */
+export const ModelBibleSchema = z.object({
+  premise: tight(120),
+  collapse: tight(240),
+  people: z.array(z.object({ name: tight(32), job: tight(36), want: tight(64) })).min(3).max(4),
+  places: z.array(tight(28)).min(3).max(4),
+  objects: z.array(tight(28)).min(3).max(4),
+  events: z.array(z.object({ date: tight(20), fact: tight(120) })).min(5).max(6),
+  authors: z.array(z.object({ name: tight(32), document: tight(36), register: tight(130), never: tight(56) })).length(3),
+  enemies: z.array(z.object({ enemyId: z.enum(ENEMY_IDS), formerJob: tight(48) })).min(3).max(5),
 });
 
 const foundationShape = {
-  bible: WorldBibleSchema,
+  bible: ModelBibleSchema,
   title: WorldRecipeSchema.shape.title,
   tagline: WorldRecipeSchema.shape.tagline,
-  themeSummary: WorldRecipeSchema.shape.themeSummary,
+};
+const roomsShape = {
+  themeSummary: z.string().trim().min(1).max(200),
   motifIds: z.array(MotifIdSchema).min(1).max(4),
   palette: PaletteSchema,
-  look: WorldLookSchema,
-  laws: z.array(WorldLawSchema).max(3),
   rooms: z.array(RoomBlueprintSchema).min(1).max(3),
-  openerBiome: ModelBriefSchema.nullable(),
   contributionMappings: z.array(ContributionMappingSchema).max(24),
 };
+const lawsShape = {
+  look: WorldLookSchema,
+  laws: z.array(WorldLawSchema).max(3),
+  terrainSkins: z.array(TerrainSkinSchema).max(4),
+  custodian: CustodianSchema,
+};
 export const FoundationToolSchema = z.object(foundationShape);
+export const RoomsToolSchema = z.object(roomsShape);
+export const LawsToolSchema = z.object(lawsShape);
 export const RelicsToolSchema = z.object({ lore: z.array(ModelLoreFragmentSchema).max(8) });
 export const RemainsToolSchema = z.object({
   lore: z.array(ModelLoreFragmentSchema).max(8),
@@ -76,10 +107,10 @@ export const PolishToolSchema = z.object({
   fixes: z.array(z.object({ path: z.string().max(80), text: z.string().trim().min(1).max(520) })).max(16),
 });
 /** The whole world in one call (operator inbox, custom single-call providers). */
-const { openerBiome: _opener, ...fullShape } = foundationShape;
-void _opener;
 export const FullRecipeToolSchema = z.object({
-  ...fullShape,
+  ...foundationShape,
+  ...roomsShape,
+  ...lawsShape,
   biomes: z.array(ModelBriefSchema).max(BIOME_BRIEF_COUNT).nullable(),
   lore: z.array(ModelLoreFragmentSchema).max(12),
   attunements: z.array(AttunementSchema).max(4),
@@ -100,6 +131,52 @@ function issuesText(error: z.ZodError, prefix = ''): string {
   }).join('; ');
 }
 
+/** Cuts at the last sentence end inside the limit, else at the last word; never mid-word, never an ellipsis. */
+export function fitText(text: string, max: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= max) return trimmed;
+  const head = trimmed.slice(0, max + 1);
+  const sentence = Math.max(head.lastIndexOf('. '), head.lastIndexOf('! '), head.lastIndexOf('? '));
+  if (sentence >= max * 0.5) return head.slice(0, sentence + 1);
+  const word = head.lastIndexOf(' ');
+  return (word > 0 ? head.slice(0, word) : trimmed.slice(0, max)).replace(/[\s,;:·-]+$/, '');
+}
+
+/**
+ * safeParse that treats an over-long string, an over-long list or an unknown id inside a list
+ * of registry ids as something to fit, not a failed world: strings are cut with `fitText`,
+ * lists are cut to their maximum, unknown list entries are dropped, and the value is parsed
+ * again. Anything else (a missing field, a wrong type, an unknown id outside a list) still fails.
+ */
+export function parseWithFit<T extends z.ZodType>(schema: T, raw: unknown): ReturnType<T['safeParse']> {
+  let value = raw;
+  for (let pass = 0; pass < 4; pass++) {
+    const result = schema.safeParse(value);
+    if (result.success) return result as ReturnType<T['safeParse']>;
+    const at = (path: readonly PropertyKey[]): unknown => path.reduce<unknown>((node, key) => (node as Record<PropertyKey, unknown> | undefined)?.[key], value);
+    const fixable = result.error.issues.filter((issue) => {
+      const node = at(issue.path);
+      if (issue.code === 'too_big') return (issue.origin === 'string' && typeof node === 'string') || (issue.origin === 'array' && Array.isArray(node));
+      // an unknown id inside a list of registry ids: drop that entry, keep the list
+      return issue.code === 'invalid_value' && typeof issue.path.at(-1) === 'number' && Array.isArray(at(issue.path.slice(0, -1))) && typeof node === 'string';
+    });
+    if (fixable.length === 0 || fixable.length !== result.error.issues.length) return result as ReturnType<T['safeParse']>;
+    value = structuredClone(value);
+    // deepest and last indices first, so removing list entries does not shift later paths
+    fixable.sort((a, b) => b.path.length - a.path.length || Number(b.path.at(-1)) - Number(a.path.at(-1)));
+    for (const issue of fixable) {
+      const parent = at(issue.path.slice(0, -1)) as Record<PropertyKey, unknown> | unknown[] | undefined;
+      const last = issue.path.at(-1);
+      if (!parent || last === undefined) continue;
+      if (issue.code === 'invalid_value') (parent as unknown[]).splice(Number(last), 1);
+      else if (issue.code !== 'too_big') continue;
+      else if (issue.origin === 'string') (parent as Record<PropertyKey, unknown>)[last] = fitText(String((parent as Record<PropertyKey, unknown>)[last]), Number(issue.maximum));
+      else (parent as Record<PropertyKey, unknown>)[last] = ((parent as Record<PropertyKey, unknown>)[last] as unknown[]).slice(0, Number(issue.maximum));
+    }
+  }
+  return schema.safeParse(value) as ReturnType<T['safeParse']>;
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export interface ParsedBrief { brief: BiomeBrief; lines: BiomeRoomLines['lines'] }
@@ -108,22 +185,34 @@ const slug = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]+/g,
 
 /** Validates one model brief against the real BiomeBriefSchema; the id is assigned by trusted code. */
 export function parseBrief(raw: unknown, index: number): ParsedBrief | undefined {
-  const model = ModelBriefSchema.safeParse(raw);
+  const model = parseWithFit(ModelBriefSchema, raw);
   if (!model.success) return undefined;
   const { roomLines, terrain, ...rest } = model.data;
   const brief = BiomeBriefSchema.safeParse({ ...rest, ...(terrain ? { terrain } : {}), id: `b${index}-${slug(rest.name)}` });
   if (!brief.success) return undefined;
-  const seen = new Set<string>();
-  const lines = roomLines.filter((line) => line.kind !== 'shop' && !seen.has(line.kind) && Boolean(seen.add(line.kind)));
+  const lines = BIOME_LINE_KINDS.flatMap((kind) => {
+    const text = roomLines[kind as keyof typeof roomLines];
+    return text ? [{ kind, text }] : [];
+  });
   return { brief: brief.data, lines };
 }
 
 export interface Foundation {
   bible: WorldBible;
-  base: Pick<WorldRecipe, 'title' | 'tagline' | 'themeSummary' | 'motifIds' | 'palette' | 'rooms' | 'contributionMappings'>;
+  header: Pick<WorldRecipe, 'title' | 'tagline'>;
+}
+export interface RoomsPart {
+  themeSummary: string;
+  motifIds: WorldRecipe['motifIds'];
+  palette: WorldRecipe['palette'];
+  rooms: WorldRecipe['rooms'];
+  contributionMappings: WorldRecipe['contributionMappings'];
+}
+export interface LawsPart {
   look?: WorldLook;
   laws: WorldLaw[];
-  opener?: ParsedBrief;
+  terrainSkins: TerrainSkin[];
+  custodian?: Custodian;
   notes: string[];
 }
 
@@ -135,24 +224,39 @@ export function parseFoundation(raw: unknown): { legacy: z.infer<typeof WorldRec
     if (!legacy.success) throw new StageParseError(`Recipe failed schema validation at ${issuesText(legacy.error)}.`);
     return { legacy: legacy.data };
   }
-  const core = z.object({
-    bible: WorldBibleSchema,
-    title: foundationShape.title, tagline: foundationShape.tagline, themeSummary: foundationShape.themeSummary,
-    motifIds: foundationShape.motifIds, palette: foundationShape.palette, rooms: foundationShape.rooms,
-    contributionMappings: foundationShape.contributionMappings.catch([]),
-  }).safeParse(raw);
+  const core = parseWithFit(z.object({ bible: WorldBibleSchema, title: foundationShape.title, tagline: foundationShape.tagline }), raw);
   if (!core.success) throw new StageParseError(`Recipe failed schema validation at ${issuesText(core.error)}.`);
+  const { bible, ...header } = core.data;
+  return { foundation: { bible, header } };
+}
+
+/** Rooms are load-bearing: a failure here is a failed world. */
+export function parseRooms(raw: unknown): RoomsPart {
+  if (!isRecord(raw)) throw new StageParseError('Recipe failed schema validation at (root): expected an object.');
+  const core = parseWithFit(z.object({
+    themeSummary: WorldRecipeSchema.shape.themeSummary, motifIds: roomsShape.motifIds, palette: roomsShape.palette,
+    rooms: roomsShape.rooms, contributionMappings: roomsShape.contributionMappings.catch([]),
+  }), raw);
+  if (!core.success) throw new StageParseError(`Recipe failed schema validation at ${issuesText(core.error)}.`);
+  return core.data;
+}
+
+/** Look, laws, terrain skins and the Custodian are flavour: they degrade item by item and never fail a world. */
+export function parseLaws(raw: unknown, bible: WorldBible): LawsPart {
+  const record = isRecord(raw) ? raw : {};
   const notes: string[] = [];
-  const look = WorldLookSchema.safeParse(raw.look);
-  if (!look.success) notes.push('World look was invalid and was dropped; the renderer derives it from motifs.');
-  const lawItems = Array.isArray(raw.laws) ? raw.laws.map((law) => WorldLawSchema.safeParse(law)).flatMap((r) => (r.success ? [r.data] : [])) : [];
-  const { laws, dropped } = sanitizeLaws(lawItems);
-  const lawCount = Array.isArray(raw.laws) ? raw.laws.length : 0;
-  if (lawCount - laws.length > 0 || dropped > 0) notes.push(`Dropped ${lawCount - laws.length} invalid, duplicate or same-group world law(s).`);
-  const opener = raw.openerBiome == null ? undefined : parseBrief(raw.openerBiome, 0);
-  if (raw.openerBiome != null && !opener) notes.push('Opener biome brief was invalid; derived brief used.');
-  const { bible, ...base } = core.data;
-  return { foundation: { bible, base, ...(look.success ? { look: look.data } : {}), laws, ...(opener ? { opener } : {}), notes } };
+  const look = WorldLookSchema.safeParse(record.look);
+  if (!look.success && record.look != null) notes.push('World look was invalid and was dropped; the renderer derives it from motifs.');
+  const lawItems = Array.isArray(record.laws) ? record.laws.map((law) => parseWithFit(WorldLawSchema, law)).flatMap((r) => (r.success ? [r.data] : [])) : [];
+  const { laws } = sanitizeLaws(lawItems);
+  const lawCount = Array.isArray(record.laws) ? record.laws.length : 0;
+  if (lawCount > laws.length) notes.push(`Dropped ${lawCount - laws.length} world law(s): invalid, conflicting, over a group cap or outside the difficulty budget.`);
+  const skins = (Array.isArray(record.terrainSkins) ? record.terrainSkins : []).map((skin) => parseWithFit(TerrainSkinSchema, skin)).flatMap((r) => (r.success ? [r.data] : []));
+  const boss = parseCustodian(record, nonBossKinds(bible));
+  return {
+    ...(look.success ? { look: look.data } : {}), laws, terrainSkins: sanitizeTerrainSkins(skins, [...TERRAIN_FEATURE_IDS]),
+    ...(boss.custodian ? { custodian: boss.custodian } : {}), notes: [...notes, ...boss.notes],
+  };
 }
 
 export function parseLore(raw: unknown, bible: WorldBible, expected: { kind: 'relic' | 'remains'; count: number }): { lore: WorldRecipe['lore']; dropped: number } {
@@ -161,7 +265,7 @@ export function parseLore(raw: unknown, bible: WorldBible, expected: { kind: 're
   const lore: WorldRecipe['lore'] = [];
   let firstError = '';
   items.slice(0, 12).forEach((item, index) => {
-    const parsed = ModelLoreFragmentSchema.safeParse(item);
+    const parsed = parseWithFit(ModelLoreFragmentSchema, item);
     if (parsed.success && parsed.data.kind === expected.kind) lore.push(clampLoreRefs(parsed.data, bible));
     else if (!parsed.success && !firstError) firstError = issuesText(parsed.error, `lore.${index}.`);
   });
@@ -172,8 +276,18 @@ export function parseLore(raw: unknown, bible: WorldBible, expected: { kind: 're
 export function parseAttunements(raw: unknown): WorldRecipe['attunements'] {
   const items = isRecord(raw) && Array.isArray(raw.attunements) ? raw.attunements : [];
   const seen = new Set<string>();
-  return items.map((item) => AttunementSchema.safeParse(item)).flatMap((r) => (r.success ? [r.data] : []))
+  return items.map((item) => parseWithFit(AttunementSchema, item)).flatMap((r) => (r.success ? [r.data] : []))
     .filter((a) => !seen.has(a.effectId) && Boolean(seen.add(a.effectId))).slice(0, 4);
+}
+
+/** The Custodian is flavour: an invalid one is dropped, an illegal move set is repaired, never fatal. */
+export function parseCustodian(raw: unknown, nonBossEnemyKinds: number): { custodian?: Custodian; notes: string[] } {
+  const value = isRecord(raw) ? raw.custodian : undefined;
+  if (value == null) return { notes: [] };
+  const custodian = parseWithFit(CustodianSchema, value);
+  if (!custodian.success) return { notes: ['Custodian moves were invalid and were dropped; the default boss is used.'] };
+  const result = sanitizeCustodian(custodian.data, nonBossEnemyKinds);
+  return { custodian: result.custodian, notes: result.substituted ? [`Replaced ${result.substituted} Custodian move(s) that broke the move-set rules with defaults.`] : [] };
 }
 
 export function parseBiomes(raw: unknown, firstIndex: number, count: number): Array<ParsedBrief | undefined> {
@@ -187,16 +301,20 @@ export function parseFullRecipe(raw: unknown): { recipe: WorldRecipe; notes: str
   if ('legacy' in first) return { recipe: first.legacy, notes: [] };
   const { foundation } = first;
   const record = raw as Record<string, unknown>;
+  const roomsPart = parseRooms(record);
+  const lawsPart = parseLaws(record, foundation.bible);
   const loreItems = Array.isArray(record.lore) ? record.lore : [];
-  const lore = loreItems.map((item) => ModelLoreFragmentSchema.safeParse(item)).flatMap((r) => (r.success ? [clampLoreRefs(r.data, foundation.bible)] : [])).slice(0, 12);
-  const notes = [...foundation.notes];
+  const lore = loreItems.map((item) => parseWithFit(ModelLoreFragmentSchema, item)).flatMap((r) => (r.success ? [clampLoreRefs(r.data, foundation.bible)] : [])).slice(0, 12);
+  const notes = [...lawsPart.notes];
   if (lore.length < loreItems.length) notes.push(`Dropped ${loreItems.length - lore.length} invalid lore fragment(s).`);
   const briefs = Array.isArray(record.biomes) ? parseBiomes(record, 0, BIOME_BRIEF_COUNT) : undefined;
   return {
-    recipe: assembleRecipe({ foundation, lore, attunements: parseAttunements(record), ...(briefs ? { briefs } : {}) }),
+    recipe: assembleRecipe({ foundation, roomsPart, lawsPart, lore, attunements: parseAttunements(record), ...(briefs ? { briefs } : {}) }),
     notes,
   };
 }
+
+export const nonBossKinds = (bible: WorldBible): number => new Set(bible.enemies.map((enemy) => enemy.enemyId).filter((id) => id !== 'guardian')).size;
 
 // ---------------------------------------------------------------------------
 // Slots: trusted code plans what each call-2 request writes
@@ -217,27 +335,26 @@ export function planRelicSlots(plannedRoomCount: number, seed: number): RelicSlo
   }));
 }
 
-export function planRemainsEnemies(foundation: Foundation, relicCount: number): EnemyId[] {
-  const ids = new Set<EnemyId>();
-  for (const room of foundation.base.rooms) for (const id of room.enemyIds) ids.add(id);
-  for (const id of foundation.opener?.brief.enemyPool ?? []) ids.add(id);
+/** One remains fragment per enemy kind the bible casts (the rooms and biomes draw from the same cast). */
+export function planRemainsEnemies(bible: WorldBible, relicCount: number): EnemyId[] {
+  const ids = new Set<EnemyId>(bible.enemies.map((enemy) => enemy.enemyId));
   ids.add('guardian');
   return [...ids].slice(0, Math.max(1, 12 - relicCount));
 }
 
-export interface BiomeSlot { index: number; position: 'middle' | 'finale'; setting: string; focusEvent: string }
+export interface BiomeSlot { index: number; position: 'opener' | 'middle' | 'finale'; setting: string; focusEvent: string }
 const SLOT_TIERS = [0, 1, 1, 2, 2, 3, 3, 4] as const;
 /**
- * Slots 1..7. Each gets a bible place and event so parallel calls do not name the same biome
+ * Slots 0..7. Each gets a bible place and event so parallel calls do not name the same biome
  * twice. The six middle briefs are dealt onto tiers 1-3 by the route seed (FLOORS.md section 12),
- * so the model is told only middle / finale.
+ * so the model is told only opener / middle / finale.
  */
 export function planBiomeSlots(bible: WorldBible, seed: number): BiomeSlot[] {
   const places = shuffled([...bible.places, ...bible.objects], `${seed}:biome-place`);
-  return SLOT_TIERS.slice(1).map((tier, offset) => {
-    const position = tier === 4 ? 'finale' as const : 'middle' as const;
-    const event = bible.events[Math.min(bible.events.length - 1, Math.round((offset / 6) * (bible.events.length - 1)))]!;
-    return { index: offset + 1, position, setting: places[offset % places.length]!, focusEvent: `${event.date}: ${event.fact}` };
+  return SLOT_TIERS.map((tier, index) => {
+    const position = tier === 0 ? 'opener' as const : tier === 4 ? 'finale' as const : 'middle' as const;
+    const event = bible.events[Math.min(bible.events.length - 1, Math.round((index / 7) * (bible.events.length - 1)))]!;
+    return { index, position, setting: places[index % places.length]!, focusEvent: `${event.date}: ${event.fact}` };
   });
 }
 
@@ -269,6 +386,9 @@ export function fallbackBrief(recipe: Pick<WorldRecipe, 'title' | 'rooms' | 'mot
 
 export function assembleRecipe(parts: {
   foundation: Foundation;
+  roomsPart: RoomsPart;
+  /** Absent when the laws call failed: the world then has no laws, look, skins or named boss. */
+  lawsPart?: LawsPart | undefined;
   lore: WorldRecipe['lore'];
   attunements: WorldRecipe['attunements'];
   /** Present only in floors mode: 8 entries, undefined where the model's brief was missing or invalid. */
@@ -276,14 +396,23 @@ export function assembleRecipe(parts: {
   deriveBriefs?: (recipe: WorldRecipe) => BiomeBrief[];
   onDerived?: (indices: number[]) => void;
 }): WorldRecipe {
-  const { foundation } = parts;
+  const { foundation, roomsPart, lawsPart } = parts;
+  const usedFeatures = roomsPart.rooms.flatMap((room) => room.terrain?.features ?? []);
+  const skins = sanitizeTerrainSkins(lawsPart?.terrainSkins ?? [], usedFeatures);
   const recipe: WorldRecipe = {
-    ...foundation.base,
+    ...foundation.header,
+    themeSummary: roomsPart.themeSummary,
+    motifIds: roomsPart.motifIds,
+    palette: roomsPart.palette,
+    rooms: roomsPart.rooms,
+    contributionMappings: roomsPart.contributionMappings,
     lore: parts.lore.slice(0, 12),
     attunements: parts.attunements,
     bible: foundation.bible,
-    ...(foundation.laws.length ? { laws: foundation.laws } : {}),
-    ...(foundation.look ? { look: foundation.look } : {}),
+    ...(lawsPart?.laws.length ? { laws: lawsPart.laws } : {}),
+    ...(lawsPart?.look ? { look: lawsPart.look } : {}),
+    ...(skins.length ? { terrainSkins: skins } : {}),
+    ...(lawsPart?.custodian ? { custodian: lawsPart.custodian } : {}),
   };
   if (!parts.briefs) return recipe;
   const derivedIndices: number[] = [];
@@ -317,7 +446,7 @@ export function assembleRecipe(parts: {
 export interface LintFailure { path: string; kind: ProseKind; maxChars: number; text: string; notes: string[] }
 export interface WorldLint { score: number; hardFail: boolean; failedFields: number; fieldCount: number; rules: string[]; failures: LintFailure[]; feedback: string[] }
 
-type Lintable = Partial<Pick<WorldRecipe, 'title' | 'tagline' | 'themeSummary' | 'rooms' | 'lore' | 'attunements' | 'laws' | 'biomes' | 'biomeRoomLines'>>;
+type Lintable = Partial<Pick<WorldRecipe, 'title' | 'tagline' | 'themeSummary' | 'rooms' | 'lore' | 'attunements' | 'laws' | 'biomes' | 'biomeRoomLines' | 'custodian' | 'terrainSkins'>>;
 
 /** House maximum handed to the polish call (characters). Schema maxima still apply on top. */
 const POLISH_MAX: Partial<Record<ProseKind, number>> = { roomLine: 100, relic: 480, remains: 320, themeSummary: 160, biomeTagline: 80 };
@@ -340,6 +469,13 @@ export function lintWorld(parts: Lintable, bible: WorldBible | undefined): World
     fields.push({ path: `laws[${index}].name`, kind: 'boonName', text: law.name, result: lintProse(law.name, { kind: 'boonName', ...(bible ? { bible } : {}) }) });
     fields.push({ path: `laws[${index}].description`, kind: 'boonDescription', text: law.description, result: lintProse(law.description, { kind: 'boonDescription', ...(bible ? { bible } : {}) }) });
   });
+  const extra = (path: string, kind: ProseKind, text: string): void => {
+    fields.push({ path, kind, text, result: lintProse(text, { kind, ...(bible ? { bible } : {}) }) });
+  };
+  if (parts.custodian) {
+    extra('custodian.title', 'bossName', parts.custodian.title);
+    parts.custodian.moves.forEach((move, index) => extra(`custodian.moves[${index}].tell`, 'bossCallout', move.tell));
+  }
   let weight = 0;
   let total = 0;
   const failures: LintFailure[] = [];
@@ -379,9 +515,14 @@ function access(parts: Lintable, path: string): { get: () => string | undefined;
     const target = parts.biomeRoomLines?.find((entry) => entry.biomeId === brief?.id)?.lines[Number(line[2])];
     return target ? { get: () => target.text, set: (text) => { target.text = text; } } : undefined;
   }
-  const item = /^(rooms|biomes|lore|attunements|laws)\[(\d+)\]\.(name|description|tagline|title|source|text)$/.exec(path);
+  if (path === 'custodian.title' && parts.custodian) {
+    const custodian = parts.custodian;
+    return { get: () => custodian.title, set: (text) => { custodian.title = text; } };
+  }
+  const item = /^(rooms|biomes|lore|attunements|laws|custodian\.moves)\[(\d+)\]\.(name|description|tagline|title|source|text|tell)$/.exec(path);
   if (!item) return undefined;
-  const target = (parts[item[1] as 'rooms'] as unknown as Array<Record<string, unknown>> | undefined)?.[Number(item[2])];
+  const list = item[1] === 'custodian.moves' ? parts.custodian?.moves : parts[item[1] as 'rooms'];
+  const target = (list as unknown as Array<Record<string, unknown>> | undefined)?.[Number(item[2])];
   const key = item[3]!;
   if (!target || typeof target[key] !== 'string') return undefined;
   return { get: () => target[key] as string, set: (text) => { target[key] = text; } };
@@ -416,6 +557,8 @@ export function displayTexts(recipe: Lintable & Partial<Pick<WorldRecipe, 'contr
     ...(recipe.lore ?? []).flatMap((fragment) => [fragment.title, fragment.source, fragment.text]),
     ...(recipe.attunements ?? []).flatMap((a) => [a.name, a.description]),
     ...(recipe.laws ?? []).flatMap((law) => [law.name, law.description]),
+    ...(recipe.terrainSkins ?? []).flatMap((skin) => [skin.name, skin.caption]),
+    ...(recipe.custodian ? [recipe.custodian.title, ...recipe.custodian.phaseTitles, ...recipe.custodian.moves.flatMap((move) => [move.name, move.tell])] : []),
     ...(recipe.biomes ?? []).flatMap((brief) => [brief.name, brief.tagline]),
     ...(recipe.biomeRoomLines ?? []).flatMap((entry) => entry.lines.map((line) => line.text)),
   ];

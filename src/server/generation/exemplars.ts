@@ -174,3 +174,24 @@ export function exemplarSection(options: { kinds: ExemplarKind[]; count?: number
     ...parts,
   ].join('\n');
 }
+
+/** One whole bible from the exemplar world least like the ideas, as a model of flatness and brevity. */
+export function exemplarBible(seed: number, ideas: readonly string[], bank: ExemplarWorld[] = loadExemplarBank()): string {
+  const ranked = bank
+    .map((world) => ({ world, overlap: ideaOverlap(world, ideas), tie: hashString(`${seed}:bible:${world.world}`) }))
+    .sort((a, b) => a.overlap - b.overlap || a.tie - b.tie);
+  const candidates = ranked.length >= 3 ? ranked.slice(0, -1) : ranked;
+  const pick = candidates[seed % Math.max(1, candidates.length)]?.world;
+  if (!pick) return '';
+  const { premise, collapse, people, places, objects, events, authors, enemies } = pick.bible;
+  const bible = {
+    premise, collapse, people, places, objects,
+    events: events.map(({ date, fact }) => ({ date, fact })), authors,
+    enemies: Object.entries(enemies).map(([enemyId, formerJob]) => ({ enemyId, formerJob })),
+  };
+  return [
+    `# Example bible from ANOTHER world ("${pick.world}")`,
+    'Imitate its flatness, its dated chain of cause and how unlike each other the three authors are. Reusing its names, numbers or objects is an error.',
+    JSON.stringify(bible),
+  ].join('\n');
+}

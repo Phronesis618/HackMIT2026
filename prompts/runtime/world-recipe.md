@@ -5,11 +5,15 @@
 Write the fields in schema order: the bible first, then everything derived from it.
 Sections below describe each part. Where a section mentions `slots`, choose them yourself:
 two relics per room (mixed lengths: short, medium, long) and one remains fragment for every
-enemy id used in the rooms, guardian included. If `floors` is true in the data, write all
-8 `biomes` (opener first, then tiers 1, 1, 2, 2, 3, 3, then the finale) with `biomeRoomLines`
-for each; otherwise set both to null.
+enemy id in the bible's cast, guardian included. If `floors` is true in the data, write all
+8 `biomes` (the opener first, six middle floors, the finale last), each with its roomLines;
+otherwise set `biomes` to null.
 
 {{foundation}}
+
+{{rooms}}
+
+{{laws}}
 
 {{relics}}
 

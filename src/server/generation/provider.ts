@@ -121,6 +121,9 @@ function createRecipeProvider(options: ProviderOptions, provider: 'openai' | 'an
           body: JSON.stringify(anthropic ? {
             model: options.model,
             max_tokens: call.maxTokens,
+            // Measured: under 6+ concurrent calls a non-streamed Messages request ran at under half the
+            // token rate of the same request streamed (and a 76-token reply took 30 s). Always stream.
+            stream: true,
             system: `${call.system}\nSubmit the JSON as the input to the ${TOOL_NAME} tool.`,
             messages: [{ role: 'user', content: input }],
             tools: [{
@@ -143,7 +146,9 @@ function createRecipeProvider(options: ProviderOptions, provider: 'openai' | 'an
           await response.body?.cancel();
           throw new GenerationFailure(`Provider HTTP ${response.status}.`);
         }
-        const body: unknown = await response.json();
+        const body: unknown = anthropic && (response.headers.get('content-type') ?? '').includes('text/event-stream')
+          ? assembleAnthropicStream(await response.text())
+          : await response.json();
         controller.signal.throwIfAborted();
         const { raw, usage: measured } = anthropic
           ? readAnthropicResponse(body, options.onUsage) : readOpenAIResponse(body, options.onUsage);
@@ -186,6 +191,61 @@ function createRecipeProvider(options: ProviderOptions, provider: 'openai' | 'an
         throw error;
       }
     },
+  };
+}
+
+/**
+ * Rebuilds a Messages API response object from its server-sent events, so the streamed and
+ * the plain JSON forms go through the same validation. Only what the reader needs is kept:
+ * text blocks, tool_use blocks (input = the joined `input_json_delta`s), stop_reason, usage.
+ */
+export function assembleAnthropicStream(sse: string): unknown {
+  const blocks: Array<{ type: string; name?: string; text: string; json: string }> = [];
+  let stopReason = '';
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let sawStart = false;
+  for (const line of sse.split(/\r?\n/)) {
+    if (!line.startsWith('data:')) continue;
+    let event: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    try {
+      event = JSON.parse(line.slice(5)) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    } catch {
+      continue;
+    }
+    if (event.type === 'message_start') {
+      sawStart = true;
+      inputTokens = Number(event.message?.usage?.input_tokens ?? 0);
+      outputTokens = Number(event.message?.usage?.output_tokens ?? 0);
+    } else if (event.type === 'content_block_start') {
+      blocks[Number(event.index)] = { type: String(event.content_block?.type), name: event.content_block?.name, text: String(event.content_block?.text ?? ''), json: '' };
+    } else if (event.type === 'content_block_delta') {
+      const block = blocks[Number(event.index)];
+      if (!block) continue;
+      if (event.delta?.type === 'input_json_delta') block.json += String(event.delta.partial_json ?? '');
+      else if (event.delta?.type === 'text_delta') block.text += String(event.delta.text ?? '');
+    } else if (event.type === 'message_delta') {
+      if (event.delta?.stop_reason) stopReason = String(event.delta.stop_reason);
+      if (event.usage?.output_tokens !== undefined) outputTokens = Number(event.usage.output_tokens);
+    } else if (event.type === 'error') {
+      throw new GenerationFailure('Provider stream reported an error.');
+    }
+  }
+  if (!sawStart || !stopReason) throw new GenerationFailure('Provider response was incomplete or invalid.');
+  return {
+    type: 'message',
+    stop_reason: stopReason,
+    content: blocks.filter(Boolean).map((block) => {
+      if (block.type !== 'tool_use') return { type: 'text', text: block.text.slice(0, 80_000) };
+      let input: unknown;
+      try {
+        input = JSON.parse(block.json || '{}') as unknown;
+      } catch {
+        throw new GenerationFailure('Recipe was not valid JSON.', true);
+      }
+      return { type: 'tool_use', name: block.name ?? '', input };
+    }),
+    usage: { input_tokens: inputTokens, output_tokens: outputTokens },
   };
 }
 

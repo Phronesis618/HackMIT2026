@@ -1,4 +1,4 @@
-A biome brief is one floor of the run. Each brief: id (lowercase slug, unique), name
+A biome brief is one floor of the run. Each brief: name
 (max 40, aim 28: a bible place), tagline (max 80, aim 70: what is in there that matters to
 a fight or to the story, with a number), motifIds (1 to 3), enemyPool (1 to 5 registry
 enemy ids, at least one that is not guardian, no duplicates), propPool (1 to 5 prop ids,
@@ -11,7 +11,7 @@ this decides how the biome's fighting rooms play.
 Choose the shape from what the place was: an archive is a maze with many lore rooms; a
 siege wall or a rail platform is a spine with elites; a ward has rest rooms. Biomes of one
 world must differ from each other in shape, enemy pool and motifs.
-roomLines: one line for each kind entrance, combat, elite, treasure, lore, rest, exit
+roomLines: one line under each key entrance, combat, elite, treasure, lore, rest, exit
 (max 100 chars each). What is visible from the door of that kind of room in this biome:
 threat first with where it is, then one usable feature. Rest, lore and treasure rooms have
 no threat: say what is on the table. Enemies are named by their former job from the bible.

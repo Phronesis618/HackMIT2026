@@ -2,12 +2,13 @@
  * Recipe generation pipeline (agent W2): bible first, prose second, linter in the loop.
  *
  * STAGED (providers with `callStage`, i.e. the Claude and OpenAI API providers)
- *   call 1  foundation: bible, title/tagline/summary, palette, look, laws, 3 legacy room
- *           blueprints, opener biome (floors only), contribution mappings. Up to one repair
- *           round on schema/text-guard failure, as before.
- *   call 2  in parallel, conditioned on the bible from call 1: relics · remains + attunements ·
- *           biome briefs 1-4 · biome briefs 5-7 (floors only) · a polish call for call-1 lines
- *           the linter rejected. Each call-2 task: one retry on a schema failure, then one polish
+ *   call 1  foundation: bible, title/tagline/summary, motifs, palette. Nothing else: output
+ *           tokens are the latency (~54 tokens/s measured), and everything else needs the bible.
+ *           Up to one repair round on schema/text-guard failure, as before.
+ *   call 2  in parallel, conditioned on the bible from call 1: rooms + palette + mappings
+ *           (load-bearing) · laws + look + terrain skins + Custodian · relics · remains +
+ *           attunements · biome briefs in four calls of two (floors only) · a polish call for
+ *           rejected header lines. Every call is sized to about 1,200 output tokens (~25 s). Each call-2 task: one retry on a schema failure, then one polish
  *           call for lint failures. Anything still running at the world budget is dropped:
  *           missing briefs are derived per brief, missing lore stays missing, provenance says so.
  *
@@ -27,19 +28,16 @@ import { BIOME_BRIEF_COUNT } from '../../shared/floors';
 import { buildSystemPrompt, namePool, type PromptStage } from './prompt';
 import { GenerationFailure, assertDisplayText, type ProviderUsage, type RecipeProvider } from './provider';
 import {
-  BiomesToolSchema, FoundationToolSchema, PolishToolSchema, RelicsToolSchema, RemainsToolSchema, StageParseError,
+  BiomesToolSchema, FoundationToolSchema, PolishToolSchema, RelicsToolSchema, LawsToolSchema, RemainsToolSchema, RoomsToolSchema, StageParseError,
   applyFixes, assembleRecipe, displayTexts, isUnsafeText, jsonSchema, lintWorld, parseAttunements, parseBiomes,
-  parseFoundation, parseLore, planBiomeSlots, planRelicSlots, planRemainsEnemies,
-  type Foundation, type ParsedBrief, type WorldLint,
+  parseFoundation, parseLaws, parseLore, parseRooms, planBiomeSlots, planRelicSlots, planRemainsEnemies,
+  type Foundation, type LawsPart, type ParsedBrief, type RoomsPart, type WorldLint,
 } from './stages';
-import { PolishToolSchema as _PolishSchema } from './stages';
 import type { z } from 'zod';
-
-void _PolishSchema;
 
 export const DEFAULT_WORLD_BUDGET_MS = 75_000;
 
-export interface CallMetric { stage: string; ms: number; ok: boolean; inputTokens?: number; outputTokens?: number }
+export interface CallMetric { stage: string; ms: number; ok: boolean; inputTokens?: number; outputTokens?: number; error?: string }
 type LintSummary = Pick<WorldLint, 'score' | 'failedFields' | 'fieldCount' | 'rules'>;
 export interface GenerationMetrics {
   mode: 'staged' | 'single' | 'legacy';
@@ -65,6 +63,7 @@ interface PipelineOptions {
   notes: string[];
   status: (phase: GenerationStatus['phase'], message: string) => void;
   countCall: () => void;
+  onCall?: ((metric: CallMetric) => void) | undefined;
 }
 
 const summary = (lint: WorldLint): LintSummary => ({ score: lint.score, failedFields: lint.failedFields, fieldCount: lint.fieldCount, rules: lint.rules });
@@ -151,9 +150,11 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
         stage: label, system: buildSystemPrompt({ stage, seed, ideas }), input, schema: jsonSchema(schema), maxTokens,
       }, work.signal);
       calls.push({ stage: label, ms: Date.now() - began, ok: true, ...(usage ? { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens } : {}) });
+      options.onCall?.(calls.at(-1)!);
       return raw;
     } catch (error) {
-      calls.push({ stage: label, ms: Date.now() - began, ok: false });
+      calls.push({ stage: label, ms: Date.now() - began, ok: false, error: error instanceof Error ? error.message.slice(0, 120) : 'failed' });
+      options.onCall?.(calls.at(-1)!);
       throw error;
     }
   }
@@ -171,28 +172,17 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
   }
 
   try {
-    // ---- call 1: foundation -------------------------------------------------
-    status('generating', 'Writing the world bible and the first rooms…');
-    const baseInput = {
-      plannedRoomCount: request.plannedRoomCount,
-      floors: options.floors,
-      contributions: request.contributions.map(({ id, text }) => ({ id, text })),
-      namePool: namePool(seed),
-    };
+    // ---- call 1: foundation (bible + header). Output tokens are the latency, so it is small. ----
+    status('generating', 'Writing the world bible…');
+    const contributions = request.contributions.map(({ id, text }) => ({ id, text }));
     let parsedFoundation: ReturnType<typeof parseFoundation> | undefined;
     let repair: string | undefined;
     for (let attempt = 1; attempt <= 2 && !parsedFoundation; attempt++) {
       try {
-        const raw = await call('foundation', 'foundation', { ...baseInput, ...(repair ? { repair } : {}) }, FoundationToolSchema, 4_000);
+        const raw = await call('foundation', 'foundation', { contributions, namePool: namePool(seed), ...(repair ? { repair } : {}) }, FoundationToolSchema, 2_500);
         signal?.throwIfAborted();
         const candidate = parseFoundation(raw);
-        if ('legacy' in candidate) assertDisplayText(candidate.legacy);
-        else {
-          assertDisplayText({
-            ...candidate.foundation.base, laws: candidate.foundation.laws, bible: candidate.foundation.bible,
-            ...(candidate.foundation.opener ? { biomes: [candidate.foundation.opener.brief], biomeRoomLines: [{ biomeId: candidate.foundation.opener.brief.id, lines: candidate.foundation.opener.lines }] } : {}),
-          });
-        }
+        assertDisplayText('legacy' in candidate ? candidate.legacy : { ...candidate.foundation.header, bible: candidate.foundation.bible });
         parsedFoundation = candidate;
       } catch (error) {
         signal?.throwIfAborted();
@@ -219,28 +209,24 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
     // ---- call 2: parallel, conditioned on the bible --------------------------
     const { foundation } = parsedFoundation;
     const { bible } = foundation;
-    for (const note of foundation.notes) notes.push(clipNote(note));
-    status('generating', 'Bible written. Writing relics, remains and floors from it…');
+    status('generating', 'Bible written. Writing rooms, relics, remains and floors from it…');
 
-    const head = {
-      ...foundation.base, laws: foundation.laws,
-      ...(foundation.opener ? { biomes: [foundation.opener.brief], biomeRoomLines: [{ biomeId: foundation.opener.brief.id, lines: foundation.opener.lines }] } : {}),
-    };
+    const header = { ...foundation.header };
     const state: {
-      relics?: WorldRecipe['lore']; remains?: WorldRecipe['lore']; attunements?: WorldRecipe['attunements'];
+      rooms?: RoomsPart; laws?: LawsPart; relics?: WorldRecipe['lore']; remains?: WorldRecipe['lore']; attunements?: WorldRecipe['attunements'];
       briefs: Array<ParsedBrief | undefined>;
     } = { briefs: Array.from({ length: BIOME_BRIEF_COUNT }, () => undefined) };
-    state.briefs[0] = foundation.opener;
     const before: WorldLint[] = [];
     let closed = false;
     const dropped: string[] = [];
 
     /** Runs `produce` with one retry on a schema/text failure. */
-    async function withRetry<T>(label: string, produce: (repairNote?: string) => Promise<T>): Promise<T> {
+    async function withRetry<T>(produce: (repairNote?: string) => Promise<T>): Promise<T> {
       try {
         return await produce();
       } catch (error) {
         if (!(error instanceof StageParseError) || work.signal.aborted) throw error;
+        notes.push(clipNote(error.message));
         return produce(error.message.slice(0, 200));
       }
     }
@@ -249,19 +235,43 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
     };
 
     const relicSlots = planRelicSlots(request.plannedRoomCount, seed);
-    const remainsEnemies = planRemainsEnemies(foundation, relicSlots.length);
+    const remainsEnemies = planRemainsEnemies(bible, relicSlots.length);
     const biomeSlots = options.floors ? planBiomeSlots(bible, seed) : [];
-    const openerForPrompt = foundation.opener ? { name: foundation.opener.brief.name, tagline: foundation.opener.brief.tagline, enemyPool: foundation.opener.brief.enemyPool, layout: foundation.opener.brief.layout } : null;
+    const world = { title: header.title, tagline: header.tagline };
 
     const tasks: Array<[string, () => Promise<void>]> = [
-      ['foundation polish', async () => {
-        const lint = lintWorld(head, bible);
+      ['header polish', async () => {
+        const lint = lintWorld(header, bible);
         before.push(lint);
-        await polish('foundation', head, bible, lint);
+        await polish('header', header, bible, lint);
+      }],
+      ['rooms', async () => {
+        const part = await withRetry(async (repairNote) => {
+          const raw = await call('rooms', 'rooms', { plannedRoomCount: request.plannedRoomCount, contributions, world, bible, ...(repairNote ? { repair: repairNote } : {}) }, RoomsToolSchema, 3_000);
+          const parsed = parseRooms(raw);
+          guard(parsed);
+          return parsed;
+        });
+        if (closed) return;
+        state.rooms = part;
+        const lint = lintWorld(part, bible);
+        before.push(lint);
+        await polish('rooms', part, bible, lint);
+      }],
+      ['laws, look and Custodian', async () => {
+        const raw = await call('laws', 'laws', { world, bible }, LawsToolSchema, 2_500);
+        const part = parseLaws(raw, bible);
+        guard(part);
+        if (closed) return;
+        state.laws = part;
+        for (const note of part.notes) notes.push(clipNote(note));
+        const lint = lintWorld(part, bible);
+        before.push(lint);
+        await polish('laws', part, bible, lint);
       }],
       ['relics', async () => {
-        const lore = await withRetry('relics', async (repairNote) => {
-          const raw = await call('relics', 'relics', { bible, rooms: foundation.base.rooms.map((room, index) => ({ roomIndex: index, name: room.name })), slots: relicSlots, ...(repairNote ? { repair: repairNote } : {}) }, RelicsToolSchema, 3_000);
+        const lore = await withRetry(async (repairNote) => {
+          const raw = await call('relics', 'relics', { bible, slots: relicSlots, ...(repairNote ? { repair: repairNote } : {}) }, RelicsToolSchema, 3_000);
           const parsed = parseLore(raw, bible, { kind: 'relic', count: relicSlots.length });
           guard({ lore: parsed.lore });
           return parsed.lore.slice(0, relicSlots.length).map((fragment) => ({ ...fragment, enemyId: null, roomIndex: Math.min(fragment.roomIndex, request.plannedRoomCount - 1) }));
@@ -273,8 +283,8 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
         await polish('relics', { lore }, bible, lint);
       }],
       ['remains and attunements', async () => {
-        const parts = await withRetry('remains', async (repairNote) => {
-          const raw = await call('remains', 'remains', { bible, enemyIds: remainsEnemies, dangers: foundation.base.rooms.map((room) => ({ enemyIds: room.enemyIds, hazards: room.hazards })), ...(repairNote ? { repair: repairNote } : {}) }, RemainsToolSchema, 3_000);
+        const parts = await withRetry(async (repairNote) => {
+          const raw = await call('remains', 'remains', { bible, world, enemyIds: remainsEnemies, ...(repairNote ? { repair: repairNote } : {}) }, RemainsToolSchema, 3_000);
           const parsed = parseLore(raw, bible, { kind: 'remains', count: remainsEnemies.length });
           const seen = new Set<string>();
           const lore = parsed.lore.filter((fragment) => fragment.enemyId !== null && remainsEnemies.includes(fragment.enemyId) && !seen.has(fragment.enemyId) && Boolean(seen.add(fragment.enemyId)))
@@ -291,10 +301,10 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
         before.push(lint);
         await polish('remains', parts, bible, lint);
       }],
-      ...[biomeSlots.slice(0, 4), biomeSlots.slice(4)].filter((slots) => slots.length > 0).map((slots, part): [string, () => Promise<void>] => [`biome briefs ${slots[0]!.index}-${slots.at(-1)!.index}`, async () => {
-        const raw = await call('biomes', `biomes:${part + 1}`, { bible, opener: openerForPrompt, slots: slots.map(({ position, setting, focusEvent }) => ({ position, setting, focusEvent })) }, BiomesToolSchema, 4_000);
+      ...[biomeSlots.slice(0, 2), biomeSlots.slice(2, 4), biomeSlots.slice(4, 6), biomeSlots.slice(6)].filter((slots) => slots.length > 0).map((slots, part): [string, () => Promise<void>] => [`biome briefs ${slots[0]!.index + 1}-${slots.at(-1)!.index + 1}`, async () => {
+        const raw = await call('biomes', `biomes:${part + 1}`, { bible, world, slots: slots.map(({ position, setting, focusEvent }) => ({ position, setting, focusEvent })) }, BiomesToolSchema, 3_000);
         const parsed = parseBiomes(raw, slots[0]!.index, slots.length);
-        const valid = parsed.filter((entry): entry is ParsedBrief => Boolean(entry) && !displayTexts({ biomes: [entry!.brief], biomeRoomLines: [{ biomeId: entry!.brief.id, lines: entry!.lines }] }).some(isUnsafeText));
+        const valid = parsed.filter((entry): entry is ParsedBrief => entry !== undefined && !displayTexts({ biomes: [entry.brief], biomeRoomLines: [{ biomeId: entry.brief.id, lines: entry.lines }] }).some(isUnsafeText));
         if (closed) return;
         parsed.forEach((entry, offset) => { state.briefs[slots[0]!.index + offset] = entry && valid.includes(entry) ? entry : undefined; });
         const parts = { biomes: valid.map((entry) => entry.brief), biomeRoomLines: valid.map((entry) => ({ biomeId: entry.brief.id, lines: entry.lines })) };
@@ -307,8 +317,9 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
     const remaining = Math.max(1_000, options.budgetMs - (Date.now() - options.startedAt));
     let timer: ReturnType<typeof setTimeout> | undefined;
     const deadline = new Promise<'deadline'>((resolve) => { timer = setTimeout(() => resolve('deadline'), remaining); });
-    const settled = tasks.map(([label, run]) => run().then(() => ({ label, done: true as const }), (error: unknown) => ({ label, done: false as const, error })));
-    const outcome = await Promise.race([Promise.all(settled), deadline]);
+    const finished = new Map<string, unknown>();
+    const running = tasks.map(([label, run]) => run().then(() => { finished.set(label, null); }, (error: unknown) => { finished.set(label, error ?? new Error('failed')); }));
+    const outcome = await Promise.race([Promise.all(running).then(() => 'done' as const), deadline]);
     clearTimeout(timer);
     closed = true;
     signal?.throwIfAborted();
@@ -316,22 +327,21 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
       work.abort(new GenerationFailure('World budget reached.'));
       notes.push(clipNote(`World budget of ${Math.round(options.budgetMs / 1000)}s reached; unfinished call-2 work was dropped.`));
     }
-    const results = outcome === 'deadline' ? await Promise.all(settled.map((entry) => Promise.race([entry, Promise.resolve({ label: '', done: true as const })]))) : outcome;
-    for (const result of results) {
-      if (result.done) continue;
-      const message = result.error instanceof Error ? result.error.message : 'failed';
-      dropped.push(result.label);
-      notes.push(clipNote(`Call 2 (${result.label}) failed: ${message}`));
+    for (const [label] of tasks) {
+      const error = finished.has(label) ? finished.get(label) : new Error('not finished within the world budget');
+      if (error === null) continue;
+      dropped.push(label);
+      notes.push(clipNote(`Call 2 (${label}) failed: ${error instanceof Error ? error.message : 'failed'}`));
     }
+    if (!state.rooms) throw new GenerationFailure('The rooms call failed, so no world could be compiled.');
     if (!state.relics && !state.remains) notes.push('This world has no lore: both lore calls failed or ran out of time.');
 
     // ---- assemble ---------------------------------------------------------
     const derivedBriefs: number[] = [];
-    const polishedFoundation: Foundation = {
-      ...foundation, base: { ...foundation.base, title: head.title, tagline: head.tagline, themeSummary: head.themeSummary, rooms: head.rooms }, laws: head.laws,
-    };
     const recipe = assembleRecipe({
-      foundation: polishedFoundation,
+      foundation: { bible, header },
+      roomsPart: state.rooms,
+      lawsPart: state.laws,
       lore: [...(state.relics ?? []), ...(state.remains ?? [])],
       attunements: state.attunements ?? [],
       ...(options.floors ? {
