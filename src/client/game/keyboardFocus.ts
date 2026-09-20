@@ -23,8 +23,12 @@ export function installMenuKeyboard(options: {
     }
     const menu = options.menu();
     // A focused control that unmounts (e.g. "Unlock" once bought) drops focus to <body>: Escape must still close.
-    const focusLost = event.code === 'Escape' && event.target === document.body;
-    if (!focusLost && (!(event.target instanceof HTMLElement) || !menu?.contains(event.target))) return;
+    if (event.code === 'Escape' && event.target === document.body) {
+      event.preventDefault();
+      options.close();
+      return;
+    }
+    if (!(event.target instanceof HTMLElement) || !menu?.contains(event.target)) return;
     if (event.code === 'Escape') {
       event.preventDefault();
       options.close();
