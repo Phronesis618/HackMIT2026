@@ -48,6 +48,8 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   }).strict(),
   z.object({ type: z.literal('request_world'), requestId: IdString.optional() }).strict(),
   z.object({ type: z.literal('enter_portal') }).strict(),
+  /** HUB.md §7: the sender is (or is no longer) standing at the departure gate. The server confirms it against the snapshot. */
+  z.object({ type: z.literal('ready'), ready: z.boolean() }).strict(),
   z.object({ type: z.literal('return_to_hq') }).strict(),
   z.object({ type: z.literal('unlock_ability') }).strict(),
   z.object({ type: z.literal('purchase_skill'), nodeId: z.string().min(1).max(64) }).strict(),

@@ -1,4 +1,4 @@
-import type { GameSnapshot, MemoryRecord } from './contracts';
+import type { GameSnapshot, MemoryRecord, PlayerState } from './contracts';
 import { tileToWorld } from './conventions';
 import type { ClassId } from './registry';
 
@@ -140,6 +140,27 @@ export function nearbyHeadquartersStation(snapshot: GameSnapshot, localPlayerId:
     }
   }
   return nearest;
+}
+
+/** True when `playerId` stands at the departure gate (HUB.md §7: within interact range of the portal tile). */
+export function isAtDepartureGate(snapshot: GameSnapshot, playerId: string): boolean {
+  return nearbyHeadquartersStation(snapshot, playerId)?.id === 'portal';
+}
+
+/** Gate readiness (HUB.md §7). Disconnected seats are neither counted nor waited for; a crew of one is ready by definition. */
+export interface CrewReadiness {
+  ready: number;
+  total: number;
+  /** Every connected operative is at the gate (or the crew is solo). */
+  all: boolean;
+  solo: boolean;
+}
+
+export function crewReadiness(players: readonly Pick<PlayerState, 'connected' | 'ready'>[]): CrewReadiness {
+  const seated = players.filter((player) => player.connected !== false);
+  const ready = seated.filter((player) => player.ready === true).length;
+  const solo = seated.length <= 1;
+  return { ready, total: seated.length, all: solo || ready === seated.length, solo };
 }
 
 export function headquartersRecords(memories: readonly MemoryRecord[]) {

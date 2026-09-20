@@ -75,6 +75,16 @@ describe('floors over the realtime server', () => {
     await vi.waitFor(() => expect(guest.session.getWorld()?.floors).toEqual(world.floors));
     // Clients get the recipe for every room once, never the rooms themselves.
     expect(guest.session.getWorld()!.rooms).toHaveLength(1);
+    // HUB.md §7: the gate waits for every connected seat, so both walk south from the spawn to it first.
+    await Promise.all([host.session, guest.session].map(async (session) => {
+      const timer = setInterval(() => session.setIntent({ moveX: 0, moveY: 1, aimX: 500, aimY: 600, attack: false, dash: false, ability: null }), 30);
+      try {
+        await vi.waitFor(() => expect(session.getSnapshot()?.players.find((player) => player.id === session.localPlayerId)?.ready).toBe(true), { timeout: 4000 });
+      } finally {
+        clearInterval(timer);
+        session.setIntent({ moveX: 0, moveY: 0, aimX: 500, aimY: 600, attack: false, dash: false, ability: null });
+      }
+    }));
     host.session.enterPortal();
 
     const crew = [host.session, guest.session];

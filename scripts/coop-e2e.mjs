@@ -504,7 +504,11 @@ async function prepareWorld(host, everyone) {
   }, { timeoutMs: 30000, label: `${p.name} sees world` })));
 }
 
+/** HUB.md §7: the gate opens only once every connected operative stands at it, so the crew gathers first. */
 async function enterByWalkingOntoPortal(host, everyone) {
+  await Promise.all(everyone.filter((p) => p !== host).map((p) => walkTo(p, centre({ col: 15, row: 17 }), {
+    hq: true, arriveDist: 12, timeoutMs: 15000, until: (s) => s.snap.players.find((q) => q.id === s.id)?.ready === true,
+  })));
   await walkTo(host, centre({ col: 15, row: 18 }), { hq: true, arriveDist: 4, timeoutMs: 15000, until: (s) => s.snap.phase === 'expedition' });
   return Promise.all(everyone.map((p) => waitFor(async () => {
     const s = await p.read();

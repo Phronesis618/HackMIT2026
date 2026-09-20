@@ -209,11 +209,11 @@ export class GameController {
       }
       const players = snapshot.players.map((p) => ({
         id: p.id, displayName: p.displayName, classId: p.classId, isLocal: p.id === session.localPlayerId,
-        connected: p.connected !== false,
+        connected: p.connected !== false, ready: p.ready === true,
       }));
       const prevPlayers = store.get().players;
       if (prevPlayers.length !== players.length || prevPlayers.some((p, i) => p.id !== players[i]!.id || p.displayName !== players[i]!.displayName
-        || p.classId !== players[i]!.classId || (p.connected !== false) !== players[i]!.connected)) {
+        || p.classId !== players[i]!.classId || (p.connected !== false) !== players[i]!.connected || (p.ready === true) !== players[i]!.ready)) {
         store.set({ players });
       }
       const discoveredLore = snapshot.discoveredLore ?? [];

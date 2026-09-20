@@ -34,6 +34,8 @@ export interface UiPlayer {
   isLocal: boolean;
   /** Co-op: false while this operative's client is away and the server is holding their seat. */
   connected?: boolean;
+  /** Co-op (HUB.md §7): standing at the departure gate, as stamped on the server snapshot. */
+  ready?: boolean;
 }
 
 export interface UiWorldSummary {
