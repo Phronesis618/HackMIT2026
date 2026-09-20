@@ -14,8 +14,11 @@ COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/src ./src
 COPY --from=build --chown=node:node /app/fixtures ./fixtures
 COPY --from=build --chown=node:node /app/prompts/runtime ./prompts/runtime
+COPY --from=build --chown=node:node /app/prompts/exemplars ./prompts/exemplars
 COPY --from=build --chown=node:node /app/design ./design
 USER node
+RUN node --import tsx --input-type=module -e \
+  "import { buildSystemPrompt, namePool, worldSeeds } from './src/server/generation/prompt.ts'; for (const stage of ['foundation', 'rooms', 'laws', 'relics', 'remains', 'biomes', 'polish', 'full']) buildSystemPrompt({ stage, seed: 0, ideas: [] }); namePool(0); worldSeeds(0);"
 EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
   CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
