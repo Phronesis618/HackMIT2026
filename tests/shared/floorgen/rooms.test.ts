@@ -20,7 +20,7 @@ import {
   pickTemplate,
   planWorldRoute,
   rollEncounters,
-} from '../../../src/server/generation/floorgen';
+} from '../../../src/shared/floorgen';
 
 const LEGAL = new Set<string>(TILE_CHARS);
 const key = (x: number, y: number) => `${x},${y}`;

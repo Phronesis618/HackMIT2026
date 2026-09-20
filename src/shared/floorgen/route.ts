@@ -15,7 +15,7 @@ import {
   type BiomeEdge,
   type BiomeNode,
   type WorldRoute,
-} from '../../../shared/floors';
+} from '../floors';
 import { createRng, seedKey } from './rng';
 
 /** Slot ids used when the caller has no brief ids yet. */

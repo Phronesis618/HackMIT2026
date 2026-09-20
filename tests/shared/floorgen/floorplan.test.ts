@@ -25,7 +25,7 @@ import {
   nextBiomeChoices,
   planWorldRoute,
   renderFloorPlan,
-} from '../../../src/server/generation/floorgen';
+} from '../../../src/shared/floorgen';
 
 function brief(id: string, linearity: number, branchiness: number, specials: BiomeSpecials = { treasure: 1, lore: 1, rest: 1, elite: 1 }): BiomeBrief {
   return {
