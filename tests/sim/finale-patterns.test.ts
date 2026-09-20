@@ -37,9 +37,9 @@ function finalRoom(options: { relays?: boolean } = {}): RoomSpec {
   });
 }
 
-function setup(worldId = 'pattern-test', crew = ['operative']): Simulation {
+function setup(worldId = 'pattern-test', crew = ['operative'], classId: 'bastion' | 'beacon' | 'shade' | 'weaver' = 'beacon'): Simulation {
   const sim = createSimulation();
-  for (const id of crew) sim.addPlayer({ id, displayName: id, classId: 'beacon' });
+  for (const id of crew) sim.addPlayer({ id, displayName: id, classId });
   sim.setWorld(PreparedWorldSchema.parse({
     worldId, createdAt: 0, recipe: fixture.recipe, art: fixture.art,
     rooms: [fixture.rooms[0], fixture.rooms[1], finalRoom()], plannedRoomCount: 3,
@@ -204,6 +204,19 @@ describe('Custodian in the simulation', () => {
     // The old Custodian died in 4.4 seconds; this one is a fight with a shape.
     expect(result.ticks * TICK_MS).toBeGreaterThan(15_000);
   });
+
+  it('lets every class win the fight alone, with no items, in well under four minutes', () => {
+    // Judges play this solo. The bot is a plain player: it steps off marked floor, dashes bolts
+    // and holds one relay. If it can win with a class, a person can; if no world lets it, the
+    // numbers in shared/custodian.ts have drifted and need to come back down.
+    for (const classId of ['bastion', 'beacon', 'shade', 'weaver'] as const) {
+      const fights = ['w-a', 'w-b', 'w-c', 'w-d'].map((worldId) => fightCustodian(setup(worldId, ['operative'], classId), ['operative'], 18_000));
+      const wins = fights.filter((fight) => fight.killed);
+      expect(wins.length, `${classId} never won solo`).toBeGreaterThan(0);
+      for (const fight of fights) expect(fight.ticks * TICK_MS, `${classId} fight ran long`).toBeLessThan(240_000);
+      for (const fight of wins) expect(fight.ticks * TICK_MS).toBeLessThan(120_000);
+    }
+  }, 120_000);
 
   it('holds the boss at a third of its health until the phase-2 wave is dead', () => {
     // Mithrix's rule, unit-tested on the gate itself: health alone opens phase 2, but phase 3 also

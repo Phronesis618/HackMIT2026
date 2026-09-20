@@ -163,9 +163,15 @@ export function nextRoomKey(run: CollapseRun, roomKey: string): string | null {
   return run.route[at + 1]!;
 }
 
-/** Rooms behind the crew fail three seconds after they leave, and cannot be re-entered. */
-export function leaveRoom(run: CollapseRun, key: string, roomId: string): void {
+/**
+ * Rooms behind the crew fail three seconds after they leave, and cannot be re-entered.
+ * A wrong turn off the route is forgiven: the route room only fails when the crew leaves it
+ * toward the portal, so a dead-end side room can never trap the crew until the clock runs out.
+ */
+export function leaveRoom(run: CollapseRun, key: string, roomId: string, toKey?: string): void {
   if (run.stage !== 'collapse' || key === run.portalKey) return;
+  const next = nextRoomKey(run, key);
+  if (toKey !== undefined && next !== null && toKey !== next) return;
   if (run.lostRoomIds.includes(roomId) || run.leaving.some((room) => room.key === key)) return;
   run.leaving.push({ key, roomId, ms: ROOM_LOST_DELAY_MS });
 }

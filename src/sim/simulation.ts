@@ -459,6 +459,14 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       return;
     }
     if (run.stage !== 'extraction') return;
+    if (run.offer.length === 0) {
+      // Nothing read, nothing recovered and no Custodian log: there is nothing to choose, so the
+      // crew simply gets out. Waiting on an empty choice would hold the run open for good.
+      run.stage = 'complete';
+      if (progress.anchor?.ritual) progress.anchor.ritual.stage = 'complete';
+      finishRun('anchored', events);
+      return;
+    }
     const chosen = stepExtraction(run, ctx);
     if (!chosen) return;
     if (progress.anchor?.ritual) progress.anchor.ritual.stage = 'complete';
@@ -1475,7 +1483,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         const arrival = doorArrival(floorsRun, room, exit.toRoomId);
         // A room that has already failed behind the crew cannot be walked back into.
         if (!arrival || roomIsLost(collapse, arrival.room.id)) continue;
-        if (collapse) leaveRoom(collapse, escapeKey(room), room.id);
+        if (collapse) leaveRoom(collapse, escapeKey(room), room.id, exit.toRoomId);
         events.push(emit({ type: 'exit_reached', playerId: p.state.id, roomIndex: room.index, toRoomIndex: exit.toRoomIndex, toRoomId: exit.toRoomId }));
         enterFloorRoom(arrival.room, arrival, events);
         return;
@@ -1551,7 +1559,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         (!escaping && (!progress.cleared || livingEnemies().length > 0 ||
           (room.isFinal && progress.anchor?.state !== 'planted')))
       )) return [];
-      if (collapse) leaveRoom(collapse, escapeKey(room), room.id);
+      if (collapse) leaveRoom(collapse, escapeKey(room), room.id, String(roomIndex));
       loadRoom(next, 'expedition');
       return [emit({ type: 'room_entered', worldId: world.worldId, roomIndex: next.index,
         roomId: next.id, roomName: next.name, playerIds: playerIds() })];

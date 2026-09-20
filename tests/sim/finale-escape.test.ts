@@ -15,7 +15,7 @@ import { createChronicleState, reduceChronicle } from '../../src/chronicle';
 import { createSimulation, type Simulation } from '../../src/sim';
 import {
   BLEED_OUT_MS, COLLAPSE_RING_MAX, LAST_STAND_HP, LAST_STAND_MS, PEDESTAL_HOLD_MS, buildOffer,
-  collapseMs, createCollapse, enterExtraction, planEscape, stepCollapse, stepExtraction,
+  collapseMs, createCollapse, enterExtraction, leaveRoom, planEscape, ROOM_LOST_DELAY_MS, stepCollapse, stepExtraction,
   type EscapeContext, type EscapePlayer,
 } from '../../src/sim/escape';
 import { fightCustodian } from './finaleBot';
@@ -208,6 +208,23 @@ describe('the collapse', () => {
     for (let i = 0; i < Math.ceil(clock.totalMs / TICK_MS) + 2 && late === null; i++) late = stepCollapse(clock, alive.ctx);
     expect(late).toBe('stranded');
     expect(clock.remainingMs).toBe(0);
+  });
+});
+
+describe('a wrong turn during the collapse', () => {
+  it('never fails the route room behind a crew that stepped into a side room', () => {
+    const run = createCollapse({ route: ['2', '1', '0'], portalRoomId: 'room-0', solo: true });
+    const { ctx, events } = stubContext([{ id: 'a', x: 200, y: 200, hp: 100 }]);
+    leaveRoom(run, '1', 'room-1', 'side');
+    for (let i = 0; i < Math.ceil(ROOM_LOST_DELAY_MS / TICK_MS) + 2; i++) stepCollapse(run, ctx);
+    expect(run.lostRoomIds).toEqual([]);
+    // The side room itself goes once the crew walks back out of it, and the route room goes
+    // when they leave it toward the portal.
+    leaveRoom(run, 'side', 'room-side', '1');
+    leaveRoom(run, '1', 'room-1', '0');
+    for (let i = 0; i < Math.ceil(ROOM_LOST_DELAY_MS / TICK_MS) + 2; i++) stepCollapse(run, ctx);
+    expect(run.lostRoomIds).toEqual(['room-side', 'room-1']);
+    expect(events.filter((event) => event.type === 'room_lost')).toHaveLength(2);
   });
 });
 
