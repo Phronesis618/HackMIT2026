@@ -673,18 +673,25 @@ export class RoomScene extends Phaser.Scene {
     bars.clear();
     const boss = snapshot.enemies.find((enemy) => enemy.enemyId === 'guardian' && enemy.hp > 0);
     if (boss && this.room) {
-      const width = Math.min(340, this.room.width * TILE_SIZE - 48);
+      // U2a: the climax's name was a 10 px stamp printed UNDER a 7 px bar in the black band
+      // below the room, where it read as a footnote. The name now sits above the bar, at the
+      // HUD's stamp size, and the bar is thicker with a hairline frame so it reads as a
+      // Custodian gauge rather than a stray line.
+      const width = Math.min(420, this.room.width * TILE_SIZE - 48);
       const x = (this.room.width * TILE_SIZE - width) / 2;
-      const y = this.room.height * TILE_SIZE + 9;
-      bars.fillStyle(0x000000, 0.8).fillRect(x, y, width, 7);
-      bars.fillStyle(hexToInt(tokens.color.danger), 0.95).fillRect(x, y, width * boss.hp / boss.maxHp, 7);
+      const y = this.room.height * TILE_SIZE + 22;
+      const h = 10;
+      bars.fillStyle(0x05070c, 0.92).fillRect(x, y, width, h);
+      bars.fillStyle(hexToInt(tokens.color.danger), 0.95).fillRect(x, y, width * boss.hp / boss.maxHp, h);
       for (const fraction of [1 / 3, 2 / 3]) {
-        bars.lineStyle(2, 0x080b15, 1).lineBetween(x + width * fraction, y, x + width * fraction, y + 7);
+        bars.lineStyle(2, 0x05070c, 1).lineBetween(x + width * fraction, y, x + width * fraction, y + h);
       }
+      bars.lineStyle(1, hexToInt(tokens.color.danger), 0.5).strokeRect(x, y, width, h);
       if (!this.bossLabel) {
-        this.bossLabel = this.text(this.room.width * TILE_SIZE / 2, y + 16, '', {
-          fontFamily: tokens.font.mono, fontSize: '10px', color: tokens.color.danger,
-        }).setOrigin(0.5).setDepth(DEPTH.overlay);
+        this.bossLabel = this.text(this.room.width * TILE_SIZE / 2, y - 6, '', {
+          fontFamily: tokens.font.mono, fontSize: '12px', color: tokens.color.danger,
+          letterSpacing: 2, stroke: '#05070c', strokeThickness: 3,
+        }).setOrigin(0.5, 1).setDepth(DEPTH.overlay);
         this.roomLayer?.add(this.bossLabel);
       }
       this.bossLabel.setVisible(true).setText(`${guardianTitle(boss)}${(boss.recoveryMs ?? 0) > 0 ? ' · EXPOSED' : ''}`);

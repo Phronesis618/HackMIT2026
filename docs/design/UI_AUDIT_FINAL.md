@@ -91,3 +91,17 @@ Each row: what, where, why. `▲` = fixed this pass; `○` = left, with the reas
 1. **Round 1** — #1–#26 above. Re-shot the full matrix.
 2. **Round 2** — see the round-2 section below.
 3. **Round 3** — full pass, nothing new.
+
+## Round 2 defects
+
+Found in `round1/`, fixed and re-shot into `round2/`.
+
+| # | Screenshot | What / where / why |
+|---|---|---|
+| ▲27 | `round1/combat-1280x800.png` | **A world's third law was lost to an ellipsis.** The new law row clamped to one line ("RATED FOR 400 · CLIPPED TO THE RAIL…"). Fixed: two lines. |
+| ▲28 | `round1/hub-cold-1280x720.png` | **The memory brief's empty state lost its last three words** ("Nothing yet. Memories are saved from re…") to the single-line ellipsis meant for memory titles. Fixed: two lines. |
+| ▲29 | `round1/final-1440x900.png` | **The Custodian's bar is the climax and read as a footnote**: a 7 px line in the black band under the room with its name printed *below* it at 10 px. Fixed in `RoomScene.ts`: the name goes above the bar at the HUD's 12 px stamp size with a dark outline, the bar is 10 px, wider, and carries a hairline frame. |
+| ▲30 | `round1/menu-p6-1440x900.png` | **Three control weights in one row on Field Notes**: a bordered toggle, a ghost button and a plain hint. The reset button now shares the toggle's treatment. |
+| ▲31 | `round1/menu-p7-1440x900.png` | **"Clear" — the one destructive action on the Memory Wall — was the lightest element in its row**, a ghost button beside a bordered "Browse archive". Given the same treatment. |
+| ○32 | `round1/final-1440x900.png` | **A warm diagonal band hangs in the void off the room's left wall** in the Vantage Spire finale room. Ruled out as the cause: `drawLightShafts` (clamped this pass, and this room's lighting is not `shafts`), `drawOverhead` (already guards every motif with `inRoom`), and `drawBackdrop` (a flat void plus a centred halo). Left rather than changed blind — it is a single edge artifact in one fixture room and the source is not in the three functions that could plausibly own it. |
+| ○33 | `round1/menu-p4-1440x900.png` | The skill tree's fourth lane now fits at 1440. A five-lane tree would still scroll horizontally inside its box. Left: no class currently builds one. |
