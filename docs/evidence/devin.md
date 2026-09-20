@@ -10,6 +10,8 @@ The contribution composer uses the existing UI action and shared text validator;
 generates Chronicle events or changes stored records.
 
 `npm run check` passed: 542 tests / 37 files, TypeScript and Vite build.
+Implementation commit: `efab963`. Merged `main` at `1536031` without conflicts and repeated
+the full check: 547 tests / 38 files, typecheck and production build passed.
 Twenty new tests exercise archive filtering/export and memory idea constraints and rendering.
 Initial test runs caught two test typing errors and an HTML attribute-case assertion; those
 new tests were corrected without changing existing tests or configuration. Whitespace checks

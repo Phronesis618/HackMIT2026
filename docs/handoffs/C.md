@@ -2,13 +2,14 @@
 
 ## Memory archive and next-world ideas — 2026-09-20
 
-- Branch: `devin/1789890825-memory-seeds`.
+- Branch: `devin/1789890825-memory-seeds`; implementation commit `efab963`.
 - **Implemented:** searchable device-local archive with world/type filters and bounded card
   display; plain-text field reports preserve recorded participants, provenance and event IDs.
   A saved memory can start an editable, 200-character contribution through the existing
   `UiActions.submitContribution`. Three directions suggest carrying it forward, an earlier
   world, or a possible continuation. No saved record is changed or invented.
-- **Verified:** `npm run check`: 542 tests / 37 files, typecheck and production build pass.
+- **Verified:** after integrating `main` at `1536031`, `npm run check`: 547 tests / 38 files,
+  typecheck and production build pass.
   Twenty new regressions cover search, ordering, export evidence, escaped rendering, Unicode
   truncation, contribution eligibility, guest access and fixture disclosure.
   `git diff --check` passes; the repository has no separate lint command.
