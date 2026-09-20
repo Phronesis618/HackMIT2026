@@ -162,6 +162,28 @@ describe('authoritative realtime room', () => {
     expect(server.realtime.clientCount()).toBe(4);
   });
 
+  it('gives the longest-disconnected seat of a full lobby to a newcomer, and still refuses a fifth live player', async () => {
+    const server = await serve();
+    const peers: Peer[] = [];
+    const ids: string[] = [];
+    for (let index = 0; index < 4; index++) {
+      const peer = await new Peer(server.url).open();
+      ids.push((await peer.hello(null)).playerId);
+      peers.push(peer);
+    }
+    await peers[1]!.close(); // a ghost seat: held for the 30 s reconnect grace
+    await peers[0]!.next('lobby', (message) => message.lobby.players.some((player) => !player.connected));
+    const newcomer = await new Peer(server.url).open();
+    const welcome = await newcomer.hello(null);
+    expect(welcome.lobby.players).toHaveLength(4);
+    expect(welcome.lobby.players.every((player) => player.connected)).toBe(true);
+    expect(welcome.lobby.players.map((player) => player.identity.id)).not.toContain(ids[1]);
+    expect(welcome.snapshot.players.map((player) => player.id)).not.toContain(ids[1]);
+    const fifth = await new Peer(server.url).open();
+    fifth.send({ type: 'hello', protocolVersion: PROTOCOL_VERSION, playerId: null, displayName: 'Fifth', classId: 'beacon' });
+    expect(await fifth.next('error')).toMatchObject({ action: 'hello', message: expect.stringContaining('full') });
+  });
+
   it('shares identity, contributions, immutable worlds, movement and ordered events with two clients', async () => {
     const server = await serve({ generation: { prepareWorld: fixtureService.prepareWorld } });
     const host = await new Peer(server.url).open();
@@ -379,6 +401,46 @@ describe('RemoteSession over real sockets', () => {
     expect(host.getContributions()).toHaveLength(1);
     expect(host.getLobby()?.players).toHaveLength(2);
     expect(host.getIsHost()).toBe(false);
+  });
+
+  it('returns a reloaded tab to the same operative via resume storage, and joins fresh when the credential is stale', async () => {
+    const server = await serve();
+    const store = new Map<string, string>();
+    const resumeStorage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => { store.set(key, value); },
+      removeItem: (key: string) => { store.delete(key); },
+    };
+    const host = remote(server.url, 'host');
+    await host.start();
+    const beforeReload = remote(server.url, 'guest', { resumeStorage });
+    await beforeReload.start();
+    const id = beforeReload.localPlayerId;
+    beforeReload.setClass('weaver');
+    await vi.waitFor(() => expect(host.getLobby()?.players.find((player) => player.identity.id === id)?.identity.classId).toBe('weaver'));
+    beforeReload.dispose(); // the page goes away; only the tab's storage survives
+    await vi.waitFor(() => expect(host.getLobby()?.players.find((player) => player.identity.id === id)?.connected).toBe(false));
+
+    const afterReload = remote(server.url, 'guest', { resumeStorage });
+    const replayed: GameEvent[] = [];
+    afterReload.onEvents((events) => replayed.push(...events));
+    await afterReload.start();
+    expect(afterReload.localPlayerId).toBe(id);
+    expect(afterReload.getLocalPlayer().classId).toBe('weaver');
+    expect(afterReload.getLobby()?.players.map((player) => player.connected)).toEqual([true, true]); // no ghost, no duplicate
+    expect(replayed).toEqual([]); // a fresh page asks for current state, not an event replay
+    afterReload.dispose();
+
+    // The server restarts (or the 30 s grace expires): the stored credential is refused, so join fresh.
+    const restarted = await serve();
+    const errors: string[] = [];
+    const stale = remote(restarted.url, 'guest', { resumeStorage });
+    stale.onError((message) => errors.push(message));
+    await stale.start();
+    expect(stale.getConnectionStatus()).toBe('connected');
+    expect(stale.getIsHost()).toBe(true);
+    expect(errors).toEqual([]);
+    expect(JSON.parse([...store.values()][0]!)).toMatchObject({ playerId: stale.localPlayerId });
   });
 
   it('rejects a failed connection and pending world requests when the server closes', async () => {
