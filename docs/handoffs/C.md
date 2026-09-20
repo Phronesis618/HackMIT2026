@@ -1,5 +1,43 @@
 # Handoff — Agent C (Devin)
 
+## Overnight hub persistence repair — 2026-09-20
+
+- Branch: `devin/1789894002-hub-replay-scope`, implementation `5a10f45`, based on `dc2c934`.
+- **Implemented:** scope hub replay keys by world; restrict legacy raw keys to the saved
+  current/latest run, retaining counters; reject explicitly foreign/training event origins.
+  Two real fixture sessions previously produced six Chronicle memories but only one hub run.
+- **Verified:** after integrating main `71f1dc2`, `npm run check`: **759 tests / 62 files**,
+  typecheck/build and whitespace passed. Five added cases cover repeat expeditions, reload, legacy active/completed stores,
+  replay protection and explicit event origins. Three failed against the original reducer.
+  Baseline production HTTP smoke passed health/config, HTML, JS/CSS and fixture generation.
+- **Mocked:** device storage uses an isolated Map; reducer-only cases use scripted events.
+  Repeat-expedition cases use real `LocalSession` and fixture providers.
+- **Unverified:** browser interaction, physical LAN and live generation. One full-suite run
+  missed the WebSocket `player_attacked` assertion; focused and full reruns passed. Three
+  unchanged-base suite runs passed, so the cause is unconfirmed. No existing test was weakened.
+  This fix does not reconstruct expeditions already discarded by the old hub reducer.
+
+## Final browser sweep and compact header — 2026-09-20
+
+- Branch: `devin/1789894710-responsive-status`, based on main `71f1dc2`.
+- **Implemented:** status controls and provenance badges wrap instead of exceeding the
+  header width; individual controls do not shrink into broken labels.
+- **Verified:** `npm run check`: **754 tests / 62 files**, typecheck/build and whitespace.
+  On `d5edb63`, browser co-op checks passed for two named and ordinary tabs: stable
+  membership/classes through repeated HQ/room-two reloads, host migration, shared receipt,
+  physical portal, synchronized combat and room progression. Device identity remained
+  separate from named identities. The 24-idea cap and both labelled preview paths passed.
+  Final observed console sweep had no runtime errors.
+- **Browser verified (`bb6380b`):** both preview routes now fit at 800 CSSpx:
+  `scrollWidth=clientWidth=792`, down from the previous 884px overflow. Preview provenance,
+  connection status and controls remain visible. HQ, Controls and Memories stay readable;
+  desktop HQ/preview fit at 1280 CSSpx. Final console sweep had no errors or warnings.
+  Keyboard repeat and normal zoom were restored. This focused run did not repeat solo/co-op.
+- **Mocked:** fixture generation; no browser state/events were injected.
+- **Unverified:** physical multi-device LAN, live generation, browser floor mode, four-active-
+  seat/grace-expiry browser checks and fine one-shot/release timings under VM slowdown.
+  Real-socket and input regression suites cover the latter lifecycle logic.
+
 ## Co-op reload readiness — 2026-09-20
 
 - Branch: `devin/1789893771-coop-reconnect`, based on main `dc2c934`.
@@ -20,22 +58,6 @@
 - **Mocked:** fixture generation and in-memory storage; real HTTP/WebSocket servers in tests.
 - **Unverified:** browser co-op retest, physical LAN, live model output and full responsive/
   preview/cap sweep. Browser rendering remains slow in this VM. No protocol or dependency changes.
-## Overnight hub persistence repair — 2026-09-20
-
-- Branch: `devin/1789894002-hub-replay-scope`, implementation `5a10f45`, based on `dc2c934`.
-- **Implemented:** scope hub replay keys by world; restrict legacy raw keys to the saved
-  current/latest run, retaining counters; reject explicitly foreign/training event origins.
-  Two real fixture sessions previously produced six Chronicle memories but only one hub run.
-- **Verified:** `npm run check`: **714 tests / 60 files**, typecheck/build and whitespace
-  passed. Five added cases cover repeat expeditions, reload, legacy active/completed stores,
-  replay protection and explicit event origins. Three failed against the original reducer.
-  Baseline production HTTP smoke passed health/config, HTML, JS/CSS and fixture generation.
-- **Mocked:** device storage uses an isolated Map; reducer-only cases use scripted events.
-  Repeat-expedition cases use real `LocalSession` and fixture providers.
-- **Unverified:** browser interaction, physical LAN and live generation. One full-suite run
-  missed the WebSocket `player_attacked` assertion; focused and full reruns passed. Three
-  unchanged-base suite runs passed, so the cause is unconfirmed. No existing test was weakened.
-  This fix does not reconstruct expeditions already discarded by the old hub reducer.
 
 ## Browser readiness follow-up — 2026-09-20
 

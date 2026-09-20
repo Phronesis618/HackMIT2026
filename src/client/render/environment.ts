@@ -7,7 +7,8 @@
 import type { Palette, RoomProp, RoomSpec } from '../../shared/contracts';
 import { TILE_SIZE, tileToWorld } from '../../shared/conventions';
 import type { MotifId } from '../../shared/registry';
-import { hexInt, intToHex, darken, mix, shiftHue, solidColors, VOID_COLOR } from './color';
+import { hexInt, intToHex, darken, lighten, luminance, mix, shiftHue, solidColors, VOID_COLOR, type SolidColors } from './color';
+import { DEFAULT_LIGHTING, type LightingSpec } from './lighting';
 
 export { solidColors, VOID_COLOR };
 import { drawTilePattern, type FloorPattern, type MoteStyle } from './dressing';
@@ -45,7 +46,8 @@ export function drawBackdrop(g: G, roomW: number, roomH: number, palette: Palett
  * (`pattern`) comes from the world's dominant motif — plates, flagstone, grating, crystal,
  * organic soil, monolith slabs or lantern-hall boards — so worlds differ underfoot too.
  */
-export function drawFloor(g: G, room: RoomSpec, palette: Palette, seed: number, pattern: FloorPattern = 'plates'): void {
+export function drawFloor(g: G, room: RoomSpec, palette: Palette, seed: number, pattern: FloorPattern = 'plates', lighting: LightingSpec = DEFAULT_LIGHTING): void {
+  const cast = lighting.castShadow;
   const rand = rng(seed + 7);
   const base = palette.floor;
   const alt = palette.floorAlt;
@@ -67,12 +69,16 @@ export function drawFloor(g: G, room: RoomSpec, palette: Palette, seed: number, 
       drawTilePattern(g, pattern, { x, y, col, row, color, seam, rand, palette });
       // Cast shadows: a solid tile to the north or west darkens this floor tile's edge, which
       // is what makes the solid read as standing ABOVE the floor.
-      if (room.tiles[row - 1]?.[col] === '#') {
-        for (let k = 0; k < 4; k++) g.fillStyle(0x000000, 0.3 - k * 0.07).fillRect(x, y + k * 3, TILE_SIZE, 3);
+      if (cast > 0 && room.tiles[row - 1]?.[col] === '#') {
+        for (let k = 0; k < 4; k++) g.fillStyle(0x000000, Math.min(0.5, (0.3 - k * 0.07) * cast)).fillRect(x, y + k * 3, TILE_SIZE, 3);
       }
-      if (line[col - 1] === '#') {
-        g.fillStyle(0x000000, 0.2).fillRect(x, y, 4, TILE_SIZE);
-        g.fillStyle(0x000000, 0.1).fillRect(x + 4, y, 4, TILE_SIZE);
+      if (cast > 0 && line[col - 1] === '#') {
+        g.fillStyle(0x000000, Math.min(0.5, 0.2 * cast)).fillRect(x, y, 4, TILE_SIZE);
+        g.fillStyle(0x000000, Math.min(0.5, 0.1 * cast)).fillRect(x + 4, y, 4, TILE_SIZE);
+      }
+      // Underlit rooms glow up the foot of whatever stands to the south.
+      if (lighting.face === 'north' && room.tiles[row + 1]?.[col] === '#') {
+        for (let k = 0; k < 3; k++) g.fillStyle(hexInt(palette.glow), 0.16 - k * 0.05).fillRect(x, y + TILE_SIZE - (k + 1) * 4, TILE_SIZE, 4);
       }
       // cracks
       if (v > 0.86) {
@@ -94,7 +100,8 @@ export function drawFloor(g: G, room: RoomSpec, palette: Palette, seed: number, 
         g.lineStyle(1, rune, 0.9).lineBetween(x + 8, y + TILE_SIZE / 2, x + TILE_SIZE - 8, y + TILE_SIZE / 2);
       }
       if (ch === '~') {
-        g.fillStyle(hazard, 0.28).fillRect(x, y, TILE_SIZE, TILE_SIZE);
+        // pale floors (bleach) need a heavier wash for the same read
+        g.fillStyle(hazard, luminance(base) > 0.3 ? 0.55 : 0.28).fillRect(x, y, TILE_SIZE, TILE_SIZE);
         g.lineStyle(2, hazard, 0.75);
         g.lineBetween(x + 4, y + TILE_SIZE - 6, x + TILE_SIZE / 2, y + 6).lineBetween(x + TILE_SIZE / 2, y + 6, x + TILE_SIZE - 4, y + TILE_SIZE - 6);
       }
@@ -118,9 +125,10 @@ export function drawFloor(g: G, room: RoomSpec, palette: Palette, seed: number, 
  * edge that touches something that is not wall, and a thin lip under the room's outer
  * south edge so the whole room reads as one clean slab standing in the void.
  */
-export function drawWalls(g: G, room: RoomSpec, palette: Palette, seed: number): void {
+export function drawWalls(g: G, room: RoomSpec, palette: Palette, seed: number, lighting: LightingSpec = DEFAULT_LIGHTING): void {
   const rand = rng(seed + 13);
-  const c = solidColors(palette);
+  const c = litSolidColors(palette, lighting);
+  const rimColor = lighting.rim === 'accent' ? hexInt(palette.accent) : lighting.rim === 'glow' ? hexInt(palette.glow) : c.rim;
   const panel = hexInt(palette.accentSoft);
   const T = TILE_SIZE;
   const at = (col: number, row: number): string => room.tiles[row]?.[col] ?? ' ';
@@ -143,13 +151,24 @@ export function drawWalls(g: G, room: RoomSpec, palette: Palette, seed: number):
       if (!isWall(n)) g.fillStyle(c.capHi, 0.8).fillRect(x, y, T, 2.5);
       if (!isWall(w)) g.fillStyle(c.capHi, 0.45).fillRect(x, y, 2, T);
       if (rand() < 0.2) g.fillStyle(c.capHi, 0.22).fillRect(x + 6 + rand() * 12, y + 5 + rand() * 6, 6, 5);
-      if (floorBelow) {
+      const floorAbove = !isWall(n) && !isVoid(n);
+      if (lighting.face === 'north' && floorAbove) {
+        // underlit: the lit face is the one turned to the floor NORTH of the tile
+        const fh = T * 0.5;
+        g.fillStyle(c.face, 1).fillRect(x, y, T, fh);
+        g.fillStyle(c.faceLow, 1).fillRect(x, y, T, lighting.shadowPx);
+        g.fillStyle(c.capHi, 0.9).fillRect(x, y + fh - 1, T, 1.5);
+        g.fillStyle(rimColor, lighting.rimAlpha).fillRect(x, y + fh - lighting.rimPx - 1, T, lighting.rimPx);
+      }
+      if (lighting.face === 'none' && floorBelow) g.fillStyle(rimColor, lighting.rimAlpha).fillRect(x, y + T - lighting.rimPx, T, lighting.rimPx);
+      if (lighting.face === 'north' && floorBelow) g.fillStyle(rimColor, lighting.rimAlpha * 0.8).fillRect(x, y + T - lighting.rimPx, T, lighting.rimPx);
+      if (floorBelow && lighting.face === 'south') {
         // front face: the tile stands above the floor south of it
         const fy = y + T * 0.42;
         g.fillStyle(c.face, 1).fillRect(x, fy, T, T - T * 0.42);
         g.fillStyle(c.capHi, 0.9).fillRect(x, fy - 1, T, 1.5);
-        g.fillStyle(c.faceLow, 1).fillRect(x, y + T - 6, T, 6);
-        g.fillStyle(c.rim, 0.55).fillRect(x, y + T - 2, T, 2);
+        g.fillStyle(c.faceLow, 1).fillRect(x, y + T - lighting.shadowPx, T, lighting.shadowPx);
+        g.fillStyle(rimColor, lighting.rimAlpha).fillRect(x, y + T - lighting.rimPx, T, lighting.rimPx);
         if (rand() < 0.22) g.fillStyle(panel, 0.8).fillRect(x + 10, y + T * 0.62, 12, 3);
       } else if (isVoid(s)) {
         // outer south edge of the room: a short lip into the void
@@ -164,6 +183,25 @@ export function drawWalls(g: G, room: RoomSpec, palette: Palette, seed: number):
       if (!isWall(e)) g.fillRect(x + T - 0.5, y, 1.5, T);
     }
   }
+}
+
+/**
+ * The shared solid colours under a lighting mode. The top face may be darkened (rim, underlit)
+ * or lifted (shafts), but never below the floor's value plus a margin: F3's rule that a solid's
+ * top is lighter than the ground survives every mode.
+ */
+export function litSolidColors(palette: Palette, lighting: LightingSpec): SolidColors {
+  const c = solidColors(palette);
+  if (lighting.capShift === 0) return c;
+  const floorL = Math.max(luminance(palette.floor), luminance(palette.floorAlt));
+  let shift = lighting.capShift;
+  let cap = shift < 0 ? darken(intToHex(c.cap), -shift) : lighten(intToHex(c.cap), shift);
+  while (shift < 0 && luminance(cap) < Math.max(floorL + 0.13, 0.26)) {
+    shift = Math.min(0, shift + 0.04);
+    cap = darken(intToHex(c.cap), -shift);
+  }
+  const capHex = intToHex(cap);
+  return { ...c, cap, capDeep: darken(capHex, 0.22), capHi: lighten(capHex, 0.22), face: darken(capHex, 0.5), faceLow: darken(capHex, 0.72) };
 }
 
 /** Warm/cool light pools under lanterns, exits and the anchor so the floor is never flat. */
@@ -264,6 +302,28 @@ export function drawMotes(g: G, motes: Mote[], t: number, roomW: number, roomH: 
         const y = wrapY(m.y + t * m.speed * 0.5);
         const x = wrapX(m.x + Math.sin(t * 0.8 + m.phase) * 6);
         g.fillStyle(pale, 0.22).fillRect(x, y, m.r * 1.6, m.r * 1.2);
+        break;
+      }
+      case 'none':
+        return;
+      case 'rain': {
+        const y = wrapY(m.y + t * (220 + m.speed * 9));
+        const x = wrapX(m.x - t * 40);
+        g.lineStyle(1, pale, 0.3).lineBetween(x, y, x - 3, y + 11);
+        if (Math.sin(t * 5 + m.phase * 3) > 0.9) g.fillStyle(pale, 0.35).fillEllipse(m.x, m.y, 5, 2);
+        break;
+      }
+      case 'snow': {
+        const y = wrapY(m.y + t * m.speed * 1.1);
+        const x = wrapX(m.x + Math.sin(t * 0.9 + m.phase) * 22 + t * 6);
+        g.fillStyle(0xffffff, 0.55).fillCircle(x, y, m.r * 0.9);
+        break;
+      }
+      case 'drift': {
+        if (m.phase > 1.6) break; // a few large shapes, not a swarm
+        const x = wrapX(m.x + t * m.speed * 0.7);
+        const y = wrapY(m.y + Math.sin(t * 0.2 + m.phase) * 24);
+        g.fillStyle(pale, 0.035).fillEllipse(x, y, 120 + m.r * 40, 46 + m.r * 14);
         break;
       }
       case 'fireflies': {

@@ -2,6 +2,44 @@
 
 Agent C records only work and verification performed in this session.
 
+## Overnight hub event scope — 2026-09-20
+
+The overnight monitor reproduced an actual `LocalSession` reload defect on `dc2c934`:
+both sessions emitted `meta:1`, `0:0` and `0:1`; Chronicle retained six memories from two
+worlds but the hub kept one run. Commit `5a10f45` scopes hub deduplication by world, retains
+legacy counters and ignores explicitly foreign/training origins. Changes stay in C-owned
+paths. Five added regression cases include real fixture sessions with isolated Map storage;
+three exposed failures in the original reducer. Existing tests were not altered.
+
+Initial `npm run check`: **714 tests / 60 files**, typecheck and production build passed;
+`git diff --check` passed. A preceding full run missed one WebSocket attack-event assertion;
+focused and full reruns passed, as did three unchanged-base suites. Cause remains unconfirmed.
+Baseline CLI production startup, safe config, health, HTML, built JS/CSS and schema-valid
+three-room fixture generation passed on an ephemeral local port; the test process was stopped.
+No browser, paid provider or physical LAN verification is claimed.
+
+After integrating main `71f1dc2`, the combined `npm run check` passed **759 tests / 62 files**,
+typecheck and production build. Incoming floors tests and co-op evidence remain intact.
+
+## Co-op verification and compact header — 2026-09-20
+
+Delegated browser testing on `d5edb63` verified named and ordinary two-tab reconnects
+without duplicates, including repeated ordinary-tab reloads after shared localStorage
+changes. Both named clients restored room two with matching hostiles and membership.
+Shared contributions, honest fixture receipt, physical portal and synchronized room-one
+combat passed. Host migration left exactly one host. Device identity remained separate.
+The contribution cap accepted 24 and blocked 25; both preview routes labelled their
+fixture content and opened the requested room. The console had no runtime errors.
+
+At 800 CSSpx the preview status strip overflowed to 884px against a 792px client width;
+HQ fit. The header now permits wrapping and keeps each label intact. Against main
+`71f1dc2`, `npm run check` passed **754 tests / 62 files**, typecheck, build and whitespace.
+Focused browser verification on `bb6380b` passed: both preview routes, HQ and menus fit at
+800 CSSpx (`scrollWidth=clientWidth=792`); desktop HQ/preview fit at 1280 CSSpx. Full
+provenance/status labels remain visible. The console contained no errors or warnings.
+Normal zoom and keyboard repeat were restored. Solo/co-op were not replayed on this
+CSS-only follow-up; physical LAN/live-provider and floor-mode verification are not claimed.
+
 ## Anchored victory and co-op reload correction — 2026-09-20
 
 The delegated run on `1099cdc` completed all three rooms, the Guardian, three relays and
@@ -23,21 +61,6 @@ Stored credentials are schema-validated.
 current browser co-op retest is pending. Full physical LAN and live provider output remain
 unverified. Low renderer FPS and slow simulation-time progression limited browser timing
 assertions; no new dependencies or infrastructure changes were needed.
-## Overnight hub event scope — 2026-09-20
-
-The overnight monitor reproduced an actual `LocalSession` reload defect on `dc2c934`:
-both sessions emitted `meta:1`, `0:0` and `0:1`; Chronicle retained six memories from two
-worlds but the hub kept one run. Commit `5a10f45` scopes hub deduplication by world, retains
-legacy counters and ignores explicitly foreign/training origins. Changes stay in C-owned
-paths. Five added regression cases include real fixture sessions with isolated Map storage;
-three exposed failures in the original reducer. Existing tests were not altered.
-
-Final `npm run check`: **714 tests / 60 files**, typecheck and production build passed;
-`git diff --check` passed. A preceding full run missed one WebSocket attack-event assertion;
-focused and full reruns passed, as did three unchanged-base suites. Cause remains unconfirmed.
-Baseline CLI production startup, safe config, health, HTML, built JS/CSS and schema-valid
-three-room fixture generation passed on an ephemeral local port; the test process was stopped.
-No browser, paid provider or physical LAN verification is claimed.
 
 ## Browser-found arrival and attack defects — 2026-09-20
 

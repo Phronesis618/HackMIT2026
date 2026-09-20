@@ -19,9 +19,12 @@ import type { AudioPort } from '../audio';
 import { cueForEvent } from '../audio';
 import type { BrowserChronicle } from '../chronicle';
 import type { LocalSession } from '../transport/LocalSession';
+import { departureBus, isDeparting } from '../ui/HeadquartersDeparture';
 import { createKeyboardMouseInput, type InputSampler } from './input';
 import { stageOwnsInput } from './keyboardFocus';
 import type { UiStore } from './uiStore';
+import { IMPLEMENTED_LAW_IDS, lawEffectText, resolveLaws, worldLawsView } from '../../sim/laws';
+import { withLookOverrides } from '../render/lookOverrides';
 
 export interface PreviewFlags {
   fixtureWorld: boolean;
@@ -167,7 +170,9 @@ export class GameController {
       const me = snapshot.players.find((p) => p.id === session.localPlayerId);
       const pointer = this.input.getPointer();
       const aim = pointer ? renderer.screenToWorld(pointer.x, pointer.y) : me ? { x: me.x + Math.cos(me.facing), y: me.y + Math.sin(me.facing) } : { x: 0, y: 0 };
-      const intent = this.input.sample(aim);
+      const sampled = this.input.sample(aim);
+      // Departure ritual (HUB.md §8): inputs lock while the gate opens; F / Escape only skip the wait.
+      const intent = isDeparting(departureBus.get()) ? { ...sampled, moveX: 0, moveY: 0, attack: false, dash: false, ability: null, interact: false } : sampled;
       if (intent.interact && !this.interactHeld) this.activateHeadquartersStation();
       this.interactHeld = intent.interact === true;
       session.setIntent(intent);
@@ -256,7 +261,10 @@ export class GameController {
     if (world && room && snapshot.worldId === world.worldId && snapshot.roomId === room.id && snapshot.phase !== 'headquarters' && roomChanged) {
       this.shownWorldId = world.worldId;
       this.shownRoomId = room.id;
-      renderer.showRoom(room, world.art, world.receipt.lines, { title: world.recipe.title, tagline: world.recipe.tagline });
+      const lawsView = withLookOverrides(worldLawsView(world));
+      renderer.showRoom(room, world.art, world.receipt.lines, {
+        title: world.recipe.title, tagline: world.recipe.tagline, look: lawsView.look, lightRadius: resolveLaws(lawsView.laws).lightRadius,
+      });
       store.set({ room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal }, phase: snapshot.phase, hud: me ? hudFrom(me, snapshot) : store.get().hud });
     }
   }
@@ -344,6 +352,9 @@ export class GameController {
         plannedRoomCount: world.plannedRoomCount,
         lore: world.recipe.lore,
         attunements: world.recipe.attunements,
+        laws: withLookOverrides(worldLawsView(world)).laws.map((law) => ({
+          lawId: law.lawId, name: law.name, description: law.description, effect: lawEffectText(law), active: IMPLEMENTED_LAW_IDS.includes(law.lawId),
+        })),
       },
       notice: null,
     });

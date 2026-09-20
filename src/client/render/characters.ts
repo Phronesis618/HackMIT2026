@@ -11,7 +11,7 @@
  *          Guardian (rings + orbiting plates).
  */
 import type { EnemyState, PlayerState } from '../../shared/contracts';
-import { CLASS_THEME, ENEMY_INFO } from '../../shared/registry';
+import { CLASS_THEME, ENEMY_INFO, type ClassId } from '../../shared/registry';
 import { hexInt, lighten, darken, mix } from './color';
 import type { G } from './fx';
 
@@ -84,18 +84,7 @@ function drawBastion(g: G, primary: number, secondary: number, attacking: boolea
   g.fillStyle(darken(STEEL, 0.15), 1).fillCircle(3, bob * 0.3, 6.5);
   g.fillStyle(primary, 1).fillRect(4, -3 + bob * 0.3, 5, 6);
   g.fillStyle(WHITE, 0.9).fillRect(6, -1.5 + bob * 0.3, 3, 3);
-  // tower shield on the left arm (−y side), angled forward
-  g.fillStyle(steel, 1).fillRoundedRect(-4, -26, 24, 9, 3);
-  g.fillStyle(steelLight, 0.5).fillRoundedRect(-2, -25, 20, 3, 2);
-  g.lineStyle(2, primary, 0.95).strokeRoundedRect(-4, -26, 24, 9, 3);
-  g.fillStyle(secondary, 1).fillTriangle(8, -24, 12, -21.5, 8, -19);
-  g.fillStyle(primary, 0.25 + 0.1 * Math.sin(t * 6)).fillRoundedRect(-6, -28, 28, 13, 5);
-  // arc-blade on the right arm (+y side), pointing forward
-  const reach = attacking ? 34 : 24;
-  g.fillStyle(darken(STEEL, 0.2), 1).fillRect(2, 12, 8, 5);
-  g.fillStyle(0xdbe4f7, 1).fillTriangle(8, 11, 8 + reach, 14.5, 8, 18);
-  g.lineStyle(1.5, primary, 1).lineBetween(8, 11, 8 + reach, 14.5);
-  if (attacking) g.lineStyle(3, primary, 0.5).lineBetween(8, 11, 8 + reach + 4, 14.5);
+  drawClassWeapon(g, 'bastion', primary, secondary, attacking, t);
 }
 
 function drawShade(g: G, primary: number, secondary: number, attacking: boolean, moving: boolean, bob: number, t: number): void {
@@ -121,17 +110,7 @@ function drawShade(g: G, primary: number, secondary: number, attacking: boolean,
   g.fillStyle(cloth, 1).fillCircle(1, 0, 6);
   g.fillStyle(secondary, 1).fillRect(3, -1.5, 6, 3);
   g.fillStyle(WHITE, 0.9).fillCircle(6.5, 0, 1.2);
-  // twin blades (±y), long, thin, glowing edges — crossed forward when attacking
-  const len = attacking ? 30 : 22;
-  const spread = attacking ? 6 : 11;
-  const back = moving && !attacking ? -6 : 0;
-  for (const side of [-1, 1] as const) {
-    const y0 = side * spread;
-    g.fillStyle(0xe8def7, 1).fillTriangle(2 + back, y0 - 1.5, 2 + back + len, y0 + side * 2, 2 + back, y0 + 1.5);
-    g.lineStyle(1.5, side < 0 ? primary : secondary, 1).lineBetween(2 + back, y0 - side * 1.5, 2 + back + len, y0 + side * 2);
-    g.fillStyle(cloth, 1).fillRect(-4 + back, y0 - 2, 6, 4);
-  }
-  if (attacking) g.lineStyle(4, primary, 0.35).lineBetween(4, -spread, 4 + len + 6, 0).lineBetween(4, spread, 4 + len + 6, 0);
+  drawClassWeapon(g, 'shade', primary, secondary, attacking, t, moving && !attacking ? -6 : 0);
 }
 
 function drawBeacon(g: G, primary: number, secondary: number, attacking: boolean, bob: number, t: number): void {
@@ -147,18 +126,7 @@ function drawBeacon(g: G, primary: number, secondary: number, attacking: boolean
   // hood + visor
   g.fillStyle(darken('#3a2a12', 0.2), 1).fillCircle(3, bob * 0.3, 6);
   g.fillStyle(primary, 1).fillRect(4, -2 + bob * 0.3, 5, 4);
-  // lantern staff forward (+x): shaft, hex lantern head, glow, three orbiting motes
-  const headX = attacking ? 34 : 28;
-  g.lineStyle(3, hexInt('#6b4a1e'), 1).lineBetween(2, 6, headX - 6, 6);
-  g.lineStyle(1, trim, 0.9).lineBetween(2, 5, headX - 6, 5);
-  g.fillStyle(primary, 0.18 + (attacking ? 0.2 : 0) + 0.06 * Math.sin(t * 7)).fillCircle(headX, 6, attacking ? 20 : 14);
-  g.fillStyle(darken('#3a2a12', 0.3), 1).fillPoints(hexagon(headX, 6, 6.5), true);
-  g.fillStyle(primary, 1).fillPoints(hexagon(headX, 6, 4), true);
-  g.fillStyle(WHITE, 0.95).fillCircle(headX, 6, 1.8);
-  for (let i = 0; i < 3; i++) {
-    const a = t * 4 + (i * Math.PI * 2) / 3;
-    g.fillStyle(i === 0 ? WHITE : trim, 0.9).fillCircle(headX + Math.cos(a) * 10, 6 + Math.sin(a) * 6, 1.6);
-  }
+  drawClassWeapon(g, 'beacon', primary, secondary, attacking, t);
 }
 
 function drawWeaver(g: G, primary: number, secondary: number, attacking: boolean, bob: number, t: number): void {
@@ -182,12 +150,111 @@ function drawWeaver(g: G, primary: number, secondary: number, attacking: boolean
   // visor
   g.fillStyle(primary, 1).fillRect(3, -2 + bob * 0.3, 6, 4);
   g.fillStyle(WHITE, 0.9).fillRect(6, -1 + bob * 0.3, 2, 2);
-  // spindle pointing forward with an orb at the tip
-  const tip = attacking ? 30 : 22;
-  g.lineStyle(2, shellLight, 1).lineBetween(6, 0, tip, 0);
-  g.fillStyle(secondary, 0.3 + (attacking ? 0.3 : 0)).fillCircle(tip + 2, 0, attacking ? 9 : 6);
-  g.fillStyle(secondary, 1).fillCircle(tip + 2, 0, 3);
-  g.fillStyle(WHITE, 1).fillCircle(tip + 2, 0, 1.2);
+  drawClassWeapon(g, 'weaver', primary, secondary, attacking, t);
+}
+
+/**
+ * The class weapon in the operative's frame (figure faces +x, origin at the body centre).
+ * One function feeds both the carried weapon and the armory rack, so the silhouettes match:
+ *  Bastion = tower shield on the −y arm + arc-blade on the +y arm
+ *  Shade   = twin phase blades on ±y
+ *  Beacon  = lantern staff with a hex lamp head
+ *  Weaver  = plasma loom spindle with an orb in a thread bracket
+ */
+export function drawClassWeapon(g: G, classId: ClassId, primary: number, secondary: number, attacking: boolean, t: number, back = 0): void {
+  switch (classId) {
+    case 'bastion': {
+      const steel = hexInt(STEEL);
+      // tower shield on the left arm (−y side), angled forward
+      g.fillStyle(steel, 1).fillRoundedRect(-4, -26, 24, 9, 3);
+      g.fillStyle(hexInt(STEEL_LIGHT), 0.5).fillRoundedRect(-2, -25, 20, 3, 2);
+      g.lineStyle(2, primary, 0.95).strokeRoundedRect(-4, -26, 24, 9, 3);
+      g.fillStyle(secondary, 1).fillTriangle(8, -24, 12, -21.5, 8, -19);
+      g.fillStyle(primary, 0.25 + 0.1 * Math.sin(t * 6)).fillRoundedRect(-6, -28, 28, 13, 5);
+      // arc-blade on the right arm (+y side), pointing forward
+      const reach = attacking ? 34 : 24;
+      g.fillStyle(darken(STEEL, 0.2), 1).fillRect(2, 12, 8, 5);
+      g.fillStyle(0xdbe4f7, 1).fillTriangle(8, 11, 8 + reach, 14.5, 8, 18);
+      g.lineStyle(1.5, primary, 1).lineBetween(8, 11, 8 + reach, 14.5);
+      if (attacking) g.lineStyle(3, primary, 0.5).lineBetween(8, 11, 8 + reach + 4, 14.5);
+      break;
+    }
+    case 'shade': {
+      // twin blades (±y), long, thin, glowing edges — crossed forward when attacking
+      const cloth = hexInt('#1a1330');
+      const len = attacking ? 30 : 22;
+      const spread = attacking ? 6 : 11;
+      for (const side of [-1, 1] as const) {
+        const y0 = side * spread;
+        g.fillStyle(0xe8def7, 1).fillTriangle(2 + back, y0 - 1.5, 2 + back + len, y0 + side * 2, 2 + back, y0 + 1.5);
+        g.lineStyle(1.5, side < 0 ? primary : secondary, 1).lineBetween(2 + back, y0 - side * 1.5, 2 + back + len, y0 + side * 2);
+        g.fillStyle(cloth, 1).fillRect(-4 + back, y0 - 2, 6, 4);
+      }
+      if (attacking) g.lineStyle(4, primary, 0.35).lineBetween(4, -spread, 4 + len + 6, 0).lineBetween(4, spread, 4 + len + 6, 0);
+      break;
+    }
+    case 'beacon': {
+      // lantern staff forward (+x): shaft, hex lantern head, glow, three orbiting motes
+      const headX = attacking ? 34 : 28;
+      g.lineStyle(3, hexInt('#6b4a1e'), 1).lineBetween(2, 6, headX - 6, 6);
+      g.lineStyle(1, secondary, 0.9).lineBetween(2, 5, headX - 6, 5);
+      g.fillStyle(primary, 0.18 + (attacking ? 0.2 : 0) + 0.06 * Math.sin(t * 7)).fillCircle(headX, 6, attacking ? 20 : 14);
+      g.fillStyle(darken('#3a2a12', 0.3), 1).fillPoints(hexagon(headX, 6, 6.5), true);
+      g.fillStyle(primary, 1).fillPoints(hexagon(headX, 6, 4), true);
+      g.fillStyle(WHITE, 0.95).fillCircle(headX, 6, 1.8);
+      for (let i = 0; i < 3; i++) {
+        const a = t * 4 + (i * Math.PI * 2) / 3;
+        g.fillStyle(i === 0 ? WHITE : secondary, 0.9).fillCircle(headX + Math.cos(a) * 10, 6 + Math.sin(a) * 6, 1.6);
+      }
+      break;
+    }
+    case 'weaver': {
+      // spindle pointing forward, an orb at the tip held in a small thread bracket
+      const tip = attacking ? 30 : 22;
+      g.lineStyle(2, lighten('#0f2a2a', 0.25), 1).lineBetween(6, 0, tip, 0);
+      g.lineStyle(1, primary, 0.7).lineBetween(tip - 6, -7, tip + 8, -7).lineBetween(tip - 6, 7, tip + 8, 7);
+      g.lineStyle(1, primary, 0.5).lineBetween(tip - 2, -7, tip - 2, 7).lineBetween(tip + 6, -7, tip + 6, 7);
+      g.fillStyle(secondary, 0.3 + (attacking ? 0.3 : 0)).fillCircle(tip + 2, 0, attacking ? 9 : 6);
+      g.fillStyle(secondary, 1).fillCircle(tip + 2, 0, 3);
+      g.fillStyle(WHITE, 1).fillCircle(tip + 2, 0, 1.2);
+      break;
+    }
+  }
+}
+
+export interface WeaponSilhouetteOptions {
+  x: number;
+  y: number;
+  /** Direction the weapon points; 0 = +x (east), −π/2 = north. */
+  angle: number;
+  scale?: number;
+  primary: number;
+  secondary: number;
+}
+
+/** Weapon centre in the operative frame, so a rack can pivot the silhouette around it. */
+const WEAPON_CENTRE: Record<ClassId, { x: number; y: number }> = {
+  bastion: { x: 10, y: -4 },
+  shade: { x: 13, y: 0 },
+  beacon: { x: 16, y: 6 },
+  weaver: { x: 15, y: 0 },
+};
+
+/**
+ * The carried weapon drawn on its own at a world position, e.g. standing on an armory rack.
+ * Same geometry as `drawClassWeapon`, so the stand and the operative in hand read the same.
+ */
+export function drawWeaponSilhouette(g: G, classId: ClassId, opts: WeaponSilhouetteOptions): void {
+  const theme = CLASS_THEME[classId];
+  const centre = WEAPON_CENTRE[classId];
+  const scale = opts.scale ?? 1;
+  g.save();
+  g.translateCanvas(opts.x, opts.y);
+  g.rotateCanvas(opts.angle);
+  g.scaleCanvas(scale, scale);
+  g.translateCanvas(-centre.x, -centre.y);
+  drawClassWeapon(g, classId, opts.primary ?? hexInt(theme.primary), opts.secondary ?? hexInt(theme.secondary), false, 0);
+  g.restore();
 }
 
 // ---------------------------------------------------------------------------
