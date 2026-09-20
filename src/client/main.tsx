@@ -11,13 +11,17 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
-import { PlayerIdentitySchema, type PlayerIdentity } from '../shared/contracts';
-import { randomId } from '../shared/ids';
 import type { GameSession } from '../shared/session';
 import { createBrowserAudio } from './audio';
 import { createBrowserChronicle } from './chronicle';
+<<<<<<< HEAD
 import { GameController, IDENTITY_STORAGE_KEY, parsePreviewFlags } from './game/GameController';
 import { connectFloorsUi, createUiStore } from './game/uiStore';
+=======
+import { GameController, parsePreviewFlags } from './game/GameController';
+import { createIdentityPersistence } from './game/identity';
+import { createUiStore } from './game/uiStore';
+>>>>>>> origin/main
 import { PhaserWorldRenderer } from './render/PhaserWorldRenderer';
 import { applyTokens } from './styles/applyTokens';
 import './styles/app.css';
@@ -26,33 +30,6 @@ import { LocalSession } from './transport/LocalSession';
 import { RemoteSession } from './transport/RemoteSession';
 import { fixtureWorldProvider, serverWorldProvider } from './transport/worldProviders';
 import { App } from './ui/App';
-
-/**
- * Identity is device-local (localStorage). `?as=<name>` switches to a per-TAB identity kept in
- * sessionStorage so two tabs on one laptop can be two operatives (local co-op testing / demo
- * backup). Never used implicitly.
- */
-function loadIdentity(tabName: string | null): PlayerIdentity {
-  const storage = tabName ? window.sessionStorage : window.localStorage;
-  const key = tabName ? `${IDENTITY_STORAGE_KEY}.tab.${tabName}` : IDENTITY_STORAGE_KEY;
-  try {
-    const raw = storage.getItem(key);
-    if (raw) {
-      const parsed = PlayerIdentitySchema.safeParse(JSON.parse(raw));
-      if (parsed.success) return parsed.data;
-    }
-  } catch {
-    /* fall through */
-  }
-  const displayName = tabName ? tabName.slice(0, 24) : `Operative-${Math.floor(Math.random() * 900 + 100)}`;
-  const fresh: PlayerIdentity = { id: randomId('player'), displayName, classId: 'bastion' };
-  try {
-    storage.setItem(key, JSON.stringify(fresh));
-  } catch {
-    /* ignore */
-  }
-  return fresh;
-}
 
 const ClientConfigSchema = z.object({ liveGenerationAvailable: z.boolean() });
 
@@ -74,8 +51,8 @@ async function boot(): Promise<void> {
   const flags = parsePreviewFlags(coOp ? '' : window.location.search);
   const availability = flags.fixtureWorld ? false : await fetchLiveAvailability();
   if (availability === null && !coOp) flags.fixtureWorld = true;
-  const tabName = params.get('as')?.trim() || null;
-  const identity = loadIdentity(tabName && /^[A-Za-z0-9 _-]{1,24}$/.test(tabName) ? tabName : null);
+  const identityPersistence = createIdentityPersistence(params.get('as'), window);
+  const identity = identityPersistence.load();
   const session: GameSession = coOp
     ? new RemoteSession({ identity })
     : new LocalSession({ identity, worldProvider: flags.fixtureWorld ? fixtureWorldProvider : serverWorldProvider });
@@ -88,8 +65,15 @@ async function boot(): Promise<void> {
   if (availability === null) store.set({ notice: { kind: 'info', text: coOp
     ? 'No co-op server is reachable. Start the RELAY server or switch to Solo for offline play.'
     : 'No generation server is reachable. Solo play uses a clearly labelled offline fixture.' } });
+<<<<<<< HEAD
   const controller = new GameController({ session, renderer, chronicle, audio, store, flags, liveGenerationAvailable });
   connectFloorsUi(session, store, controller.actions); // floors UI bridge (agent F3): UiModel.floor + actions.chooseBiome
+=======
+  const controller = new GameController({
+    session, renderer, chronicle, audio, store, flags, liveGenerationAvailable,
+    persistIdentity: identityPersistence.save,
+  });
+>>>>>>> origin/main
   window.addEventListener('pagehide', (event) => {
     if (!event.persisted) controller.dispose();
   });

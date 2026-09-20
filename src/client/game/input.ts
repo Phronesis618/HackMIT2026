@@ -4,6 +4,7 @@
  */
 import { INPUT_BINDINGS } from '../../shared/conventions';
 import type { LocalIntent } from '../../shared/session';
+import { stageOwnsInput } from './keyboardFocus';
 
 export interface InputSampler {
   /** Produce the intent for this frame. `aim` is the current pointer in world coords. */
@@ -11,9 +12,6 @@ export interface InputSampler {
   getPointer(): { x: number; y: number } | null; // canvas-relative pixels
   dispose(): void;
 }
-
-const isTextTarget = (el: EventTarget | null): boolean =>
-  el instanceof HTMLElement && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
 
 export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
   const down = new Set<string>();
@@ -25,7 +23,7 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
   const matches = (code: string, list: readonly string[]) => list.includes(code);
 
   const onKeyDown = (e: KeyboardEvent): void => {
-    if (isTextTarget(e.target)) return;
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || !stageOwnsInput(e.target, stage)) return;
     const all = Object.values(INPUT_BINDINGS).flat() as readonly string[];
     if (!all.includes(e.code)) return;
     e.preventDefault();
@@ -47,13 +45,15 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
     abilityPressed = null;
   };
   const onFocus = (event: FocusEvent): void => {
-    if (isTextTarget(event.target)) onBlur();
+    if (!stageOwnsInput(event.target, stage)) onBlur();
   };
   const onPointerMove = (e: PointerEvent): void => {
     const rect = (stage.querySelector('canvas') ?? stage).getBoundingClientRect();
     pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
   const onPointerDown = (e: PointerEvent): void => {
+    if (!stageOwnsInput(e.target, stage)) return;
+    stage.focus({ preventScroll: true });
     if (e.button === 0) {
       attackPressed = true;
       onPointerMove(e);

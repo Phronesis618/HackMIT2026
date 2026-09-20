@@ -19,9 +19,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { z } from 'zod';
-import { WorldRecipeSchema, type GenerationRequest, type WorldRecipe } from '../../shared/contracts';
+import { WorldRecipeSchema, type GenerationRequest } from '../../shared/contracts';
 import { ENEMY_IDS, MOTIF_IDS, PROP_IDS } from '../../shared/registry';
-import { GenerationFailure, type RecipeProvider } from '../generation/provider';
+import { assertDisplayText, GenerationFailure, type RecipeProvider } from '../generation/provider';
 
 /** Shown in provenance labels: "LIVE · cursor-agent". */
 export const OPERATOR_MODEL = 'cursor-agent';
@@ -191,19 +191,6 @@ export function createOperatorProvider(options: OperatorProviderOptions): Operat
       }
     },
   };
-}
-
-/** Same guard as the API providers: display text must never contain markup, URLs or code. */
-function assertDisplayText(recipe: WorldRecipe): void {
-  const text = [
-    recipe.title, recipe.tagline, recipe.themeSummary,
-    ...recipe.rooms.flatMap((room) => [room.name, room.description]),
-    ...recipe.contributionMappings.map((mapping) => mapping.featureDescription),
-    ...recipe.lore.flatMap((fragment) => [fragment.title, fragment.source, fragment.text]),
-  ];
-  if (text.some((value) => /[<>]|```|(?:https?:\/\/|www\.|data:|javascript:)|\b(?:eval|function)\s*\(/i.test(value))) {
-    throw new GenerationFailure('Recipe text contained markup, a URL, or code.', true);
-  }
 }
 
 function atomicWrite(file: string, contents: string): void {

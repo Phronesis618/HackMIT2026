@@ -4,13 +4,17 @@
  * reducer rules, this adapter and the memory wall UI.
  */
 import { MemoryRecordSchema, type GameEvent, type MemoryRecord } from '../../shared/contracts';
-import { createChronicleState, reduceChronicle, type ChronicleContext, type ChronicleState } from '../../chronicle';
+import {
+  createChronicleState, reduceChronicle, refreshChronicleReceipt,
+  type ChronicleContext, type ChronicleState, type ChronicleWorldContext,
+} from '../../chronicle';
 import { clearMemories, loadMemories, saveMemories, type KeyValueStorage } from './localStore';
 
 export interface BrowserChronicle {
   getMemories(): MemoryRecord[];
   /** Reduce events into memories, persist, return the newly created ones. */
   ingest(events: GameEvent[], ctx: Omit<ChronicleContext, 'now'>): MemoryRecord[];
+  refreshReceipt(world: ChronicleWorldContext): void;
   attachThumbnail(memoryId: string, dataUrl: string): void;
   clear(): void;
   subscribe(listener: (memories: MemoryRecord[]) => void): () => void;
@@ -33,6 +37,13 @@ export function createBrowserChronicle(storage: KeyValueStorage, now: () => numb
         notify();
       }
       return result.created;
+    },
+    refreshReceipt(world) {
+      const updated = refreshChronicleReceipt(state, world);
+      if (updated === state) return;
+      state = updated;
+      saveMemories(storage, state.memories);
+      notify();
     },
     attachThumbnail(memoryId, dataUrl) {
       if (!/^data:image\/(?:jpeg|png|webp);base64,/.test(dataUrl) || !MemoryRecordSchema.shape.thumbnailDataUrl.safeParse(dataUrl).success) return;
@@ -58,3 +69,4 @@ export function createBrowserChronicle(storage: KeyValueStorage, now: () => numb
 
 export { MEMORIES_STORAGE_KEY, loadMemories, saveMemories, clearMemories } from './localStore';
 export type { KeyValueStorage } from './localStore';
+export type { ChronicleWorldContext } from '../../chronicle';
