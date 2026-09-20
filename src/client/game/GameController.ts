@@ -380,6 +380,13 @@ export class GameController {
         palette: world.art.palette,
         motifIds: world.art.motifIds,
         roomNames: world.rooms.map((room) => room.name),
+        // Floors worlds: the route the crew will walk, tier by tier (a fork shows both options).
+        ...(world.floors ? {
+          biomes: world.floors.route.tiers.flatMap((tier, depth) => tier.map((biomeId) => {
+            const brief = world.floors!.briefs.find((b) => b.id === biomeId);
+            return { name: brief ? `${depth + 1} · ${brief.name}` : biomeId, roomNames: brief ? [brief.tagline] : [], palette: world.art.palette };
+          })),
+        } : {}),
       },
       notice: null,
     });
