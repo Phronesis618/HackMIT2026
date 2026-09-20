@@ -154,10 +154,41 @@ The bridge checks out no repository code and has no GitHub token permissions.
 
 ## Current playable loop
 
-HQ contributions → honest creation receipt → portal → three combat rooms → Guardian and
-Anchor → debrief and persistent memories. All four classes have Q abilities and an E unlock
-purchased with room-clear rewards. Clear enemies before using exits; hold F to revive a
-nearby teammate or plant the cleared final room's Anchor.
+**Default (flags off): the legacy loop.** HQ contributions → honest creation receipt →
+departure gate → three combat rooms → Guardian and Anchor → debrief and persistent memories.
+
+**With floors and laws on (`RELAY_FLOORS=1 RELAY_LAWS=1`): the full loop.** The same hub, then a
+five-tier route of biomes instead of three rooms — sealing doors, a minimap and a hold-`M` floor
+map, room kinds (`entrance`, `combat`, `elite`, `treasure`, `lore`, `rest`, `exit`), a gatekeeper
+at each biome exit, a choice of the next biome, the three-phase **Custodian** at the end, the
+relay ritual, the collapse escape and one relic carried out. The world also derives **laws**
+(rules the world itself imposes, shown on screen with their real numbers) and a **look**.
+
+All four classes have Q abilities and an E unlock purchased with room-clear rewards; world
+**attunements** are a skill-tree branch the world writes itself. Clear enemies before using
+exits; hold F to revive a nearby teammate, read a relic, open a biome gate or plant the Anchor.
+
+### Flags
+
+Both default to **off**. The **server is the authority**: it reads the environment and reports
+its answer on `GET /api/config`, and every client adopts that, so a crew cannot play one game
+while their screens draw another (`src/shared/flags.ts`).
+
+| Flag | Server env | Per-browser fallback | What it turns on |
+| --- | --- | --- | --- |
+| floors | `RELAY_FLOORS=1` | `?floors=1` | Prepared worlds are five-tier biome routes instead of three rooms |
+| laws | `RELAY_LAWS=1` | `?laws=1` | Derive laws + a look for worlds whose recipe has none (authored laws always apply) |
+
+Other URL parameters the client reads: `?world=fixture` (bundled offline world, no server),
+`?room=<0-2>` and `?autoenter=1` (jump straight in), `?mode=coop&as=<name>` (co-op identity per
+tab), `?hints=off|reset` (onboarding prompts), and the renderer overrides `?palette= ?lighting=
+?floor= ?wall= ?atmo= ?dark=`.
+
+### Onboarding
+
+Just-in-time coach prompts, first-encounter notes per room kind and a **Field Notes** menu page,
+all client-side. `?hints=off` silences them for a capture or a bot run; `?hints=reset` forgets
+every hint this browser has been shown.
 
 Implemented: deterministic combat and enemy telegraphs, host-authoritative co-op, immutable
 incremental room delivery, procedural rendering/audio and mute, event-derived Chronicle,
@@ -167,8 +198,24 @@ validated live generation with bounded fallback, and non-root production contain
 access it. This static deployment uses the explicitly labelled bundled fixture; live
 generation and co-op require the Node server.
 
-Verified scope and remaining external prerequisites are in [QA](docs/QA.md). Live Claude/OpenAI
-and physical LAN remain unverified; mocked provider tests do not establish live generation.
+### Verification
+
+`npm run check` is typecheck + **1075 Vitest tests across 88 files** + production build.
+
+Three harnesses drive the real game with **real keyboard and mouse input only**, reading state
+read-only from the DOM and the `window.relay` handle the client already exposes — nothing is
+injected and there are no test hooks in the app:
+
+| Script | What it does |
+| --- | --- |
+| `scripts/shot.mjs` | Headless screenshots of any URL, plus an audit preset. `docs/SCREENSHOTS.md` |
+| `scripts/coop-e2e.mjs` | 2–5 browsers actually play co-op; PASS/FAIL table. `docs/QA_COOP.md` |
+| `scripts/solo-e2e.mjs` | One browser actually plays solo: hub, biomes, Custodian, ritual, fixtures, onboarding, audio |
+
+What has been **observed in a browser**, what is **unit-tested only** and what is **unverified**
+is spelled out box by box in [QA](docs/QA.md), including a four-class × three-fixture solo
+survivability table. Live Claude/OpenAI generation and a physical two-laptop LAN remain
+unverified; mocked provider tests do not establish live generation.
 
 ## Configuration
 
