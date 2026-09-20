@@ -46,9 +46,15 @@ export function createRelayServer(config: ServerConfig, deps: { log?: (m: string
     })
     : null;
   if (operator) log(`generation: operator inbox at ${operator.inboxDir} (reply deadline ${Math.round(config.generation.operatorTimeoutMs / 1000)}s)`);
+  // Live mode with an API provider but no key (a public deploy before secrets are added, or a
+  // laptop without a key) still generates from the crew's ideas: the composer steps in and says
+  // so in the log and in every world's COMPOSED label. Nothing is ever labelled live.
+  const apiKey = config.generation.provider === 'anthropic' ? config.generation.anthropicApiKey : config.generation.provider === 'openai' ? config.generation.openaiApiKey : null;
+  const keylessLive = config.generation.mode === 'live' && (config.generation.provider === 'anthropic' || config.generation.provider === 'openai') && !apiKey?.trim();
+  if (keylessLive) log(`generation: ${config.generation.provider} selected without an API key; the offline composer will build worlds instead (labelled COMPOSED).`);
   const primary = operator
     ? { provider: operator, model: OPERATOR_MODEL }
-    : config.generation.mode === 'live' && config.generation.provider === 'composer'
+    : config.generation.mode === 'live' && (config.generation.provider === 'composer' || keylessLive)
       ? { provider: composer, model: COMPOSER_MODEL }
       : null;
   const generation = createGenerationService({

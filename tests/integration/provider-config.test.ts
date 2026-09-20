@@ -35,12 +35,16 @@ describe('AI provider configuration', () => {
     expect(describeForClient(config)).toEqual({ generationMode: 'fixture', liveGenerationAvailable: false });
   });
 
-  it.each(['anthropic', 'openai'])('requires the selected %s key even when the other key exists', (provider) => {
+  it.each(['anthropic', 'openai'])('never borrows the other key when the selected %s key is missing; the offline composer covers live mode', (provider) => {
     const config = loadServerConfig({
       env: { ...env, RELAY_AI_PROVIDER: provider, [provider === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY']: '' },
       argv: [],
     });
-    expect(describeForClient(config)).toEqual({ generationMode: 'live', liveGenerationAvailable: false });
+    // The selected provider's own key is empty, so no paid API can be called...
+    expect(provider === 'anthropic' ? config.generation.anthropicApiKey : config.generation.openaiApiKey).toBeNull();
+    // ...yet live mode still produces a world from the crew's ideas: app.ts substitutes the
+    // composer (labelled COMPOSED, never live). The client flag reflects that.
+    expect(describeForClient(config)).toEqual({ generationMode: 'live', liveGenerationAvailable: true });
   });
 
   it('rejects a misspelled provider instead of silently using a different paid service', () => {

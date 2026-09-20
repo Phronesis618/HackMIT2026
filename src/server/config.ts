@@ -120,7 +120,10 @@ export function describeForClient(config: ServerConfig): { generationMode: Gener
   const apiKey = provider === 'anthropic' ? anthropicApiKey : openaiApiKey;
   return {
     generationMode: config.generation.mode,
-    liveGenerationAvailable: config.generation.mode === 'live' && (KEYLESS_PROVIDERS.has(provider) || Boolean(apiKey?.trim())),
+    // In live mode a world is always generated from the crew's ideas: by the selected API model
+    // when its key is present, otherwise by the offline composer (see app.ts). Keyless API
+    // providers are therefore still 'available'; the provenance label says which one built it.
+    liveGenerationAvailable: config.generation.mode === 'live' && (KEYLESS_PROVIDERS.has(provider) || Boolean(apiKey?.trim()) || provider === 'anthropic' || provider === 'openai'),
   };
 }
 
