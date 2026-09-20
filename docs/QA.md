@@ -156,7 +156,30 @@ better than it. It is still the only end-to-end number anyone has.
 
 ## Co-op (`scripts/coop-e2e.mjs`)
 
-<!-- COOP_RESULTS -->
+`node scripts/coop-e2e.mjs --only lobby,demo` on merged `main`, **flags off**: **24/24
+checkpoints passed, 0 skipped** (`/tmp/relay-shots/coop/results.json`). That includes the new
+co-op **READY gate** at the departure gate — `4c` one operative at the gate shows `1 / 2 READY`
+on both screens and the host cannot enter; `4d` both at the gate shows `2 / 2 READY` and the host
+may — and `6f`, a guest going offline still lets the host start the run.
+
+Also observed in that table: 4/4 lobby with a fifth player refused cleanly, departed crew pruned,
+classes and ideas agreeing on both screens, guest cannot press Prepare, both land in room 1 of the
+same world, movement syncs both ways with measured latency, enemy HP and room clear agree, the E
+unlock is per-player, a downed player shows as downed on both screens, hold-`F` revive, the
+collapse debrief on both screens, host-only return, and memories on each device.
+
+`--floors` (flags **on**) adds the floors group, plus a checkpoint added on this branch:
+
+- `9e` **laws and the look are identical on both clients** — the resolved law list with its real
+  numbers, whether they were derived or authored, and the look, compared string-for-string across
+  both browsers. This is what server-authoritative flags exist to guarantee
+  (`src/shared/flags.ts`).
+
+<!-- COOP_FLOORS -->
+
+Not added for lack of time, and therefore **unverified**: an attunement bought by the *guest*
+specifically (the purchase path is per-player and is observed solo), and the collapse escape with
+two players (unreachable for the same reason it is unreachable solo — see the finale section).
 
 ## Audio
 
@@ -174,6 +197,41 @@ better than it. It is still the only end-to-end number anyone has.
 - [ ] **The public Pages URL and the Render service, loaded in a browser.** **Unverified this
       pass.**
 - [ ] Two physical laptops on the presentation LAN. **Unverified** — needs two laptops.
+
+
+## The flip decision: should floors + laws be ON by default for the demo?
+
+**No. Do not flip.** The criteria set for this decision were: Step 1 completes without a
+softlock, crash, console-error spam or desync; the first room arrives within 60 s in live mode;
+legacy fixtures and the Pages build are still fine. Measured against those:
+
+| Criterion | Result |
+| --- | --- |
+| No crash, no console errors, no desync | **Met.** Zero uncaught page errors and zero `console.error` lines across every solo run; co-op 24/24 with flags off. |
+| No softlock | **Met as far as anyone got.** Nothing ever hung; the one run that ended early ended in a legitimate death with a correct debrief. |
+| Step 1 *completes* | **Not met.** Nobody — bot or human — has played a floors route to the Custodian. The last two minutes of that path (collapse escape, carry-one-relic, the hub showing the run) have never run in a browser at all. |
+| First room within 60 s live | **Not measured.** No live world was generated this pass. |
+| Legacy and Pages still fine | **Not measured this pass.** Legacy solo was not re-run; the Pages artifact and the Render service were not loaded. |
+
+The argument for flipping is real: everything observed of floors is good. The hub, the receipt,
+the departure ritual, sealing doors, the minimap and hold-`M` map, five room kinds, terrain tiles,
+the three-phase Custodian, the relay ritual and twelve of twelve solo survivability cells are all
+green, with laws visibly active and honestly labelled.
+
+The argument against is decisive: **flipping makes the demo's default path one whose ending
+nobody has seen.** A judge who plays to the end of a floors run reaches code — the collapse, the
+extraction, the relic choice — that is unit-tested and has never been rendered. Legacy mode's
+ending *has* been played, by two people, on two screens (`docs/QA_COOP.md` 7c). Defaulting to the
+path with the observed ending is the smaller risk, and it costs one environment variable to
+change your mind.
+
+**Nothing is being hidden by this.** Floors and laws are one flag away and the demo script says
+so; `RELAY_FLOORS=1 RELAY_LAWS=1` on the server, or `?floors=1&laws=1` in one browser.
+
+**What would flip it:** one floors run played to the Custodian with the collapse and the relic
+choice observed on screen, plus one live generation reaching the first room inside 60 s. Both are
+a single unattended `scripts/solo-e2e.mjs --only fullrun --minutes 45` and one live run away —
+they were a time budget short, not a blocker.
 
 ## Known limits of the harness itself
 

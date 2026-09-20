@@ -230,7 +230,7 @@ function readRelay() {
     ui: {
       phase: ui.phase, notice: ui.notice, memories: ui.memories.length, room: ui.room,
       players: ui.players, contributions: ui.contributions.map((c) => `${c.playerName}: ${c.text}`),
-      world: ui.world && { title: ui.world.title, label: ui.world.provenance.label, source: ui.world.provenance.source, receipt: ui.world.receipt.lines.map((l) => `${l.playerName}: ${l.text}`) },
+      world: ui.world && { title: ui.world.title, label: ui.world.provenance.label, source: ui.world.provenance.source, receipt: ui.world.receipt.lines.map((l) => `${l.playerName}: ${l.text}`), laws: ui.world.laws ?? null, lawsDerived: ui.world.lawsDerived ?? null },
     },
   };
 }
@@ -1082,6 +1082,17 @@ async function groupFloors(ctx) {
   await startRun(ctx, 'floors');
   const first = await agree(pair, (s) => ({ floor: s.snap.floor ?? null, roomId: s.snap.roomId }));
   await shots(pair, 's9-floors-entrance');
+  // Q1: the whole point of server-authoritative flags — both machines must be playing the same
+  // game AND drawing the same world. Laws carry their resolved numbers; the look drives the render.
+  const r2look = (s) => s.ui.world?.lookDerived ?? null;
+  const rules = await agree(pair, (s, d) => ({
+    laws: (s.ui.world?.laws ?? []).map((l) => `${l.lawId}:${l.active}:${l.effect}`),
+    lawsDerived: s.ui.world?.lawsDerived ?? null,
+    look: r2look(s),
+    onScreen: (d.bodyText.match(/Enemy groups[^\n]*|Movement at[^\n]*|Dash goes[^\n]*|Light[^\n]*/g) ?? []).slice(0, 4),
+  }));
+  report.check('9e', 'laws and the look are identical on both clients', rules.ok && JSON.parse(rules.values[0]).laws.length > 0,
+    `both screens: ${rules.values[0].slice(0, 500)}${rules.ok ? '' : ` || DIVERGED: ${rules.values[1].slice(0, 500)}`}`);
   const hasFloor = Boolean(JSON.parse(first.values[0]).floor);
   report.check('9a', 'floors run: snapshot.floor present and identical on both screens', first.ok && hasFloor, `both screens: ${first.values[0].slice(0, 400)}`);
   if (!hasFloor) return;
