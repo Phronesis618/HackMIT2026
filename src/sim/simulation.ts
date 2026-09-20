@@ -1182,10 +1182,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       if (world?.worldId !== next?.worldId) {
         rooms.clear();
         discoveredLore = new Set();
-        roomProvider = null;
       }
       world = next;
-      if (next?.floors && !roomProvider) roomProvider = (options.roomProvider ?? createRoomProvider)(next);
+      // Outside a run the provider follows the latest copy of the world (briefs may arrive late).
+      if (!floorsRun) roomProvider = next?.floors ? (options.roomProvider ?? createRoomProvider)(next) : null;
     },
     getWorld() { return world; },
     getRoom() { return room; },
