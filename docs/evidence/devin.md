@@ -2,6 +2,22 @@
 
 Agent C records only work and verification performed in this session.
 
+## Overnight hub event scope — 2026-09-20
+
+The overnight monitor reproduced an actual `LocalSession` reload defect on `dc2c934`:
+both sessions emitted `meta:1`, `0:0` and `0:1`; Chronicle retained six memories from two
+worlds but the hub kept one run. Commit `5a10f45` scopes hub deduplication by world, retains
+legacy counters and ignores explicitly foreign/training origins. Changes stay in C-owned
+paths. Five added regression cases include real fixture sessions with isolated Map storage;
+three exposed failures in the original reducer. Existing tests were not altered.
+
+Final `npm run check`: **714 tests / 60 files**, typecheck and production build passed;
+`git diff --check` passed. A preceding full run missed one WebSocket attack-event assertion;
+focused and full reruns passed, as did three unchanged-base suites. Cause remains unconfirmed.
+Baseline CLI production startup, safe config, health, HTML, built JS/CSS and schema-valid
+three-room fixture generation passed on an ephemeral local port; the test process was stopped.
+No browser, paid provider or physical LAN verification is claimed.
+
 ## Browser-found arrival and attack defects — 2026-09-20
 
 The delegated browser pass on PR #21 (`e26b178`) used real controls to submit an idea,
