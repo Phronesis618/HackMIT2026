@@ -199,6 +199,7 @@ export interface UiActions {
   setDisplayName(name: string): void;
   selectClass(classId: ClassId): void;
   submitContribution(text: string): void;
+  removeContribution?(contributionId: string): void;
   requestWorld(): void;
   enterPortal(): void;
   returnToHeadquarters(): void;

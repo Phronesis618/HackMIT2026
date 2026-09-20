@@ -21,6 +21,34 @@
   entry worked. Coverage stopped at the user's deadline. Software rendering was slow.
 - Merge remains for a repository owner: this session's merge command was denied.
 
+## Remove contributed ideas — 2026-09-20
+
+- Branch: `devin/1789915612-remove-world-ideas`, based on `972bb06`.
+- **Implemented:** Remove beside your own HQ ideas, in solo and co-op. Removal frees a
+  contribution slot and affects the next generation; existing worlds and receipts stay intact.
+  The server validates ownership and rejects changes during generation or outside HQ.
+- **Integration:** small additive `removeContribution` session/UI methods and
+  `remove_contribution` client message, with implementations on both transports.
+- **Verified:** `npm run check` passed **1109 tests / 92 files**, typecheck and build;
+  whitespace passed. Eight new cases cover capacity, empty ideas, retained receipts,
+  subsequent generation, stream locking, UI ownership, co-op synchronization and server guards.
+- **Mocked:** fixture generation only; no paid provider calls in tests.
+- **Unverified:** browser interaction and deployment at this commit.
+
+## Startup with blocked session storage — 2026-09-20
+
+- Branch: `devin/1789915588-startup-storage`, implementation `7e456d6`, based on `972bb06`.
+- **Implemented:** treat a failed `sessionStorage.getItem` as an unseen start screen,
+  preventing a storage `SecurityError` from escaping App's initial state calculation.
+- **Verified:** both solo and co-op startup regressions failed before the fix;
+  `npm run check` then passed **1103 tests / 93 files**, typecheck and production build.
+  The base revision also passed **1101 tests / 92 files** and an offline production CLI
+  smoke (health/config, HTML, referenced JS/CSS, schema-valid fixture generation, clean exit).
+- **Mocked:** the regression injects a storage reader that throws `SecurityError`.
+- **Unverified:** fresh browser interaction, physical LAN, hosted deployment and live providers.
+  PR #48 owns the separate coordinated bug batch, including issue #41; issue #45 still
+  needs Agent A's onboarding publication fix. The monitor notified that owner on PR #48.
+
 ## Production AI prompt packaging — 2026-09-20
 
 - Branch: `devin/1789914107-fix-generation-image`, based on `aaf9fdf`.

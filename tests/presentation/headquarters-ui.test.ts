@@ -27,6 +27,27 @@ function model(): UiModel {
 }
 
 describe('headquarters station UI', () => {
+  it.each(['ready', 'preparing', 'disconnected'] as const)('only offers removal of your own ideas: %s', (state) => {
+    const ui = model();
+    ui.connection.mode = 'remote';
+    ui.contributions = [
+      { id: 'own', playerId: ui.localPlayer.id, playerName: 'You', text: 'Dragons', submittedAt: 1 },
+      { id: 'other', playerId: 'other-player', playerName: 'Friend', text: 'Castles', submittedAt: 2 },
+    ];
+    if (state === 'preparing') ui.phase = 'preparing';
+    if (state === 'disconnected') ui.connection.status = 'offline';
+    const html = renderToStaticMarkup(createElement(HeadquartersPanel, {
+      model: ui, actions: { ...actions, removeContribution: vi.fn() },
+    }));
+    expect(html).toContain('aria-label="Remove idea: Dragons"');
+    expect(html).not.toContain('aria-label="Remove idea: Castles"');
+    expect(html).toContain('Friend');
+    expect(html).toContain('Castles');
+    expect(html).toContain(state === 'ready'
+      ? 'aria-label="Remove idea: Dragons">Remove'
+      : 'aria-label="Remove idea: Dragons" disabled="">Remove');
+  });
+
   it('clearly labels empty records as device-local without claiming lifetime wins', () => {
     const html = renderToStaticMarkup(createElement(HeadquartersStationPanel, { model: model(), actions }));
     expect(html).toContain('Device-local records');

@@ -208,6 +208,15 @@ export class LocalSession implements GameSession {
     return this.contributions;
   }
 
+  removeContribution(contributionId: string): boolean {
+    if (this.disposed || this.connection !== 'connected' || this.getPhase() !== 'headquarters'
+      || this.activeGeneration) return false;
+    const remaining = this.contributions.filter((c) => c.id !== contributionId || c.playerId !== this.localPlayerId);
+    if (remaining.length === this.contributions.length) return false;
+    this.contributions = remaining;
+    return true;
+  }
+
   unlockAbility(): void {
     if (this.disposed) return;
     const events = this.sim.unlockAbility(this.localPlayerId);

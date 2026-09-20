@@ -227,6 +227,13 @@ export class RemoteSession implements GameSession {
     return contribution;
   }
 
+  removeContribution(contributionId: string): boolean {
+    if (this.connection !== 'connected' || this.getPhase() !== 'headquarters'
+      || ['queued', 'generating', 'validating'].includes(this.generation.phase)
+      || !this.contributions.some((c) => c.id === contributionId && c.playerId === this.localPlayerId)) return false;
+    return this.send({ type: 'remove_contribution', contributionId });
+  }
+
   requestWorld(): Promise<PreparedWorld> {
     if (!this.getIsHost()) return Promise.reject(new Error('Only the connected host can prepare a world.'));
     if (this.pendingWorld) return Promise.reject(new Error('A world request is already in progress.'));
