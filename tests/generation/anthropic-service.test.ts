@@ -134,6 +134,34 @@ describe('Claude generation', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('accepts a validated Claude response that takes thirty seconds', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(() =>
+      new Promise((resolve) => setTimeout(() => resolve(response()), 30_000)));
+    const pending = service(fetchMock).prepareWorld(request);
+    await vi.advanceTimersByTimeAsync(30_000);
+    const world = await pending;
+    expect(PreparedWorldSchema.safeParse(world).success).toBe(true);
+    expect(world.provenance).toMatchObject({ source: 'live', attempts: 1, durationMs: 30_000 });
+    expect(fetchMock.mock.calls[0]?.[1]?.signal?.aborted).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([undefined, 120_000])('caps Claude requests at fifty-five seconds with timeout %s', async (timeoutMs) => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(() => new Promise(() => {}));
+    const pending = service(fetchMock, timeoutMs).prepareWorld(request);
+    await vi.advanceTimersByTimeAsync(54_999);
+    expect(fetchMock.mock.calls[0]?.[1]?.signal?.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const world = await pending;
+    expect(world.provenance).toMatchObject({ source: 'live_fallback_fixture', attempts: 1, durationMs: 55_000 });
+    expect(world.provenance.notes).toContain('Provider timeout after 55000ms.');
+    expect(fetchMock.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('propagates cancellation while reading the response without fallback', async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(new ReadableStream()));
