@@ -39,6 +39,8 @@ import {
   RoomKindSchema,
   WorldFloorsSchema,
 } from './floors';
+import { BiomeRoomLinesListSchema, LoreRefsShape, WorldBibleSchema } from './bible';
+import { WorldLawListSchema, WorldLookSchema } from './laws';
 
 // ---------------------------------------------------------------------------
 // Primitives
@@ -522,6 +524,17 @@ export const WorldRecipeSchema = z.object({
 export const FloorsWorldRecipeSchema = WorldRecipeSchema.extend({
   /** Exactly 8 bounded biome briefs: opener, three pairs of choices, finale. Model-facing. */
   biomes: BiomeBriefListSchema.optional(),
+  // --- agent W2 (writing pipeline): all optional, additive. See src/shared/bible.ts and laws.ts. ---
+  /** Structured world facts written before any prose. Never shown to players. */
+  bible: WorldBibleSchema.optional(),
+  /** Same fragments plus optional `authorIndex` / `eventIndex` into the bible. */
+  lore: z.array(LoreFragmentSchema.extend(LoreRefsShape)).max(12),
+  /** One room line per room kind per biome (proposed slot; consumers may ignore it). */
+  biomeRoomLines: BiomeRoomLinesListSchema.optional(),
+  /** 2–3 world laws from the closed registry in laws.ts. NOT yet implemented by the sim. */
+  laws: WorldLawListSchema.optional(),
+  /** Bounded renderer parameters beyond the palette. NOT yet implemented by the renderer. */
+  look: WorldLookSchema.optional(),
 });
 export type WorldRecipe = z.infer<typeof FloorsWorldRecipeSchema>;
 
