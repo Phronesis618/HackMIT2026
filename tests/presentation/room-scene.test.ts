@@ -245,17 +245,13 @@ describe('room presentation against authoritative contracts', () => {
     expect(stage.nodes.find((n) => n.depth === DEPTH.propsBehind + 0.6)).toBeUndefined();
   });
 
-  it('draws an in-world Integrity strip above the room during an expedition, but not in headquarters', () => {
+  it('leaves crew Integrity and the room title to the React HUD: no in-canvas strip, no title text', () => {
     setup();
-    const expeditionBars = stage.nodes.find((n) => n.depth === DEPTH.overlay - 1)!;
-    expect(expeditionBars.fillRoundedRect).toHaveBeenCalled();
-
-    stage.nodes.length = 0;
-    const hq = new RoomScene();
-    hq.buildRoom(headquartersRoom, headquartersArt, { headquarters: true });
-    hq.renderSnapshot({ ...sampleSnapshot, roomId: headquartersRoom.id }, localId);
-    const hqBars = stage.nodes.find((n) => n.depth === DEPTH.overlay - 1)!;
-    expect(hqBars.fillRoundedRect).not.toHaveBeenCalled();
+    const bars = stage.nodes.find((n) => n.depth === DEPTH.overlay - 1 && n.fillRoundedRect.mock.calls.length > 0);
+    expect(bars).toBeUndefined();
+    const labels = stage.nodes.map((n) => n.text);
+    expect(labels).not.toContain(`${firstRoom.index + 1} · ${firstRoom.name.toUpperCase()}`);
+    expect(labels).not.toContain(sampleSnapshot.players[0]!.displayName + ' · down');
   });
 
   it('draws relics and remains from the snapshot, prompts to read nearby relics and plays the reveal on discovery', () => {

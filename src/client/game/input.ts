@@ -122,7 +122,8 @@ export function createHoldKey(codes: readonly string[], onChange: (held: boolean
     onChange(held);
   };
   const onKeyDown = (e: KeyboardEvent): void => {
-    if (isTextTarget(e.target) || e.repeat || !codes.includes(e.code)) return;
+    const typing = e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])') !== null;
+    if (typing || e.repeat || e.ctrlKey || e.metaKey || e.altKey || !codes.includes(e.code)) return;
     set(true);
   };
   const onKeyUp = (e: KeyboardEvent): void => {
