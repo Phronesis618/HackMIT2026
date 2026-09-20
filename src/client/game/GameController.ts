@@ -263,6 +263,7 @@ export class GameController {
         committedRoomCount: world.rooms.length,
         plannedRoomCount: world.plannedRoomCount,
         lore: world.recipe.lore,
+        attunements: world.recipe.attunements,
       },
       notice: null,
     });

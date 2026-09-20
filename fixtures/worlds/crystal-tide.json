@@ -11,16 +11,16 @@
       "monoliths"
     ],
     "palette": {
-      "background": "#150c2a",
-      "floor": "#2c1d4d",
-      "floorAlt": "#36265c",
-      "wall": "#472f74",
-      "wallEdge": "#b58cff",
-      "accent": "#d8a8ff",
-      "accentSoft": "#ff6bd6",
-      "glow": "#d8a8ff",
+      "background": "#100b1c",
+      "floor": "#211831",
+      "floorAlt": "#2b2140",
+      "wall": "#342349",
+      "wallEdge": "#9573cd",
+      "accent": "#d0a0ff",
+      "accentSoft": "#9573cd",
+      "glow": "#bfa5ff",
       "hazard": "#ff658f",
-      "text": "#f4e9ff"
+      "text": "#eee2ff"
     },
     "rooms": [
       {
@@ -136,21 +136,43 @@
         "roomIndex": 0,
         "enemyId": "guardian"
       }
+    ],
+    "attunements": [
+      {
+        "effectId": "bolt_ward",
+        "name": "Counted by the Lens",
+        "description": "Turn your face to the lens and be kept: the sea’s bolts find less of you."
+      },
+      {
+        "effectId": "hazard_ward",
+        "name": "Salt-Sure Footing",
+        "description": "The divers’ trick for the shallows: what glows underfoot burns a watcher less."
+      },
+      {
+        "effectId": "relic_mend",
+        "name": "Tide-Gauge Reading",
+        "description": "Each mark read from the glass steadies the hand that reads it."
+      },
+      {
+        "effectId": "guardian_bane",
+        "name": "Lens-Keeper’s Stop",
+        "description": "You know where the Focus was blinded once. Strike there."
+      }
     ]
   },
   "art": {
     "paletteFamily": "ink-neon",
     "palette": {
-      "background": "#150c2a",
-      "floor": "#2c1d4d",
-      "floorAlt": "#36265c",
-      "wall": "#472f74",
-      "wallEdge": "#b58cff",
-      "accent": "#d8a8ff",
-      "accentSoft": "#ff6bd6",
-      "glow": "#d8a8ff",
+      "background": "#100b1c",
+      "floor": "#211831",
+      "floorAlt": "#2b2140",
+      "wall": "#342349",
+      "wallEdge": "#9573cd",
+      "accent": "#d0a0ff",
+      "accentSoft": "#9573cd",
+      "glow": "#bfa5ff",
       "hazard": "#ff658f",
-      "text": "#f4e9ff"
+      "text": "#eee2ff"
     },
     "motifIds": [
       "crystals",

@@ -24,7 +24,7 @@ function model(discoveredLore: number[] = []): UiModel {
       worldId: 'w', title: fixture.recipe.title, tagline: fixture.recipe.tagline, themeSummary: fixture.recipe.themeSummary,
       provenance: { source: 'fixture', label: 'OFFLINE FIXTURE', generatedAt: 0, durationMs: 0, attempts: 0, notes: [] },
       receipt: { source: 'fixture', worldTitle: fixture.recipe.title, headline: 'Test receipt', lines: [] },
-      committedRoomCount: 3, plannedRoomCount: 3, lore: fixture.recipe.lore,
+      committedRoomCount: 3, plannedRoomCount: 3, lore: fixture.recipe.lore, attunements: fixture.recipe.attunements,
     },
     room: { index: 0, name: 'Test room', description: '', isFinal: false },
     hud: { hp: 100, maxHp: 100, state: 'idle', dashReady: true, dashCooldownMs: 0, attackReady: true, enemiesRemaining: 2, resources: 3 },
@@ -71,10 +71,13 @@ describe('Tab menu', () => {
     expect(html).toContain('Return to headquarters');
   });
 
-  it('skills page renders the scaffold tree as locked', () => {
-    const html = render(createElement(SkillsPage));
+  it('skills page grows the class tree plus the branch this world wrote, all still locked', () => {
+    const html = render(createElement(SkillsPage, { model: model() }));
     expect(html).toContain('Reinforced Plating');
-    expect(html).toContain('locked');
-    expect(html).toContain('Not yet active');
+    expect(html).toContain('Bastion of Last Light');
+    for (const a of fixture.recipe.attunements) expect(html).toContain(a.name.replace(/'/g, '&#x27;'));
+    expect(html).toContain(`Attuned to ${fixture.recipe.title}`);
+    expect(html).toContain('not wired');
+    expect(html).not.toContain('Never Seen');
   });
 });

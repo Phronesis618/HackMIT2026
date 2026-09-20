@@ -11,6 +11,7 @@ import type {
 } from './registry';
 import type {
   AnchorState,
+  Attunement,
   Contribution,
   CreationReceipt,
   GenerationProvenance,
@@ -41,6 +42,8 @@ export interface UiWorldSummary {
   plannedRoomCount: number;
   /** Every fragment the world holds; the Codex shows undiscovered ones as ???. */
   lore: LoreFragment[];
+  /** World-grown skill nodes (see src/shared/skills.ts). */
+  attunements: Attunement[];
 }
 
 export interface UiRoomSummary {

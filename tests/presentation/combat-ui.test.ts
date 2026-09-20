@@ -24,7 +24,7 @@ function model(): UiModel {
       worldId: SAMPLE_WORLD_ID, title: SAMPLE_WORLD_TITLE, tagline: 'Test world', themeSummary: 'Test theme',
       provenance: { source: 'fixture', label: 'OFFLINE FIXTURE', generatedAt: 0, durationMs: 0, attempts: 0, notes: [] },
       receipt: { source: 'fixture', worldTitle: SAMPLE_WORLD_TITLE, headline: 'Test receipt', lines: [] },
-      committedRoomCount: 3, plannedRoomCount: 3, lore: [],
+      committedRoomCount: 3, plannedRoomCount: 3, lore: [], attunements: [],
     },
     room: { index: 0, name: 'Test room', description: 'Test description', isFinal: false },
     hud: { hp: 100, maxHp: 100, state: 'idle', dashReady: true, dashCooldownMs: 0, attackReady: true, enemiesRemaining: 2 },

@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ABILITY_UNLOCK_COST } from '../../shared/conventions';
 import {
   ABILITY_DETAILS, CLASS_ABILITIES, CLASS_INFO, CLASS_THEME, ENEMY_IDS, ENEMY_INFO, type EnemyId,
 } from '../../shared/registry';
-import { SKILL_TREES } from '../../shared/skills';
+import { buildSkillTree, type SkillNode } from '../../shared/skills';
 import type { UiActions, UiModel } from '../../shared/ui';
 import { ENEMY_LORE } from '../../sim/training';
 import { AbilityIcon } from './AbilityIcon';
@@ -69,7 +69,7 @@ export function GameMenu({ model, actions }: { model: UiModel; actions: UiAction
           {page === 'codex' && <CodexPage model={model} />}
           {page === 'bestiary' && <BestiaryPage model={model} />}
           {page === 'operative' && <OperativePage model={model} actions={actions} />}
-          {page === 'skills' && <SkillsPage />}
+          {page === 'skills' && <SkillsPage model={model} />}
         </section>
       </div>
     </div>
@@ -229,31 +229,97 @@ export function OperativePage({ model, actions }: { model: UiModel; actions: UiA
   );
 }
 
-export function SkillsPage() {
+const LANE_W = 150;
+const TIER_H = 118;
+
+/**
+ * Vertical tree, Nine Sols style: root at the bottom, tiers climb; hairline connectors
+ * drawn in SVG behind circular nodes; selecting a node opens its detail beside the tree.
+ * Nothing is purchasable yet — the data is the design, the effects are a later pass.
+ */
+export function SkillsPage({ model }: { model: UiModel }) {
+  const world = model.world ? { title: model.world.title, attunements: model.world.attunements } : null;
+  const tree = buildSkillTree(model.localPlayer.classId, world);
+  const [selectedId, setSelectedId] = useState<string>('core.root');
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [tree.title]);
+
+  const lanes = tree.nodes.map((n) => n.lane);
+  const minLane = Math.min(...lanes);
+  const maxLane = Math.max(...lanes);
+  const width = (maxLane - minLane + 1) * LANE_W;
+  const height = tree.tiers * TIER_H;
+  const pos = (n: SkillNode) => ({ x: (n.lane - minLane) * LANE_W + LANE_W / 2, y: (tree.tiers - 1 - n.tier) * TIER_H + TIER_H / 2 });
+  const byId = new Map(tree.nodes.map((n) => [n.id, n]));
+  const selected = byId.get(selectedId) ?? tree.nodes[0]!;
+  const theme = CLASS_THEME[model.localPlayer.classId];
+  const resources = model.hud?.resources ?? 0;
+
   return (
-    <>
-      <h2 className="menu__title">Skills</h2>
-      <p className="muted">Not yet active. The tree below is the planned shape: resources earned in runs will buy permanent operative upgrades here.</p>
-      {SKILL_TREES.map((tree) => {
-        const tiers = Math.max(...tree.nodes.map((n) => n.tier)) + 1;
-        const lanes = Math.max(...tree.nodes.map((n) => n.lane)) + 1;
-        return (
-          <div key={tree.classId} className="skilltree" style={{ gridTemplateColumns: `repeat(${tiers}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${lanes}, auto)` }}>
-            {tree.nodes.map((node) => (
-              <div
-                key={node.id}
-                className={`skillnode skillnode--${node.status}`}
-                style={{ gridColumn: node.tier + 1, gridRow: node.lane + 1 }}
-                title={node.requires.length ? `Requires ${node.requires.join(', ')}` : 'Root'}
-              >
-                <span className="skillnode__name">{node.name}</span>
-                <span className="skillnode__desc">{node.description}</span>
-                <span className="skillnode__cost">{node.cost} · locked</span>
-              </div>
-            ))}
+    <div className="skills" style={{ ['--class-color' as string]: theme.primary }}>
+      <div className="skills__head">
+        <div>
+          <h2 className="menu__title">{tree.title}</h2>
+          <p className="muted">{tree.subtitle}</p>
+        </div>
+        <span className="badge">{resources} resources</span>
+      </div>
+      <p className="skills__note">Design preview — effects are not wired to the simulation yet. Attunements are written by the world you are in.</p>
+      <div className="skills__body">
+        <div className="skilltree__scroll" ref={scrollRef}>
+          <div className="skilltree" style={{ width, height }}>
+            <svg className="skilltree__lines" width={width} height={height} aria-hidden="true">
+              {tree.nodes.flatMap((n) => n.requires.map((req) => {
+                const from = byId.get(req);
+                if (!from) return null;
+                const a = pos(from);
+                const b = pos(n);
+                const midY = (a.y + b.y) / 2;
+                return (
+                  <path
+                    key={`${req}->${n.id}`}
+                    className={`skilltree__line skilltree__line--${n.kind}`}
+                    d={`M ${a.x} ${a.y} C ${a.x} ${midY}, ${b.x} ${midY}, ${b.x} ${b.y}`}
+                  />
+                );
+              }))}
+            </svg>
+            {tree.nodes.map((n) => {
+              const { x, y } = pos(n);
+              const capstone = n.kind === 'class' && n.tier === 5;
+              return (
+                <button
+                  key={n.id}
+                  type="button"
+                  className={`skillnode skillnode--${n.kind} skillnode--${n.status} ${capstone ? 'skillnode--capstone' : ''} ${selected.id === n.id ? 'skillnode--selected' : ''}`}
+                  style={{ left: x, top: y }}
+                  onClick={() => setSelectedId(n.id)}
+                  aria-pressed={selected.id === n.id}
+                  aria-label={`${n.name}: ${n.description}`}
+                >
+                  <span className="skillnode__ring" />
+                  <span className="skillnode__label">{n.name}</span>
+                </button>
+              );
+            })}
           </div>
-        );
-      })}
-    </>
+        </div>
+        <aside className="skilltree__detail">
+          <span className={`skilltree__kind skilltree__kind--${selected.kind}`}>{selected.kind === 'attunement' ? 'World attunement' : selected.kind === 'core' ? 'Operative core' : CLASS_INFO[model.localPlayer.classId].name}</span>
+          <h3 className="skilltree__name">{selected.name}</h3>
+          <p className="skilltree__desc">{selected.description}</p>
+          <dl className="skilltree__meta">
+            <dt>Cost</dt><dd>{selected.cost === 0 ? 'Innate' : `${selected.cost} resources`}</dd>
+            <dt>Tier</dt><dd>{selected.tier === 0 ? 'Root' : selected.tier}</dd>
+            <dt>Requires</dt><dd>{selected.requires.length ? selected.requires.map((r) => byId.get(r)?.name ?? r).join(', ') : '—'}</dd>
+            <dt>State</dt><dd>{selected.status === 'planned' ? 'Locked · not yet active' : 'Active'}</dd>
+          </dl>
+          {selected.effectId && <p className="hint">Engine effect: <code>{selected.effectId}</code></p>}
+        </aside>
+      </div>
+    </div>
   );
 }
