@@ -22,7 +22,11 @@ For a container host, use the production-container commands in the README.
 
 ## Presentation sequence
 
-1. Start at headquarters. Choose a class and enter a display name.
+1. Start at the Stillpoint sanctuary. Walk northwest to the Armory and tap F at a class
+   shrine to attune. The northeast Echo Archive shows device-local records; the southwest
+   Proving Chamber opens solo training; the southeast Observatory focuses the contribution
+   console. Enter a display name in the sidebar. Manual class controls remain available
+   as an accessibility shortcut.
 2. Each player contributes an idea. The host presses **Prepare world**.
 3. Read the creation receipt before entering. State the provenance label aloud:
    **LIVE**, **OFFLINE FIXTURE**, or **FALLBACK FIXTURE**. Unused contributions must remain

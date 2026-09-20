@@ -1,5 +1,29 @@
 # Handoff — Agent A (Fable, `feat/core`)
 
+## Terrain, Custodian finale, and Stillpoint sanctuary — 2026-09-20
+
+- Branch: `devin/1789887155-terrain-boss-sanctuary`; integration commits through `e1e43c2`.
+- Implemented: bounded terrain recipes, deterministic fixtures, attackable barriers with
+  per-room damage persistence, raised crossings, rubble/conduit movement, and snapshot rendering.
+  Three Guardian health phases introduce charges, denser rings, and exposed recovery windows.
+  Final rooms charge three relays under expanding pulses, then discharge the central Anchor.
+  Legacy rooms without relay metadata preserve the old interaction.
+- Implemented: walkable Stillpoint with four class shrines, device-local Archive records,
+  Observatory, training access, and the existing portal/contribution flows. Station actions
+  read authoritative snapshots; the server remains authoritative for class changes.
+- Shared changes are additive: optional recipe terrain, room relay sites, boss phase/recovery,
+  Anchor ritual, snapshot terrain, and UI station state/actions. Registry adds five tile
+  characters. No dependency changes.
+- Verified: typecheck and production build pass. Integrated suite: 282 passed, 6 failed
+  across 30 files. All new tests pass. Existing failures are stale fixtures/mocks:
+  `tests/sim/simulation.test.ts` hardcodes the former HQ pillar; `compactWorld` in
+  `tests/integration/realtime.test.ts` replaces geometry but retains fixture relay sites;
+  `tests/presentation/room-scene.test.ts` lacks Phaser `strokeEllipse` and `fillTriangle`.
+  Existing tests are unchanged pending approval to update that setup without weakening assertions.
+- Mocked: renderer unit tests use Phaser display mocks; no new gameplay stubs.
+- Unverified: live model generation and browser/co-op playthrough of the integrated expansion.
+  Do not merge while the full suite is failing. Demo instructions are in `docs/DEMO.md`.
+
 ## Operator mode + world dressing (Sep 20, early morning)
 
 - **Implemented — operator generation transport (demo-only):** `RELAY_AI_PROVIDER=operator`

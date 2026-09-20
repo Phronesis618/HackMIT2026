@@ -18,6 +18,7 @@ import { drawHostile, drawOperative } from './characters';
 import { hexInt } from './color';
 import { drawAnchorRitual } from './anchorRitual';
 import { collectTerrainTiles, drawTerrain, terrainCaption, type TerrainTile } from './terrain';
+import { drawHeadquartersStations, type HeadquartersStationView } from './headquarters';
 import { drawMotif, drawProp, drawSanctuary, drawVignette } from './drawing';
 import { drawBackdrop, drawFloor, drawLightPools, drawMotes, drawWalls, makeMotes, type Mote } from './environment';
 import { drawFloorDressing, drawOverhead, drawWallDressing, FLOOR_PATTERN, MOTE_STYLE, stencilColors, type MoteStyle } from './dressing';
@@ -69,6 +70,7 @@ export class RoomScene extends Phaser.Scene {
   private terrainView: Phaser.GameObjects.Graphics | null = null;
   private terrainHint: Phaser.GameObjects.Text | null = null;
   private terrainTiles: TerrainTile[] = [];
+  private headquartersStations: HeadquartersStationView | null = null;
   private statusLabels = new Map<string, Phaser.GameObjects.Text>();
   private portalPulse = 0;
   private players = new Map<string, EntityView>();
@@ -136,6 +138,7 @@ export class RoomScene extends Phaser.Scene {
     this.terrainView = null;
     this.terrainHint = null;
     this.terrainTiles = collectTerrainTiles(room);
+    this.headquartersStations = null;
     this.statusLabels.clear();
     this.loreNodesView = null;
     this.loreHint = null;
@@ -217,19 +220,18 @@ export class RoomScene extends Phaser.Scene {
       const exit = room.exits[0];
       drawSanctuary(sanctuary, roomW, roomH, p, exit ? tileToWorld(exit.x, exit.y) : undefined);
       layer.add(sanctuary);
-      layer.add(this.text(roomW - 160, 17, 'CHRONICLE ARCHIVE', {
-        fontFamily: tokens.font.mono, fontSize: '10px', color: tokens.color.warmLamp,
-      }).setOrigin(0.5).setDepth(DEPTH.overlay));
+      this.headquartersStations = drawHeadquartersStations(this, layer, room, this.textResolution);
     }
 
     const props = this.add.graphics().setDepth(DEPTH.propsBehind + 1);
     for (const prop of room.props) {
+      if (opts.headquarters && prop.id.startsWith('hq-station-')) continue;
       const c = tileToWorld(prop.x, prop.y);
       drawProp(props, prop.propId, c.x, c.y, p, art.glowIntensity);
     }
     layer.add(props);
 
-    if (opts.headquarters) this.drawControlsFloorHint(layer, roomW / 2, 7 * TILE_SIZE, p);
+    if (opts.headquarters) this.drawControlsFloorHint(layer, roomW / 2, 11 * TILE_SIZE, p);
 
     this.portalGlow = this.add.graphics().setDepth(DEPTH.floorDecal + 3);
     layer.add(this.portalGlow);
@@ -333,6 +335,7 @@ export class RoomScene extends Phaser.Scene {
     if (!this.art || snapshot.roomId !== this.room?.id) return;
     this.latestSnapshot = snapshot;
     this.localPlayerId = localPlayerId;
+    this.headquartersStations?.update(snapshot, localPlayerId);
 
     const seenPlayers = new Set<string>();
     for (const player of snapshot.players) {
