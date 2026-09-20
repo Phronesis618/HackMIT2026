@@ -242,6 +242,10 @@ full health: a hazard tick that took a sliver off it must not spend the crew's o
 At 0.5: **×2.5**. A Shade one-shots swarmlings and husks from stealth. This promotes the existing
 `first_strike` attunement (`registry.ts:235`, status `planned`) from a skill node to a world law, which
 also means implementing it once serves both.
+The two do **not** multiply: `openingStrikeMul` (`src/sim/effects.ts`) takes the LARGER of the law
+and the attunement, capped at `DEMO_TUNING.openingStrikeMaxMul` (×3) — see docs/TUNING.md. A
+lingering `dash_echo` trail tick is crew damage but not a strike, so it neither takes the bonus nor
+spends it.
 **Touch points:** `damageEnemy` + one boolean on `EnemyRuntime`.
 
 ### Enemies

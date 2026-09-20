@@ -203,7 +203,11 @@ describe('the collapse escape, over terrain', () => {
     const world = floorsWorld('a8-escape', (briefs) => {
       for (const brief of briefs) {
         brief.hazards = true;
-        brief.terrain = { features: ['pits', 'vents', 'canisters', 'cover'], layout: 'gauntlet', density: 'dense', intensity: 0.7 };
+        // All five combat tiles, at the middle of the intensity band rather than the top of it:
+        // A27 made wide enemies real (a Warden or Guardian used to be droppable into geometry it
+        // could never leave, where it stood still and hurt nobody), and five biomes of maximum
+        // terrain on top of that is not a walk out, it is a wipe. Every tile below still appears.
+        brief.terrain = { features: ['pits', 'vents', 'canisters', 'cover'], layout: 'gauntlet', density: 'dense', intensity: 0.4 };
       }
     });
     const sim = createSimulation();
