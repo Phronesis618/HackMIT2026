@@ -118,7 +118,7 @@ export function createGenerationService(options: GenerationServiceOptions): Gene
         onUsage: options.onUsage ?? ((usage) => log(`Provider tokens: input=${usage.inputTokens}, output=${usage.outputTokens}, total=${usage.totalTokens}`)),
       }),
       model, fixtures, log,
-      ...(options.fallbackProvider ? { fallbackProvider: options.fallbackProvider } : {}),
+      ...(options.fallbackProvider ? { fallbackProvider: options.fallbackProvider } : {}), floors: options.floors ?? false,
     })
     : {
       ...fixtureService,

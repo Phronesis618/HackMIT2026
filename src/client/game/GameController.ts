@@ -203,6 +203,11 @@ export class GameController {
           prev.anchor?.state !== hud.anchor?.state ||
           prev.anchor?.progress !== hud.anchor?.progress ||
           prev.ultCharge !== hud.ultCharge ||
+          prev.collapse?.stage !== hud.collapse?.stage ||
+          prev.collapse?.chosenKey !== hud.collapse?.chosenKey ||
+          (prev.collapse?.offer.map((card) => card.votes.join()).join('|') ?? '') !== (hud.collapse?.offer.map((card) => card.votes.join()).join('|') ?? '') ||
+          // A tenth of a second is the collapse clock's precision, and the only reason to re-render it.
+          Math.round((prev.collapse?.remainingMs ?? 0) / 100) !== Math.round((hud.collapse?.remainingMs ?? 0) / 100) ||
           prev.abilityRCooldownMs !== hud.abilityRCooldownMs ||
           (prev.training?.awakeEnemyIds.join(',') ?? '') !== (hud.training?.awakeEnemyIds.join(',') ?? '') ||
           Math.abs(prev.dashCooldownMs - hud.dashCooldownMs) > 40
@@ -501,6 +506,7 @@ function hudFrom(me: PlayerState, snapshot: GameSnapshot): NonNullable<UiModel['
     anchor: snapshot.anchor,
     ultCharge: Math.round(me.ultCharge ?? 0),
     abilityRCooldownMs: Math.ceil((me.abilityRCooldownMs ?? 0) / 100) * 100,
+    collapse: snapshot.collapse ?? null,
     training:
       snapshot.phase === 'training'
         ? { awakeEnemyIds: snapshot.enemies.filter((e) => e.state !== 'idle' && e.state !== 'dead').map((e) => e.id) }

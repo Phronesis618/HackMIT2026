@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { lazy, Suspense, useCallback, useState } from 'react';
 import type { UiActions } from '../../shared/ui';
 import type { UiStore } from '../game/uiStore';
 import { HeadquartersPanel } from './HeadquartersPanel';
@@ -10,11 +10,14 @@ import { ProvenanceBadge } from './ProvenanceBadge';
 import { shouldShowStart, StartScreen } from './StartScreen';
 import { useUiModel } from './useUiModel';
 import { WorldPanel } from './WorldPanel';
-import { DebriefPanel } from './DebriefPanel';
 import { AbilityBar } from './AbilityBar';
 import { GameMenu } from './GameMenu';
 import { HeadquartersPrompt, HeadquartersStationPanel } from './HeadquartersStations';
+import { EscapeTimer } from './EscapeTimer';
+import { RelicChoice } from './RelicChoice';
 import { FloorsHud } from './FloorsHud';
+
+const DebriefPanel = lazy(() => import('./DebriefPanel').then((m) => ({ default: m.DebriefPanel })));
 
 export interface AppProps {
   store: UiStore;
@@ -77,6 +80,8 @@ export function App({ store, actions, onStageReady }: AppProps) {
             {inRun && <PartyPlate model={model} />}
             {inRun && <Hud model={model} actions={actions} />}
             {!inRun && <GenerationOverlay model={model} actions={actions} />}
+          {inRun && <EscapeTimer model={model} />}
+          {inRun && <RelicChoice model={model} />}
             <FloorsHud model={model} actions={actions} />
             {atHq && <HeadquartersPrompt model={model} actions={actions} />}
           </section>
@@ -87,7 +92,7 @@ export function App({ store, actions, onStageReady }: AppProps) {
             {inRun && <RunStatus model={model} />}
             {atHq && <HeadquartersStationPanel model={model} actions={actions} />}
             {atHq && <HeadquartersPanel model={model} actions={actions} />}
-            {model.phase === 'debrief' && <DebriefPanel model={model} actions={actions} />}
+            {model.phase === 'debrief' && <Suspense fallback={null}><DebriefPanel model={model} actions={actions} /></Suspense>}
             {model.world && <WorldPanel world={model.world} discoveredLore={model.discoveredLore} compact={inRun} />}
             <MemoryBrief memories={model.memories} />
           </div>
