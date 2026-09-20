@@ -72,6 +72,7 @@ const THEME_LAWS: Record<string, [WorldLawId, WorldLawId]> = {
   archive: ['long_echo', 'committed_strike'], swamp: ['tidal_drag', 'the_many'], clockwork: ['committed_strike', 'few_and_terrible'],
   crystal: ['glass_lattice', 'first_light'], storm: ['thin_air', 'first_light'], cathedral: ['long_echo', 'first_light'],
   festival: ['thin_air', 'the_many'],
+  hive: ['the_many', 'long_echo'], wasteland: ['few_and_terrible', 'committed_strike'], frontier: ['first_light', 'committed_strike'],
 };
 const LAW_VOICE: Record<WorldLawId, { noun: string; line: string }> = {
   thin_air: { noun: 'Thin Air', line: 'Thin air over the {word}: a dash carries 65% farther and its cooldown runs 25% longer.' },

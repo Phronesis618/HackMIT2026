@@ -12,7 +12,8 @@ import { compileWorldRecipe, createGenerationService } from '../../src/server/ge
 import { GenerationFailure, type RecipeProvider } from '../../src/server/generation/provider';
 import { parseWorldPrefix } from '../../src/client/transport/worldProviders';
 import { BiomeBriefListSchema } from '../../src/shared/floors';
-import { lintRecipeText } from '../../src/shared/prose';
+import { lintProse, lintRecipeText } from '../../src/shared/prose';
+import { REMAINS_TEMPLATES, THEMES } from '../../src/server/composer/themes';
 import { floorsSeedFor, upgradeToFloors } from '../../src/shared/floorgen';
 
 const fixturesDir = path.resolve(__dirname, '../../fixtures/worlds');
@@ -163,6 +164,30 @@ describe('composeWorld', () => {
       expect(hard, `${prompt} -> ${hard.join(' | ')}`).toEqual([]);
       expect(lint.score).toBeLessThan(30);
     }
+  });
+
+  it('every authored theme string passes the house linter\'s hard rules in its own kind', () => {
+    const fill = (text: string) => text.replace(/\{word\}/g, 'lantern').replace(/\{flavor\}/g, 'in the hold');
+    const hard: string[] = [];
+    const check = (label: string, text: string, kind: Parameters<typeof lintProse>[1]['kind']) => {
+      const issues = lintProse(fill(text), { kind }).issues.filter((i) => i.severity === 'hard');
+      if (issues.length) hard.push(`${label}: ${issues.map((i) => i.rule).join(',')}`);
+    };
+    for (const theme of THEMES) {
+      theme.taglines.forEach((t, i) => check(`${theme.id}.tagline[${i}]`, t, 'tagline'));
+      check(`${theme.id}.summary`, theme.summary, 'themeSummary');
+      for (const role of ['entry', 'mid', 'final'] as const) {
+        theme.rooms[role].names.forEach((t, i) => check(`${theme.id}.${role}.name[${i}]`, t, 'roomName'));
+        theme.rooms[role].descriptions.forEach((t, i) => check(`${theme.id}.${role}.desc[${i}]`, t, 'roomLine'));
+      }
+      theme.relics.forEach((l, i) => { check(`${theme.id}.relic[${i}].title`, l.title, 'loreTitle'); check(`${theme.id}.relic[${i}].source`, l.source, 'loreSource'); check(`${theme.id}.relic[${i}].text`, l.text, 'relic'); });
+      theme.attunements.forEach((a, i) => { check(`${theme.id}.attune[${i}].name`, a.name, 'boonName'); check(`${theme.id}.attune[${i}].desc`, a.description, 'boonDescription'); });
+    }
+    for (const [enemy, list] of Object.entries(REMAINS_TEMPLATES)) {
+      list.forEach((l, i) => { check(`remains.${enemy}[${i}].title`, l.title, 'loreTitle'); check(`remains.${enemy}[${i}].source`, l.source, 'loreSource'); check(`remains.${enemy}[${i}].text`, l.text, 'remains'); });
+    }
+    expect(hard).toEqual([]);
+    expect(THEMES.length).toBeGreaterThanOrEqual(19);
   });
 
   it('produces distinct worlds across many different ideas', () => {
