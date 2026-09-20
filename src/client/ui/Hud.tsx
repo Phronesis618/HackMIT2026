@@ -1,4 +1,5 @@
 import type { UiActions, UiModel } from '../../shared/ui';
+import { anchorInstruction } from '../../shared/finale';
 
 /**
  * In-the-moment prompts only, overlaid on the canvas. Everything explanatory (abilities,
@@ -13,10 +14,7 @@ export function Hud({ model }: { model: UiModel; actions: UiActions }) {
   const critical = !down && hp / hud.maxHp <= 0.25;
   const anchor = hud.anchor;
   const anchorPrompt = !anchor ? null
-    : anchor.state === 'planted' ? 'Anchor secured'
-      : hud.enemiesRemaining > 0 ? null
-        : anchor.state === 'planting' ? `Planting Anchor · ${Math.floor(anchor.progress * 100)}%`
-          : 'Hold F at the Anchor to secure this world';
+    : hud.enemiesRemaining > 0 ? null : anchorInstruction(anchor, hud.roomCleared === true);
   return (
     <div className="hud-strip" aria-live="polite">
       {/* Visible Integrity bar lives in-world, above the room (RoomScene); this stays for screen readers. */}

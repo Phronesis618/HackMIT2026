@@ -230,6 +230,7 @@ export const RoomSpecSchema = z
     isFinal: z.boolean(),
     attributions: z.array(AttributionSchema).max(24),
     relics: z.array(RoomRelicSchema).max(6).default([]),
+    anchorRelays: z.array(z.object({ x: TileCoord, y: TileCoord })).length(3).optional(),
   })
   .superRefine((room, ctx) => {
     if (room.tiles.length !== room.height) {
@@ -287,6 +288,15 @@ export const RoomSpecSchema = z
     for (const r of room.relics) {
       if (!inBounds(r.x, r.y)) ctx.addIssue({ code: 'custom', message: `relic ${r.id} out of bounds` });
       else if (!walkable(r.x, r.y)) ctx.addIssue({ code: 'custom', message: `relic ${r.id} is placed on a wall/void tile` });
+    }
+    if (room.anchorRelays) {
+      const unique = new Set(room.anchorRelays.map((relay) => `${relay.x},${relay.y}`));
+      if (!room.isFinal || unique.size !== 3) ctx.addIssue({ code: 'custom', message: 'Anchor relays require three distinct sites in the final room' });
+      for (const relay of room.anchorRelays) {
+        if (!inBounds(relay.x, relay.y) || !walkable(relay.x, relay.y) || room.tiles[relay.y]?.[relay.x] === '~') {
+          ctx.addIssue({ code: 'custom', message: 'Anchor relay must be on safe walkable ground' });
+        }
+      }
     }
   });
 export type RoomSpec = z.infer<typeof RoomSpecSchema>;
@@ -536,6 +546,8 @@ export const EnemyStateSchema = z.object({
   slowMs: z.number().nonnegative().optional(),
   stunMs: z.number().nonnegative().optional(),
   markMs: z.number().nonnegative().optional(),
+  bossPhase: z.number().int().min(1).max(3).optional(),
+  recoveryMs: z.number().nonnegative().optional(),
 });
 export type EnemyState = z.infer<typeof EnemyStateSchema>;
 
@@ -559,6 +571,14 @@ export const AnchorStateSchema = z.object({
   y: z.number(),
   state: z.enum(['dormant', 'planting', 'planted']),
   progress: z.number().min(0).max(1),
+  ritual: z.object({
+    stage: z.enum(['locked', 'relays', 'core', 'discharging', 'complete']),
+    relays: z.array(z.object({ x: z.number(), y: z.number(), activated: z.boolean() })).length(3),
+    activeRelay: z.number().int().min(0).max(3),
+    pulseRadius: z.number().nonnegative(),
+    pulseWarningMs: z.number().nonnegative(),
+    dischargeMs: z.number().nonnegative(),
+  }).optional(),
 });
 export type AnchorState = z.infer<typeof AnchorStateSchema>;
 
