@@ -27,6 +27,8 @@ import { fileURLToPath } from 'node:url';
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..');
 const PLAYWRIGHT_SPEC = 'playwright@1.61';
+/** A Chromium already on the machine (boxes that cannot reach the Playwright CDN); skips `playwright install`. */
+const CHROMIUM_PATH = process.env.RELAY_CHROMIUM_PATH || null;
 // Co-op needs real frame rates: the client drops input when a frame takes > 250 ms, and N software-GL
 // (SwiftShader) pages on a busy machine run at 2–6 fps. On macOS headless Chromium can use the real GPU
 // through ANGLE/Metal (~40+ fps); elsewhere fall back to shot.mjs's SwiftShader flags (--gl swiftshader).
@@ -106,7 +108,7 @@ async function ensurePlaywright(depsDir) {
     await execInherit('npm', ['install', PLAYWRIGHT_SPEC, '--no-audit', '--no-fund'], { cwd: depsDir });
   }
   const marker = path.join(depsDir, '.chromium-installed');
-  if (!fs.existsSync(marker)) {
+  if (!CHROMIUM_PATH && !fs.existsSync(marker)) {
     await execInherit('npx', ['-y', PLAYWRIGHT_SPEC, 'install', 'chromium'], { cwd: depsDir });
     await fs.promises.writeFile(marker, new Date().toISOString());
   }
@@ -505,10 +507,14 @@ async function prepareWorld(host, everyone) {
 }
 
 /** HUB.md §7: the gate opens only once every connected operative stands at it, so the crew gathers first. */
-async function enterByWalkingOntoPortal(host, everyone) {
-  await Promise.all(everyone.filter((p) => p !== host).map((p) => walkTo(p, centre({ col: 15, row: 17 }), {
+async function gatherAtGate(players) {
+  await Promise.all(players.map((p) => walkTo(p, centre({ col: 15, row: 17 }), {
     hq: true, arriveDist: 12, timeoutMs: 15000, until: (s) => s.snap.players.find((q) => q.id === s.id)?.ready === true,
   })));
+}
+
+async function enterByWalkingOntoPortal(host, everyone) {
+  await gatherAtGate(everyone.filter((p) => p !== host));
   await walkTo(host, centre({ col: 15, row: 18 }), { hq: true, arriveDist: 4, timeoutMs: 15000, until: (s) => s.snap.phase === 'expedition' });
   return Promise.all(everyone.map((p) => waitFor(async () => {
     const s = await p.read();
@@ -862,7 +868,9 @@ async function startRun(ctx, tag) {
   if (s.snap.phase !== 'headquarters') throw new Error(`startRun: expected headquarters, got ${s.snap.phase}`);
   await prepareWorld(alice, pair);
   await sleep(400);
-  await alice.page.getByRole('button', { name: /^Enter portal/ }).click();
+  await gatherAtGate(pair);
+  // A host already standing on the gate tile departs the moment the last seat arrives (§7).
+  if ((await alice.read()).snap.phase === 'headquarters') await alice.page.getByRole('button', { name: /^Enter portal/ }).first().click();
   await alice.focusStage();
   await Promise.all(pair.map((p) => waitFor(async () => ((await p.read()).ui.phase === 'expedition'), { timeoutMs: 8000, label: `${p.name} expedition (${tag})` })));
   await sleep(1000);
@@ -1146,7 +1154,9 @@ async function main() {
 
   await servers.start();
   const playwright = await ensurePlaywright(args.depsDir);
-  const browser = await playwright.chromium.launch({ headless: true, args: GL_ARGS[args.gl] ?? GL_ARGS.swiftshader });
+  const browser = await playwright.chromium.launch({
+    headless: true, args: GL_ARGS[args.gl] ?? GL_ARGS.swiftshader, ...(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {}),
+  });
   const report = new Report(args.outDir);
   const all = [];
   const ctx = {
