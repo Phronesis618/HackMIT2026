@@ -713,14 +713,14 @@
           "tell": "COUNTERWEIGHT DROPS DOWN THE LANE. STEP ONE TILE ASIDE."
         },
         {
-          "patternId": "sweep_arc",
-          "name": "Trunk 4",
-          "tell": "TRUNK 4 SWINGS ROUND THE DRUM. STAND CLOSE OR WALK WITH IT."
+          "patternId": "ring_bloom",
+          "name": "Handrail current",
+          "tell": "12 BOLTS OFF THE HANDRAILS, THEN 12 MORE. DASH A GAP."
         },
         {
-          "patternId": "pylon_lock",
-          "name": "Platform 3 barriers",
-          "tell": "BARRIERS DROP. LEAVE THE SIGNAL LAMP'S WEDGE."
+          "patternId": "gravity_well",
+          "name": "Trunk 4",
+          "tell": "TRUNK 4 WINDS ON. THE FLOOR SLIDES TO THE DRUM FOR 2 S."
         }
       ]
     }

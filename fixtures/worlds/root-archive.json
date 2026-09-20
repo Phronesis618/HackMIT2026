@@ -722,9 +722,9 @@
           "tell": "SEED JARS BURST FROM THE DOOR, 12 A RING. DASH THE GAP."
         },
         {
-          "patternId": "summon_choir",
-          "name": "Closing bell",
-          "tell": "CLOSING BELL. PATRONS RISE FROM 4 SEATS. HIT THE DOOR NOW."
+          "patternId": "gravity_well",
+          "name": "Root draw",
+          "tell": "THE ROOT DRINKS. THE FLOOR PULLS TO THE DOOR FOR 2 S."
         }
       ]
     }

@@ -706,11 +706,6 @@
       ],
       "moves": [
         {
-          "patternId": "shatter_step",
-          "name": "Lens mount",
-          "tell": "THE LENS MOUNT SWINGS TO THE MARK. WALK OFF IT."
-        },
-        {
           "patternId": "sweep_arc",
           "name": "The 4-metre lens",
           "tell": "THE BEAM CROSSES BERTH 2 LEFT TO RIGHT. GET INSIDE ITS ARC."
@@ -719,6 +714,11 @@
           "patternId": "arena_flood",
           "name": "Sluice 2 brine",
           "tell": "SLUICE 2 OPENS. THE MARKED SALT BOILS IN 3."
+        },
+        {
+          "patternId": "shatter_step",
+          "name": "Lens mount",
+          "tell": "THE LENS MOUNT SWINGS TO THE MARK. WALK OFF IT."
         }
       ]
     }

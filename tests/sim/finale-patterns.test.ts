@@ -20,7 +20,10 @@ import { createSimulation, type Simulation } from '../../src/sim';
 import { createCustodianRuntime, custodianPhase, type BossContext } from '../../src/sim/boss';
 import { fightCustodian } from './finaleBot';
 
-const fixture = WorldFixtureSchema.parse(fixtureJson);
+// These tests exercise the sim's own derivation (seeded patterns, default names, offline laws),
+// so the fixture's authored laws / look / custodian are stripped here.
+const { laws: _laws, look: _look, custodian: _custodian, ...bareRecipe } = WorldFixtureSchema.parse(fixtureJson).recipe;
+const fixture = { ...WorldFixtureSchema.parse(fixtureJson), recipe: bareRecipe };
 const relays = [{ x: 5, y: 3 }, { x: 16, y: 3 }, { x: 17, y: 11 }];
 const pool = ['husk', 'sentinel', 'lurker'] as const;
 
