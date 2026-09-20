@@ -373,8 +373,17 @@ function headquartersRoom() {
     if ((x === 11 || x === 19) && y > 13 && y !== 15 && y !== 16) return '#';
     return '.';
   }).join(''));
-  const stations = [[4, 3], [8, 3], [4, 7], [8, 7], [24, 4], [24, 16], [5, 16]];
-  const props = [...stations.map(([x, y]) => ({ propId: 'terminal', x, y })), { propId: 'pillar', x: 13, y: 3 }, { propId: 'pillar', x: 17, y: 3 }, { propId: 'monolith_shard', x: 27, y: 6 }];
+  // Keep these in step with src/shared/headquarters.ts and src/sim/headquarters.ts — every
+  // station that is not in HEADQUARTERS_PROPLESS_STATIONS (portal, relics, quartermaster) puts a
+  // blocking `terminal` on its tile, and the relic shelf's five brackets are 1x2 `monolith_shard`.
+  // tests/presentation/coop-harness-hub.test.ts fails if this list drifts from the real room.
+  const stations = [[4, 3], [8, 3], [4, 7], [8, 7], [24, 4], [24, 8], [24, 16], [5, 16]];
+  const relicBrackets = [[12, 1], [13, 1], [14, 1], [16, 1], [17, 1]];
+  const props = [
+    ...stations.map(([x, y]) => ({ propId: 'terminal', x, y })),
+    ...relicBrackets.map(([x, y]) => ({ propId: 'monolith_shard', x, y })),
+    { propId: 'pillar', x: 13, y: 3 }, { propId: 'pillar', x: 17, y: 3 }, { propId: 'monolith_shard', x: 27, y: 6 },
+  ];
   return { width, height, tiles, props, exits: [{ x: 15, y: 18 }] };
 }
 const HQ_SHRINES = { bastion: [4, 3], shade: [8, 3], beacon: [4, 7], weaver: [8, 7] };

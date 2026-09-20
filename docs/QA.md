@@ -96,7 +96,7 @@ Reached with the repo's own deep-link `?world=fixture&room=2&laws=1`, and again 
 - [x] **Phase 3** reached both times.
 - [x] **The relay ritual** — `relays#0 → relays#1 → relays#2 → core#3 → discharging#3`, in order,
       in **10 s**, anchor state `planted`.
-- [x] **The collapse escape and the hub afterwards — observed. Carry-one-relic — still not.**
+- [x] **The collapse escape, the carry-one-relic choice and the hub afterwards — all observed.**
       At tier 4 (`--only floorsend --tier 4 --tier-at exit`, four cold runs) the whole chain
       rendered for the first time: the world's own Custodian (`Adjei, the Seed Vault door`, 1200
       HP, all three phase titles, patterns `siege_charge` / `ring_bloom` / `gravity_well`, down in
@@ -108,12 +108,22 @@ Reached with the repo's own deep-link `?world=fixture&room=2&laws=1`, and again 
       run's own words, `Return to headquarters` worked, and the hub came back with 15 memories, the
       relic shelf, the quartermaster and the records station drawn
       (`/tmp/relay-shots/q2/ending-b/26-hub-after-run.png`).
-      **Not observed: extraction, and therefore the relic choice.** All four runs ended
-      `stranded` — and *not one ran out of clock*; they used 15–17 % of it and died fighting.
-      Why that is not a verdict on the game is in the next box.
+      **And one run of six went all the way out.** Run `d` (bastion, `vantage-spire`,
+      `b7-winch-house-40`): Custodian down in **16 s** at lowest integrity 62/100, ritual in
+      **11 s**, then the collapse walked in **9 room hops in 24 s of a 216 s budget — 11 % of the
+      clock, hazard rings never past 0/3, integrity 50 → 50, no damage taken on the way out**. It
+      reached **`extraction`** (`Clear of the collapse`), was offered **three relic cards derived
+      from its own run** — *Brake lever, Winch House 40* / *Cage belt, size M* / *Marshal's load
+      rig*, each `REMAINS YOU RECOVERED` — stood on a pedestal with no key and no button, and the
+      choice locked (`chosen = remains:9`). The debrief read *"Operative-601 **returned with the
+      world anchored**. Deepest point: Winch House 40, tier 5 of 5, 11 rooms in."*
+      (`/tmp/relay-shots/q2/ending-d/23-escape.png`, `24-relic-choice.png`, `25-debrief.png`).
+      The other five runs ended `stranded` — and *not one of any of them ran out of clock*; they
+      used 11–17 % of it and died fighting. Why that is not a verdict on the game is in the next
+      box.
 
-- [ ] **Is the escape fair for a human? Still not shown — and the new evidence is harder than
-      the game, not easier.** The budget is `clamp(45 s + 15 s/hop, 60 s, 180 s) × 1.2` solo —
+- [ ] **Is the escape fair for a human? Walkable — observed once — but the odds are still not
+      measured, and the new evidence is harder than the game, not easier.** The budget is `clamp(45 s + 15 s/hop, 60 s, 180 s) × 1.2` solo —
       **72–216 s**; every door opens; a hazard ring closes one tile in from the walls every 25 s,
       capped at 3; a solo operative gets one free last stand at 25 HP. Terrain is the shipped
       `DEFAULT_TERRAIN_INTENSITY = 0.5` and is not re-rolled. The bot walked it in a sixth of the
@@ -123,7 +133,8 @@ Reached with the repo's own deep-link `?world=fixture&room=2&laws=1`, and again 
       at `tierMultiplier(4) = 1.72×`, under `long_dark` (vision 206 px). A crew that had walked
       the route would be retreating through rooms it had emptied, with the upgrades those rooms
       paid for. So: the escape **works**; whether it is winnable is still open, and the number
-      here is a floor well below the real one.
+      here is a floor well below the real one. The one run that got out is the one whose Custodian
+      fight left it at **62** integrity instead of 17–29; after that the walk home cost it nothing.
 
 ## Solo survivability, first five rooms, authored laws ON
 
@@ -173,13 +184,17 @@ better than it. It is still the only end-to-end number anyone has.
 
 ## Legacy mode, flags OFF
 
-- [ ] Hub → three rooms → Guardian → ritual → debrief, solo, one class. **Still unverified.**
-      Q2 ran `--legacy --only legacy` and it got as far as `L3` (the hub boots with the flags off,
-      a three-room legacy world with an honest receipt, and the gate starts the run — all PASS)
-      before the group **aborted on a harness bug**: `player.read()` returns `null` while the page
-      is mid-navigation and `groupLegacy` dereferenced it (`Cannot read properties of null`). The
-      null guard is fixed on this branch (commit `13068b7`); the re-run did not fit in the window.
-      Co-op still covers the same path with two players and is observed: `docs/QA_COOP.md`, 7c.
+- [x] **Hub → three rooms → Guardian → ritual → debrief, solo. Observed**, `--legacy --only
+      legacy --class bastion`, **4/4** (`/tmp/relay-shots/q2/legacy2/`). `/api/config` reported
+      `floors:false, laws:false` and the client adopted it; the world was a three-room legacy world
+      (`floors=false`) prepared in **0.2 s** with an `OFFLINE FIXTURE` badge and an honest
+      `recorded · not used in this world` receipt; the gate started the run in **1.4 s**; the bot
+      walked to **room index 2**, fought the Guardian through **phases 1 and 3**, and completed the
+      ritual `relays#0 → relays#1 → relays#2 → core#3 → discharging#3` into the debrief. No
+      collapse, as expected — the 3-room fixtures give the final arena no door out.
+      The first attempt at this **aborted on a harness bug**: `player.read()` returns `null` while
+      the page is mid-navigation and `groupLegacy` dereferenced it. Fixed on this branch
+      (commit `13068b7`); the run above is the re-run.
 
 ## Co-op (`scripts/coop-e2e.mjs`)
 
@@ -289,9 +304,9 @@ legacy fixtures and the Pages build are still fine. Measured against those:
 | --- | --- |
 | No crash, no console errors, no desync | **Met.** Zero uncaught page errors and zero `console.error` lines across every solo run; co-op 24/24 with flags off. |
 | No softlock | **Met as far as anyone got.** Nothing ever hung; the one run that ended early ended in a legitimate death with a correct debrief. |
-| Step 1 *completes* | **Q1: not met. Q2: most of the way.** The Custodian, the ritual, the collapse and the hub afterwards have now all been rendered at tier 4 — but reached by a DEV deep link, not by play, and the run ended `stranded`, so **extraction and the relic choice are still undrawn**. |
+| Step 1 *completes* | **Q1: not met. Q2: met once, from a deep link.** One run of six played the whole ending — Custodian, ritual, collapse, extraction, relic choice, debrief, hub. It was *positioned* at tier 4 by a DEV deep link rather than walking there, and five of six runs died on the way out under conditions the deep link makes harder than the game. |
 | First room within 60 s live | **Met.** Q2 measured one live world: Prepare → portal-ready in **49.2 s**, `LIVE · claude-sonnet-4-6`, contribution attributed. |
-| Legacy and Pages still fine | **Pages: yes** (Q1). **Production bundle: yes** (Q2 — 9/9 solo, 5/5 co-op over WebSocket). **Legacy solo: still not re-run** — Q2's attempt hit a harness null-dereference, now fixed. |
+| Legacy and Pages still fine | **Met.** Pages: yes (Q1). Production bundle: yes (Q2 — 9/9 solo, 5/5 co-op over WebSocket). Legacy solo: yes (Q2 — 4/4, Guardian and ritual played). |
 
 The argument for flipping is real: everything observed of floors is good. The hub, the receipt,
 the departure ritual, sealing doors, the minimap and hold-`M` map, five room kinds, terrain tiles,
@@ -318,23 +333,26 @@ they were a time budget short, not a blocker.
 The live half is now **done**: 49.2 s to portal-ready, honestly labelled. The floors half is
 **partly** done, and the precise wording matters, so here it is without hedging:
 
-> **A floors run has been played to its ending in a browser on `56be6a0`** — the tier-4 Custodian,
-> the three-relay ritual, the collapse starting and the walk home through terrain, the debrief and
-> the hub afterwards were all rendered and driven with real input. **The last step was not
-> reached:** the operative was `stranded` in all four runs, so the extraction and the
-> carry-one-relic choice have still never been drawn. The run was **positioned** by a DEV-only
-> deep link (`?tier=4&at=exit`), not walked there, and that deep link makes the ending *harder*
-> than the game (no attunements, uncleared rooms on the way out).
+> **A floors run has been played to its ending in a browser on `56be6a0`** — the tier-4 Custodian
+> through all three phases, the three-relay ritual, the collapse, the walk home through terrain,
+> **the extraction, the carry-one-relic choice**, the "returned with the world anchored" debrief
+> and the hub afterwards, all rendered and driven with real input. The run was **positioned** by a
+> DEV-only deep link (`?tier=4&at=exit`), not walked there, and that deep link makes the ending
+> *harder* than the game, not easier (no attunements, uncleared rooms on the way out). One run in
+> six got out; the other five died fighting, never short of clock.
 
 > Turning floors + laws on by default is `RELAY_FLOORS=1 RELAY_LAWS=1` (server) or
 > `?floors=1&laws=1` (client) — **left to the team.** Q2 changed no defaults.
 
-Q2's own read, offered and not acted on: this is better evidence than Q1 had and still short of
-the bar Q1 set. Nothing in four tier-4 runs hung, crashed, logged an error or left a state the
-player could not leave — every failure was a death, handled correctly to the hub. The remaining
-risk is not a crash; it is a judge who beats the Custodian and then does not get out, and sees a
-`stranded` debrief instead of the relic. That is a *design* edge at tier 4, and it is the one
-thing nobody has measured with a real player's upgrades.
+Q2's own read, offered and not acted on: **the bar Q1 set has now been cleared on the letter of
+it** — the ending has been played, and one live world reached the portal in 49.2 s. Nothing in six
+tier-4 runs hung, crashed, logged an error or left a state a player could not leave; every failure
+was a death, handled correctly all the way to the hub. What has *not* been cleared is the spirit
+of it: the winning run was 1 of 6, from a position no player reaches, so **how hard the ending is
+for a real player with a real route's upgrades is still unmeasured**. The residual risk is not a
+crash — it is a judge who beats the Custodian, does not get out, and sees a `stranded` debrief
+instead of a relic. That is a tuning question, and a tuning edit hours before a demo would be a
+guess dressed as a fix.
 
 ## Known limits of the harness itself
 
@@ -345,10 +363,12 @@ thing nobody has measured with a real player's upgrades.
   real room from `session.sim.getRoom()` instead and has no replica to drift.
 - **Fixed on `qa/fullrun`:** `groupLegacy` dereferenced a null `player.read()` and aborted the
   whole group; `coop-e2e.mjs` now appends `&debug=1` so it can drive a production bundle.
-- **Still open (Q2, not fixed — no time):** `coop-e2e.mjs`'s `headquartersRoom()` replica is still
-  missing the five `monolith_shard` relic brackets and the `records` station, so its BFS walks
-  through solid props. Repro: compare `headquartersRoom()` in the script with
-  `src/sim/headquarters.ts`.
+- **Fixed on `qa/fullrun`:** `coop-e2e.mjs`'s `headquartersRoom()` replica was missing the five
+  `monolith_shard` relic brackets on the north wall and the `records` station at (24, 8), so its
+  BFS walked through solid props. Both are back, and
+  `tests/presentation/coop-harness-hub.test.ts` is now a tripwire: it reads the harness as text
+  and fails if the tiles the replica blocks stop matching the tiles `headquartersRoom` blocks, so
+  the next prop added to the hub cannot drift silently.
 - **Still open (Q2):** checkpoint `F8` reads the hub's *station panels*, which only open when an
   operative stands next to a station; the bot returns to the middle of the hub and reads
   immediately, so F8 fails on a hub that is in fact correct. Fix: walk to the quartermaster and the
