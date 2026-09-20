@@ -424,7 +424,7 @@ body {
   margin: 0;
   color: var(--color-mist100);
 }
-/* Codex: discovered lore only; undiscovered entries stay ???. */
+/* Codex: discovered lore only; an undiscovered entry reads "Not found yet" and its kind. */
 .codex {
   margin-top: var(--space-sm);
 }
@@ -2172,7 +2172,10 @@ body { font-size: var(--fs-body); }
 .rail-top:not(:has(.hud-minimap-slot > :not(.hud-minimap-slot__placeholder))) { grid-template-columns: minmax(0, 1fr); }
 .rail-top:not(:has(.hud-minimap-slot > :not(.hud-minimap-slot__placeholder))) .hud-minimap-slot { display: none; }
 .rail-top:not(:has(.hud-minimap-slot > :not(.hud-minimap-slot__placeholder))) .rail-stats { grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
-.side__scroll { mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent); padding-bottom: var(--space-sm); }
+/* Sign-off: the fade is 16px deep and the last panel's bottom border sat inside it, so the
+   Memory Wall read as clipped by the fixed "Tab · menu" key below. Give the scroller a
+   bottom pad deeper than the fade (and as tall as that key) so the last border lands clear. */
+.side__scroll { mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent); padding-bottom: 32px; }
 .memory-brief__open { display: inline; margin: 0 0 0 var(--space-xs); }
 .world-brief .tagline { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 /* D4. The world brief's meta ran on and wrapped raggedly around the floated Codex link.

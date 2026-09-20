@@ -346,11 +346,11 @@ export class RoomScene extends Phaser.Scene {
     layer.add(this.terrainHint);
     // A DM-style beat on arrival: the room's mood in its own words, then it fades out.
     // U2a: it used to sit at 30% of the room's height — on top of the spawn, so it landed
-    // across the operative and their name label. It now hangs just inside the room's top
-    // edge, above everything that stands on the floor, with an opaque plane behind it.
+    // across the operative and their name label. It then hung at y=14, which covered the
+    // top wall run. Sign-off: clear the border wall (one tile) and sit on the floor below it.
     if (room.description && !opts.headquarters) {
       const descriptionCard = this
-        .text(roomW / 2, 14, room.description, {
+        .text(roomW / 2, TILE_SIZE + 6, room.description, {
           fontFamily: tokens.font.body, fontSize: '11px', color: p.text, align: 'center',
           wordWrap: { width: Math.min(roomW - 64, 460) },
           backgroundColor: 'rgba(5, 7, 12, 0.88)',
