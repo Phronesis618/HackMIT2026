@@ -63,6 +63,7 @@ export class RoomScene extends Phaser.Scene {
   private roomLayer: Phaser.GameObjects.Layer | null = null;
   private portalGlow: Phaser.GameObjects.Graphics | null = null;
   private telegraphs: Phaser.GameObjects.Graphics | null = null;
+  private telegraphClip: Phaser.GameObjects.Graphics | null = null;
   private motesGfx: Phaser.GameObjects.Graphics | null = null;
   private motes: Mote[] = [];
   private moteStyle: MoteStyle = 'sparks';
@@ -163,6 +164,8 @@ export class RoomScene extends Phaser.Scene {
     this.roomLayer?.destroy(true);
     this.portalGlow = null;
     this.telegraphs = null;
+    this.telegraphClip?.destroy();
+    this.telegraphClip = null;
     this.motesGfx = null;
     this.anchorView?.destroy();
     this.anchorView = null;
@@ -301,6 +304,9 @@ export class RoomScene extends Phaser.Scene {
     // Under `long_dark` telegraphs draw above the dark: danger is never hidden by a law.
     this.telegraphs = this.add.graphics().setDepth(this.lightRadius !== null ? DEPTH.entities - 1.5 : DEPTH.floorDecal + 4);
     layer.add(this.telegraphs);
+    // A wind-up's range can reach past the walls; clip it to the room so no band hangs in the void.
+    this.telegraphClip = this.make.graphics({}, false).fillStyle(0xffffff).fillRect(0, 0, roomW, roomH);
+    this.telegraphs.setMask(this.telegraphClip.createGeometryMask());
     this.projectilesView = this.add.graphics().setDepth(DEPTH.effects - 1);
     layer.add(this.projectilesView);
     // Under the entities: the trail is on the floor, and it must not hide what is standing in it.
