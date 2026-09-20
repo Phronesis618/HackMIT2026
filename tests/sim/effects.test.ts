@@ -249,9 +249,11 @@ describe('attunement effects in the simulation', () => {
 
   it('hazard_ward: a hazard floor burns for 40% less', () => {
     const ids: AttunementEffectId[] = ['hazard_ward'];
-    const rooms = [{ hazard: [[6, 7], [7, 7], [8, 7]] as Array<[number, number]> }];
+    // Six tiles, not three: at hazardIntervalMs = 600 a walk across three tiles now ends
+    // before the first burn tick, so the band has to be long enough to span one.
+    const rooms = [{ hazard: [[6, 7], [7, 7], [8, 7], [9, 7], [10, 7], [11, 7]] as Array<[number, number]> }];
     const { plain, boosted } = pair(rooms, ids, buyFirst(ids, 'hazard_ward'));
-    const burn = (sim: Simulation) => firstPlayerHit(sim, (e) => e.sourceEnemyId === TERRAIN_DAMAGE_SOURCE.hazard, 600, { moveX: 1 });
+    const burn = (sim: Simulation) => firstPlayerHit(sim, (e) => e.sourceEnemyId === TERRAIN_DAMAGE_SOURCE.hazard, 900, { moveX: 1 });
     const base = burn(plain);
     expect(base).toBeGreaterThan(0);
     expect(burn(boosted)).toBe(Math.round(base * HAZARD_WARD_MUL));
@@ -563,13 +565,13 @@ describe('skill purchases', () => {
    * still carries one flat list — the nodes that count where the crew is standing.
    */
   it('an attunement stays in the world that grew it; the core spine travels with the operative', () => {
-    const rooms: RoomOptions[] = [{ hazard: [[6, 7], [7, 7], [8, 7]] }];
+    const rooms: RoomOptions[] = [{ hazard: [[6, 7], [7, 7], [8, 7], [9, 7], [10, 7], [11, 7]] }];
     const first = world(rooms, attunementsFor(ids));
     // Same recipe, same attunement in the same slot, different world: the ids are identical.
     const second = PreparedWorldSchema.parse({ ...first, worldId: 'effects-world-2' });
     const burn = (sim: Simulation) => {
       sim.enterRoom(PAY_ROOMS);
-      return firstPlayerHit(sim, (e) => e.sourceEnemyId === TERRAIN_DAMAGE_SOURCE.hazard, 600, { moveX: 1 });
+      return firstPlayerHit(sim, (e) => e.sourceEnemyId === TERRAIN_DAMAGE_SOURCE.hazard, 900, { moveX: 1 });
     };
     const sim = createSimulation();
     sim.addPlayer({ id: P1, displayName: P1, classId: 'bastion' });
