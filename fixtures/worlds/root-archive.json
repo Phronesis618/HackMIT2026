@@ -133,9 +133,9 @@
       },
       {
         "kind": "relic",
-        "title": "Delivery slip 4471",
-        "source": "carbon slip pinned to the first Index cabinet",
-        "text": "SLIP 4471. Dry Day 26, 14:10. To: Seed Vault door. From: Index wing. Item: coolant, 20 litres, for the card terminals. Carried by: N. Farrow. Signature: refused. Reason given: \"Order 7. Water does not pass this door in either direction.\" Time of refusal: 14:12. Coolant returned to the Index, 15:00. Slip not closed.",
+        "title": "Note in can 3",
+        "source": "folded paper in an empty 20-litre can, Index wing",
+        "text": "Hal. Dry Day 26. I carried 20 litres of coolant to the Seed Vault door for the Index terminals. Slip 4471. She would not sign. She said: \"Order 7. Water does not pass this door in either direction.\" I carried it back. My arms say it was 20 litres each way. The slip is still open. Is the well any better? N.",
         "roomIndex": 1,
         "enemyId": null,
         "authorIndex": 2,
@@ -163,9 +163,9 @@
       },
       {
         "kind": "relic",
-        "title": "Slip 4490",
-        "source": "carbon slip, pencil, tucked under the ration tank lid",
-        "text": "SLIP 4490. Dry Day 34, 09:00. To: Seed Vault door. From: Well Head, H. Mbeki. Item: well reading, 0 m. Carried by: N. Farrow. Door: grown shut, bark to the lintel. Signature: none. Adjei answered through the door: \"4 degrees. Hold.\" Slip 4471 still open. N.F.",
+        "title": "Note under the tank lid",
+        "source": "pencil on the back of a slip, under the ration tank lid",
+        "text": "Hal. I took your reading to the Seed Vault door on Dry Day 34. 0 m. The door is grown shut. Bark to the lintel. I read it to her through the bark. She said: \"4 degrees. Hold.\" That was all of it. Slip 4471 is still open. I have 6 empty cans. Where do you want them? N.",
         "roomIndex": 2,
         "enemyId": null,
         "authorIndex": 2,
@@ -205,7 +205,7 @@
         "kind": "remains",
         "title": "Bark from the Seed Vault door",
         "source": "slab of bark, 4 cm thick, cold to the touch",
-        "text": "Bark off the Seed Vault door. Farrow logged the door grown shut on Dry Day 34 at 09:00 and the answer through it: \"4 degrees. Hold.\" The bark is 4 degrees on the inside face. The well behind the Well Head read 0 m the same morning.",
+        "text": "Bark off the Seed Vault door. Farrow's note to Mbeki has the door grown shut on Dry Day 34 and the answer through it: \"4 degrees. Hold.\" The bark is 4 degrees on the inside face. The well behind the Well Head read 0 m the same morning.",
         "roomIndex": 0,
         "enemyId": "guardian",
         "authorIndex": 2,
@@ -660,8 +660,8 @@
         },
         {
           "name": "Ngozi Farrow",
-          "document": "delivery slips",
-          "register": "Recipient, item, weight, time, signature. One clause a line. Refusals recorded word for word.",
+          "document": "notes to Hal Mbeki, folded into the empty cans",
+          "register": "Opens Hal. One clause a line. What was said to her, word for word. Ends on one question for him.",
           "never": "writes a sentence with two clauses"
         }
       ],

@@ -58,6 +58,7 @@ export type ProseKind =
 
 export type ProseRule =
   | 'stock-phrase'
+  | 'callout-formula'
   | 'slop-word'
   | 'slop-name'
   | 'not-x-but-y'
@@ -434,6 +435,14 @@ export function lintProse(rawText: string, options: ProseLintOptions): ProseLint
     }
     if (personified && !(personifiedInLast && sentences.length > 1)) {
       add('personified-abstraction', 'warn', personified, `Rule personified-abstraction: "${personified}" gives a mind to a thing. Name the person who did it, or say what the thing physically does.`, 15);
+    }
+
+    // The callout formula ---------------------------------------------------
+    // A warning, not a hard fail: docs/WRITING.md 5.10 still carries one as a worked example.
+    // Blind read, 20 Sept: a third of all generated boss tells were "GET BEHIND THE <noun>".
+    if (options.kind === 'bossCallout') {
+      const formula = /\bget\s+behind\b/i.exec(text);
+      if (formula) add('callout-formula', 'warn', formula[0], 'Rule callout-formula: "GET BEHIND THE ..." is the callout every world reaches for. Say where safety is another way: name the dry floor, the far wall, the side of the machine, or give the countdown.', 8);
     }
 
     // The ominous turn -----------------------------------------------------

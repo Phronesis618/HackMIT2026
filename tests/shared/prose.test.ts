@@ -127,6 +127,12 @@ describe('rules', () => {
   const hard = (text: string, kind: ProseKind, bible?: unknown): string[] =>
     lintProse(text, { kind, bible }).issues.filter((i) => i.severity === 'hard').map((i) => i.rule);
 
+  it('callout-formula: GET BEHIND THE X is flagged on boss callouts only', () => {
+    expect(issueRules('PUMP 6 SPINS UP. GET BEHIND THE CASING.', 'bossCallout')).toContain('callout-formula');
+    expect(issueRules('PUMP 6 SPINS UP. STAND ON THE GRATING.', 'bossCallout')).not.toContain('callout-formula');
+    expect(issueRules('Tarn told the crew to get behind the casing at 03:10.', 'relic')).not.toContain('callout-formula');
+  });
+
   it('stock-phrase is a hard fail', () => {
     expect(hard('The pump is a testament to her stubbornness.', 'relic')).toContain('stock-phrase');
     expect(hard('He could not help but count the crates again.', 'relic')).toContain('stock-phrase');

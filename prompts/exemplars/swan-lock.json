@@ -1,0 +1,433 @@
+{
+  "world": "Swan Lock",
+  "licence": "Written for RELAY by the editor pass, 20 Sept 2026. Original text; no passages copied.",
+  "bible": {
+    "title": "Swan Lock",
+    "premise": "A canal lock with a pub beside it, where salt barges tied up for a night and waited for the water.",
+    "collapse": "On 10 October, after the darts final at the Swan, lock-keeper Kofi Brandt bet landlady Marit Oyelaran 3 pints he could fill the lock in under 9 minutes, opened all 4 paddles on the top gate and went to bed. The pound drained overnight and 17 barges sat down in the mud with their crews aboard.",
+    "people": [
+      {
+        "name": "Kofi Brandt",
+        "job": "lock-keeper",
+        "want": "to win one bet off Marit Oyelaran"
+      },
+      {
+        "name": "Marit Oyelaran",
+        "job": "landlady of the Swan",
+        "want": "the slate paid off before winter"
+      },
+      {
+        "name": "Nell Brandt",
+        "job": "the lock-keeper's daughter, aged 9",
+        "want": "her mum home by her birthday"
+      },
+      {
+        "name": "Dagny Roos",
+        "job": "skipper of the barge Patience",
+        "want": "to be through the lock before the frost"
+      }
+    ],
+    "places": [
+      "the Swan",
+      "top gate",
+      "the pound",
+      "the Patience",
+      "lock chamber"
+    ],
+    "objects": [
+      "brass windlass",
+      "the slate",
+      "cellar hatch",
+      "exercise book",
+      "tinned peaches"
+    ],
+    "events": [
+      {
+        "id": "E1",
+        "date": "3 October",
+        "fact": "Oyelaran chalked Brandt's tab on the slate at 41 pints and stopped his credit."
+      },
+      {
+        "id": "E2",
+        "date": "10 October, darts final",
+        "fact": "Brandt bet Oyelaran 3 pints he could fill the lock in under 9 minutes."
+      },
+      {
+        "id": "E3",
+        "date": "10 October, after closing",
+        "fact": "Brandt opened all 4 paddles on the top gate with his brass windlass and went to bed."
+      },
+      {
+        "id": "E4",
+        "date": "11 October",
+        "fact": "The pound was dry for 2 miles. 17 barges sat in the mud, the Patience nearest the gate."
+      },
+      {
+        "id": "E5",
+        "date": "14 October",
+        "fact": "Roos shared the Patience's 30 tins of peaches between 17 crews."
+      },
+      {
+        "id": "E6",
+        "date": "19 October",
+        "fact": "Eels came out of the mud into the Swan's cellar. Oyelaran counted 60 and shut the cellar hatch."
+      },
+      {
+        "id": "E7",
+        "date": "25 October",
+        "fact": "Brandt dropped the brass windlass into the lock chamber and went down the ladder after it."
+      }
+    ],
+    "authors": [
+      {
+        "name": "Nell Brandt",
+        "document": "letters to her mum in a school exercise book",
+        "register": "Opens Dear Mum. Counts sleeps to her birthday. Long sentences joined with and. Repeats what grown-ups said word for word.",
+        "never": "thinks her dad did anything wrong"
+      },
+      {
+        "name": "Marit Oyelaran",
+        "document": "the slate behind the bar: tabs, bets and who is barred",
+        "register": "A name, then what is owed in pints. Settles an argument in one line. No dates unless somebody is barred.",
+        "never": "writes down a bet without the stake"
+      },
+      {
+        "name": "Dagny Roos",
+        "document": "verses made up at the tiller and painted on the Patience's cabin",
+        "register": "Four short lines, second and fourth rhymed. Counts barges, miles and tins. Rude about lock-keepers.",
+        "never": "puts her own name in a verse"
+      }
+    ],
+    "enemies": {
+      "husk": "barge crews sunk to the waist in the pound",
+      "swarmling": "eels out of the drained pound",
+      "spewer": "bilge pumps left running on the barges",
+      "guardian": "Kofi Brandt at the top gate with the brass windlass"
+    }
+  },
+  "exemplars": [
+    {
+      "id": "sl-relic-1",
+      "kind": "relic",
+      "bibleRefs": [
+        "E2",
+        "E3",
+        "brass windlass",
+        "top gate"
+      ],
+      "author": "Nell Brandt",
+      "title": "Letter to Mum, 12 sleeps",
+      "source": "pencil, page 9 of a school exercise book",
+      "text": "Dear Mum, it is 12 sleeps to my birthday. Dad had a bet with Mrs Oyelaran at the darts that he can fill the lock in under 9 minutes, and she said he could not fill a kettle in 9 minutes, and everybody laughed. It is for 3 pints. He took the brass windlass out after closing and told me to go to bed and I did, but I heard all 4 paddles go up because they squeak. He came in whistling. Please write back and say which day. Love, Nell.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-relic-2",
+      "kind": "relic",
+      "bibleRefs": [
+        "E1",
+        "the slate"
+      ],
+      "author": "Marit Oyelaran",
+      "title": "The slate, left column",
+      "source": "chalk on the slate behind the Swan's bar",
+      "text": "K. BRANDT: 41 pints. Nothing more on the slate till 20 are paid. He says the company pays him Friday. It has been Friday twice.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-relic-3",
+      "kind": "relic",
+      "bibleRefs": [
+        "E2",
+        "the Swan"
+      ],
+      "author": "Marit Oyelaran",
+      "title": "The slate, bets",
+      "source": "chalk, boxed off in the corner of the slate",
+      "text": "BET. Brandt says he fills the lock in under 9 minutes. I say he doesn't. Stake 3 pints. Witnessed by the Swan darts team, who are no use as witnesses after ten o'clock.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-relic-4",
+      "kind": "relic",
+      "bibleRefs": [
+        "E4",
+        "the pound",
+        "the Patience"
+      ],
+      "author": "Dagny Roos",
+      "title": "Verse, port side",
+      "source": "white paint on the cabin side of the Patience",
+      "text": "17 barges went to bed afloat / and woke up sat in clay. / 2 miles of pound went down the lock / for 3 pints at the Swan, they say.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-relic-5",
+      "kind": "relic",
+      "bibleRefs": [
+        "E6",
+        "cellar hatch",
+        "the Patience"
+      ],
+      "author": "Nell Brandt",
+      "title": "Letter to Mum, 3 sleeps",
+      "source": "a page torn from an exercise book, folded small",
+      "text": "Dear Mum, 3 sleeps. There are eels in the cellar of the Swan. Mrs Oyelaran counted 60 and then shut the cellar hatch and said a word. Dad says eels can walk over land if the grass is wet, which I did not believe, and now I have seen it. I am putting this one under the door of the Patience because Mrs Roos says she will post it when she floats.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-relic-6",
+      "kind": "relic",
+      "bibleRefs": [
+        "E7",
+        "E1",
+        "lock chamber",
+        "brass windlass"
+      ],
+      "author": "Marit Oyelaran",
+      "title": "The slate, barred list",
+      "source": "chalk, gone over twice so it will not rub off",
+      "text": "BARRED: K. Brandt, for life or until he refills the pound, whichever comes first. Went down the lock chamber ladder on the 25th after that brass windlass. 44 pints. I am leaving it up.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-remains-1",
+      "kind": "remains",
+      "bibleRefs": [
+        "E2",
+        "the slate",
+        "husk"
+      ],
+      "author": "Marit Oyelaran",
+      "title": "R. Asante's tin mug",
+      "source": "a dented tin mug on a belt hook",
+      "enemyId": "husk",
+      "text": "A tin mug with R. Asante scratched on the base and mud from the pound dried to the rim. He had 2 pints on the slate from the darts final. Oyelaran rubbed them off herself, which she has done for nobody else.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-remains-2",
+      "kind": "remains",
+      "bibleRefs": [
+        "E6",
+        "cellar hatch",
+        "swarmling"
+      ],
+      "author": "Nell Brandt",
+      "title": "Eel number 61",
+      "source": "an eel, a beer mat stuck to its side",
+      "enemyId": "swarmling",
+      "text": "An eel as long as Nell's arm, which she measured. There is a Swan beer mat stuck to it. Mrs Oyelaran stopped counting at 60, so this is 61.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-remains-3",
+      "kind": "remains",
+      "bibleRefs": [
+        "E4",
+        "the Patience",
+        "spewer"
+      ],
+      "author": "Dagny Roos",
+      "title": "B. Imre's pump handle",
+      "source": "an iron bilge pump handle, grip worn pale",
+      "enemyId": "spewer",
+      "text": "Pump handle off the Patience, worn pale where two hands go. B. Imre pumped from 11 October until there was nothing under the hull to pump. Roos gave him a line on the cabin: pumped all night and raised the mud an inch.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-remains-4",
+      "kind": "remains",
+      "bibleRefs": [
+        "E3",
+        "E7",
+        "brass windlass",
+        "guardian"
+      ],
+      "author": "Marit Oyelaran",
+      "title": "Brandt's brass windlass",
+      "source": "a brass windlass with a bootlace through the handle",
+      "enemyId": "guardian",
+      "text": "Brass windlass, the square socket worn nearly round. On 10 October it opened all 4 paddles on the top gate. Found at the foot of the lock chamber ladder. Oyelaran took it against the tab: 1 pint off, 43 to go.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-room-1",
+      "kind": "roomLine",
+      "bibleRefs": [
+        "the pound",
+        "husk"
+      ],
+      "text": "Two barges lean together in the mud. Crew stand waist deep between the hulls, facing the door.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-room-2",
+      "kind": "roomLine",
+      "bibleRefs": [
+        "the Swan",
+        "cellar hatch",
+        "swarmling"
+      ],
+      "text": "The Swan's cellar. A barrel sits on the hatch and the barrel is rocking.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-room-3",
+      "kind": "roomLine",
+      "bibleRefs": [
+        "top gate",
+        "spewer"
+      ],
+      "text": "All 4 paddles are up. Water crosses the floor knee high; the gate walkway above it is dry.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-boon-1",
+      "kind": "boonDescription",
+      "bibleRefs": [
+        "exercise book",
+        "the pound"
+      ],
+      "author": "Nell Brandt",
+      "name": "Nell's Exercise Book",
+      "effectId": "hazard_ward",
+      "text": "Nell Brandt wrote her mum 14 letters in it and posted none. The back page is her map of where the mud will hold a person.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-boon-2",
+      "kind": "boonDescription",
+      "bibleRefs": [
+        "E5",
+        "tinned peaches"
+      ],
+      "author": "Dagny Roos",
+      "name": "Roos's Tin Opener",
+      "effectId": "relic_mend",
+      "text": "Dagny Roos shared 30 tins between 17 crews and kept the opener. People were very polite to her after that.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-boon-3",
+      "kind": "boonDescription",
+      "bibleRefs": [
+        "E2",
+        "the Swan"
+      ],
+      "author": "Marit Oyelaran",
+      "name": "Red Flights",
+      "effectId": "guardian_bane",
+      "text": "Marit Oyelaran throws three darts with red flights. She has not bought her own drink at a Swan final in 6 years.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-item-1",
+      "kind": "itemBlurb",
+      "bibleRefs": [
+        "E5",
+        "tinned peaches",
+        "the Patience"
+      ],
+      "author": "Dagny Roos",
+      "name": "Tinned Peaches",
+      "text": "Restores 20 Integrity. One of 30 tins off the Patience. The label says serves four, which Roos read as a suggestion.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-item-2",
+      "kind": "itemBlurb",
+      "bibleRefs": [
+        "the Swan"
+      ],
+      "author": "Marit Oyelaran",
+      "name": "Swan Beer Mat",
+      "text": "Blocks the next hit. The Swan had 500 printed. Most of them are under table legs.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-item-3",
+      "kind": "itemBlurb",
+      "bibleRefs": [
+        "the slate"
+      ],
+      "author": "Marit Oyelaran",
+      "name": "Pint on the Slate",
+      "text": "Doubles damage for 5 s. Oyelaran chalks it up against whoever is standing nearest the bar.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-biome-1",
+      "kind": "biomeTagline",
+      "bibleRefs": [
+        "the pound",
+        "E4"
+      ],
+      "name": "The Pound",
+      "text": "Two miles of canal with the water let out. 17 barges, all leaning.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-biome-2",
+      "kind": "biomeTagline",
+      "bibleRefs": [
+        "the Swan",
+        "cellar hatch"
+      ],
+      "name": "The Swan",
+      "text": "The darts final is still chalked up. There is a barrel on the cellar hatch.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-biome-3",
+      "kind": "biomeTagline",
+      "bibleRefs": [
+        "top gate",
+        "brass windlass"
+      ],
+      "name": "Top Gate",
+      "text": "4 paddles up since 10 October, and the only windlass is down the chamber.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-boss-1",
+      "kind": "bossCallout",
+      "bibleRefs": [
+        "brass windlass",
+        "guardian"
+      ],
+      "text": "BRANDT SWINGS THE WINDLASS WIDE. STAY INSIDE HIS ARM.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-boss-2",
+      "kind": "bossCallout",
+      "bibleRefs": [
+        "top gate",
+        "lock chamber"
+      ],
+      "text": "PADDLES UP. THE CHAMBER'S FILLING. CLIMB.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-boss-3",
+      "kind": "bossCallout",
+      "bibleRefs": [
+        "E6",
+        "cellar hatch",
+        "the Swan"
+      ],
+      "text": "SIXTY EELS OUT OF THE CELLAR HATCH. BACKS TO THE BAR.",
+      "world": "Swan Lock"
+    },
+    {
+      "id": "sl-boss-4",
+      "kind": "bossCallout",
+      "bibleRefs": [
+        "E2"
+      ],
+      "text": "UNDER 9 MINUTES, HE SAID. COUNT HIM DOWN FROM THE WALKWAY.",
+      "world": "Swan Lock"
+    }
+  ]
+}

@@ -46,12 +46,19 @@ moves: exactly three patternIds from custodianPatterns, all three different, in 
 one marked [close], one marked [ranged], then one marked [control] or [arena]. At most one
 of the three may be marked [arena]. Pick summon_choir only if the bible casts two or more
 non-guardian enemy kinds. For each move, name (hard max 32, four words at most) is the bible object doing the
-damage, and tell (hard max 60, aim 50, capitals, nine words at most, counted) is a callout:
-the bible object about to hurt the crew, a plain verb, and where to stand. It is shouted
-across a room mid-fight, so it is short: "PUMP 6 SPINS UP. GET BEHIND THE CASING."
-"BULKHEADS CLOSING IN 5". Safety is named with a thing in this world, never with the
-registry's own wording for the counter: "dash the gap", "step off the mark", "sidestep one
-tile" and "walk off it" are engine phrasing and are rejected. Say what the crew should get
-behind, get off, or get between.
+damage, and tell (hard max 60, aim 50, capitals, nine words at most, counted) is a callout
+shouted across a room mid-fight. It names the bible object about to hurt the crew and
+leaves no doubt where safety is, in a thing of this world. The three tells in a fight have
+three DIFFERENT sentence shapes. Some shapes that work:
+  what it is doing, then where to go:  "PUMP 6 SPINS UP. STAND ON THE GRATING."
+  a countdown:                          "BULKHEADS CLOSING IN 5"
+  the boss's own words:                 "TARN: I SAID CLEAR MY DECK. SHE MEANS THE RED PLATES."
+  where safety is, and nothing else:    "DRY FLOOR BY THE LOCKERS. NOWHERE ELSE."
+Whatever the shape, a crew member who hears only this line knows where to stand: a tell
+that is all attitude ("KADER: JUST LET IT RUN.") or that uses briefing-room words
+(operative, sightline, radius, rearmost) is no use in a fight.
+"GET BEHIND THE <something>" has been used by every world so far: it is marked down
+by the checker, so say it another way. Rejected outright are the registry's own words for the counter ("dash the gap", "step off the
+mark", "sidestep one tile", "walk off it"): those are engine phrasing.
 A move set that breaks these rules is replaced wholesale, and its names and tells are lost
 with it.

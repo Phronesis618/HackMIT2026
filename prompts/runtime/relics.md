@@ -3,7 +3,8 @@
 The data holds the world bible and a list of `slots`. Write exactly one lore fragment per
 slot, in slot order, each with kind "relic", enemyId null and the slot's roomIndex.
 
-A relic is a found document. It is BY one of the three bible authors ABOUT one bible
+A relic is something a person wrote and left: a letter, a verse, a chalked bet, a label,
+a note on a machine, and only sometimes an entry in a log. It is BY one of the three bible authors ABOUT one bible
 event, in that author's register, on that author's document. Each slot fixes the
 authorIndex and the eventIndex: copy them. Together the slots cover the whole chain of
 events in three voices. An author who was not there when the event happened reports how it
@@ -25,6 +26,12 @@ as a trace in it: a name missing from the list, a delivery that did not come.
 - No two fragments open the same way. If one opens on the date, the next opens on an
   object, a name, a quantity or mid-sentence in the task. A log keeper need not restate the
   date, heading and status in every entry: a found page often starts halfway down.
-- title (max 40): labels the object: the document and its date or number.
+- What a fragment IS varies with who wrote it. A letter has somebody it is to and
+  something it asks for. A verse rhymes and scans, roughly. A slate has names and what is
+  owed. Graffiti is answered by a second hand. Only a log has a timestamp and quantities in
+  a row, and at most a third of the fragments in this call may be shaped like that. The
+  number a fragment must carry can be a child's count of sleeps as well as a reading.
+- title (max 40): labels the object as the finder would: what it is and where it starts
+  ("Letter to Mum, 12 sleeps", "The slate, bets"). Do not give every title a date.
 - source (max 60, aim 45): what it physically is and where it lies, e.g. clipped to a named door.
 - text (max 520): the fragment itself. Must contain a bible proper noun and a number or date.
