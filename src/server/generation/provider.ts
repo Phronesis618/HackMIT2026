@@ -205,7 +205,7 @@ function readAnthropicResponse(body: unknown, onUsage?: (usage: ProviderUsage) =
   return { raw: tool.input, ...(measured ? { usage: measured } : {}) };
 }
 
-function assertDisplayText(recipe: WorldRecipe): void {
+export function assertDisplayText(recipe: WorldRecipe): void {
   const text = [
     recipe.title, recipe.tagline, recipe.themeSummary,
     ...recipe.rooms.flatMap((room) => [room.name, room.description]),
