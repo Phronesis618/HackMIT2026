@@ -2078,3 +2078,18 @@ body { font-size: var(--fs-body); }
 @media (max-height: 840px) {
   .panel--hq .hq-directory { display: none; }
 }
+
+/* ---- round 3: stage hugs its 16:9 canvas (no black bands), bar sits right under it ---- */
+:root { --top-h: 44px; }
+.stage-col { grid-template-rows: auto auto; align-content: start; justify-items: center; }
+.stage-wrap {
+  --stage-max-h: calc(100vh - var(--top-h) - 2 * var(--space-md) - var(--bar-h) - var(--space-sm));
+  aspect-ratio: 16 / 9;
+  width: min(100%, calc(var(--stage-max-h) * 16 / 9));
+}
+.commandbar { width: 100%; }
+.vitals__id { flex: 1 0 96px; }
+.vitals__class { display: none; }
+@media (min-width: 1600px) { .vitals__class { display: inline; } }
+.btn { white-space: nowrap; }
+.panel--hq .field .panel__row .btn { flex: none; }

@@ -64,7 +64,8 @@ export function HudVitals({ model }: { model: UiModel }) {
         <div className="vitals__fill" style={{ width: `${ratio * 100}%` }} />
       </div>
       <div className="vitals__read">
-        <span className="vitals__label">{down ? 'Down' : `${CLASS_INFO[classId].name} · Integrity`}</span>
+        <span className="vitals__class">{CLASS_INFO[classId].name} ·</span>
+        <span className="vitals__label">{down ? 'Down' : 'Integrity'}</span>
         <span className="vitals__num">{hud ? Math.round(hp) : '—'}<small>/{hud ? maxHp : '—'}</small></span>
       </div>
     </div>
