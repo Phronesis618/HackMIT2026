@@ -29,6 +29,14 @@ export function HeadquartersPanel({ model, actions, departure = departureBus }: 
     actions.submitContribution(draft.trim());
     setDraft('');
   };
+  /** An idea still sitting in the box when Prepare world is pressed counts: submit it first. */
+  const prepare = (): void => {
+    if (draft.trim() && !full) {
+      actions.submitContribution(draft.trim());
+      setDraft('');
+    }
+    actions.requestWorld();
+  };
 
   return (
     <div className="panel panel--hq">
@@ -128,7 +136,7 @@ export function HeadquartersPanel({ model, actions, departure = departureBus }: 
       )}
 
       <div className="actions">
-        <button type="button" className="btn btn--primary" onClick={actions.requestWorld} disabled={busy || !connected || !host}>
+        <button type="button" className="btn btn--primary" onClick={prepare} disabled={busy || !connected || !host}>
           {busy ? 'Preparing…' : worldReady ? 'Prepare another world' : 'Prepare world'}
         </button>
         <button type="button" className="btn" onClick={() => departure.begin(actions.enterPortal)} disabled={busy || !worldReady || !connected || !host || !gateOpen}>

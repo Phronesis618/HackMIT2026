@@ -18,6 +18,7 @@ import { formatIssues, GenerationRequestSchema, GenerationStatusSchema, Prepared
 import { describeForClient, type ServerConfig } from './config';
 import { createGenerationService, type GenerationService } from './generation';
 import { attachRealtime, type RealtimeHandle } from './network/realtime';
+import { composeWorldRecipe } from './composer/compose';
 import { COMPOSER_MODEL, createComposerProvider } from './composer/provider';
 import { createOperatorProvider, OPERATOR_MODEL } from './operator/provider';
 
@@ -37,15 +38,22 @@ export function createRelayServer(config: ServerConfig, deps: { log?: (m: string
   // The offline composer: instant `procedural` worlds from the players' ideas. It is the
   // primary provider when selected and the fallback for every live provider otherwise.
   const composer = createComposerProvider();
-  // DEMO ONLY: `operator` hands requests to a coding agent watching an inbox directory.
+  // DEMO ONLY: `operator` hands requests to a coding agent watching an inbox directory. In
+  // polish mode the composer drafts first and the agent only edits, within a short window.
+  const polishing = config.generation.operatorMode === 'polish';
   const operator = config.generation.mode === 'live' && config.generation.provider === 'operator'
     ? createOperatorProvider({
       dir: config.generation.operatorDir,
       timeoutMs: config.generation.operatorTimeoutMs,
+      ...(polishing ? { polish: { draft: composeWorldRecipe, timeoutMs: config.generation.operatorPolishMs } } : {}),
       log: (m) => log(`generation: ${m}`),
     })
     : null;
-  if (operator) log(`generation: operator inbox at ${operator.inboxDir} (reply deadline ${Math.round(config.generation.operatorTimeoutMs / 1000)}s)`);
+  if (operator) {
+    log(polishing
+      ? `generation: operator inbox at ${operator.inboxDir} (polish mode: composer drafts, operator edits within ${Math.round(config.generation.operatorPolishMs / 1000)}s while present)`
+      : `generation: operator inbox at ${operator.inboxDir} (reply deadline ${Math.round(config.generation.operatorTimeoutMs / 1000)}s)`);
+  }
   // Live mode with an API provider but no key (a public deploy before secrets are added, or a
   // laptop without a key) still generates from the crew's ideas: the composer steps in and says
   // so in the log and in every world's COMPOSED label. Nothing is ever labelled live.
@@ -53,7 +61,7 @@ export function createRelayServer(config: ServerConfig, deps: { log?: (m: string
   const keylessLive = config.generation.mode === 'live' && (config.generation.provider === 'anthropic' || config.generation.provider === 'openai') && !apiKey?.trim();
   if (keylessLive) log(`generation: ${config.generation.provider} selected without an API key; the offline composer will build worlds instead (labelled COMPOSED).`);
   const primary = operator
-    ? { provider: operator, model: OPERATOR_MODEL }
+    ? { provider: operator, model: polishing ? COMPOSER_MODEL : OPERATOR_MODEL }
     : config.generation.mode === 'live' && (config.generation.provider === 'composer' || keylessLive)
       ? { provider: composer, model: COMPOSER_MODEL }
       : null;
@@ -90,7 +98,7 @@ export function createRelayServer(config: ServerConfig, deps: { log?: (m: string
           liveImplemented: info.liveImplemented,
           fixtureIds: info.fixtureIds,
           provider: info.provider,
-          ...(operator ? { operatorPending: operator.pending().length } : {}),
+          ...(operator ? { operatorPending: operator.pending().length, operatorMode: config.generation.operatorMode } : {}),
         },
         realtimeClients: realtime.clientCount(),
       });

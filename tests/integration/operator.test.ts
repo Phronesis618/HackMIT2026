@@ -13,7 +13,9 @@ import { createRelayServer } from '../../src/server/app';
 import { loadServerConfig } from '../../src/server/config';
 import { createGenerationService } from '../../src/server/generation';
 import { GenerationFailure } from '../../src/server/generation/provider';
-import { createOperatorProvider, OPERATOR_MODEL, type OperatorRequestFile } from '../../src/server/operator/provider';
+import { composeWorldRecipe } from '../../src/server/composer/compose';
+import { COMPOSER_MODEL } from '../../src/server/composer/provider';
+import { createOperatorProvider, mergePatch, OPERATOR_MODEL, OPERATOR_PRESENCE_FILE, type OperatorRequestFile } from '../../src/server/operator/provider';
 
 const fixturesDir = path.resolve(__dirname, '../../fixtures/worlds');
 const fixtureRecipe = (): WorldRecipe => WorldFixtureSchema.parse(
@@ -182,6 +184,155 @@ describe('operator provider', () => {
     controller.abort();
     await expect(pending).rejects.toBeDefined();
     expect(provider.pending()).toEqual([]);
+  });
+});
+
+describe('operator provider in polish mode (composer drafts, operator edits)', () => {
+  const idea = (text: string) => ({ ...request('req-polish-1'), floors: true, contributions: [{ ...sampleContributions[0]!, text }] });
+  const present = (dir: string): void => { fs.writeFileSync(path.join(dir, OPERATOR_PRESENCE_FILE), ''); };
+  const polishProvider = (dir: string, timeoutMs = 5_000) =>
+    createOperatorProvider({ dir, timeoutMs: 60_000, pollMs: 20, polish: { draft: composeWorldRecipe, timeoutMs } });
+
+  it('ships the composer draft at once, without an inbox file, when nobody is watching', async () => {
+    const dir = tmpDir();
+    const provider = polishProvider(dir);
+    expect(provider.source).toBe('procedural');
+    expect(provider.badge).toBe('COMPOSED');
+    const began = Date.now();
+    const result = await provider.generate(idea('a signal lamp somebody wired to the handrail'));
+    expect(Date.now() - began).toBeLessThan(2_000);
+    expect(result.recipe.title).toBe(composeWorldRecipe(idea('a signal lamp somebody wired to the handrail')).title);
+    expect(result.notes?.join(' ')).toMatch(/No operator was watching/);
+    expect(fs.readdirSync(provider.inboxDir)).toEqual([]);
+    expect(provider.pending()).toEqual([]);
+  });
+
+  it('writes the draft and an edit sheet, merges a partial patch by position and validates the whole', async () => {
+    const dir = tmpDir();
+    present(dir);
+    const provider = polishProvider(dir);
+    const pending = provider.generate(idea('giant glowing jellyfish drift through the halls as sentries'));
+    const inbox = await awaitInbox(provider.inboxDir, 'req-polish-1-1.json');
+    expect(inbox.mode).toBe('polish');
+    expect(inbox.draft?.rooms).toHaveLength(3);
+    expect(inbox.draft?.biomes).toHaveLength(8);
+    expect(inbox.edit?.rooms.map((room) => room.name)).toEqual(inbox.draft?.rooms.map((room) => room.name));
+    expect(inbox.edit?.biomes).toHaveLength(8);
+    expect(inbox.instructions).toMatch(/seconds to edit/);
+    expect(inbox.instructions.length).toBeLessThan(3_000);
+    expect(inbox.deadlineAt - inbox.createdAt).toBe(5_000);
+
+    const patch = {
+      title: 'Lantern Halls Nine',
+      tagline: 'Nine jellyfish on the night roster. Four gates open.',
+      rooms: [null, { description: 'Four night sentries drift the centre line; salt crust waist high on both walls.' }],
+      biomes: [{ name: 'Tank Room B' }],
+      contributionMappings: [...(inbox.draft?.contributionMappings ?? []), {
+        contributionId: sampleContributions[0]!.id, kind: 'name', roomIndex: 0, featureDescription: 'The arrival hall is named for the jellyfish sentries.',
+      }],
+    };
+    fs.writeFileSync(inbox.reply.path, JSON.stringify(patch));
+    const { recipe, notes } = await pending;
+    const draft = inbox.draft!;
+    expect(recipe.title).toBe('Lantern Halls Nine');
+    expect(recipe.tagline).toBe(patch.tagline);
+    expect(recipe.rooms[0]).toEqual(draft.rooms[0]);
+    expect(recipe.rooms[1]?.description).toBe(patch.rooms[1]?.description);
+    expect(recipe.rooms[1]?.enemyIds).toEqual(draft.rooms[1]?.enemyIds);
+    expect(recipe.rooms[2]).toEqual(draft.rooms[2]);
+    expect(recipe.biomes?.[0]?.name).toBe('Tank Room B');
+    expect(recipe.biomes?.[0]?.tagline).toBe(draft.biomes?.[0]?.tagline);
+    expect(recipe.biomes?.slice(1)).toEqual(draft.biomes?.slice(1));
+    expect(recipe.laws).toEqual(draft.laws);
+    expect(recipe.contributionMappings).toHaveLength(draft.contributionMappings.length + 1);
+    expect(notes?.join(' ')).toMatch(/edited by the operator in \d+s: biomes, contributionMappings, rooms, tagline, title/);
+    expect(fs.readdirSync(provider.doneDir).some((f) => f.includes('accepted.reply'))).toBe(true);
+  });
+
+  it('rejects a bad edit with repair feedback, then accepts the corrected sheet', async () => {
+    const dir = tmpDir();
+    present(dir);
+    const provider = polishProvider(dir);
+    const pending = provider.generate(idea('monkey pirates in the jungle'));
+    const inbox = await awaitInbox(provider.inboxDir, 'req-polish-1-1.json');
+    fs.writeFileSync(inbox.reply.path, JSON.stringify({ title: '', rooms: [{ name: 'Rigging Deck' }] }));
+    const repairInbox = await awaitInbox(provider.inboxDir, 'req-polish-1-2.json');
+    expect(repairInbox.mode).toBe('polish');
+    expect(repairInbox.repair).toMatch(/schema validation at title/);
+    expect(repairInbox.deadlineAt).toBe(inbox.deadlineAt);
+    fs.writeFileSync(repairInbox.reply.path, JSON.stringify({ rooms: [{ name: 'Rigging Deck' }], tagline: 'See https://example.com' }));
+    const urlInbox = await awaitInbox(provider.inboxDir, 'req-polish-1-3.json');
+    expect(urlInbox.repair).toMatch(/markup, a URL, or code/);
+    fs.writeFileSync(urlInbox.reply.path, JSON.stringify({ rooms: [{ name: 'Rigging Deck' }] }));
+    const { recipe } = await pending;
+    expect(recipe.rooms[0]?.name).toBe('Rigging Deck');
+    expect(recipe.title).toBe(inbox.draft?.title);
+  });
+
+  it('cannot add rooms or biomes through a patch, and ships the draft unchanged on silence', async () => {
+    const dir = tmpDir();
+    present(dir);
+    const provider = polishProvider(dir, 300);
+    const pending = provider.generate(idea('a bakery run by three careful robots'));
+    const inbox = await awaitInbox(provider.inboxDir, 'req-polish-1-1.json');
+    const draft = inbox.draft!;
+    const grown = mergePatch(draft, { rooms: [...draft.rooms, draft.rooms[0]], biomes: [...(draft.biomes ?? []), draft.biomes?.[0]] }) as WorldRecipe;
+    expect(grown.rooms).toHaveLength(3);
+    expect(grown.biomes).toHaveLength(8);
+    // silence: no reply at all
+    const { recipe, notes } = await pending;
+    expect(recipe).toEqual(draft);
+    expect(notes?.join(' ')).toMatch(/did not edit the composed draft within 0s/);
+    expect(provider.pending()).toEqual([]);
+    expect(fs.readdirSync(provider.doneDir).some((f) => f.includes('timeout.request'))).toBe(true);
+  });
+
+  it('labels a polished world as composed, never live, through the generation service', async () => {
+    const dir = tmpDir();
+    present(dir);
+    const provider = polishProvider(dir);
+    const service = createGenerationService({
+      mode: 'live', provider: 'operator', openaiApiKey: null, openaiModel: 'unused', fixturesDir, log: () => {},
+      recipeProvider: { provider, model: COMPOSER_MODEL },
+    });
+    const pending = service.prepareWorld(idea('a lighthouse whose keeper is a very old dog'));
+    const inbox = await awaitInbox(provider.inboxDir, 'req-polish-1-1.json');
+    fs.writeFileSync(inbox.reply.path, JSON.stringify({ title: 'Keeper Dog Light' }));
+    const world = PreparedWorldSchema.parse(await pending);
+    expect(world.recipe.title).toBe('Keeper Dog Light');
+    expect(world.provenance.source).toBe('procedural');
+    expect(world.provenance.label).toBe(`COMPOSED · ${COMPOSER_MODEL}`);
+    expect(world.provenance.notes.join(' ')).toMatch(/edited by the operator/);
+  });
+
+  it('is wired by RELAY_OPERATOR_MODE=polish and reports it on /api/health', async () => {
+    const dir = tmpDir();
+    const config = loadServerConfig({
+      env: {
+        NODE_ENV: 'test', PORT: '0', HOST: '127.0.0.1',
+        RELAY_GENERATION_MODE: 'live', RELAY_AI_PROVIDER: 'operator', RELAY_OPERATOR_DIR: dir, RELAY_OPERATOR_MODE: 'polish', RELAY_OPERATOR_POLISH_MS: '4000',
+      },
+      argv: [],
+    });
+    expect(config.generation).toMatchObject({ operatorMode: 'polish', operatorPolishMs: 4000 });
+    expect(() => loadServerConfig({ env: { RELAY_OPERATOR_MODE: 'sometimes' }, argv: [] })).toThrow(/author or polish/);
+    const server = createRelayServer(config, { log: () => {} });
+    const { port } = await server.listen();
+    try {
+      const health = await (await fetch(`http://127.0.0.1:${port}/api/health`)).json() as { generation: Record<string, unknown> };
+      expect(health.generation).toMatchObject({ provider: 'operator', operatorPending: 0, operatorMode: 'polish' });
+      // nobody watching: the composer draft comes back immediately as a composed world
+      const began = Date.now();
+      const response = await fetch(`http://127.0.0.1:${port}/api/world`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request('req-http-polish')),
+      });
+      const world = PreparedWorldSchema.parse(await response.json());
+      expect(Date.now() - began).toBeLessThan(3_000);
+      expect(world.provenance).toMatchObject({ source: 'procedural', model: COMPOSER_MODEL });
+      expect(world.provenance.notes.join(' ')).toMatch(/No operator was watching/);
+    } finally {
+      await server.close();
+    }
   });
 });
 

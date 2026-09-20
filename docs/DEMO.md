@@ -191,6 +191,27 @@ that chat open for the whole demo; `GET /api/health` reports `provider: "operato
 `operatorPending`. Do not describe operator output as an unattended API call; the badge and
 the receipt already say what it is.
 
+#### Polish mode (the demo default): composer drafts, agent edits
+
+`RELAY_OPERATOR_MODE=polish` keeps generation fast while still letting the agent shape each
+world. The offline composer drafts the complete world from the ideas in milliseconds; the
+inbox file then carries `mode: "polish"`, the full `draft`, a pre-filled `edit` sheet of its
+player-facing text (title, tagline, summary, room and biome names/lines, laws, lore,
+attunements) and a short brief. The agent writes the sheet back with only the fields it
+changed (same positions); the server merges it over the draft, validates the whole recipe and
+compiles it. Rules that keep it seamless and honest:
+
+- The server waits at most `RELAY_OPERATOR_POLISH_MS` (default 90 s), and only while
+  `.relay/operator/PRESENT` has been touched in the last 20 s. `node scripts/operator-watch.mjs`
+  keeps that heartbeat and prints one wake line per request. With nobody watching, the draft
+  ships in about a second.
+- Silence or an invalid edit never costs the crew a world: a bad sheet comes back as attempt+1
+  with a `repair` message inside the same window; silence ships the draft unchanged.
+- A patch cannot add or remove rooms or biomes, or change ids, motifs, props, enemies or
+  terrain; anything it does set is re-validated (`FloorsWorldRecipeSchema`, no markup/URLs).
+- Provenance stays `COMPOSED · relay-composer` either way; the provenance notes say whether
+  the operator edited it (and which fields) or the draft shipped as composed.
+
 ## Recovery
 
 - If the crew disconnects, use the displayed connection state to rejoin; do not present a

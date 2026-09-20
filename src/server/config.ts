@@ -20,11 +20,16 @@ export type GenerationMode = 'fixture' | 'live';
  * operator          — DEMO ONLY: no key. Each request is written to an inbox directory and a
  *                     coding agent watching that directory (e.g. Cursor) writes the WorldRecipe
  *                     reply. See src/server/operator/provider.ts and docs/DEMO.md.
+ *                     RELAY_OPERATOR_MODE=polish: the composer drafts instantly and the agent
+ *                     gets RELAY_OPERATOR_POLISH_MS (default 90 s) to edit the text, only while
+ *                     its presence heartbeat is fresh; otherwise the draft ships at once.
  */
 export type AIProvider = 'anthropic' | 'openai' | 'composer' | 'operator';
+export type OperatorMode = 'author' | 'polish';
 const KEYLESS_PROVIDERS: ReadonlySet<string> = new Set(['composer', 'operator']);
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 export const DEFAULT_OPERATOR_TIMEOUT_MS = 180_000;
+export const DEFAULT_OPERATOR_POLISH_MS = 90_000;
 
 export interface ServerConfig {
   port: number;
@@ -41,6 +46,10 @@ export interface ServerConfig {
     operatorDir: string;
     /** How long the `operator` provider waits for a reply before the labelled fixture fallback. */
     operatorTimeoutMs: number;
+    /** `author` (agent writes the whole recipe) or `polish` (composer drafts, agent edits). */
+    operatorMode: OperatorMode;
+    /** Polish mode: how long the composer's draft waits for the agent's edit. */
+    operatorPolishMs: number;
     /** RELAY_FLOORS=1: worlds are floors worlds unless a request says `floors: false`. Default off. */
     floors: boolean;
     /** RELAY_LAWS=1: derive laws + a look for worlds whose recipe has none. Default off. */
@@ -93,6 +102,11 @@ export function loadServerConfig(options: LoadConfigOptions = {}): ServerConfig 
   }
   const requestedMode: GenerationMode = env.RELAY_GENERATION_MODE === 'live' ? 'live' : 'fixture';
   const operatorTimeoutMs = Number((env.RELAY_OPERATOR_TIMEOUT_MS ?? '').trim());
+  const operatorPolishMs = Number((env.RELAY_OPERATOR_POLISH_MS ?? '').trim());
+  const operatorModeRaw = (env.RELAY_OPERATOR_MODE ?? '').trim().toLowerCase() || 'author';
+  if (operatorModeRaw !== 'author' && operatorModeRaw !== 'polish') {
+    throw new Error('RELAY_OPERATOR_MODE must be author or polish.');
+  }
 
   const staticDir = path.join(REPO_ROOT, 'dist', 'client');
 
@@ -109,6 +123,8 @@ export function loadServerConfig(options: LoadConfigOptions = {}): ServerConfig 
       openaiModel: (env.OPENAI_MODEL ?? '').trim() || 'gpt-5-mini',
       operatorDir: path.resolve(REPO_ROOT, (env.RELAY_OPERATOR_DIR ?? '').trim() || path.join('.relay', 'operator')),
       operatorTimeoutMs: Number.isFinite(operatorTimeoutMs) && operatorTimeoutMs > 0 ? operatorTimeoutMs : DEFAULT_OPERATOR_TIMEOUT_MS,
+      operatorMode: operatorModeRaw,
+      operatorPolishMs: Number.isFinite(operatorPolishMs) && operatorPolishMs > 0 ? operatorPolishMs : DEFAULT_OPERATOR_POLISH_MS,
       floors: ['1', 'true'].includes((env.RELAY_FLOORS ?? '').trim().toLowerCase()),
       laws: ['1', 'true'].includes((env.RELAY_LAWS ?? '').trim().toLowerCase()),
     },
