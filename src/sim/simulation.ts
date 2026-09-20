@@ -596,6 +596,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       encounters.push({ id: 'anchor-guardian', enemyId: 'guardian', x: tile.col, y: tile.row, count: 1 });
     }
     const hpScale = floorsRun && phase === 'expedition' ? tierMultiplier(floorsRun.tier) : 1;
+    // A27: every body already standing in this room. A pack whose fanned-out spots land in a wall
+    // fell back to the nearest open tile — the SAME one for every member, and for the next group
+    // too, so four Wardens ended up on one point, unable to separate or to be reached.
+    const placedBodies: Point[] = [];
     for (const planned of encounters) {
       // Floors biome exits: the gatekeeper is a one-phase Custodian until B1 gives it its own fight.
       const gatekeeper = floorsRun !== null && planned.role === 'gatekeeper';
@@ -615,13 +619,14 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       for (let i = 0; i < encounter.count; i++) {
         const base = tileToWorld(encounter.x, encounter.y);
         const offset = i === 0 ? 0 : (i % 2 === 0 ? 1 : -1) * Math.ceil(i / 2) * (info.radius * 2 + 6);
-        let spawn = nearestOpenPosition(grid, { x: base.x + offset, y: base.y }, info.radius);
+        let spawn = nearestOpenPosition(grid, { x: base.x + offset, y: base.y }, info.radius, placedBodies);
         if (floorsRun && i > 0) {
           // Pack members fan out sideways; never into a pocket the crew cannot reach (sealed doors would never open).
           reachable ??= connectedTiles(grid, { col: encounter.x, row: encounter.y });
           const tile = worldToTile(spawn.x, spawn.y);
-          if (!reachable.has(tile.row * grid.width + tile.col)) spawn = nearestOpenPosition(grid, base, info.radius);
+          if (!reachable.has(tile.row * grid.width + tile.col)) spawn = nearestOpenPosition(grid, base, info.radius, placedBodies);
         }
+        placedBodies.push(spawn);
         enemies.push({
           state: {
             id: `${encounter.id.slice(0, 61)}-${i}`, enemyId: encounter.enemyId,
