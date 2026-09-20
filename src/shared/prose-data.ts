@@ -96,6 +96,58 @@ export const SLOP_PHRASES: readonly string[] = [
   'it is worth noting', "it's worth noting", 'in a world where', 'more than just', 'not merely',
 ];
 
+/**
+ * Phrases that are fine once and a tell twice. Scored (not hard-failed) per occurrence by
+ * `lintProse`; `lintWorldText` hard-fails every occurrence after the first WITHIN ONE WORLD.
+ *
+ * "in a different hand" was used three times across four live worlds (docs/design/BLIND_READ.md,
+ * 20 Sept): it is the only way the model knows to say two people wrote on one thing. Entries
+ * must not overlap each other as substrings ("in a different hand" contains "a different hand",
+ * so only the shorter is listed) or one use would count as two.
+ */
+export const SCORED_PHRASES: readonly string[] = [
+  'a different hand', 'another hand', 'a second hand', 'a shakier hand', 'a steadier hand',
+  'a different pen', 'the handwriting changes', 'the handwriting is different',
+];
+
+/**
+ * Briefing-room vocabulary. A boss callout is shouted by somebody standing in the room, in
+ * that world's words; these belong to a tactical briefing in a game that is not this one.
+ * Live, 20 Sept: "COYLE'S LINE ON THE REARMOST OPERATIVE", "BREAK HIS SIGHTLINE BEFORE THE
+ * HAUL LANDS". Checked on `bossCallout` only, where every word is shouted by a person.
+ *
+ * "Operative" is NOT here, though it is the word that reads worst in a callout: it is RELAY's
+ * own word for a player, used by the skill tree, the law summaries and two of the engine's
+ * default tells (`src/shared/custodian.ts`), so the linter cannot call it foreign. What a
+ * callout should use instead is the creature's former job, which `laws.md` asks for and the
+ * `engine-word` rule enforces for the enemy ids. See docs/design/BLIND_READ.md, 20 Sept.
+ */
+export const BRIEFING_WORDS: readonly string[] = [
+  'hostile', 'hostiles', 'sightline', 'sightlines', 'engage',
+  'engages', 'engaging', 'engagement', 'perimeter', 'radius', 'rearmost', 'sitrep', 'eta',
+];
+
+/**
+ * Small things a person carries. Two or three of them counted out in one remains fragment is
+ * the pocket inventory: "One door-cycle key on a numbered fob. One blank form. One pen,
+ * uncapped, lid lost." Deliberately excludes anything you would need two hands for (a mug, a
+ * glove, a lamp), which is why those keep passing.
+ */
+export const POCKET_OBJECTS: readonly string[] = [
+  'pen', 'pens', 'pencil', 'pencils', 'biro', 'key', 'keys', 'fob', 'fobs', 'form', 'forms',
+  'card', 'cards', 'ticket', 'tickets', 'stub', 'stubs', 'letter', 'letters', 'note', 'notes',
+  'slip', 'slips', 'chit', 'chits', 'token', 'tokens', 'coin', 'coins', 'comb', 'button',
+  'buttons', 'lighter', 'match', 'matches', 'whistle', 'tag', 'tags', 'badge',
+  'badges', 'receipt', 'receipts', 'handkerchief', 'photograph', 'photo', 'wrapper',
+  'needle', 'pin', 'pins', 'stamp', 'stamps', 'wallet', 'purse',
+];
+
+/** Where a pocket inventory is carried. Two counted objects plus one of these is the list. */
+export const CARRIED_CONTAINERS: readonly string[] = [
+  'pocket', 'pockets', 'belt', 'kit', 'pouch', 'pouches', 'satchel', 'wallet', 'purse',
+  'webbing', 'knapsack', 'haversack', 'holdall',
+];
+
 /** Used by abstract-heavy and no-ominous-closer. Nouns with no weight, size or serial number. */
 export const ABSTRACT_NOUNS: readonly string[] = [
   'silence', 'darkness', 'dark', 'memory', 'memories', 'time', 'fate', 'destiny', 'hope', 'fear',

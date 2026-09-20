@@ -18,7 +18,7 @@ import {
   CustodianSchema, LAW_INFO, TerrainSkinSchema, WorldLawSchema, WorldLookSchema, sanitizeCustodian, sanitizeLaws, sanitizeTerrainSkins,
   type Custodian, type TerrainSkin, type WorldLaw, type WorldLook,
 } from '../../shared/laws';
-import { KIND_SPECS, lintProse, lintRecipeText, formatRepairFeedback, type ProseKind } from '../../shared/prose';
+import { KIND_SPECS, lintProse, lintRecipeText, lintWorldText, formatRepairFeedback, type ProseKind, type WorldTextOptions } from '../../shared/prose';
 import { ENEMY_IDS, MOTIF_IDS, PROP_IDS, TERRAIN_FEATURE_IDS, type EnemyId } from '../../shared/registry';
 
 // ---------------------------------------------------------------------------
@@ -575,7 +575,10 @@ const REMAINS_SHAPES = [
   'one sentence: the object and the mark on it',
   'what is printed or written on it, quoted, then who it belonged to',
   'the object, its wear, then the dated bible fact',
-  'a short list of what was in the pockets or on the belt',
+  // Was "a short list of what was in the pockets or on the belt", which is where the pocket
+  // inventory the blind read kept finding came from: the prompt forbade the list while the
+  // slot asked for it (docs/design/BLIND_READ.md, 20 Sept).
+  'the job these creatures did, in one flat clause, then the one object that proves it',
   'the object and a note one of the authors left on it',
 ];
 /** One remains fragment per enemy kind the bible casts, each dated by a different event and given a different shape. */
@@ -742,8 +745,14 @@ export function lintFields(parts: Lintable, bible: WorldBible | undefined): Lint
   return fields;
 }
 
-/** `lintFields` scored, with the checks that need more than one line to see. */
-export function lintWorld(parts: Lintable, bible: WorldBible | undefined): WorldLint {
+/**
+ * `lintFields` scored, with the checks that need more than one line to see.
+ *
+ * `options.seeds` are the document kinds this world was seeded with (`worldSeeds`), so the
+ * world-scope checks can tell a fragment that named its own document from one that copied the
+ * seed out of the prompt data.
+ */
+export function lintWorld(parts: Lintable, bible: WorldBible | undefined, options: WorldTextOptions = {}): WorldLint {
   const fields = lintFields(parts, bible);
   let weight = 0;
   let total = 0;
@@ -777,6 +786,17 @@ export function lintWorld(parts: Lintable, bible: WorldBible | undefined): World
     });
   }
   const known = new Set(failures.map((failure) => failure.path));
+  // Faults that need the whole world in view: a phrase used twice, a seeded document kind copied out.
+  for (const issue of lintWorldText(fields, options)) {
+    if (known.has(issue.path)) continue;
+    known.add(issue.path);
+    rules.add(issue.rule);
+    failures.push({
+      path: issue.path, kind: issue.kind, text: issue.text,
+      maxChars: Math.min(POLISH_MAX[issue.kind] ?? Infinity, KIND_SPECS[issue.kind].max),
+      notes: [issue.advice],
+    });
+  }
   for (const failure of [...lawFailures(parts), ...remainsNameFailures(parts, bible), ...openerFailures(parts), ...calloutFailures(parts), ...dateFailures(parts, bible), ...stockPropFailures(parts)]) {
     if (known.has(failure.path)) continue;
     known.add(failure.path);
