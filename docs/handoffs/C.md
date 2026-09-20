@@ -1,5 +1,23 @@
 # Handoff — Agent C (Devin)
 
+## Final browser sweep and compact header — 2026-09-20
+
+- Branch: `devin/1789894710-responsive-status`, based on main `71f1dc2`.
+- **Implemented:** status controls and provenance badges wrap instead of exceeding the
+  header width; individual controls do not shrink into broken labels.
+- **Verified:** `npm run check`: **754 tests / 62 files**, typecheck/build and whitespace.
+  On `d5edb63`, browser co-op checks passed for two named and ordinary tabs: stable
+  membership/classes through repeated HQ/room-two reloads, host migration, shared receipt,
+  physical portal, synchronized combat and room progression. Device identity remained
+  separate from named identities. The 24-idea cap and both labelled preview paths passed.
+  Final observed console sweep had no runtime errors.
+- **Browser defect:** at 800 CSSpx, preview header width was 884px against a 792px content
+  viewport. This CSS correction still needs a focused responsive retest.
+- **Mocked:** fixture generation; no browser state/events were injected.
+- **Unverified:** physical multi-device LAN, live generation, browser floor mode, four-active-
+  seat/grace-expiry browser checks and fine one-shot/release timings under VM slowdown.
+  Real-socket and input regression suites cover the latter lifecycle logic.
+
 ## Co-op reload readiness — 2026-09-20
 
 - Branch: `devin/1789893771-coop-reconnect`, based on main `dc2c934`.
