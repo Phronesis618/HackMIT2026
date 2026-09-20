@@ -24,8 +24,10 @@ export type SkillEffectId = AttunementEffectId | CoreEffectId;
 export interface SkillNode {
   id: string;
   name: string;
-  /** Player-facing intended effect. */
+  /** Player-facing effect, plain numbers first (docs/WRITING.md). */
   description: string;
+  /** The world's own line for an attunement; shown under the effect, never instead of it. */
+  lore?: string;
   /** Row, 0 at the root (bottom). */
   tier: number;
   /** Column: 0 is the spine, negative left, positive right. */
@@ -151,7 +153,7 @@ export function buildSkillTree(classId: ClassId, world: SkillWorldContext | null
     const id = `attune.${i}.${a.effectId}`;
     nodes.push({
       id, name: a.name,
-      description: `${a.description} (${ATTUNEMENT_EFFECT_INFO[a.effectId].summary})`,
+      description: ATTUNEMENT_EFFECT_INFO[a.effectId].summary, lore: a.description,
       tier: 2 + i, lane: 2, requires: [i === 0 ? 'core.salvage' : `attune.${i - 1}.${attunements[i - 1]!.effectId}`],
       cost: 3 + i, kind: 'attunement', effectId: a.effectId, status: ATTUNEMENT_EFFECT_INFO[a.effectId].status === 'implemented' ? 'implemented' : 'planned',
     });

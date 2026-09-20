@@ -386,6 +386,7 @@ export function SkillsPage({ model, actions, selectedId: initialId = 'core.root'
           <span className={`skilltree__kind skilltree__kind--${selected.kind}`}>{selected.kind === 'attunement' ? 'World attunement' : selected.kind === 'core' ? 'Operative core' : CLASS_INFO[model.localPlayer.classId].name}</span>
           <h3 className="skilltree__name">{selected.name}</h3>
           <p className="skilltree__desc">{selected.description}</p>
+          {selected.lore && <p className="skilltree__desc muted">{selected.lore}</p>}
           <dl className="skilltree__meta">
             <dt>Cost</dt><dd>{selected.cost === 0 ? 'Innate' : `${selected.cost} resources`}</dd>
             <dt>Tier</dt><dd>{selected.tier === 0 ? 'Root' : selected.tier}</dd>
