@@ -237,7 +237,8 @@ resource, so a crew that ignores exploration is a crew on its last 30 HP at the 
 **Touch points:** the `beacon.e.rally` branch, `discoverLore`.
 
 **`first_light`** · budget **−1** · *the first cut is the deep one*
-`firstStrikeMul = lerp(2.0, 3.0, i)` on the first damage instance against an untouched enemy.
+`firstStrikeMul = lerp(2.0, 3.0, i)` on the first damage instance a PLAYER deals to an enemy (not on
+full health: a hazard tick that took a sliver off it must not spend the crew's opening strike).
 At 0.5: **×2.5**. A Shade one-shots swarmlings and husks from stealth. This promotes the existing
 `first_strike` attunement (`registry.ts:235`, status `planned`) from a skill node to a world law, which
 also means implementing it once serves both.

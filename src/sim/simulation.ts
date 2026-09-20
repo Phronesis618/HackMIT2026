@@ -100,6 +100,12 @@ interface EnemyRuntime {
   waveTag?: string;
   /** Mirror-shade decoys: they telegraph, they deal nothing, they hold one point. */
   decoy?: boolean;
+  /**
+   * True once a PLAYER's hit has landed on it. `first_light` keys its opening-strike bonus on
+   * this rather than on full health, so a burn tick from the room cannot spend the crew's
+   * opening strike before anyone has swung (docs/design/WORLD_MUTATORS.md).
+   */
+  struckByPlayer?: boolean;
 }
 
 /** Floors: the crew arrives through a door, on its `entry` tile, facing `inward`. */
@@ -587,6 +593,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       e.cooldownMs = 600;
       e.hitMs = 0;
       e.hazard = createHazardClock();
+      e.struckByPlayer = false; // a fresh target is a fresh opening strike
     }
   }
 
@@ -731,13 +738,16 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const s = e.state;
     if (s.hp <= 0) return;
     // World laws scale what the CREW hits for. A vent is not a player: it neither gets
-    // `playerDamageMul` nor spends the `first_light` opening strike's multiplier on a burn tick.
-    const lawMul = source.kind === 'player' ? laws.playerDamageMul * (s.hp === s.maxHp ? laws.firstStrikeMul : 1) : 1;
+    // `playerDamageMul` nor spends the `first_light` opening strike on a burn tick — and, because
+    // the bonus is keyed on the first PLAYER hit rather than on full health, a hazard that has
+    // already taken a sliver off an enemy cannot quietly cancel it either.
+    const lawMul = source.kind === 'player' ? laws.playerDamageMul * (e.struckByPlayer === true ? 1 : laws.firstStrikeMul) : 1;
     const marked = Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1) * lawMul);
     // The Custodian caps single hits at 12% of its health, applies its phase-3 shield and any
     // vulnerability window it has opened (BOSS_FINALE §3.2, §4.2).
     const amount = Math.min(s.hp, e.custodian ? custodianIncomingDamage(e.custodian, s, marked) : marked);
     if (amount <= 0) return;
+    if (source.kind === 'player') e.struckByPlayer = true;
     const by = source.kind === 'player' ? source.player : source.kind === 'displaced' ? source.by : null;
     // An environmental kill pays half: attractive to aim for, never better than fighting.
     const credit = source.kind === 'player' ? 1 : ENV_KILL_CREDIT;

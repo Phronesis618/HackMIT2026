@@ -319,7 +319,7 @@ export function lawEffectText(law: WorldLaw): string {
     case 'committed_strike': return `${r.attackMoveMul === 0 ? 'No movement' : `Movement at ${Math.round(r.attackMoveMul * 100)}%`} during a basic attack. Damage dealt +${pct(r.playerDamageMul)}.`;
     case 'glass_lattice': return `Integrity ${r.playerMaxHp} instead of ${PLAYER_MAX_HP}. Damage dealt ${times(r.playerDamageMul)}.`;
     case 'long_echo': return `Q and E cooldowns -${pct(r.abilityCooldownMul)}. Ultimate charges ${pct(r.ultChargeMul)} slower.`;
-    case 'first_light': return `First hit on an undamaged enemy deals ${times(r.firstStrikeMul)} damage.`;
+    case 'first_light': return `The crew's first hit on an enemy deals ${times(r.firstStrikeMul)} damage. The room's own damage does not count.`;
     case 'few_and_terrible': return `Enemy groups ${times(r.enemyCountMul)} size. Enemy health ${times(r.enemyHpMul)}, damage +${pct(r.enemyDamageMul)}.`;
     case 'the_many': return `Enemy groups ${times(r.enemyCountMul)} size, up to ${LAW_ROOM_ENEMY_CAP} per room. Enemy health ${times(r.enemyHpMul)}, damage -${pct(r.enemyDamageMul)}.`;
     case 'long_dark': return `Hazard tiles and attack warnings always show. Everything else, enemies included, is hidden past ${r.lightRadius} px from each operative.`;
