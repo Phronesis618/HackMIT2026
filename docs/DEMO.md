@@ -30,9 +30,12 @@ For a container host, use the production-container commands in the README.
    Proving Chamber opens solo training; the southeast Observatory focuses the contribution
    console. Enter a display name in the sidebar. Manual class controls remain available
    as an accessibility shortcut.
-2. Each player contributes an idea. The host presses **Prepare world**.
+2. Each player contributes an idea. The host presses **Prepare world**. The forming ring shows
+   the crew's ideas orbiting; the reveal card names the world, its palette, rooms, laws and
+   how many ideas shaped it (the composer answers in milliseconds, so the reveal is the beat).
 3. Read the creation receipt before entering. State the provenance label aloud:
-   **LIVE**, **OFFLINE FIXTURE**, or **FALLBACK FIXTURE**. Unused contributions must remain
+   **LIVE**, **COMPOSED** (offline composer, built from the ideas, no model call),
+   **OFFLINE FIXTURE**, or **FALLBACK FIXTURE**. Unused contributions must remain
    visibly unused; authored fixtures do not become generated worlds because a player typed.
 4. Enter the portal together. Pause briefly for the first-room reveal and arrival keepsake.
 5. Show movement, a directional attack, a dash through danger and the class's Q ability.
@@ -45,6 +48,9 @@ For a container host, use the production-container commands in the README.
    dash through it. Activated relays stay charged. Return to the core and tap F to release
    the signal, watch the discharge, then return to the sanctuary and its Archive.
 9. Review the debrief, return to headquarters and show the new event-derived memories.
+   Back in the sanctuary open **Tab → Skills**: hostiles paid shards on defeat and the room
+   clears paid more; learn a bright node (Reinforced Plating, Second Wind, Salvager, or the
+   class weapon node) and point at the tree filling in — the between-runs roguelike loop.
 10. Reload to show that the memory wall persists on this browser. Co-op shares event content;
    storage and captured arrival images belong to each browser.
 
