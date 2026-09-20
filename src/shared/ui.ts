@@ -47,6 +47,20 @@ export interface UiWorldSummary {
   lore: LoreFragment[];
   /** World-grown skill nodes (see src/shared/skills.ts). */
   attunements: Attunement[];
+  /** World laws (agent M1): the world's name for each law beside the engine's plain effect. Absent = none. */
+  laws?: UiWorldLaw[];
+}
+
+export interface UiWorldLaw {
+  lawId: string;
+  /** Model-written (or derived) in-world name. */
+  name: string;
+  /** Model-written in-world line. */
+  description: string;
+  /** Engine-written: game terms and the real numbers at this world's intensity. */
+  effect: string;
+  /** False while the sim does not apply this law yet; the panel says so. */
+  active: boolean;
 }
 
 export interface UiRoomSummary {
