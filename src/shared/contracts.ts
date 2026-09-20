@@ -759,7 +759,8 @@ export const AnchorStateSchema = z.object({
   state: z.enum(['dormant', 'planting', 'planted']),
   progress: z.number().min(0).max(1),
   ritual: z.object({
-    stage: z.enum(['locked', 'relays', 'core', 'discharging', 'complete']),
+    /** `collapse`/`extraction`/`stranded` are the run's last minutes (BOSS_FINALE.md §7). */
+    stage: z.enum(['locked', 'relays', 'core', 'discharging', 'collapse', 'extraction', 'complete', 'stranded']),
     relays: z.array(z.object({
       x: z.number(),
       y: z.number(),
@@ -800,6 +801,31 @@ export const GameSnapshotSchema = z.object({
     brokenWalls: z.array(z.string().regex(/^\d+,\d+$/)).max(2048),
     wallDamage: z.record(z.string().regex(/^\d+,\d+$/), z.number().nonnegative()),
   }).optional(),
+  /**
+   * The collapse after the Anchor discharges: the walk back to the portal, the rooms failing
+   * behind the crew, and the three pedestals at the end of it. Absent until the Anchor holds.
+   */
+  collapse: z.object({
+    /** Mirrors `anchor.ritual.stage`, which is only visible in the Anchor room itself. */
+    stage: z.enum(['collapse', 'extraction', 'complete', 'stranded']),
+    remainingMs: z.number().nonnegative(),
+    totalMs: z.number().positive(),
+    ringDepth: z.number().int().min(0).max(3),
+    portalRoomId: IdString,
+    /** Rooms already lost behind the crew; the minimap greys them. */
+    lostRoomIds: z.array(IdString).max(40),
+    /** The room the crew should head for next, for the floor chevron and the minimap pulse. */
+    nextRoomId: IdString.optional(),
+    /** Extraction only: what the run earned the right to carry out. */
+    offer: z.array(z.object({
+      key: z.string().max(40),
+      title: z.string().max(40),
+      x: z.number(),
+      y: z.number(),
+      votes: z.array(IdString).max(4),
+    })).max(3),
+    chosenKey: z.string().max(40).nullable(),
+  }).nullable().optional(),
   /**
    * The Custodian's floor: tiles one of its arena patterns has marked right now, plus the tiles
    * its phase-2 corruption turned hostile for the rest of the fight. Absent outside a boss fight.
@@ -908,11 +934,19 @@ export const GameEventSchema = z.discriminatedUnion('type', [
     name: z.string().max(32), tell: z.string().max(60), firstUse: z.boolean(),
   }),
   z.object({ ...eventBase, type: z.literal('terrain_corrupted'), roomId: IdString, enemyId: IdString, tilesChanged: z.number().int().nonnegative() }),
+  z.object({ ...eventBase, type: z.literal('collapse_started'), worldId: IdString, totalMs: z.number().positive(), hops: z.number().int().nonnegative() }),
+  z.object({ ...eventBase, type: z.literal('room_lost'), worldId: IdString, roomId: IdString }),
+  z.object({ ...eventBase, type: z.literal('extraction_reached'), worldId: IdString, playerIds: z.array(IdString), remainingMs: z.number().nonnegative() }),
+  z.object({
+    ...eventBase, type: z.literal('relic_carried'), worldId: IdString, key: z.string().max(40),
+    title: z.string().max(40), detail: z.string().max(200), playerIds: z.array(IdString),
+  }),
   z.object({
     ...eventBase,
     type: z.literal('run_ended'),
     worldId: IdString,
-    outcome: z.enum(['anchored', 'collapsed', 'aborted']),
+    /** `stranded`: the Anchor held and the crew did not get out. The world is saved; no relic. */
+    outcome: z.enum(['anchored', 'collapsed', 'aborted', 'stranded']),
     playerIds: z.array(IdString),
   }),
 ]);

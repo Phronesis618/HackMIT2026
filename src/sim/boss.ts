@@ -561,7 +561,8 @@ function stepCorruptionRing(rt: CustodianRuntime, ctx: BossContext): void {
   rt.field.corrupted = perimeterTiles(ctx.room, rt.ringStep);
 }
 
-function perimeterTiles(room: RoomSpec, depth: number): string[] {
+/** The `depth` rings of floor just inside the walls; never doors or the Anchor, so nothing seals. */
+export function perimeterTiles(room: RoomSpec, depth: number): string[] {
   const keys: string[] = [];
   for (let row = 0; row < room.height; row++) {
     for (let col = 0; col < room.width; col++) {

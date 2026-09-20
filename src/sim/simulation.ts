@@ -20,7 +20,15 @@ import {
 import { headquartersRoom } from './headquarters';
 import { terrainSpeedMultiplier, type TerrainState } from '../shared/terrain';
 import { createTerrainState, strikeBreakableWalls } from './terrain';
-import { ANCHOR_DISCHARGE_MS, ANCHOR_PULSE_SPEED, ANCHOR_PULSE_WARNING_MS, guardianPhase, RELAY_ACTIVATION_RANGE } from '../shared/finale';
+import {
+  ANCHOR_PULSE_SPEED, ANCHOR_PULSE_WARNING_MS, anchorDischargeMs, guardianPhase,
+  preActivatedRelays, RELAY_ACTIVATION_RANGE, relicsRead,
+} from '../shared/finale';
+import {
+  buildOffer, collapseSnapshot, createCollapse, enterExtraction, leaveRoom, planEscape,
+  roomIsLost, stepCollapse, stepExtraction, COLLAPSE_CHASE_SPEED, COLLAPSE_REVIVE_MS, PEDESTAL_RANGE,
+  type CollapseRun, type EscapeContext,
+} from './escape';
 import {
   custodianMaxHp, gatekeeperMaxHp, gatekeeperTier, PHASE_CHANGE_RECOVERY_MS, resolveCustodian,
   type ResolvedCustodian,
@@ -31,7 +39,7 @@ import {
   type BossContext, type CustodianRuntime,
 } from './boss';
 import { TRAINING_REGEN_PER_TICK, TRAINING_RESPAWN_MS, TRAINING_WAKE_RANGE, trainingRoom } from './training';
-import { FLOOR_ENTRANCE_ROOM_ID } from '../shared/floors';
+import { DOOR_SIDES, FLOOR_ENTRANCE_ROOM_ID } from '../shared/floors';
 import { createRoomProvider, type RoomProvider } from './floorProvider';
 import {
   FLOOR_TUNING, TREASURE_REWARD, advanceBiome, clearReward, connectedTiles, createFloorsRun, doorArrival, floorRunState, focusPoint,
@@ -172,6 +180,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   let discoveredLore = new Set<number>();
   /** The world's Custodian identity and its three patterns; resolved once per world. */
   let custodianCache: { worldId: string; resolved: ResolvedCustodian } | null = null;
+  /** Non-null from the moment the Anchor discharges until the crew is out (or is not). */
+  let collapse: CollapseRun | null = null;
+  /** Written when the Custodian falls; the extraction offers it as a thing to carry out. */
+  let custodianLog: { title: string; detail: string } | null = null;
 
   function emit(data: GameEventInput): GameEvent {
     return { ...data, id: `${tick}:${eventCounter++}`, tick, timeMs: tick * TICK_MS };
@@ -213,6 +225,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   }
 
   function doorsLocked(): boolean {
+    // Never make the crew fight its way out: every door is open once the collapse starts.
+    if (collapse !== null) return false;
     return floorsRun !== null && phase === 'expedition' && sealsDoors(room) && !progress.cleared;
   }
 
@@ -352,6 +366,109 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     };
   }
 
+  /** Key of a room inside the escape route: the floors room id, or the legacy room index. */
+  function escapeKey(spec: RoomSpec): string {
+    return spec.roomId ?? String(spec.index);
+  }
+
+  /** Rooms reachable from `key` in one step, in the same key space as `escapeKey`. */
+  function escapeNeighbours(key: string): string[] {
+    if (floorsRun) {
+      const plan = floorsRun.provider.plan(floorsRun.biomeId);
+      const node = plan.rooms.find((candidate) => candidate.id === key);
+      return node ? DOOR_SIDES.map((side) => node.doors[side]).filter((id): id is string => id !== undefined) : [];
+    }
+    const spec = world?.rooms[Number(key)];
+    return spec ? spec.exits.map((exit) => String(exit.toRoomIndex)) : [];
+  }
+
+  /**
+   * The walk back: from the Anchor room to the way the crew came in — the biome entrance in a
+   * floors run, room 1 in a legacy world. A final arena with no door out has no route, and then
+   * the run ends at the discharge exactly as it did before the collapse existed.
+   */
+  function startCollapse(events: GameEvent[]): boolean {
+    if (!world || collapse !== null) return false;
+    const portalKey = floorsRun ? FLOOR_ENTRANCE_ROOM_ID : '0';
+    const route = planEscape(escapeKey(room), portalKey, escapeNeighbours);
+    if (!route || route.length < 2) return false;
+    const portalSpec = floorsRun
+      ? floorsRun.provider.getRoom({ biomeId: floorsRun.biomeId, roomId: portalKey })
+      : world.rooms[0];
+    if (!portalSpec) return false;
+    collapse = createCollapse({
+      route, portalRoomId: portalSpec.id,
+      solo: orderedPlayers().filter((p) => p.state.hp > 0).length <= 1,
+    });
+    rebuildGrid(); // every door unseals
+    events.push(emit({ type: 'collapse_started', worldId: world.worldId, totalMs: collapse.totalMs, hops: collapse.hops }));
+    return true;
+  }
+
+  function escapeContext(events: GameEvent[]): EscapeContext {
+    return {
+      worldId: world?.worldId ?? '',
+      room,
+      roomKey: escapeKey(room),
+      players: () => orderedPlayers().map((p) => ({ id: p.state.id, x: p.state.x, y: p.state.y, hp: p.state.hp })),
+      crewSize: () => players.size,
+      damagePlayer: (playerId, source, damage) => {
+        const p = players.get(playerId);
+        return p ? damagePlayer(p, source, damage, false, events, false) : false;
+      },
+      revive: (playerId, hp) => {
+        const p = players.get(playerId);
+        if (!p) return;
+        p.state.hp = Math.min(p.state.maxHp, hp);
+        resetTransient(p);
+        p.state.invulnerableMs = 1000;
+        events.push(emit({ type: 'player_revived', playerId, byPlayerId: playerId, hp: p.state.hp }));
+      },
+      emit: (event) => { events.push(emit(event)); },
+    };
+  }
+
+  /** Three pedestals rise around the portal room's own focus. */
+  function pedestalPoints(): Array<{ x: number; y: number }> {
+    const base = focusPoint(room) ?? findTile('P') ?? tileToWorld(Math.floor(room.width / 2), Math.floor(room.height / 2));
+    return [0, 1, 2].map((index) => {
+      const angle = (index * Math.PI * 2) / 3 - Math.PI / 2;
+      return nearestOpenPosition(grid, {
+        x: base.x + Math.cos(angle) * TILE_SIZE * 2, y: base.y + Math.sin(angle) * TILE_SIZE * 2,
+      }, PLAYER_RADIUS);
+    });
+  }
+
+  /** The collapse, the extraction and the one thing the crew carries out. */
+  function updateCollapse(events: GameEvent[]): void {
+    const run = collapse;
+    if (!run || !world) return;
+    const ctx = escapeContext(events);
+    if (run.stage === 'collapse') {
+      if (escapeKey(room) === run.portalKey) {
+        enterExtraction(run, buildOffer({
+          lore: world.recipe.lore, discovered: [...discoveredLore], custodianLog, at: pedestalPoints(),
+        }), ctx);
+        if (progress.anchor?.ritual) progress.anchor.ritual.stage = 'extraction';
+        return;
+      }
+      if (stepCollapse(run, ctx) === 'stranded') {
+        if (progress.anchor?.ritual) progress.anchor.ritual.stage = 'stranded';
+        finishRun('stranded', events);
+      }
+      return;
+    }
+    if (run.stage !== 'extraction') return;
+    const chosen = stepExtraction(run, ctx);
+    if (!chosen) return;
+    if (progress.anchor?.ritual) progress.anchor.ritual.stage = 'complete';
+    events.push(emit({
+      type: 'relic_carried', worldId: world.worldId, key: chosen.key, title: chosen.title,
+      detail: chosen.detail, playerIds: chosen.votes.length > 0 ? chosen.votes : playerIds(),
+    }));
+    finishRun('anchored', events);
+  }
+
   /** The boss's floor, for the renderer and the HUD: marked tiles now, corrupted tiles for good. */
   function bossFieldFor(): { bossField?: NonNullable<GameSnapshot['bossField']> } {
     const boss = progress.enemies.find((e) => e.custodian && e.state.hp > 0);
@@ -448,8 +565,13 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         ...anchorPoint, state: 'dormant', progress: 0,
         ...(room.anchorRelays ? { ritual: {
           stage: 'locked' as const,
-          relays: room.anchorRelays.map((relay) => ({ ...tileToWorld(relay.x, relay.y), activated: false })),
-          activeRelay: 0, pulseRadius: 0, pulseWarningMs: ANCHOR_PULSE_WARNING_MS, dischargeMs: 0,
+          // Relics actually read this run start the circuit further along (BOSS_FINALE §6).
+          relays: room.anchorRelays.map((relay, index) => ({
+            ...tileToWorld(relay.x, relay.y),
+            activated: index < preActivatedRelays(relicsRead([...discoveredLore], world?.recipe.lore ?? [])),
+          })),
+          activeRelay: preActivatedRelays(relicsRead([...discoveredLore], world?.recipe.lore ?? [])),
+          pulseRadius: 0, pulseWarningMs: ANCHOR_PULSE_WARNING_MS, dischargeMs: 0,
         } } : {}),
       } : null,
       cleared: false,
@@ -562,6 +684,15 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: p.state.id,
         worldId: phase === 'expedition' ? world?.worldId ?? null : null }));
       dropRemains(e);
+      // The fight writes its own record: the world's name for the Custodian, its three moves, how
+      // long it took and who landed the last hit. The extraction may offer it as a thing to carry.
+      if (e.custodian && e.maxBossPhase === undefined) {
+        const moves = e.custodian.custodian.moves.map((move) => move.name).join(', ');
+        custodianLog = {
+          title: 'Custodian log',
+          detail: `${e.custodian.custodian.title}: ${moves}. ${Math.round(tick * TICK_MS / 1000)} seconds. Last hit by ${p.state.displayName}.`.slice(0, 200),
+        };
+      }
     }
   }
 
@@ -1179,7 +1310,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (distance(s, target.state) > stopRange || !clearPath(grid, s, target.state)) {
       const waypoint = chaseWaypoint(grid, s, target.state, ENEMY_INFO[s.enemyId].radius);
       const d = distance(s, waypoint);
-      const step = Math.min(d, spec.speed * (s.slowMs > 0 ? 0.35 : 1) *
+      const step = Math.min(d, spec.speed * (s.slowMs > 0 ? 0.35 : 1) * (collapse !== null ? COLLAPSE_CHASE_SPEED : 1) *
         terrainSpeedMultiplier(room, s.x, s.y, progress.terrain.brokenWalls) * TICK_MS / 1000);
       if (d > 0) {
         const moved = moveCircle(grid, s.x, s.y, ENEMY_INFO[s.enemyId].radius,
@@ -1193,7 +1324,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     }
   }
 
-  function finishRun(outcome: 'anchored' | 'collapsed' | 'aborted', events: GameEvent[]): void {
+  function finishRun(outcome: 'anchored' | 'collapsed' | 'aborted' | 'stranded', events: GameEvent[]): void {
     if (phase !== 'expedition' || !world) return;
     phase = 'debrief';
     for (const p of players.values()) {
@@ -1206,7 +1337,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   function updateObjectives(events: GameEvent[]): void {
     if (phase !== 'expedition' || !world) return;
     const living = orderedPlayers().filter((p) => p.state.hp > 0);
-    if (players.size > 0 && living.length === 0) {
+    // During the collapse a downed crew is escape.ts's business: a solo last stand, or a bleed-out
+    // that ends the run as `stranded` rather than as a wipe.
+    if (players.size > 0 && living.length === 0 && collapse === null) {
       finishRun('collapsed', events);
       return;
     }
@@ -1219,7 +1352,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         continue;
       }
       busy.add(rescuer.state.id);
-      downed.state.reviveProgress = Math.min(1, downed.state.reviveProgress + TICK_MS / REVIVE_DURATION_MS);
+      downed.state.reviveProgress = Math.min(1, downed.state.reviveProgress +
+        TICK_MS / (collapse !== null ? COLLAPSE_REVIVE_MS : REVIVE_DURATION_MS));
       if (downed.state.reviveProgress >= 1 - 1e-7) {
         downed.state.hp = Math.min(REVIVE_HP, downed.state.maxHp);
         resetTransient(downed);
@@ -1237,6 +1371,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         markCleared(floorsRun, room.roomId);
         rebuildGrid(); // the doors unseal
       }
+    }
+    if (collapse !== null) {
+      updateCollapse(events);
+      return;
     }
     if (floorsRun) updateFloorFeatures(living, busy, events);
     const anchor = progress.anchor;
@@ -1270,17 +1408,24 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       projectiles = [];
     }
     if (ritual.stage === 'discharging') {
-      ritual.dischargeMs = Math.min(ANCHOR_DISCHARGE_MS, ritual.dischargeMs + TICK_MS);
-      anchor.progress = 0.75 + 0.25 * ritual.dischargeMs / ANCHOR_DISCHARGE_MS;
-      if (ritual.dischargeMs >= ANCHOR_DISCHARGE_MS - 1e-7) {
-        ritual.stage = 'complete';
+      // Every relic the crew actually read takes 150 ms off the discharge (BOSS_FINALE §6).
+      const dischargeMs = anchorDischargeMs(relicsRead([...discoveredLore], world.recipe.lore));
+      ritual.dischargeMs = Math.min(dischargeMs, ritual.dischargeMs + TICK_MS);
+      anchor.progress = 0.75 + 0.25 * ritual.dischargeMs / dischargeMs;
+      if (ritual.dischargeMs >= dischargeMs - 1e-7) {
         anchor.state = 'planted';
         anchor.progress = 1;
         events.push(emit({ type: 'anchor_planted', worldId: world.worldId, roomIndex: room.index, playerIds: playerIds() }));
-        finishRun('anchored', events);
+        // The Anchor holds; now get out. A room with no way back ends the run here, as before.
+        if (startCollapse(events)) ritual.stage = 'collapse';
+        else {
+          ritual.stage = 'complete';
+          finishRun('anchored', events);
+        }
       }
       return;
     }
+    if (ritual.stage === 'collapse' || ritual.stage === 'extraction' || ritual.stage === 'stranded') return;
     if (ritual.activeRelay > 0) {
       if (ritual.pulseWarningMs > 0) ritual.pulseWarningMs = decay(ritual.pulseWarningMs);
       else {
@@ -1320,7 +1465,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
 
   function updateExits(events: GameEvent[]): void {
     if (phase === 'debrief') return;
-    const open = phase === 'headquarters' || phase === 'training' || progress.cleared;
+    const open = phase === 'headquarters' || phase === 'training' || progress.cleared || collapse !== null;
     for (const p of orderedPlayers()) {
       const { col, row } = worldToTile(p.state.x, p.state.y);
       const exit = room.exits.find((e) => e.x === col && e.y === row);
@@ -1328,7 +1473,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         // Floors: the sim walks the graph itself. Same group rule as legacy exits: the first
         // operative through a door takes the whole crew along.
         const arrival = doorArrival(floorsRun, room, exit.toRoomId);
-        if (!arrival) continue;
+        // A room that has already failed behind the crew cannot be walked back into.
+        if (!arrival || roomIsLost(collapse, arrival.room.id)) continue;
+        if (collapse) leaveRoom(collapse, escapeKey(room), room.id);
         events.push(emit({ type: 'exit_reached', playerId: p.state.id, roomIndex: room.index, toRoomIndex: exit.toRoomIndex, toRoomId: exit.toRoomId }));
         enterFloorRoom(arrival.room, arrival, events);
         return;
@@ -1368,6 +1515,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       if (world?.worldId !== next?.worldId) {
         rooms.clear();
         discoveredLore = new Set();
+        collapse = null;
+        custodianLog = null;
       }
       world = next;
       // Outside a run the provider follows the latest copy of the world (briefs may arrive late).
@@ -1391,12 +1540,18 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         enterFloorRoom(roomProvider.getRoom(roomProvider.entranceRef()), undefined, events);
         return events;
       }
+      // During the collapse the crew walks BACK through rooms it has already cleared: the only
+      // rules left are that the door exists and the room behind it has not failed yet.
+      const escaping = collapse !== null && phase === 'expedition';
       if (phase === 'expedition' && (
-        room.index === roomIndex || !progress.cleared || livingEnemies().length > 0 ||
-        !orderedPlayers().some((p) => p.state.hp > 0) ||
+        room.index === roomIndex ||
         !room.exits.some((exit) => exit.toRoomIndex === roomIndex) ||
-        (room.isFinal && progress.anchor?.state !== 'planted')
+        !orderedPlayers().some((p) => p.state.hp > 0) ||
+        (escaping && roomIsLost(collapse, next.id)) ||
+        (!escaping && (!progress.cleared || livingEnemies().length > 0 ||
+          (room.isFinal && progress.anchor?.state !== 'planted')))
       )) return [];
+      if (collapse) leaveRoom(collapse, escapeKey(room), room.id);
       loadRoom(next, 'expedition');
       return [emit({ type: 'room_entered', worldId: world.worldId, roomIndex: next.index,
         roomId: next.id, roomName: next.name, playerIds: playerIds() })];
@@ -1405,6 +1560,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       const events: GameEvent[] = [];
       finishRun('aborted', events);
       floorsRun = null;
+      collapse = null;
+      custodianLog = null;
       rooms.clear();
       discoveredLore = new Set();
       for (const p of players.values()) {
@@ -1482,6 +1639,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
             relays: progress.anchor.ritual.relays.map((relay) => ({ ...relay })) } } : {}) } : null,
         roomCleared: phase !== 'headquarters' && progress.cleared,
         ...bossFieldFor(),
+        ...(collapse ? { collapse: collapseSnapshot(collapse, escapeKey(room)) } : {}),
         terrain: { brokenWalls: [...progress.terrain.brokenWalls], wallDamage: { ...progress.terrain.wallDamage } },
         ...(floorsRun && phase !== 'headquarters' ? { floor: floorRunState(floorsRun, doorsLocked()) } : {}),
       };

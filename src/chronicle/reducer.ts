@@ -205,7 +205,11 @@ function memoryFromEvent(
           ? 'returned with the world anchored'
           : event.outcome === 'collapsed'
             ? 'watched the world collapse'
-            : 'aborted the expedition';
+            : event.outcome === 'stranded'
+              // The Anchor held; they did not make it back to the portal. No relic, and the run
+              // still counts: the world is saved.
+              ? 'anchored the world and did not get out'
+              : 'aborted the expedition';
       return {
         id: memoryId('run_summary', event),
         kind: 'run_summary',
@@ -234,6 +238,26 @@ function memoryFromEvent(
         participants,
         title: clip(event.title, 80),
         summary: clip(`${event.source} — ${event.text} (${event.kind === 'relic' ? 'read' : 'recovered'} by ${joinNames(participants)})`, 400),
+        sourceEventIds: [event.id],
+        provenanceSource: world.provenanceSource,
+      };
+    }
+    case 'relic_carried': {
+      // The one thing the crew chose to carry out of the collapse. Derived from a real choice at a
+      // real pedestal, so the hub may talk about it (BOSS_FINALE.md §8).
+      const world = ctx.world;
+      if (!world) return null;
+      const participants = resolveParticipants(event.playerIds, ctx.players);
+      return {
+        id: memoryId('lore', event),
+        kind: 'lore',
+        worldId: world.worldId,
+        worldTitle: clip(world.title, 40),
+        roomIndex: null,
+        createdAt: ctx.now,
+        participants,
+        title: clip(`Carried out — ${event.title}`, 80),
+        summary: clip(`${joinNames(participants)} carried ${event.title} out of ${world.title} as it came down. ${event.detail}`, 400),
         sourceEventIds: [event.id],
         provenanceSource: world.provenanceSource,
       };
