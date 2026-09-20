@@ -35,6 +35,41 @@ simulation is byte-for-byte the same game.
 That is the repetition the lead is describing, and laws + look parameters are the cheapest fix: neither
 needs new content, new art assets, new enemies or new rooms. They reinterpret what already exists.
 
+### 0.1 · What the shipped systems actually do — and the rule they share
+
+| system | a representative entry | exact effect |
+| --- | --- | --- |
+| RoR2 Artifacts | **Glass** | "Allies deal **500% damage**, but have **10% health**." |
+| | **Swarms** | "Monster spawns are **doubled**, but monster maximum health is **halved**." |
+| | **Honor** | Enemies can **only** spawn as elites |
+| | **Spite** | Enemies drop exploding bombs on death |
+| | **Kin** | Monsters become **one type per stage** |
+| | **Frailty** | "Fall damage is **doubled and lethal**." |
+| | **Chaos** | Friendly fire enabled |
+| Isaac Curses | **Curse of Darkness** | The floor becomes significantly darker; visibility is limited to Isaac's aura |
+| | **Curse of the Lost** | Removes the map from the HUD **and increases the floor's room count by 4** |
+| | **Curse of the Maze** | Entering a room "will occasionally take Isaac to the wrong room, with a screen-shake and sound effect" |
+| | **Curse of the Blind** | Item sprites become question marks until picked up |
+| | **Curse of the Labyrinth** | Merges a chapter's two floors into one XL floor with **two** boss rooms and **two** treasure rooms |
+
+Sources: [RoR2 wiki.gg](https://riskofrain2.wiki.gg/wiki/Artifacts) ·
+[Isaac wiki.gg](https://bindingofisaacrebirth.wiki.gg/wiki/Curses)
+
+Three observations that shape everything below.
+
+1. **Almost none of them are difficulty sliders.** RoR2's artifacts are *rule* changes — friendly fire,
+   one monster type, items from monsters instead of chests. Isaac's curses are almost entirely
+   **information** changes: no map, no health bar, no item sprites, darkness. Neither system's flagship
+   entries touch a damage number. The lead asked for "changes that help the game feel less repetitive",
+   and the shipped answer to that is *change what the player knows and what the rules are*, not *change
+   what the numbers are*.
+2. **The good ones trade.** Glass is 500%/10%. Swarms is ×2 spawns / ÷2 health. Curse of the Lost takes
+   your map **and gives you four more rooms**. A one-directional nerf is a difficulty setting; a trade
+   is a law. Every entry in §2 that is worth shipping has a trade in it, and the ones that don't
+   (`wardens_watch`, `long_dark`) carry a +2 budget to pay for it.
+3. **They are implementable in single-digit lines.** "Monster spawns doubled, health halved" is two
+   multipliers. That is the bar for §2: if a law needs new runtime state, it is not in the one-night cut.
+
 ## 1 · Schema
 
 ```ts
@@ -146,6 +181,9 @@ spacing without touching a single ability.
 `playerMaxHp = round(lerp(60, 35, i))` · `playerDamageMul = lerp(1.5, 2.1, i)`.
 At 0.5: **48 HP, ×1.8 damage**. A husk hit (14) is now 29% of your health. Every hazard in TILES.md
 matters. The single most run-defining law available and it is two constants.
+RoR2's Glass is **500% damage at 10% health** ([wiki.gg](https://riskofrain2.wiki.gg/wiki/Artifacts));
+ours is deliberately a third as extreme, because RoR2's Glass is chosen by a veteran who wants it and
+ours is imposed on someone playing for five minutes at a hackathon booth.
 **Touch points:** `makePlayer`, `damageEnemy`.
 
 **`long_echo`** · budget **−1** · *the world remembers your gestures*
@@ -179,13 +217,18 @@ Enemy radius is *not* scaled — hitboxes must stay honest.
 `enemyCountMul = lerp(1.5, 2.1, i)` (hard cap 12 per room, the existing `RoomSpecSchema` limit) ·
 `enemyHpMul = lerp(0.60, 0.45, i)` · `enemyDamageMul = lerp(0.85, 0.70, i)`.
 At 0.5: **1.8× enemies at 0.55 HP and 0.78 damage.** Bastion's sweep and Shade's Blade Storm become the
-answer; Beacon's single-target lance stops being.
+answer; Beacon's single-target lance stops being. This is RoR2's Swarms ("spawns doubled, maximum health
+halved", [wiki.gg](https://riskofrain2.wiki.gg/wiki/Artifacts)) pulled in slightly because our rooms are
+smaller and our cap is 12.
 **Mutually exclusive with `few_and_terrible`.**
 
 **`wardens_watch`** · budget **+2** · *everything here has a rank*
 `eliteFraction = lerp(0.25, 0.50, i)`. That fraction of spawned enemies get `role: 'elite'`: **+60% HP,
 +25% damage, a visible aura ring, +2 resources on death.** At 0.5: **37%**.
 floorgen's director already assigns `role` (FLOORS.md §6), so this is a director multiplier, not new code.
+RoR2's Honor makes enemies spawn **only** as elites ([wiki.gg](https://riskofrain2.wiki.gg/wiki/Artifacts));
+a fraction is the right call for us because we have four archetype roles and turning all of them elite
+erases the encounter director's composition work.
 
 **`restless`** · budget **+1** · *nothing here stays down*
 `reanimate = { delayMs: round(lerp(14000, 9000, i)), hpFraction: lerp(0.35, 0.50, i), windowMs: same as delayMs }`.
@@ -199,6 +242,9 @@ cleared. Never applies to `elite`, `gatekeeper` or `guardian`.
 At 0.5: **70 px, 12 to players, 20 to enemies.** Detonates `*` canisters (TILES.md T1) and chains through
 packs. The blast code is **literally the canister's** — if TILES cut #2 lands, this law is ~15 lines.
 Falls off linearly to 0.35× at the rim and requires `clearPath`, same as the canister.
+This is RoR2's Spite ("enemies drop exploding bombs on death",
+[wiki.gg](https://riskofrain2.wiki.gg/wiki/Artifacts)) with the bomb's fuse removed, because our rooms
+are small enough that a delayed bomb would just be a second hazard the player can't see.
 
 ### Terrain
 
@@ -231,12 +277,20 @@ telegraph audibly, still hit you). `lantern` props and `+` conduit tiles add **+
 At 0.5: **215 px ≈ 6.7 tiles**.
 In co-op this is transformative — two light circles that must decide whether to stay joined. It is also
 renderer-only: **zero simulation risk**, which is why it is in the one-night cut.
+Isaac's Curse of Darkness limits visibility to "Isaac's aura" and, in Repentance, *widens the light
+radius while deepening the dark around it* ([wiki.gg](https://bindingofisaacrebirth.wiki.gg/wiki/Curses))
+— worth copying: a bigger, harder-edged circle reads as better-lit and is easier to play than a soft
+falloff, even when it shows you less.
 **Forbidden in the final biome** — the Custodian's telegraphs must be readable (BOSS_FINALE §9).
 
 **`mirror_halls`** · budget **+1** · *the map will not hold still*
 `hideMinimap = true`. The minimap is hidden and a room's name is withheld until entered. On 3-room
 worlds this is nearly free; on 5-biome floors it is a real law, and it directly raises the stakes of the
 collapse-escape, which relies on the minimap (BOSS_FINALE §7.4).
+Isaac's Curse of the Lost removes the map **and adds 4 rooms to the floor**
+([wiki.gg](https://bindingofisaacrebirth.wiki.gg/wiki/Curses)) — it charges you twice and is famously
+the least-liked curse. Ours should pay *out*, not in: while `mirror_halls` is active, add **+1 lore
+room** to every biome's `layout.specials`. Getting lost should at least mean finding something.
 **Forbidden when `long_dark` is also chosen** — two information blackouts is not a law, it is a bug
 report.
 
@@ -248,6 +302,19 @@ difficulty. The telegraph-design literature is explicit that tells are delivered
 channels precisely so any one can be occluded
 ([bugnet](https://bugnet.io/blog/how-to-design-enemy-attack-telegraphs)); this law removes one channel
 and pays for it in the other.
+
+### 2.1 Considered and left out (and why), with the id reserved
+
+Each of these is a real shipped mechanic and each is 5–20 lines. They are out of the 18 only because
+the registry has to stay small enough that a model picks well from it.
+
+| reserved id | precedent | why not now |
+| --- | --- | --- |
+| `one_lineage` | RoR2 **Kin** — one monster type per stage ([wiki.gg](https://riskofrain2.wiki.gg/wiki/Artifacts)) | Genuinely cheap (filter `enemyPool` to one id) and genuinely transformative, but it fights the encounter director's composition rules and the biome briefs' `enemyPool[1..5]`. Worth revisiting the day after. |
+| `crossed_lines` | RoR2 **Chaos** — friendly fire | We have no player-vs-player damage path at all, and adding one to a co-op game at 3 a.m. is how you ship a griefing bug. |
+| `long_fall` | RoR2 **Frailty** — fall damage doubled and lethal | Needs TILES.md's pits first, and "pits kill players" contradicts T2's deliberate never-lethal rule. If it ever ships it must be opt-in. |
+| `wrong_door` | Isaac **Curse of the Maze** — entering a room occasionally puts you in the wrong one, with a screen-shake and a sound ([wiki.gg](https://bindingofisaacrebirth.wiki.gg/wiki/Curses)) | Needs the floor graph (F2), and it is actively hostile during the collapse-escape. Excellent law for a *world*, terrible law for a *demo*. |
+| `blind_offer` | Isaac **Curse of the Blind** — item sprites hidden until picked up | Waits on the item system, which is D1b's doc and not built. |
 
 ## 3 · Guard-rails
 

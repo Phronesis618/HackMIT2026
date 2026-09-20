@@ -26,11 +26,30 @@ Two facts from reading the code:
    `RoomSpecSchema` ("anchor relays must be on safe ground") — and then the simulation ignores it.
    The renderer already promises damage the sim does not deliver.
 
-The reference games make the room fight. Isaac's rocks, pits and TNT are route control *and* weapons;
-Gungeon's tables block bullets on a flip and its red barrels chain; Hades' Tartarus spike traps damage
-enemies as readily as you, and two boons (Athena's deflect, Poseidon's knockback) exist largely to push
-things into them. That asymmetry — *the hazard is neutral, the player is the one who can aim it* — is
-the single mechanic missing from our terrain layer.
+The reference games make the room fight, and they are specific about it:
+
+- **Isaac's spikes deal one heart to Isaac and 8 damage to non-flying enemies.** Retracting spikes
+  "retract and extend on timers" and "can be walked over safely while they are retracted," and they can
+  be **deactivated with pressure plates**
+  ([wiki.gg](https://bindingofisaacrebirth.wiki.gg/wiki/Spikes)). One tile, three of the mechanics this
+  doc wants: neutral damage, a readable period, and a linked switch.
+- **Isaac's rocks block movement *and* projectiles, and can be pushed into gaps to make bridges**;
+  bomb rocks explode when destroyed ([wiki.gg](https://bindingofisaacrebirth.wiki.gg/wiki/Rocks)).
+- **Gungeon: non-flying enemies pushed into a pit "instantly die," which is stated outright as the
+  reason knockback weapons are good.** The player who falls in pays **half a heart** and respawns at
+  the rim; a dodge roll keeps you airborne; non-flying enemies will not cross a pit on their own
+  ([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Pits)).
+- **Gungeon's tables block bullets, clear nearby bullets during the flip animation, grant a few frames
+  of invincibility — and Bullet Kin flip tables and use them as cover themselves**
+  ([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Tables)). Braziers are explicitly called out as
+  objects that "do not provide cover," i.e. the distinction is designed, not incidental
+  ([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Objects)).
+- **Gungeon's explosive barrels deal ~35 damage to enemies**, and a dodge roll destroys one *without*
+  detonating it; water barrels can be electrified, oil ignites from explosions and fire, poison goop
+  hurts anything standing in it ([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Objects)).
+
+The common thread — *the hazard is neutral; the player's edge is that they can aim it* — is the single
+mechanic missing from our terrain layer.
 
 **What this doc adds:** 11 combat-facing tiles, each with exact sim rules; a bounded schema letting the
 model skin and tune them per biome; generator placement rules that cannot strand a room; a 5-tile
@@ -164,8 +183,11 @@ Damage falls off linearly from centre to rim (×1.0 at 0 px, ×0.35 at 76 px) an
 `clearPath(grid, canister, target)` so a wall shields you. On detonation the tile becomes `:` rubble
 (consistent with `B`). Chains are depth-limited to 6 to bound a pathological cluster.
 
-**Asymmetry is deliberate:** 48 to enemies vs 26 to players. Gungeon's barrels hurt you too, which is
-what makes shooting one a decision rather than a free button; the 2:1 ratio keeps it a *good* decision.
+**Asymmetry is deliberate:** 48 to enemies vs 26 to players. Gungeon's barrels deal ~35 to enemies and
+hurt you too, which is what makes shooting one a decision rather than a free button
+([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Objects)); our 2:1 ratio keeps it a *good* decision at
+our shorter range band. Gungeon also lets a dodge roll destroy a barrel **without** detonating it —
+worth copying later as a safety valve, but not tonight.
 
 **Enemies.** Enemy projectiles and melee also arm canisters — a sentinel volley aimed at a player
 standing beside one is a real threat. `chaseWaypoint` treats `*` as solid, so enemies path around them
@@ -209,10 +231,15 @@ same tick-ordered inputs (co-op desync guard).
   - enemy → `hp = 0`, `enemy_defeated` with `byPlayerId` = the displacer, full ult charge credit, and
     `dropRemains` fires at the pit rim so lore is never lost down a hole.
   - player → `hp = 1`, snapped to `nearestOpenPosition`, `invulnerableMs = 800`. Players never die to
-    a pit. (Isaac does the same: pits cost half a heart and a respawn, not a run.)
+    a pit. Gungeon charges **half a heart and a respawn at the pit edge**, and lets a dodge roll carry
+    you over ([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Pits)); every rule in this section is that
+    page, translated to our numbers.
 
 **Enemies.** `chaseWaypoint`'s BFS already avoids solids, so enemies path around pits and, crucially,
-*bunch at the ledge* — a readable, exploitable formation.
+*bunch at the ledge* — a readable, exploitable formation. Gungeon documents the same behaviour
+("non-flying enemies won't attempt crossing pits on their own") and the same exploit
+([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Pits)). We have no flying enemies, so the "flyers
+ignore pits" half of that design is free to add later as an enemy flag.
 
 **Co-op.** Bastion's knockback becomes a deletion tool, which is the clearest "your class matters"
 moment in the kit. Weaver's `collapse` pulls a pack toward a point: aim it past a ledge.
@@ -255,8 +282,11 @@ While `firing`, any entity whose centre is on the tile takes `VENT_DAMAGE = 14`,
 and bosses ×0.5, as with `~`.
 
 Three phase groups mean a vent field is never all-on: there is always a safe third of it, so crossing is
-a rhythm problem, not a dice roll. This is Zelda/Hades spike-trap grammar: *fixed period, visible tell,
-guaranteed safe beat.*
+a rhythm problem, not a dice roll. This is Isaac's retracting-spike grammar — *fixed period, safe while
+retracted, deactivable from a pressure plate* — with **8 damage to non-flying enemies** as the stated
+precedent for hurting both sides ([wiki.gg](https://bindingofisaacrebirth.wiki.gg/wiki/Spikes)).
+Our `_` plate (T6) is the same lever: standing on a plate of the vent field's group forces every vent in
+it to `idle` while held. That is one line and it turns a hazard into a co-op puzzle.
 
 **Enemies.** Enemies walk vent fields freely and eat the damage. The vent field is the best kiting
 ground in the room.
@@ -301,6 +331,10 @@ counter: run at them. Cover gives a second: break the line and make them move.
 
 **Enemies.** Enemies do not deliberately use cover (no new AI — out of budget tonight). They lose line
 of sight and re-path, which reads as them flanking. Note the honest limitation in the code comment.
+Gungeon does go the extra step — **Bullet Kin flip tables and use them as cover themselves**
+([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Tables)) — and that is the obvious follow-up if `-`
+lands well. Gungeon also draws the line we are drawing: braziers "do not provide cover" and tables do,
+and the game is explicit about which is which ([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Objects)).
 
 **Co-op.** Bastion's `bulwark` already blocks beams; `-` is the free, shared version of that, so a
 Beacon can hold a firing line while a Shade flanks. The clearest split-duty terrain we have.
@@ -445,7 +479,10 @@ readable, funny, and exploitable. A current lane pointing into a pit or a vent f
 build a fight around.
 
 **Co-op.** A conveyor into a hazard is a shared setup: one player tethers/knocks an enemy in, the other
-keeps the lane clear.
+keeps the lane clear. Gungeon's minecarts are the nearest published relative — frictionless, they keep
+moving until you get out, and in co-op **two players can share one but only one steers**
+([wiki.gg](https://enterthegungeon.wiki.gg/wiki/Objects)). Currents are the ungated version of that:
+no boarding, no steering, no new input.
 
 **Renderer.** Directional chevrons scrolling at 110 px/s (the actual speed — never lie about the number),
 plus a faint streak on anything standing on it. Reuse `+` conduit's chevron drawing with a pan.
@@ -497,10 +534,17 @@ inside the veil hits normally; (e) `"` never generates in `isFinal` rooms.
 **Feature id:** `secret_walls`. **Char:** `S`. Renders **identically to `#`**; solid; destroyed by any
 single point of damage.
 
-FLOORS.md §8 lists secret rooms as not generated. `S` is the tile they will need: Isaac's rule is "an
-empty grid cell touching ≥ 3 filled rooms becomes a secret room, entered by bombing a shared wall". Our
-equivalent: the floorgen pass finds such a cell, builds a small treasure room, and marks the shared
-border tile `S`.
+FLOORS.md §8 lists secret rooms as not generated. `S` is the tile they will need, and Isaac's placement
+rule is precise: pick an **empty cell adjacent to at least three rooms**, avoiding cells next to dead
+ends; if no cell qualifies after 300 attempts, relax the criteria, and again after 600, so **the secret
+room is always placed** — "generally wedged near intersections"
+([Boris the Brave](https://www.boristhebrave.com/2020/09/12/dungeon-generation-in-binding-of-isaac/)).
+Note that this is a deliberate exception to Isaac's own "don't place next to >1 filled neighbour" rule,
+which FLOORS.md §4 already implements verbatim — so the exception has to be coded as one.
+
+Our equivalent: the floorgen pass finds such a cell, builds a small treasure room, and marks the shared
+border tile `S`. The "relax, never fail" structure is the same one floorgen's `MAX_ATTEMPTS = 60` +
+deterministic comb fallback already uses, so it is a known shape in this codebase.
 
 Tell: a seam drawn at alpha 0.08 (visible if you look, invisible if you don't) plus a hollow *knock*
 audio ping when a player is within 64 px. No map marker.
