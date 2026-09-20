@@ -13,7 +13,7 @@ writing pipeline, hub, tiles, boss finale, co-op verify, UI audit); `npm run che
   a secondary-theme middle room; player words echoed into title/room names/lore; mappings only
   for features actually placed (compiler cross-check tested); up to two `rules`; **eight floors
   `BiomeBrief`s** across three themes so a floors run through a composed world changes vocabulary
-  at every fork (`resolveBiomeBriefs` uses them, tested with `upgradeToFloors`). New provenance
+  at every fork (`resolveBiomeBriefs` uses them; enemy pools follow floorgen's per-tier caps; the floors bot walks four composed biomes into the Anchor biome in `tests/integration/composer-floors-run.test.ts`, and beats the Custodian in the ad-hoc runs). New provenance
   source `procedural` (`ATTRIBUTING_SOURCES` = live + procedural) — badge `COMPOSED · relay-composer`,
   never `live`. `RecipeProvider` gained optional `source`/`badge`; the generation service takes a
   `fallbackProvider` so a failed Claude/GPT/operator attempt yields a composed world (with the
