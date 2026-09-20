@@ -191,6 +191,21 @@ Zod validation, bounded repair, safe compiler, and incremental room delivery as 
 Each Claude request has a 55-second deadline; OpenAI retains a 25-second deadline.
 Invalid recipes can receive one repair attempt within a new request deadline.
 
+### No key at all: the composer
+
+```dotenv
+RELAY_GENERATION_MODE=live
+RELAY_AI_PROVIDER=composer
+```
+
+The offline composer (`src/server/composer`) builds a world from the crew's ideas in a few
+milliseconds with no model call: sixteen themes chosen by keyword, the players' own words in
+the title, room names and lore, one or two world laws, eight floors biome briefs, and only
+honest attributions. Worlds are labelled `COMPOSED · relay-composer` (source `procedural`),
+never `live`. With Claude or GPT selected, the composer is the fallback when the model call
+fails — and it steps in automatically when the selected provider's key is missing — so the
+crew never sees a canned fixture for a failed or unconfigured live call.
+
 ### Switch back to GPT
 
 Add the OpenAI key and change the provider, then restart; no code changes are needed:

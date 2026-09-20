@@ -86,7 +86,8 @@ players' words into the title, room names and lore, chooses up to two world rule
 `WORLD_RULE_INFO`) and eight floors biome briefs, and only ever maps an idea to a feature it
 really placed. Worlds are labelled `COMPOSED · relay-composer` with source `procedural` — never
 `live`. With an API provider selected, the composer is the fallback when the model fails,
-so the demo never shows a canned fixture for a failed live call.
+so the demo never shows a canned fixture for a failed live call — and when the selected
+provider's key is missing (a fresh deploy, a keyless laptop) the composer builds every world.
 
 The receipt reports the actual generation source. Missing credentials, timeouts, rejected
 model output, or unavailable models can fall back to an explicitly labelled fixture (or, when

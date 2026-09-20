@@ -17,7 +17,7 @@ writing pipeline, hub, tiles, boss finale, co-op verify, UI audit); `npm run che
   source `procedural` (`ATTRIBUTING_SOURCES` = live + procedural) — badge `COMPOSED · relay-composer`,
   never `live`. `RecipeProvider` gained optional `source`/`badge`; the generation service takes a
   `fallbackProvider` so a failed Claude/GPT/operator attempt yields a composed world (with the
-  failure in its notes) instead of a canned fixture. `.env` on this laptop runs the composer.
+  failure in its notes) instead of a canned fixture. `.env` on this laptop runs the composer. Live mode with a missing API key now composes instead of serving fixtures (public deploy is safe before secrets are added).
 - **Retired — my interim world rules.** I had shipped 8 implemented `rules` overnight; when M1's
   laws harness landed (`src/sim/laws.ts`, 8 laws in the sim + long_dark in the renderer) I removed
   the duplicate system rather than stack two modifier layers. What survives from it: hazard floor
