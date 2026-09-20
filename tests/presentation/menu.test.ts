@@ -81,7 +81,7 @@ describe('Tab menu', () => {
   it('skills page grows the class tree plus the branch this world wrote, all still locked', () => {
     const html = render(createElement(SkillsPage, { model: model() }));
     expect(html).toContain('Reinforced Plating');
-    expect(html).toContain('Bastion of Last Light');
+    expect(html).toContain('Last Stand');
     for (const a of fixture.recipe.attunements) expect(html).toContain(a.name.replace(/'/g, '&#x27;'));
     expect(html).toContain(`Attuned to ${fixture.recipe.title}`);
     expect(html).toContain('not wired');

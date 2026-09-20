@@ -140,7 +140,7 @@ export function BestiaryPage({ model }: { model: UiModel }) {
   return (
     <>
       <h2 className="menu__title">Bestiary</h2>
-      <p className="muted">How each hostile fights is field knowledge. What it was before this world ended is only known from what it leaves behind.</p>
+      <p className="muted">How each hostile fights is listed here. What it was before the collapse is filled in from the remains the crew recovers.</p>
       <ul className="bestiary">
         {ENEMY_IDS.map((id) => {
           const remains = remainsFor(id);
@@ -322,7 +322,7 @@ export function SkillsPage({ model }: { model: UiModel }) {
         </div>
         <span className="badge">{resources} resources</span>
       </div>
-      <p className="skills__note">Design preview — effects are not wired to the simulation yet. Attunements are written by the world you are in.</p>
+      <p className="skills__note">Design preview: effects are not wired to the simulation yet. Attunements are written by the world you are in.</p>
       <div className="skills__body">
         <div className="skilltree__scroll" ref={scrollRef}>
           <div className="skilltree" style={{ width, height }}>

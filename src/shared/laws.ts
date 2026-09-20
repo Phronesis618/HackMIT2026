@@ -39,14 +39,14 @@ export const LAW_INFO: Record<WorldLawId, {
   budget: -2 | -1 | 0 | 1 | 2;
 }> = {
   thin_air: { group: 'movement', budget: -1, summary: 'Dashes carry about 65% farther on a 25% longer cooldown. Gaps and hazard fields become crossable in one move.' },
-  tidal_drag: { group: 'movement', budget: 0, summary: 'Crew and enemies walk about 17% slower; dash cooldown drops by a third. Movement becomes dashes with short walks between.' },
+  tidal_drag: { group: 'movement', budget: 0, summary: 'Crew and enemies walk about 17% slower; dash cooldown drops by a third. Dash more, walk less.' },
   committed_strike: { group: 'movement', budget: 0, summary: 'Operatives are rooted for the 220 ms of their own attack and hit 25% harder.' },
-  glass_lattice: { group: 'combat', budget: 2, summary: 'Operatives have 48 Integrity instead of 100 and deal 1.8x damage. Every hit and hazard matters.' },
+  glass_lattice: { group: 'combat', budget: 2, summary: 'Operatives have 48 Integrity instead of 100 and deal 1.8x damage.' },
   long_echo: { group: 'combat', budget: -1, summary: 'Ability cooldowns are about a third shorter; the ultimate charges 25% slower.' },
   bleeding_light: { group: 'combat', budget: 2, summary: 'Abilities heal nothing. Reading a relic restores 32 Integrity to every living operative, once per relic.' },
   first_light: { group: 'combat', budget: -1, summary: 'The first hit on an untouched enemy deals 2.5x damage.' },
-  few_and_terrible: { group: 'enemies', budget: 1, summary: 'Half as many enemies, each with 2.2x health and 28% more damage. Fights become duels.' },
-  the_many: { group: 'enemies', budget: 1, summary: '1.8x as many enemies, each at 55% health and 78% damage. Wide attacks are the answer.' },
+  few_and_terrible: { group: 'enemies', budget: 1, summary: 'Half as many enemies, each with 2.2x health and 28% more damage.' },
+  the_many: { group: 'enemies', budget: 1, summary: '1.8x as many enemies, each at 55% health and 78% damage. Attacks that hit several at once pay off.' },
   wardens_watch: { group: 'enemies', budget: 2, summary: 'About 37% of enemies are elites: +60% health, +25% damage, a visible ring, better drops.' },
   restless: { group: 'enemies', budget: 1, summary: 'A defeated enemy stands back up once after 11.5 s at 42% health unless an operative walks over its marker first.' },
   unstable_matter: { group: 'enemies', budget: 1, summary: 'Enemies burst when they fall: 70 px radius, 12 damage to crew, 20 to other enemies. Bursts chain through packs.' },

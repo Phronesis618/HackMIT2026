@@ -27,9 +27,9 @@ export function HeadquartersPanel({ model, actions, departure = departureBus }: 
 
   return (
     <div className="panel panel--hq">
-      <p className="eyebrow">The sanctuary between worlds</p>
+      <p className="eyebrow">Headquarters</p>
       <h2 className="panel__title">The Stillpoint</h2>
-      <p className="muted">A quiet place to choose who you will be next.</p>
+      <p className="muted">Pick a weapon, add an idea for the next world, then take the gate.</p>
       <div className="hq-directory" aria-label="Headquarters directory">
         <span><strong>Northwest · Armory</strong> — four weapon stands</span>
         <span><strong>North · Returns hall</strong> — quartermaster and relic shelf</span>
@@ -153,7 +153,7 @@ export function HeadquartersPanel({ model, actions, departure = departureBus }: 
         </p>
       )}
       <p className="hint">
-        Walk onto the glowing gate at the bottom of the room to leave once a world is ready{ABILITY_STATUS.attack === 'partial' ? '. Attack damage is not implemented yet' : ''}. Key bindings are in the menu under Controls.
+        Walk onto the gate at the south end of the room to leave once a world is ready{ABILITY_STATUS.attack === 'partial' ? '. Attack damage is not implemented yet' : ''}. Key bindings are in the menu under Controls.
       </p>
     </div>
   );

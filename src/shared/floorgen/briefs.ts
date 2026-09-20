@@ -33,33 +33,33 @@ const OPENER: Archetype = {
   layout: { linearity: 0.8, branchiness: 0.2, specials: { treasure: 1, lore: 1, rest: 0, elite: 0 } },
 };
 const FINALE: Archetype = {
-  noun: 'Core', tagline: 'The last floor. Thirty rooms, and the Anchor site behind its custodian.', hazards: true, density: 'dense',
+  noun: 'Core', tagline: 'The last floor: 30 rooms, then the Custodian and the Anchor site.', hazards: true, density: 'dense',
   layout: { linearity: 0.5, branchiness: 0.5, specials: { treasure: 2, lore: 2, rest: 2, elite: 4 } },
 };
 /** The six middle biomes; a seeded shuffle decides which brief slot gets which. */
 const MIDDLE: readonly Archetype[] = [
   {
-    noun: 'Warren', tagline: 'A maze of short passages and dead ends. Most of the records are here.', hazards: true, density: 'balanced',
+    noun: 'Warren', tagline: 'Short passages and dead ends. More record rooms than any other floor.', hazards: true, density: 'balanced',
     layout: { linearity: 0.1, branchiness: 0.9, specials: { treasure: 1, lore: 3, rest: 1, elite: 1 } },
   },
   {
-    noun: 'Wall', tagline: 'One long line of guarded rooms. Nowhere to rest.', hazards: false, density: 'dense',
+    noun: 'Wall', tagline: 'One long line of rooms with elite packs along it. No camp.', hazards: false, density: 'dense',
     layout: { linearity: 0.95, branchiness: 0.05, specials: { treasure: 1, lore: 1, rest: 0, elite: 3 } },
   },
   {
-    noun: 'Crossing', tagline: 'Four wings off a central hall. The exit is at the end of one of them.', hazards: false, density: 'balanced',
+    noun: 'Crossing', tagline: 'Branching halls. The exit is down one branch; the others dead-end.', hazards: false, density: 'balanced',
     layout: { linearity: 0.3, branchiness: 0.6, specials: { treasure: 1, lore: 2, rest: 1, elite: 2 } },
   },
   {
-    noun: 'Vaults', tagline: 'Two sealed stores, each behind a heavy guard.', hazards: true, density: 'balanced',
+    noun: 'Vaults', tagline: 'Sealed stores in the dead ends. More elite rooms than most floors.', hazards: true, density: 'balanced',
     layout: { linearity: 0.55, branchiness: 0.45, specials: { treasure: 2, lore: 1, rest: 0, elite: 3 } },
   },
   {
-    noun: 'Shelter', tagline: 'Quiet rooms where a crew can stop, and wide halls between them.', hazards: false, density: 'sparse',
+    noun: 'Shelter', tagline: 'Open halls, at least 1 camp, few elite rooms.', hazards: false, density: 'sparse',
     layout: { linearity: 0.35, branchiness: 0.35, specials: { treasure: 1, lore: 2, rest: 2, elite: 1 } },
   },
   {
-    noun: 'Works', tagline: 'Flooded machine halls strung along a service corridor.', hazards: true, density: 'dense',
+    noun: 'Works', tagline: 'Machine halls along one service corridor. Hazard floor, dense terrain.', hazards: true, density: 'dense',
     layout: { linearity: 0.7, branchiness: 0.3, specials: { treasure: 1, lore: 1, rest: 1, elite: 2 } },
   },
 ];

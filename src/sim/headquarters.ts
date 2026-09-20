@@ -28,7 +28,7 @@ export const headquartersRoom: RoomSpec = RoomSpecSchema.parse({
   id: HEADQUARTERS_ROOM_ID,
   index: 0,
   name: 'The Stillpoint',
-  description: 'The sanctuary between worlds. Take a weapon from the armory, read the archive, or chart an expedition.',
+  description: 'Headquarters. Weapons in the armory, records in the archive, the next world at the observatory.',
   width,
   height,
   tiles,

@@ -34,7 +34,7 @@ export function HeadquartersPrompt({ model, actions, departure = departureBus }:
     <>
     <HeadquartersDeparture bus={departure} />
     <div className="hq-wayfinder">
-      <span className="hq-wayfinder__place">THE STILLPOINT <span>Sanctuary / headquarters</span></span>
+      <span className="hq-wayfinder__place">THE STILLPOINT <span>Headquarters</span></span>
       {station ? (
         <button type="button" className="hq-prompt" onClick={actions.activateHeadquartersStation} disabled={busy || model.connection.status !== 'connected'}>
           <kbd>F</kbd><span><strong>{station.name}</strong><small>{departing ? 'The gate is opening' : busy ? 'World preparation in progress' : station.action}</small></span>
@@ -102,8 +102,8 @@ export function HeadquartersStationPanel({ model, actions, hub = hubStateBus, de
               ['Creation receipts', records.receipts],
             ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
           </dl>
-          <h3 className="eyebrow">Latest echoes</h3>
-          {latest.length === 0 ? <p className="muted">The archive is quiet. Enter a world to begin recording your journey.</p> : (
+          <h3 className="eyebrow">Latest records</h3>
+          {latest.length === 0 ? <p className="muted">No records yet. The first one is saved when a world is prepared.</p> : (
             <ul className="hq-echoes">{latest.map((memory) => (
               <li key={memory.id}><strong>{memory.title}</strong><p>{memory.summary}</p><small>{memory.worldTitle} · {memory.provenanceSource === 'live' ? 'Live generation' : memory.provenanceSource === 'live_fallback_fixture' ? 'Fallback fixture' : 'Offline fixture'}</small></li>
             ))}</ul>
@@ -117,7 +117,7 @@ export function HeadquartersStationPanel({ model, actions, hub = hubStateBus, de
         <>
           <p className="hq-status">{model.contributions.length} / 24 signals collected</p>
           <p className="hint">The contribution console below remains available anywhere in headquarters. Add an idea, then prepare a world.</p>
-          <button type="button" className="btn" onClick={() => document.getElementById('contribution')?.focus()} disabled={!ready}>Write a world signal</button>
+          <button type="button" className="btn" onClick={() => document.getElementById('contribution')?.focus()} disabled={!ready}>Write an idea</button>
           {model.world && <p className="muted">Charted destination: {model.world.title}</p>}
         </>
       )}
@@ -130,7 +130,7 @@ export function HeadquartersStationPanel({ model, actions, hub = hubStateBus, de
       )}
       {station.id === 'portal' && (
         <>
-          <p className="hq-status">{model.world?.title ?? 'No destination charted'}</p>
+          <p className="hq-status">{model.world?.title ?? 'No world prepared'}</p>
           <p className="hint">{departing ? 'The gate is opening. F or Esc leaves now.' : model.world ? 'Walk into the gate or enter here when the crew is ready.' : 'Contribute an idea in the console below and prepare a world first.'}</p>
           <button type="button" className="btn btn--primary" onClick={() => departure.begin(actions.enterPortal)} disabled={!ready || !model.world || !host}>{departing ? 'Departing…' : 'Enter portal'}</button>
           {!host && <p className="hint">The crew leader opens the gate for everyone.</p>}

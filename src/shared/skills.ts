@@ -46,7 +46,7 @@ export interface SkillWorldContext {
 const planned = (node: Omit<SkillNode, 'status' | 'kind'>, kind: SkillKind): SkillNode => ({ ...node, kind, status: 'planned' });
 
 const CORE: SkillNode[] = [
-  { id: 'core.root', name: 'Relay Bond', description: 'The operative’s link to the relay. Everything grows from here.', tier: 0, lane: 0, requires: [], cost: 0 },
+  { id: 'core.root', name: 'Relay Bond', description: 'Root node. Costs nothing; every other node connects back to it.', tier: 0, lane: 0, requires: [], cost: 0 },
   { id: 'core.plating', name: 'Reinforced Plating', description: '+20 max Integrity.', tier: 1, lane: -1, requires: ['core.root'], cost: 2 },
   { id: 'core.wind', name: 'Second Wind', description: 'Dash cooldown −25%; invulnerability window +50 ms.', tier: 1, lane: 0, requires: ['core.root'], cost: 2 },
   { id: 'core.salvage', name: 'Salvager', description: 'Cleared rooms yield +1 resource.', tier: 1, lane: 1, requires: ['core.root'], cost: 2 },
@@ -59,10 +59,10 @@ const CLASS_TREES: Record<ClassId, Array<Omit<SkillNode, 'status' | 'kind'>>> = 
     { id: 'bastion.footing', name: 'Held Ground', description: 'Immune to knockback while Bulwark is up; +10% move speed with the shield down.', tier: 3, lane: -1, requires: ['bastion.sweep'], cost: 4 },
     { id: 'bastion.reflect', name: 'Mirror Plating', description: 'Bolts blocked by Bulwark are thrown back along their line.', tier: 3, lane: 0, requires: ['bastion.plate'], cost: 4 },
     { id: 'bastion.radius', name: 'Wide Shockwave', description: 'Shockwave radius 135 → 180; stun +0.5 s.', tier: 3, lane: 1, requires: ['core.salvage', 'bastion.plate'], cost: 4 },
-    { id: 'bastion.taunt', name: 'Beacon of Steel', description: 'Enemies within 200 prefer you over allies while Bulwark is up.', tier: 4, lane: -1, requires: ['bastion.footing'], cost: 5 },
+    { id: 'bastion.taunt', name: 'Draw Fire', description: 'Enemies within 200 prefer you over allies while Bulwark is up.', tier: 4, lane: -1, requires: ['bastion.footing'], cost: 5 },
     { id: 'bastion.aftershock', name: 'Aftershock', description: 'Shockwave leaves a 2 s zone that slows anything crossing it.', tier: 4, lane: 1, requires: ['bastion.radius'], cost: 5 },
     { id: 'bastion.slam', name: 'Deeper Slam', description: 'Aegis Slam damage +25% and it fully recharges Bulwark.', tier: 4, lane: 0, requires: ['bastion.reflect'], cost: 5 },
-    { id: 'bastion.last_light', name: 'Bastion of Last Light', description: 'At 25% Integrity, Bulwark raises itself once per room.', tier: 5, lane: 0, requires: ['bastion.taunt', 'bastion.slam', 'bastion.aftershock'], cost: 8 },
+    { id: 'bastion.last_light', name: 'Last Stand', description: 'At 25% Integrity, Bulwark raises itself once per room.', tier: 5, lane: 0, requires: ['bastion.taunt', 'bastion.slam', 'bastion.aftershock'], cost: 8 },
   ],
   shade: [
     { id: 'shade.edge', name: 'Keen Edge', description: 'Phase blades +4 damage; attack cadence +10%.', tier: 2, lane: -1, requires: ['core.plating'], cost: 3 },
@@ -119,7 +119,7 @@ export function buildSkillTree(classId: ClassId, world: SkillWorldContext | null
   const tiers = Math.max(...nodes.map((n) => n.tier)) + 1;
   return {
     title: `${CLASS_INFO[classId].name} tree`,
-    subtitle: world ? `Attuned to ${world.title}` : 'No world attuned — attunements grow once a world is prepared',
+    subtitle: world ? `Attuned to ${world.title}` : 'No world attuned. Attunements appear once a world is prepared.',
     nodes,
     tiers,
   };

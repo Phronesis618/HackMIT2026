@@ -50,7 +50,7 @@ describe('Chronicle origin worlds', () => {
     const missed = recorded.filter((m) => m.kind === 'milestone' || m.kind === 'lore');
     expect(missed).toHaveLength(2);
     expect(missed.every((m) => m.worldId === 'world-a' && m.worldTitle === 'World A' && m.provenanceSource === 'fixture')).toBe(true);
-    expect(missed[0]!.title).toBe('First victory — World A');
+    expect(missed[0]!.title).toBe('First victory: World A');
     expect(missed[0]!.summary).toBe('Reviewer defeated the first hostile recorded in World A.');
     expect(missed[1]!.title).toBe('Recovered shard');
     expect(recorded.some((m) => m.worldId === 'world-b' && m.kind === 'milestone')).toBe(false);

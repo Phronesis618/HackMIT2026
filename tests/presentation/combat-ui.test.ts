@@ -130,7 +130,7 @@ describe('event-derived debrief', () => {
     const ui = debrief(sampleEvents);
     const html = renderToStaticMarkup(createElement(DebriefPanel, { model: ui, actions }));
     expect(html).toContain('No expedition outcome has been recorded yet');
-    expect(html).toContain('Arrival preserved');
+    expect(html).toContain('Arrival keepsake');
     expect(html).toContain('defeated the first hostile');
     expect(html).toContain('3 memories from this world');
     expect(html).not.toContain('world anchored');
@@ -156,7 +156,7 @@ describe('event-derived debrief', () => {
     ui.world = { ...ui.world!, worldId: 'test-other-world' };
     const html = renderToStaticMarkup(createElement(DebriefPanel, { model: ui, actions }));
     expect(html).toContain('No memories from this world');
-    expect(html).not.toContain('Arrival preserved');
+    expect(html).not.toContain('Arrival keepsake');
     expect(html).not.toContain('planted the Anchor');
     ui.world = null;
     expect(renderToStaticMarkup(createElement(DebriefPanel, { model: ui, actions }))).toContain('No expedition outcome');
