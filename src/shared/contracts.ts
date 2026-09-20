@@ -794,6 +794,8 @@ export const GameSnapshotSchema = z.object({
       fuseMs: z.number().nonnegative(),
       depth: z.number().int().nonnegative(),
     })).optional(),
+    /** Damage on each '-' cover tile (TILES.md T4); omitted while none has been shot. */
+    coverDamage: z.record(TileKey, z.number().nonnegative()).optional(),
   }).optional(),
   /**
    * Floors runs only (absent in HQ, training and legacy worlds): where the crew is in the

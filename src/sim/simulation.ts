@@ -26,7 +26,7 @@ import {
 } from '../shared/terrain';
 import {
   applyCanisterBlastToTerrain, armCanistersInCircle, blastFalloff, createTerrainState,
-  stepCanisterFuses, strikeTerrain,
+  damageCoverInCircle, stepCanisterFuses, strikeTerrain,
 } from './terrain';
 import { createHazardClock, stepHazardTiles, type HazardClock } from './hazards';
 import { ANCHOR_DISCHARGE_MS, ANCHOR_PULSE_SPEED, ANCHOR_PULSE_WARNING_MS, guardianPhase, RELAY_ACTIVATION_RANGE } from '../shared/finale';
@@ -643,8 +643,12 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       const ny = pr.y + pr.vy * TICK_MS / 1000;
       if (circleHitsSolid(grid, nx, ny, pr.radius, 'shots')) {
         // A bolt that ends on a canister lights it: enemy fire is a detonator too (T1).
-        progress.terrain = armCanistersInCircle(room, progress.terrain, nx, ny, pr.radius,
-          roomTerrainTuning(room).canisterFuseMs).state;
+        const tuning = roomTerrainTuning(room);
+        progress.terrain = armCanistersInCircle(room, progress.terrain, nx, ny, pr.radius, tuning.canisterFuseMs).state;
+        // ...and a bolt that ends on cover chips it. Enough of them and the barricade is gone.
+        const chipped = damageCoverInCircle(room, progress.terrain, nx, ny, pr.radius, pr.damage, tuning.coverHp);
+        progress.terrain = chipped.state;
+        if (chipped.hits.some((hit) => hit.destroyed)) rebuildGrid();
         continue;
       }
       pr.x = nx;
@@ -666,8 +670,18 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   function arcTargets(origin: Point, facing: number, range: number, arc: number): EnemyRuntime[] {
     return livingEnemies().filter((e) =>
       inArc(origin, e.state, facing, range, arc, ENEMY_INFO[e.state.enemyId].radius) &&
-      clearPath(grid, origin, e.state),
+      canStrike(origin, e.state),
     ).sort((a, b) => distance(origin, a.state) - distance(origin, b.state));
+  }
+
+  /**
+   * Line of fire for a player's own attack. Inside one tile the check falls back to the
+   * movement layer, where '-' cover is open but walls are not: you can hit the thing standing
+   * on the other side of a barricade, and still not the thing behind a wall (TILES.md T4).
+   */
+  function canStrike(origin: Point, target: Point): boolean {
+    if (clearPath(grid, origin, target)) return true;
+    return distance(origin, target) <= TILE_SIZE && clearPath(grid, origin, target, 1, 'solid');
   }
 
   function basicAttack(p: PlayerRuntime, events: GameEvent[]): void {
@@ -1493,6 +1507,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
           // Omitted while nothing is lit, so rooms without canisters keep today's snapshot exactly.
           ...(Object.keys(progress.terrain.canisters ?? {}).length > 0
             ? { canisters: Object.fromEntries(Object.entries(progress.terrain.canisters ?? {}).map(([k, v]) => [k, { ...v }])) }
+            : {}),
+          ...(Object.keys(progress.terrain.coverDamage ?? {}).length > 0
+            ? { coverDamage: { ...progress.terrain.coverDamage } }
             : {}),
         },
         ...(floorsRun && phase !== 'headquarters' ? { floor: floorRunState(floorsRun, doorsLocked()) } : {}),

@@ -44,7 +44,56 @@ export interface TileRef {
 }
 
 export function createTerrainState(): TerrainState {
-  return { brokenWalls: [], wallDamage: {}, canisters: {} };
+  return { brokenWalls: [], wallDamage: {}, canisters: {}, coverDamage: {} };
+}
+
+/**
+ * '-' low cover takes the damage of whatever stopped against it and shatters into rubble at
+ * `maxHp` (TILES.md T4). One shared pool per tile, exactly like a bulkhead's.
+ */
+export function damageCover(
+  room: RoomSpec,
+  state: TerrainState,
+  col: number,
+  row: number,
+  damage: number,
+  maxHp: number,
+): TerrainDamageResult {
+  if (!Number.isFinite(damage) || damage <= 0 || terrainTileAt(room, col, row, state.brokenWalls) !== '-') {
+    return { state, hits: [], armed: [] };
+  }
+  const key = terrainTileKey(col, row);
+  const total = Math.min(maxHp, (state.coverDamage?.[key] ?? 0) + damage);
+  const hp = maxHp - total;
+  return {
+    state: {
+      ...state,
+      brokenWalls: hp <= 0 ? [...state.brokenWalls, key] : [...state.brokenWalls],
+      coverDamage: { ...state.coverDamage, [key]: total },
+    },
+    hits: [{ x: col, y: row, hp, destroyed: hp <= 0 }],
+    armed: [],
+  };
+}
+
+/** Whatever cover a circle overlaps takes the hit. Used by bolts and by blasts. */
+export function damageCoverInCircle(
+  room: RoomSpec,
+  state: TerrainState,
+  x: number,
+  y: number,
+  radius: number,
+  damage: number,
+  maxHp: number,
+): TerrainDamageResult {
+  let next = state;
+  const hits: TerrainHit[] = [];
+  for (const { col, row } of tilesInCircle(room, x, y, radius)) {
+    const result = damageCover(room, next, col, row, damage, maxHp);
+    next = result.state;
+    hits.push(...result.hits);
+  }
+  return { state: next, hits, armed: [] };
 }
 
 export function damageBreakableWall(
@@ -253,6 +302,10 @@ export function applyCanisterBlastToTerrain(
     const tile = terrainTileAt(room, col, row, next.brokenWalls);
     if (tile === 'B') {
       const result = damageBreakableWall(room, next, col, row, CANISTER_WALL_DAMAGE);
+      next = result.state;
+      wallHits.push(...result.hits);
+    } else if (tile === '-') {
+      const result = damageCover(room, next, col, row, CANISTER_WALL_DAMAGE, CANISTER_WALL_DAMAGE);
       next = result.state;
       wallHits.push(...result.hits);
     } else if (tile === '*' && blast.depth < CANISTER_MAX_CHAIN_DEPTH) {

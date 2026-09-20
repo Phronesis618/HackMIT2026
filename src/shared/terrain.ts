@@ -23,6 +23,8 @@ export interface TerrainState {
   wallDamage: Record<string, number>;
   /** Armed '*' canisters, keyed "col,row". Absent is the same as empty (snapshots omit it). */
   canisters?: Record<string, CanisterState>;
+  /** Damage taken by each '-' cover tile, keyed "col,row". Same shape as wallDamage. */
+  coverDamage?: Record<string, number>;
 }
 
 export function terrainTileKey(col: number, row: number): string {
@@ -30,7 +32,7 @@ export function terrainTileKey(col: number, row: number): string {
 }
 
 /** Tiles that leave rubble behind when they are destroyed. */
-const DESTRUCTIBLE = new Set<string>(['B', '*']);
+const DESTRUCTIBLE = new Set<string>(['B', '*', '-']);
 
 export function terrainTileAt(
   room: RoomSpec,

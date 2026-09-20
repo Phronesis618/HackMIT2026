@@ -296,6 +296,23 @@ function applyTerrain(grid: Grid, pathY: number, blueprint: RoomBlueprint, seed:
       blobs++;
     }
   }
+  if (features.has('cover')) {
+    // Runs of 2-4 across the room's short axis, at least three tiles from any wall, never
+    // touching each other. Walkable, so nothing here can strand a room.
+    const [dx, dy] = width >= height ? [0, 1] : [1, 0];
+    let runs = 0;
+    for (const start of cells) {
+      if (runs >= Math.min(3, density)) break;
+      const length = 2 + (hashString(`${seed}:cover:${start.x}:${start.y}`) % 3);
+      const run: Coord[] = [];
+      for (let i = 0; i < length; i++) run.push({ x: start.x + dx * i, y: start.y + dy * i });
+      if (!run.every(({ x, y }) => grid[y]?.[x] === '.' && Math.abs(y - pathY) > 1 && !nearKeyPoint(keyPoints, x, y) &&
+        x >= 3 && x < width - 3 && y >= 3 && y < height - 3 &&
+        ![-1, 0, 1].some((ny) => [-1, 0, 1].some((nx) => grid[y + ny]?.[x + nx] === '-')))) continue;
+      for (const cell of run) grid[cell.y]![cell.x] = '-';
+      runs++;
+    }
+  }
   if (features.has('vents')) {
     // Fields of 4 or 9 tiles (2x2 / 3x3), at most two, off the guaranteed path row and never
     // touching each other. Walkable, so the only thing at risk is the hazard-free route, which

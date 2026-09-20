@@ -11,7 +11,7 @@ export interface TerrainTile { x: number; y: number }
  * Tiles this layer draws or captions. '~' is painted by the floor pass in environment.ts; it is
  * listed here so a player standing beside scalding floor still gets told what it is.
  */
-const CAPTIONED_TILES = 'B=>:+~*o^';
+const CAPTIONED_TILES = 'B=>:+~*o^-';
 
 export function collectTerrainTiles(room: RoomSpec): TerrainTile[] {
   const tiles: TerrainTile[] = [];
@@ -40,6 +40,7 @@ export function terrainCaption(
     case '*': return TERRAIN_CAPTION.canisters;
     case 'o': return TERRAIN_CAPTION.pits;
     case '^': return TERRAIN_CAPTION.vents;
+    case '-': return TERRAIN_CAPTION.cover;
     case '>':
     case '=': return TERRAIN_CAPTION.bridges;
     default: return null;
@@ -86,6 +87,22 @@ export function drawTerrain(
         .lineBetween(x + 10, y + 13, x + 21, y + 19)
         .lineBetween(x + 21, y + 19, x + 14, y + 30);
       if (damaged) g.lineBetween(x + 10, y + 13, x + 2, y + 19).lineBetween(x + 21, y + 19, x + 30, y + 13);
+    } else if (type === '-') {
+      // Half a wall, and the silhouette has to say so: it occupies the lower two thirds of the
+      // tile with a lit top edge, so you read "I can walk over that, my bolts cannot".
+      const chipped = (state?.coverDamage?.[terrainTileKey(tile.x, tile.y)] ?? 0) > 0;
+      g.fillStyle(0x000000, 0.28).fillRect(x + 1, y + T - 5, T - 2, 6);
+      g.fillStyle(solid.face, 1).fillRect(x + 1, y + T * 0.42, T - 2, T * 0.5);
+      g.fillStyle(solid.faceLow, 1).fillRect(x + 1, y + T - 8, T - 2, 5);
+      g.fillStyle(solid.capHi, 0.95).fillRect(x + 1, y + T * 0.38, T - 2, 4);
+      g.lineStyle(1.25, solid.outline, 0.9).strokeRect(x + 1, y + T * 0.38, T - 2, T * 0.54);
+      g.lineStyle(1, deckLine, 0.7);
+      for (let i = 8; i < T - 4; i += 9) g.lineBetween(x + i, y + T * 0.42, x + i, y + T - 4);
+      if (chipped) {
+        g.lineStyle(2, solid.outline, 1)
+          .lineBetween(x + 9, y + T * 0.4, x + 14, y + T * 0.72)
+          .lineBetween(x + 20, y + T * 0.44, x + 17, y + T * 0.8);
+      }
     } else if (type === '^') {
       // Flush grille while idle. The 500 ms charge flickers at 9 Hz — a rate no ambient
       // dressing uses, so it reads as mechanism rather than decoration — and the 300 ms firing

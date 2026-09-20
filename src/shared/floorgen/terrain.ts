@@ -38,6 +38,11 @@ const MAX_PIT_BLOBS = 2;
 const PIT_BLOB_MIN = 2;
 const PIT_BLOB_MAX = 6;
 const MAX_VENT_FIELDS = 2;
+const MAX_COVER_RUNS = 3;
+const COVER_RUN_MIN = 2;
+const COVER_RUN_MAX = 4;
+/** Cover against a wall does nothing: it has to be out in the open to break a firing line. */
+const COVER_WALL_CLEARANCE = 3;
 
 /** Returns the room's tile rows with terrain applied. `room` is not mutated. */
 export function applyBiomeTerrain(room: BuiltRoom, terrain: BiomeTerrain, seed: string): string[] {
@@ -72,6 +77,7 @@ export function applyBiomeTerrain(room: BuiltRoom, terrain: BiomeTerrain, seed: 
   if (features.has('pits')) stampPits(grid, order, free, density, room.spawn, reachPoints, blocked, rng);
   if (features.has('canisters')) stampCanisters(grid, order, free, density, room.spawn, reachPoints, blocked);
   if (features.has('vents')) stampVents(grid, order, free, density, room.spawn, reachPoints, blocked, rng);
+  if (features.has('cover')) stampCover(grid, order, free, density, room.width, room.height, rng);
   for (const feature of ['rubble', 'conduits'] as const) {
     if (!features.has(feature)) continue;
     const offsets = feature === 'rubble'
@@ -137,6 +143,34 @@ function stampBridges(
       break;
     }
     if (placed >= wanted) return;
+  }
+}
+
+/**
+ * Cover runs are 2-4 tiles laid across the room's short axis, so they cut the long sight lines
+ * a sentinel or a warden wants (TILES.md T4). At least three tiles from any wall, because cover
+ * with your back to a wall breaks no line anyone was using. Walkable, so reachability is free.
+ */
+function stampCover(
+  grid: Grid, order: readonly Coord[], free: (x: number, y: number) => boolean, density: number,
+  width: number, height: number, rng: Rng,
+): void {
+  // Perpendicular to the long axis: a wide room gets vertical runs, a tall room horizontal ones.
+  const [dx, dy] = width >= height ? [0, 1] : [1, 0];
+  const wanted = Math.min(MAX_COVER_RUNS, density);
+  let placed = 0;
+  for (const start of order) {
+    if (placed >= wanted) return;
+    const length = COVER_RUN_MIN + rng.range(0, COVER_RUN_MAX - COVER_RUN_MIN);
+    const run: Coord[] = [];
+    for (let i = 0; i < length; i++) run.push({ x: start.x + dx * i, y: start.y + dy * i });
+    if (!run.every(({ x, y }) =>
+      free(x, y) &&
+      x >= COVER_WALL_CLEARANCE && x < width - COVER_WALL_CLEARANCE &&
+      y >= COVER_WALL_CLEARANCE && y < height - COVER_WALL_CLEARANCE &&
+      ![-1, 0, 1].some((ny) => [-1, 0, 1].some((nx) => grid[y + ny]?.[x + nx] === '-')))) continue;
+    for (const cell of run) grid[cell.y]![cell.x] = '-';
+    placed++;
   }
 }
 
