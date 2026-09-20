@@ -139,6 +139,10 @@ async function single(options: PipelineOptions): Promise<GeneratedRecipe> {
 async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
   const { provider, request, seed, signal, notes, status } = options;
   const ideas = request.contributions.map((contribution) => contribution.text);
+  // The seeded ingredients this world was handed. The document kinds go to the linter too, so
+  // a fragment that copies its seed out of the prompt data is caught (`seeded-kind`).
+  const seeds = worldSeeds(seed);
+  const lintOptions = { seeds: seeds.documentKinds };
   const calls: CallMetric[] = [];
   const work = new AbortController();
   const onAbort = () => work.abort(signal?.reason);
@@ -181,7 +185,7 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
       }, PolishToolSchema, 2_000);
       const parsed = PolishToolSchema.safeParse(raw);
       if (parsed.success) applyFixes(parts, bible, failures, parsed.data.fixes);
-      failures = [...(label === 'header' ? headerOverflow(parts as Foundation['header']) : []), ...lintWorld(parts, bible).failures].slice(0, 12);
+      failures = [...(label === 'header' ? headerOverflow(parts as Foundation['header']) : []), ...lintWorld(parts, bible, lintOptions).failures].slice(0, 12);
     }
     fitOverlong(parts, bible);
   }
@@ -194,7 +198,7 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
     let repair: string | undefined;
     for (let attempt = 1; attempt <= 2 && !parsedFoundation; attempt++) {
       try {
-        const raw = await call('foundation', 'foundation', { contributions, namePool: namePool(seed), ...worldSeeds(seed), ...(repair ? { repair } : {}) }, FoundationToolSchema, 2_500);
+        const raw = await call('foundation', 'foundation', { contributions, namePool: namePool(seed), ...seeds, ...(repair ? { repair } : {}) }, FoundationToolSchema, 2_500);
         signal?.throwIfAborted();
         let candidate: ReturnType<typeof parseFoundation>;
         try {
@@ -264,7 +268,7 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
 
     const tasks: Array<[string, () => Promise<void>]> = [
       ['header polish', async () => {
-        const lint = lintWorld(header, bible);
+        const lint = lintWorld(header, bible, lintOptions);
         before.push(lint);
         await polish('header', header, bible, lint, headerOverflow(header));
       }],
@@ -277,7 +281,7 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
         });
         if (closed) return;
         state.rooms = part;
-        const lint = lintWorld(part, bible);
+        const lint = lintWorld(part, bible, lintOptions);
         before.push(lint);
         await polish('rooms', part, bible, lint, cuts(part, bible, part.cuts));
       }],
@@ -288,7 +292,7 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
         if (closed) return;
         state.laws = part;
         for (const note of part.notes) notes.push(clipNote(note));
-        const lint = lintWorld(part, bible);
+        const lint = lintWorld(part, bible, lintOptions);
         before.push(lint);
         await polish('laws', part, bible, lint, cuts(part, bible, part.cuts));
       }],
@@ -305,7 +309,7 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
         if (closed) return;
         state.relics = lore.lore;
         const parts = { lore: lore.lore };
-        const lint = lintWorld(parts, bible);
+        const lint = lintWorld(parts, bible, lintOptions);
         before.push(lint);
         await polish('relics', parts, bible, lint, cuts(parts, bible, lore.cuts));
       }],
@@ -326,7 +330,7 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
         if (closed) return;
         state.remains = parts.lore;
         state.attunements = parts.attunements;
-        const lint = lintWorld(parts, bible);
+        const lint = lintWorld(parts, bible, lintOptions);
         before.push(lint);
         await polish('remains', parts, bible, lint, cuts(parts, bible, parts.cuts));
       }],
@@ -342,7 +346,7 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
         parsed.forEach((entry, offset) => { state.briefs[slots[0]!.index + offset] = entry && valid.includes(entry) ? entry : undefined; });
         const parts = { biomes: valid.map((entry) => entry.brief), biomeRoomLines: valid.map((entry) => ({ biomeId: entry.brief.id, lines: entry.lines })) };
         const briefCuts = valid.flatMap((entry, local) => entry.cuts.map((cut) => ({ ...cut, path: `biomes[${local}].${cut.path}` })));
-        const lint = lintWorld(parts, bible);
+        const lint = lintWorld(parts, bible, lintOptions);
         before.push(lint);
         await polish(`biomes:${part + 1}`, parts, bible, lint, cuts(parts, bible, briefCuts));
       }]),
@@ -392,7 +396,7 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
     if (cut) notes.push(clipNote(`${cut} line(s) over their length limit were cut at a sentence or clause end by trusted code.`));
     assertDisplayText(recipe);
 
-    const after = lintWorld(recipe, bible);
+    const after = lintWorld(recipe, bible, lintOptions);
     const beforeSummary = mergeLint(before);
     const polished = calls.some((entry) => entry.stage.startsWith('polish') && entry.ok);
     notes.push(lintNote(beforeSummary, summary(after), polished));

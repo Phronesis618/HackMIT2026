@@ -55,8 +55,14 @@ three DIFFERENT sentence shapes. Some shapes that work:
   the boss's own words:                 "TARN: I SAID CLEAR MY DECK. SHE MEANS THE RED PLATES."
   where safety is, and nothing else:    "DRY FLOOR BY THE LOCKERS. NOWHERE ELSE."
 Whatever the shape, a crew member who hears only this line knows where to stand: a tell
-that is all attitude ("KADER: JUST LET IT RUN.") or that uses briefing-room words
-(operative, sightline, radius, rearmost) is no use in a fight.
+that is all attitude ("KADER: JUST LET IT RUN.") is no use in a fight.
+A callout is shouted by somebody standing in this room, in the words the people here use for
+each other and for their own machines. Briefing-room vocabulary belongs to another game and
+is rejected: hostile, sightline, engage, perimeter, radius, rearmost, sitrep, ETA. The crew
+are called what the people here call each other, and these creatures are their former job
+("the loaders", "the night porters") and never "operatives", which is the engine's word and
+not this world's. The thing about to hurt them has this world's name, and where to stand is a
+place in this room.
 "GET BEHIND THE <something>" has been used by every world so far: it is marked down
 by the checker, so say it another way. Rejected outright are the registry's own words for the counter ("dash the gap", "step off the
 mark", "sidestep one tile", "walk off it"): those are engine phrasing.

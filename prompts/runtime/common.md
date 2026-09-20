@@ -42,6 +42,9 @@ from which facts you pick. A reader should believe a working game writer wrote e
 12. Vary the shape. Texts of one type must differ from each other in length, opening
     and sentence count. Some open on a date, some on an object, some on a name, some mid-task.
     Use lists of two or four, seldom three.
+13. Quote signs, labels and stamps as they were made. A sign is painted, stamped or typed by
+    somebody with no dash key: it uses full stops, a colon or a second line, never a dash.
+    "PHARMACY HOLD. AUTHORISED ENTRY ONLY." Titles and labels of your own follow the same rule.
 
 Write to a word budget, not to the limit. Every maxLength counts characters, and a line
 written over it is cut by trusted code at the nearest boundary, so the player reads a

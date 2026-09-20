@@ -5,10 +5,13 @@ The data holds the world bible and `slots`. Write one fragment per slot, in slot
 kind "remains", roomIndex 0, with the slot's enemyId and eventIndex. Remains are what a
 defeated enemy leaves behind: one object: a tool, a glove, a mug with a name scratched in, a lunch tin, a dart, a
 hymn sheet. Fewer than half are tags, tickets, badges or anything else that was issued.
-One object means one: a list of a pocket's or a kit's contents ("one pen, one key, one
-folded letter") is an inventory, every world writes it, and it is sent back. So is
-anything "in a different hand". Say what is odd about the single thing and who did it. It shows who
-this was (the slot's formerJob) and carries one trace of the slot's event that dates it.
+A remains fragment does one job: it says what these creatures did for a living (the slot's
+formerJob), flat, and puts down ONE object that proves it, with the odd thing about that
+object and who did it. Like this: "Cage marshal's load rig, rated 120 kg. The marshal counted
+riders into the cage and stopped at 40. The rig's counter reads 61." The job, one object, one
+number that disagrees with it. Two objects is a list, and a list is an inventory whoever
+reads it skims. Tell two people's writing apart by what they wrote, never by the handwriting.
+It carries one trace of the slot's event that dates it.
 - Follow the slot's `shape`; the shapes differ so that no two fragments read alike.
   Max 320 chars; one of them should be under 120.
 - It is an object description, catalogued as one of the three authors would (authorIndex).

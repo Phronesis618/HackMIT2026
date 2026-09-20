@@ -296,7 +296,7 @@ DO · kind=enemyBlurb
 
 ### 5.10 Boss name and phase callouts
 
-Purpose: the name is a person or machine from the bible with their title. Callouts are telegraphs: they name the bible object that is about to hurt the crew and use a plain verb, in capitals, target 52, limit 60. FTL and Into the Breach event text is the model: state what is happening and what it threatens, then stop.
+Purpose: the name is a person or machine from the bible with their title. Callouts are telegraphs: they name the bible object that is about to hurt the crew and use a plain verb, in capitals, target 52, limit 60. FTL and Into the Breach event text is the model: state what is happening and what it threatens, then stop. The line is shouted by somebody standing in the room, so it uses that world's words for its own machines and its own people; briefing-room vocabulary (hostile, sightline, engage, perimeter, rearmost) is rejected by `callout-vocabulary`, and the crew are called what this world's people call each other, never "operatives". The three tells in one fight take three different shapes. "GET BEHIND THE …" is not one of them: every world reaches for it, and `callout-formula` is a hard fail.
 
 DON'T · kind=bossCallout · rule=personified-abstraction
 > THE ABYSS HUNGERS
@@ -309,8 +309,16 @@ DON'T · kind=bossCallout · rule=no-player-feelings
 DO · kind=bossName
 > Director Sele, Pump 6 Frame
 
-DO · kind=bossCallout
+DON'T · kind=bossCallout · rule=callout-formula
 > PUMP 6 SPINS UP. GET BEHIND THE CASING.
+
+Fault: three worlds in four shout this; it also asks the crew to find cover the room may not have.
+
+DO · kind=bossCallout
+> PUMP 6 SPINS UP. DRY FLOOR IS BY THE LOCKERS.
+
+DO · kind=bossCallout
+> SELE: OFF MY DECK. SHE MEANS THE RED PLATES.
 
 DO · kind=bossCallout
 > BULKHEADS CLOSING IN 5
