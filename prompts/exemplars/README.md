@@ -25,4 +25,4 @@ A fourth world, Halloran Deep, is the worked example in `docs/WRITING.md` and su
 2. Rotate. Seed the choice from the world seed so a retry sees the same set and a new world sees a different one. Take the samples from at least two files so no single register dominates.
 3. Show each exemplar together with the bible facts it used: `bibleRefs` resolved to the event sentence and the author entry. The thing to imitate is the step from fact to fragment, so the model must see both halves.
 4. Tell the model the exemplars are from other worlds and that reusing their names, numbers or objects is an error. The linter's `needs-bible-noun` rule catches this, because those names are absent from the new world's bible.
-5. Relics vary on purpose from 1 to 9 sentences, and some are funny and some are flat. Keep that spread in any subset you show.
+5. Relics vary on purpose from 2 sentences to about 10, and some are funny and some are flat. Keep that spread in any subset you show.
