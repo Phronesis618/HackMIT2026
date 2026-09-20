@@ -188,9 +188,15 @@ export class GameController {
           store.set({ hud });
         }
       }
-      const players = snapshot.players.map((p) => ({ id: p.id, displayName: p.displayName, classId: p.classId, isLocal: p.id === session.localPlayerId }));
+      const players = snapshot.players.map((p) => ({
+        id: p.id, displayName: p.displayName, classId: p.classId, isLocal: p.id === session.localPlayerId,
+        hp: Math.round(p.hp), maxHp: p.maxHp, state: p.state,
+      }));
       const prevPlayers = store.get().players;
-      if (prevPlayers.length !== players.length || prevPlayers.some((p, i) => p.id !== players[i]!.id || p.displayName !== players[i]!.displayName || p.classId !== players[i]!.classId)) {
+      if (prevPlayers.length !== players.length || prevPlayers.some((p, i) => {
+        const next = players[i]!;
+        return p.id !== next.id || p.displayName !== next.displayName || p.classId !== next.classId || p.hp !== next.hp || p.maxHp !== next.maxHp || p.state !== next.state;
+      })) {
         store.set({ players });
       }
       const discoveredLore = snapshot.discoveredLore ?? [];

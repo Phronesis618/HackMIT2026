@@ -31,6 +31,10 @@ export interface UiPlayer {
   displayName: string;
   classId: ClassId;
   isLocal: boolean;
+  /** Live vitals from the authoritative snapshot (absent before the first snapshot). */
+  hp?: number;
+  maxHp?: number;
+  state?: PlayerActionState;
 }
 
 export interface UiWorldSummary {

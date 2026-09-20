@@ -529,11 +529,13 @@ export class RoomScene extends Phaser.Scene {
     const bars = this.statusView;
     if (!bars) return;
     bars.clear();
+    // Bottom-right of the room, out of the way of the DOM party frames (top-left) and the ability bar.
     const rowH = 15;
-    const barX = 14;
     const barW = 108;
+    const barX = (this.room?.width ?? 0) * TILE_SIZE - 14 - barW;
+    const baseY = (this.room?.height ?? 0) * TILE_SIZE + 18;
     snapshot.players.forEach((player, i) => {
-      const y = -50 + i * rowH;
+      const y = baseY + i * rowH;
       const pct = player.maxHp > 0 ? Math.max(0, Math.min(1, player.hp / player.maxHp)) : 0;
       const down = player.state === 'down';
       const isLocal = player.id === localPlayerId;
@@ -545,11 +547,11 @@ export class RoomScene extends Phaser.Scene {
 
       let label = this.statusLabels.get(player.id);
       if (!label) {
-        label = this.text(0, 0, '', { fontFamily: tokens.font.mono, fontSize: '9px', color: tokens.color.mist100 }).setOrigin(0, 0.5).setDepth(DEPTH.overlay);
+        label = this.text(0, 0, '', { fontFamily: tokens.font.mono, fontSize: '9px', color: tokens.color.mist100 }).setOrigin(1, 0.5).setDepth(DEPTH.overlay);
         this.roomLayer?.add(label);
         this.statusLabels.set(player.id, label);
       }
-      label.setPosition(barX + barW + 6, y + 4);
+      label.setPosition(barX - 6, y + 4);
       const text = `${player.displayName}${down ? ' · down' : ''}`;
       if (label.text !== text) label.setText(text);
     });
@@ -804,13 +806,25 @@ export class RoomScene extends Phaser.Scene {
     });
   }
 
-  private floatText(x: number, y: number, text: string, color: string, size = 13): void {
-    const t = this.add
-      .text(x, y, text, { fontFamily: tokens.font.display, fontSize: `${size}px`, color, fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 })
+  /**
+   * Damage / heal numbers: large, high-contrast, with a pop-in and a rising fade so they read
+   * from across the room. `weight` scales size and hang time (1 = normal hit, 2 = heavy, 3 = ultimate).
+   */
+  private floatText(x: number, y: number, text: string, color: string, size = 20, weight = 1): void {
+    const drift = ((this.effectSeed * 37) % 21) - 10;
+    const t = this.text(x, y, text, {
+      fontFamily: tokens.font.display, fontSize: `${size}px`, color, fontStyle: 'bold',
+      stroke: '#05070c', strokeThickness: Math.max(4, Math.round(size * 0.28)),
+      shadow: { offsetX: 0, offsetY: 2, color: 'rgba(0,0,0,0.65)', blur: 6, fill: true, stroke: true },
+    })
       .setOrigin(0.5)
-      .setDepth(DEPTH.overlay);
+      .setDepth(DEPTH.overlay + 1)
+      .setScale(0.6);
     this.roomLayer?.add(t);
-    this.tweens.add({ targets: t, y: y - 26, alpha: 0, duration: 650, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
+    const hang = 720 + weight * 180;
+    this.tweens.add({ targets: t, scale: 1 + weight * 0.12, duration: 140, ease: 'Back.easeOut', yoyo: false });
+    this.tweens.add({ targets: t, x: x + drift, y: y - 38 - weight * 10, duration: hang, ease: 'Cubic.easeOut' });
+    this.tweens.add({ targets: t, alpha: 0, delay: hang * 0.55, duration: hang * 0.45, ease: 'Quad.easeIn', onComplete: () => t.destroy() });
   }
 
   private classColor(playerId: string): number {
@@ -855,13 +869,18 @@ export class RoomScene extends Phaser.Scene {
           const target = this.enemyPositions.get(event.enemyId);
           if (target) {
             this.animate(target.x, target.y, 320, (g, t) => fx.drawImpact(g, t, this.classColor(event.byPlayerId), seed, 1));
-            this.floatText(target.x + (seed % 5) * 3 - 6, target.y - 24, `${event.amount}`, tokens.canvas.telegraph, event.amount >= 30 ? 16 : 13);
+            const heavy = event.amount >= 50 ? 3 : event.amount >= 30 ? 2 : 1;
+            const color = heavy === 3 ? '#ff9f43' : heavy === 2 ? '#ffd166' : '#fff6c8';
+            this.floatText(target.x + (seed % 5) * 3 - 6, target.y - 28, `${Math.round(event.amount)}`, color, heavy === 3 ? 32 : heavy === 2 ? 26 : 20, heavy);
           }
           break;
         }
         case 'player_damaged': {
           const target = this.players.get(event.playerId)?.container;
-          if (target) this.animate(target.x, target.y, 320, (g, t) => fx.drawImpact(g, t, hexToInt(tokens.color.danger), seed, 1.2));
+          if (target) {
+            this.animate(target.x, target.y, 320, (g, t) => fx.drawImpact(g, t, hexToInt(tokens.color.danger), seed, 1.2));
+            this.floatText(target.x, target.y - 34, `−${Math.round(event.amount)}`, '#ff6b7a', event.amount >= 25 ? 26 : 22, event.amount >= 25 ? 2 : 1);
+          }
           if (event.playerId === this.localPlayerId) this.cameras.main.shake(110, 0.004);
           break;
         }
@@ -903,7 +922,7 @@ export class RoomScene extends Phaser.Scene {
           const target = this.players.get(event.playerId)?.container;
           if (target) {
             this.animate(target.x, target.y, 500, (g, t) => fx.drawRally(g, t, hexToInt(tokens.color.success), 34, seed));
-            this.floatText(target.x, target.y - 26, `+${event.amount}`, tokens.color.success);
+            this.floatText(target.x, target.y - 34, `+${Math.round(event.amount)}`, '#8dff9e', 20, 1);
           }
           break;
         }
