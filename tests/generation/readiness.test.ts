@@ -202,7 +202,8 @@ describe('deterministic live preflight', () => {
     });
     const worlds: PreparedWorld[] = [];
     for await (const world of service.prepareWorldStream(request)) worlds.push(world);
-    expect(compile).toHaveBeenCalledTimes(1);
+    // One compile of the recipe as written, one retreat to motif-default terrain (W2), then the fallback.
+    expect(compile).toHaveBeenCalledTimes(2);
     expect(worlds).toHaveLength(1);
     expect(worlds[0]!.provenance.source).toBe('live_fallback_fixture');
     expect(worlds[0]!.rooms).toHaveLength(3);
