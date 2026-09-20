@@ -41,10 +41,11 @@ const J = (v) => JSON.stringify(v);
 
 const HELP = `solo-e2e.mjs — scripted single-player verification (real input only)
 
-  --only <groups>       hub, biome, attune, deep, finale, legacy, fixtures, audio, onboarding.\n                        Default: hub,biome,attune,deep
+  --only <groups>       hub, biome, attune, deep, finale, fullrun, legacy, fixtures, audio, onboarding.\n                        Default: hub,biome,attune,deep
   --legacy              Spawn the server with floors/laws OFF and drive the legacy 3-room path
   --class <id>          bastion | shade | beacon | weaver (weapon stand the bot walks to). Default: bastion
   --hints off|reset|on  ?hints= for every page load. Default: off (the onboarding group forces reset)
+  --finale-entry <how>  deeplink (?room=2, fast) | play (walk rooms 1-3 so the collapse has a route home)
   --minutes <n>         Time budget for the "deep" group. Default 10
   --port <n>            Vite client port. Default 6973
   --server-port <n>     API/WS port. Default port + 3614
@@ -57,7 +58,7 @@ const HELP = `solo-e2e.mjs — scripted single-player verification (real input o
 function parseArgs(argv) {
   const args = {
     port: 6973, serverPort: null, base: null, outDir: '/tmp/relay-shots/q1', depsDir: '/tmp/relay-shot-deps',
-    only: null, legacy: false, klass: 'bastion', minutes: 10, hints: 'off',
+    only: null, legacy: false, klass: 'bastion', minutes: 10, hints: 'off', finaleEntry: 'deeplink',
     gl: process.platform === 'darwin' ? 'metal' : 'swiftshader', env: {}, width: 1440, height: 900, help: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -72,6 +73,7 @@ function parseArgs(argv) {
       case '--legacy': args.legacy = true; break;
       case '--class': args.klass = argv[++i]; break;
       case '--hints': args.hints = argv[++i]; break;
+      case '--finale-entry': args.finaleEntry = argv[++i]; break;
       case '--minutes': args.minutes = Number(argv[++i]); break;
       case '--gl': args.gl = argv[++i]; break;
       case '--width': args.width = Number(argv[++i]); break;
@@ -882,29 +884,48 @@ async function groupAttune(ctx) {
   await sleep(600);
 
   // Buy whatever the tree will sell, cheapest first: `core.salvage` gates the first attunement.
+  // The detail pane's button is read by class + text; its accessible name does not resolve here.
+  const detail = async () => player.page.evaluate(() => {
+    const d = document.querySelector('.skilltree__detail');
+    if (!d) return null;
+    const btn = [...d.querySelectorAll('button')].find((b) => /^Buy/i.test(b.textContent.trim()));
+    return {
+      name: d.querySelector('.menu__title, h3')?.textContent?.trim() ?? null,
+      kind: d.querySelector('.skilltree__kind')?.textContent?.trim() ?? null,
+      buy: btn ? btn.textContent.trim() : null,
+      enabled: btn ? !btn.disabled : false,
+    };
+  });
+  const clickBuy = async () => player.page.evaluate(() => {
+    const d = document.querySelector('.skilltree__detail');
+    const btn = d && [...d.querySelectorAll('button')].find((b) => /^Buy/i.test(b.textContent.trim()));
+    if (!btn || btn.disabled) return false;
+    btn.click();
+    return true;
+  });
   const inspected = [];
   const purchases = [];
-  for (let pass = 0; pass < 6; pass++) {
+  for (let pass = 0; pass < 8; pass++) {
     const nodes = player.page.locator('button.skillnode');
     const n = await nodes.count().catch(() => 0);
     let boughtThisPass = null;
     for (let i = 0; i < n && !boughtThisPass; i++) {
       await nodes.nth(i).click().catch(() => {});
-      await sleep(200);
-      const kind = ((await player.page.locator('.skilltree__kind').first().textContent().catch(() => '')) ?? '').trim();
-      const name = ((await player.page.locator('.skilltree__detail .menu__title, .skilltree__detail h3').first().textContent().catch(() => '')) ?? '').trim();
-      const buy = player.page.getByRole('button', { name: /^Buy · / });
-      const enabled = await buy.count().then((c) => c > 0).catch(() => false) ? await buy.first().isEnabled().catch(() => false) : false;
-      if (pass === 0) inspected.push(`${name || '?'} [${kind || '?'}]${enabled ? ' BUYABLE' : ''}`);
-      if (!enabled) continue;
-      const label = ((await buy.first().textContent().catch(() => '')) ?? '').trim();
-      await buy.first().click().catch(() => {});
-      await sleep(800);
-      boughtThisPass = { name, kind, label };
-      purchases.push(boughtThisPass);
+      await sleep(160);
+      const info = await detail();
+      if (!info) continue;
+      if (pass === 0) inspected.push(`${info.name} [${info.kind}]${info.enabled ? ` ${info.buy}` : ''}`);
+      if (!info.enabled) continue;
+      // Take the attunement as soon as one is affordable; otherwise buy the cheapest gate.
+      if (!/attun/i.test(info.kind ?? '') && purchases.length >= 2) continue;
+      if (await clickBuy()) {
+        await sleep(700);
+        boughtThisPass = info;
+        purchases.push(info);
+      }
     }
     if (!boughtThisPass) break;
-    if (purchases.some((b) => /attun/i.test(b.kind))) break;
+    if (/attun/i.test(boughtThisPass.kind ?? '')) break;
   }
   await player.shot('08-attunement');
   await player.tap('Escape');
@@ -917,7 +938,7 @@ async function groupAttune(ctx) {
   const attunement = owned.find((id) => id.startsWith('attune.'));
   report.check('A1', 'a world attunement can be bought from the skill tree with run resources',
     Boolean(attunement) && (me1?.resources ?? 0) < before,
-    `resources ${before} -> ${me1?.resources}; skillNodeIds ${J(ownedBefore)} -> ${J(owned)}; bought ${J(purchases.map((b) => `${b.name} (${b.label})`))}; nodes on the page: ${J(inspected.slice(0, 14))}`, '08-attunement');
+    `resources ${before} -> ${me1?.resources}; skillNodeIds ${J(ownedBefore)} -> ${J(owned)}; bought ${J(purchases.map((b) => `${b.name} (${b.buy})`))}; nodes on the page: ${J(inspected.slice(0, 14))}`, '08-attunement');
   report.check('A2', 'the attunement is one the world itself wrote',
     Boolean(attunement) && (s1.world?.attunements ?? []).length > 0,
     attunement ? `owned "${attunement}"; the world offers ${J(s1.world?.attunements)}` : `no attunement owned; the world offers ${J(s1.world?.attunements)}`);
@@ -945,6 +966,7 @@ async function groupDeep(ctx) {
     if (s.room?.kind) { if (!kinds.has(s.room.kind)) await noteShot(ctx, s.room.kind); kinds.add(s.room.kind); }
     if (s.room) for (const ch of tileSet(s.room)) if (TILE_NAMES[ch]) tilesSeen.add(TILE_NAMES[ch]);
 
+    if (s.room?.isFinal || s.room?.feature === 'anchor') { outcome = 'final-room'; break; }
     const d = await player.dom();
     if (d.biomeChoice) {
       biomeChoice = d.biomeDoors;
@@ -1023,16 +1045,62 @@ async function groupDeep(ctx) {
  * cannot grind a whole floors route inside the time budget.
  */
 async function groupFinale(ctx) {
+  await finaleEntry(ctx);
+  await finaleTail(ctx);
+}
+
+async function finaleEntry(ctx) {
   const { report, player, args } = ctx;
-  const url = q(args, args.legacy ? { world: 'fixture', room: '2' } : { world: 'fixture', room: '2', laws: '1' });
+  // `?room=2` drops straight onto the Custodian, which is fast but leaves the crew with no
+  // cleared rooms behind them — `startCollapse` then finds no route home and the run completes
+  // without a collapse. `--finale-entry play` walks rooms 1-3 first so the escape is real.
+  const played = args.finaleEntry === 'play';
+  const url = q(args, played
+    ? { world: 'fixture', autoenter: '1', ...(args.legacy ? {} : { laws: '1' }) }
+    : { world: 'fixture', room: '2', ...(args.legacy ? {} : { laws: '1' }) });
+  ctx.entryUrl = url;
   await player.open(url, { spyAudio: true });
   await sleep(2000);
+  let s = await player.read();
+  if (played) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < 12 * 60_000) {
+      const w = await player.read();
+      if (w.snap.phase !== 'expedition' || w.room?.isFinal) break;
+      if (!w.snap.roomCleared) {
+        const r = await fightUntil(player, { timeoutMs: 150000 });
+        if (r === 'downed') {
+          const back = await waitFor(async () => {
+            const p2 = await player.read();
+            return p2.snap.phase !== 'expedition' || (p2.snap.players.find((z) => z.id === p2.id)?.hp ?? 0) > 0 ? p2 : null;
+          }, { timeoutMs: 15000, intervalMs: 300, label: 'down resolved' }).catch(() => null);
+          if (!back || back.snap.phase !== 'expedition') break;
+        }
+        continue;
+      }
+      const door = (w.room?.exits ?? [])[0];
+      if (!door) break;
+      const before = w.snap.roomIndex;
+      await walkTo(player, centre({ col: door.x, row: door.y }), { arriveDist: 3, timeoutMs: 25000, until: (z) => z.snap.roomIndex !== before });
+      await sleep(900);
+    }
+    s = await player.read();
+    report.check('F0', 'the rooms before the Custodian are cleared on foot, so the collapse has a route home',
+      s.snap.phase === 'expedition' && s.room?.isFinal === true,
+      `entered via ${url}; walked to roomIndex=${s.snap.roomIndex} isFinal=${s.room?.isFinal} in ${((Date.now() - t0) / 60000).toFixed(1)} min`);
+    if (s.snap.phase !== 'expedition') return;
+  }
+}
+
+/** From standing in the final room: the Custodian, the ritual, the collapse, the relic, the debrief. */
+async function finaleTail(ctx) {
+  const { report, player } = ctx;
   let s = await player.read();
   await player.shot('20-custodian-start');
   const boss = s.snap.enemies.find((e) => e.bossPhase !== undefined) ?? s.snap.enemies[0];
   report.check('F1', 'the final room holds the Custodian, named and phased by the world',
     Boolean(boss) && Boolean(s.world?.custodian) && (s.world.custodianPhases ?? []).length === 3,
-    `deep-link ${url}; boss=${boss?.enemyId} hp=${boss?.hp} phase=${boss?.bossPhase} pattern=${boss?.patternId}; recipe custodian="${s.world?.custodian}" phases=${J(s.world?.custodianPhases)}; laws on screen=${J(s.ui.lawsUi)}`, '20-custodian-start');
+    `entered via ${ctx.entryUrl ?? 'the run in progress'}; boss=${boss?.enemyId} hp=${boss?.hp} phase=${boss?.bossPhase} pattern=${boss?.patternId}; recipe custodian="${s.world?.custodian}" phases=${J(s.world?.custodianPhases)}; laws on screen=${J(s.ui.lawsUi)}`, '20-custodian-start');
 
   // --- fight it. Track phases and patterns seen; the floor corrupts in phase 2.
   const phases = new Set();
@@ -1194,6 +1262,27 @@ async function groupFinale(ctx) {
   report.check('F8', 'the hub shows the run: quartermaster line, records, relic shelf, memories',
     s.snap.phase === 'headquarters' && s.ui.memories > 0 && Boolean(d.hqSpeech) && (d.hqRecords.length > 0 || d.memoryCards.length > 0),
     `phase=${s.snap.phase}; memories=${s.ui.memories}; quartermaster="${(d.hqSpeech ?? '').slice(0, 160)}"; records=${J(d.hqRecords.slice(0, 3))}; shelf="${(d.hqShelf ?? '').slice(0, 120)}"; memory cards=${J(d.memoryCards.slice(0, 4))}`, '26-hub-after-run');
+}
+
+/**
+ * The whole thing, once, in one browser: cold hub, a real floors route through the biomes to the
+ * Custodian, the ritual, the collapse and the debrief. This is the run that decides whether
+ * floors are demo-ready; give it `--minutes 40`.
+ */
+async function groupFullRun(ctx) {
+  await groupHub(ctx);
+  const s0 = await ctx.player.read();
+  if (s0?.snap.phase !== 'expedition') return;
+  await groupBiome(ctx);
+  await groupAttune(ctx);
+  await groupDeep(ctx);
+  const s = await ctx.player.read();
+  if (s?.snap.phase === 'expedition' && (s.room?.isFinal || s.room?.feature === 'anchor')) {
+    await finaleTail(ctx);
+  } else {
+    ctx.report.add('F1', 'the Custodian was reached by playing the floors route', 'SKIP',
+      `the bot got as far as ${J(ctx.deepest)} in the time budget; phase=${s?.snap.phase} room=${s?.room?.id} isFinal=${s?.room?.isFinal}`);
+  }
 }
 
 /** Legacy mode: flags off, the three-room world and the Guardian. */
@@ -1417,7 +1506,7 @@ async function groupOnboarding(ctx) {
 // Main
 // ---------------------------------------------------------------------------------------------
 
-const GROUPS = { hub: groupHub, biome: groupBiome, attune: groupAttune, deep: groupDeep, finale: groupFinale, legacy: groupLegacy, fixtures: groupFixtures, audio: groupAudio, onboarding: groupOnboarding };
+const GROUPS = { hub: groupHub, biome: groupBiome, attune: groupAttune, deep: groupDeep, finale: groupFinale, legacy: groupLegacy, fixtures: groupFixtures, audio: groupAudio, onboarding: groupOnboarding, fullrun: groupFullRun };
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
