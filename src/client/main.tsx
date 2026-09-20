@@ -11,6 +11,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { z } from 'zod';
+import { adoptServerFlags } from '../shared/flags';
 import type { GameSession } from '../shared/session';
 import { createBrowserAudio } from './audio';
 import { createBrowserChronicle } from './chronicle';
@@ -36,14 +37,24 @@ function tabStorage(): Storage | undefined {
   }
 }
 
-const ClientConfigSchema = z.object({ liveGenerationAvailable: z.boolean() });
+/**
+ * `floors` / `laws` default to false for a server too old to report them; a client must never
+ * turn a world law on because a field was missing.
+ */
+const ClientConfigSchema = z.object({
+  liveGenerationAvailable: z.boolean(),
+  floors: z.boolean().default(false),
+  laws: z.boolean().default(false),
+});
 
-async function fetchLiveAvailability(): Promise<boolean | null> {
+type ClientConfig = z.infer<typeof ClientConfigSchema>;
+
+async function fetchServerConfig(): Promise<ClientConfig | null> {
   try {
     const res = await fetch('/api/config', { signal: AbortSignal.timeout(3000) });
     if (!res.ok) return null;
     const parsed = ClientConfigSchema.safeParse(await res.json());
-    return parsed.success ? parsed.data.liveGenerationAvailable : null;
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
@@ -54,7 +65,10 @@ async function boot(): Promise<void> {
   const params = new URLSearchParams(window.location.search);
   const coOp = params.get('mode') === 'coop';
   const flags = parsePreviewFlags(coOp ? '' : window.location.search);
-  const availability = flags.fixtureWorld ? false : await fetchLiveAvailability();
+  // The bundled-fixture preview never talks to a server, so it keeps its own URL flags.
+  const serverConfig = flags.fixtureWorld ? null : await fetchServerConfig();
+  if (!flags.fixtureWorld) adoptServerFlags(serverConfig && { floors: serverConfig.floors, laws: serverConfig.laws });
+  const availability = flags.fixtureWorld ? false : serverConfig === null ? null : serverConfig.liveGenerationAvailable;
   if (availability === null && !coOp) flags.fixtureWorld = true;
   const identityPersistence = createIdentityPersistence(params.get('as'), window);
   const identity = identityPersistence.load();

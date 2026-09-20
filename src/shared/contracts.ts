@@ -564,7 +564,7 @@ export const FloorsWorldRecipeSchema = WorldRecipeSchema.extend({
   bible: WorldBibleSchema.optional(),
   /** Same fragments plus optional `authorIndex` / `eventIndex` into the bible. */
   lore: z.array(LoreFragmentSchema.extend(LoreRefsShape)).max(12),
-  /** One room line per room kind per biome (proposed slot; consumers may ignore it). */
+  /** One room line per room kind per biome. Read by src/shared/floorgen/runtime.ts: it becomes that room's description, with the engine's derived line as the fallback. */
   biomeRoomLines: BiomeRoomLinesListSchema.optional(),
   /** 2–3 world laws from the closed registry in laws.ts. NOT yet implemented by the sim. */
   laws: WorldLawListSchema.optional(),
@@ -733,6 +733,13 @@ export const PlayerStateSchema = z.object({
   ultCharge: z.number().min(0).max(100).optional(),
   /** Short lockout after firing R (prevents double-fire on held keys). */
   abilityRCooldownMs: z.number().nonnegative().optional(),
+  /**
+   * Co-op only: false while this operative's client is away and the server is holding their seat
+   * (30 s grace). Absent means present — solo play and every legacy snapshot omit it. A seat with
+   * nobody behind it is marked on every screen, ignored by enemies, and not counted as a living
+   * operative when the sim asks whether the crew is down.
+   */
+  connected: z.boolean().optional(),
   /** Skill-tree nodes this operative bought (`src/shared/skills.ts`); absent until the first purchase. */
   skillNodeIds: z.array(z.string().max(64)).max(64).optional(),
 });

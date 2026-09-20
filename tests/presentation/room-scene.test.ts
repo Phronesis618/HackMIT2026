@@ -265,6 +265,20 @@ describe('room presentation against authoritative contracts', () => {
     expect(labels).not.toContain(sampleSnapshot.players[0]!.displayName + ' · down');
   });
 
+  // A11: for 30 s after a disconnect the body stands in the room. Say so on the nameplate.
+  it('marks a seat whose client has gone away, and leaves every other nameplate alone', () => {
+    const scene = setup();
+    const [me, ally] = sampleSnapshot.players;
+    expect(stage.nodes.map((n) => n.text)).toContain(ally!.displayName);
+    scene.renderSnapshot({ ...sampleSnapshot, players: [me!, { ...ally!, connected: false }] }, localId);
+    const labels = stage.nodes.map((n) => n.text);
+    expect(labels).toContain(`${ally!.displayName} · offline`);
+    expect(labels).toContain(me!.displayName);
+    expect(labels).not.toContain(`${me!.displayName} · offline`);
+    scene.renderSnapshot(sampleSnapshot, localId);
+    expect(stage.nodes.map((n) => n.text)).not.toContain(`${ally!.displayName} · offline`);
+  });
+
   it('draws relics and remains from the snapshot, prompts to read nearby relics and plays the reveal on discovery', () => {
     const scene = setup();
     const me = sampleSnapshot.players[0]!;

@@ -77,6 +77,9 @@ export function RunStatus({ model }: { model: UiModel }) {
   const hud = model.hud;
   const room = model.room;
   const training = model.phase === 'training';
+  // Floors runs count rooms of the current BIOME against its budget; legacy worlds count the
+  // world's planned rooms. `plannedRoomCount` is 1 in a floors world, so never show it there.
+  const floor = training ? null : model.floor ?? null;
   const planned = model.world?.plannedRoomCount ?? 0;
   const hostiles = hud?.enemiesRemaining ?? 0;
   const cleared = !training && hostiles === 0;
@@ -90,7 +93,19 @@ export function RunStatus({ model }: { model: UiModel }) {
             <dt>Hostiles</dt>
             <dd>{cleared ? 'Clear' : hostiles}</dd>
           </div>
-          {!training && room && planned > 0 && (
+          {floor && (
+            <>
+              <div className="rail-stat">
+                <dt>Rooms</dt>
+                <dd>{floor.roomsVisited}<small>/{floor.roomCount}</small></dd>
+              </div>
+              <div className="rail-stat">
+                <dt>Biome</dt>
+                <dd>{floor.depth}<small>/{floor.depthCount}</small></dd>
+              </div>
+            </>
+          )}
+          {!floor && !training && room && planned > 0 && (
             <div className="rail-stat">
               <dt>Room</dt>
               <dd>{room.index + 1}<small>/{planned}</small></dd>
@@ -105,9 +120,16 @@ export function RunStatus({ model }: { model: UiModel }) {
         </dl>
       </div>
       <section className="panel rail-status" aria-label="Expedition status">
-        <p className="eyebrow">{training ? 'Training range' : room?.isFinal ? 'Final room' : 'Expedition'}</p>
+        <p className="eyebrow">{training ? 'Training range' : floor ? floor.biomeName : room?.isFinal ? 'Final room' : 'Expedition'}</p>
         <h2 className="panel__title">{room?.name ?? (training ? 'Proving chamber' : 'Unknown room')}</h2>
-        {!training && planned > 0 && room && (
+        {floor && (
+          <ol className="rail-progress" aria-label={`Biome ${floor.depth} of ${floor.depthCount}`}>
+            {Array.from({ length: floor.depthCount }, (_, i) => (
+              <li key={i} className={i < floor.depth - 1 ? 'is-done' : i === floor.depth - 1 ? 'is-here' : ''} />
+            ))}
+          </ol>
+        )}
+        {!floor && !training && planned > 0 && room && (
           <ol className="rail-progress" aria-label={`Room ${room.index + 1} of ${planned}`}>
             {Array.from({ length: planned }, (_, i) => (
               <li key={i} className={i < room.index ? 'is-done' : i === room.index ? 'is-here' : ''} />
@@ -127,10 +149,12 @@ export function Crew({ model }: { model: UiModel }) {
       <p className="rail-label">Crew · {players.length}/4</p>
       <ul className="rail-crew__list">
         {players.map((p) => (
-          <li key={p.id} className={`rail-crew__row ${p.isLocal ? 'is-local' : ''}`}>
+          <li key={p.id} className={`rail-crew__row ${p.isLocal ? 'is-local' : ''} ${p.connected === false ? 'is-offline' : ''}`}>
             <span className="vitals__swatch" style={{ background: CLASS_THEME[p.classId].primary }} />
             <span className="rail-crew__name">{p.displayName}</span>
-            <span className="rail-crew__class">{CLASS_INFO[p.classId].name}{p.isLocal ? ' · you' : ''}</span>
+            <span className="rail-crew__class">
+              {CLASS_INFO[p.classId].name}{p.isLocal ? ' · you' : ''}{p.connected === false ? ' · offline' : ''}
+            </span>
           </li>
         ))}
       </ul>

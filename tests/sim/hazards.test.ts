@@ -196,6 +196,57 @@ describe('hazard tiles in the simulation', () => {
     expect(enemyHp(lawful)).toBe(enemyHp(plain));
   });
 
+  /**
+   * A20. `first_light` used to key its opening-strike bonus on the enemy being at full health,
+   * so one terrain burn tick — which is credited to nobody and scaled by nothing — silently
+   * cancelled the crew's opening strike before anyone had swung. It is keyed on the first
+   * PLAYER hit instead.
+   */
+  it('does not let a burn tick spend the crew\'s opening strike (first_light)', () => {
+    const firstLight = { laws: [{ lawId: 'first_light', name: 'First Light', description: 'The first cut is the deep one.', intensity: 1 }] };
+    // A guardian: the only enemy with enough health that a x3 opening strike is not clipped by
+    // `Math.min(hp, ...)`, and in a room with no relay ring it is a plain encounter.
+    const arena = (hazard: boolean): RoomSpec => {
+      const tiles: string[][] = Array.from({ length: 10 }, (_, y) =>
+        Array.from({ length: 16 }, (_, x) => (x === 0 || x === 15 || y === 0 || y === 9 ? '#' : '.')));
+      tiles[4]![2] = 'P';
+      tiles[1]![14] = 'X';
+      if (hazard) for (const x of [5, 6, 7]) tiles[4]![x] = '~';
+      return RoomSpecSchema.parse({
+        id: `first-light-${hazard ? 'burnt' : 'clean'}`, index: 0, name: 'First light arena', description: '',
+        width: 16, height: 10, tiles: tiles.map((row) => row.join('')), props: [], attributions: [], relics: [],
+        encounters: [{ id: 'keeper', enemyId: 'guardian', x: 6, y: 4, count: 1 }],
+        exits: [{ x: 14, y: 1, toRoomIndex: 1, direction: 'east' }], isFinal: false,
+      });
+    };
+
+    /** The damage of the crew's FIRST landed hit, and whether the room got there first. */
+    const openingStrike = (hazard: boolean): { burnedFirst: boolean; amount: number | null } => {
+      const sim = expedition([arena(hazard), hazardArena(1), hazardArena(2, true)], firstLight);
+      let burnedFirst = false;
+      let amount: number | null = null;
+      for (let i = 0; i < 1200 && amount === null; i++) {
+        const enemy = sim.getSnapshot().enemies[0]!;
+        const me = sim.getSnapshot().players[0]!;
+        const gap = Math.hypot(enemy.x - me.x, enemy.y - me.y);
+        // Close to melee range, then swing — but in the burnt room only after the fire has bitten.
+        for (const event of tick(sim, { moveX: gap > 56 ? 1 : 0, attack: gap <= 56 && (burnedFirst || !hazard), aimX: enemy.x, aimY: enemy.y })) {
+          if (event.type !== 'enemy_damaged') continue;
+          if (event.byPlayerId === null) burnedFirst ||= amount === null;
+          else amount ??= event.amount;
+        }
+      }
+      return { burnedFirst, amount };
+    };
+
+    const clean = openingStrike(false);
+    const burnt = openingStrike(true);
+    expect(clean.burnedFirst).toBe(false);
+    expect(burnt.burnedFirst).toBe(true); // the room took it off full health first
+    expect(clean.amount).toBe(20 * 3); // bastion's 20, tripled at intensity 1
+    expect(burnt.amount).toBe(clean.amount); // ...and the crew still gets its opening strike
+  });
+
   it('is deterministic: two simulations fed the same intents agree tick for tick', () => {
     const a = expedition();
     const b = expedition();

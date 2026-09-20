@@ -92,8 +92,9 @@ export const LoreRefsShape = {
 
 /**
  * Per-biome room lines: one short line per room kind, shown when a room of that kind is
- * entered in that biome. PROPOSED SLOT (additive): `BiomeBrief` has no text beyond name and
- * tagline, so these ride beside the briefs in `WorldRecipe.biomeRoomLines`, keyed by biome id.
+ * entered in that biome. `BiomeBrief` has no text beyond name and tagline, so these ride beside
+ * the briefs in `WorldRecipe.biomeRoomLines`, keyed by biome id. The floor runtime reads them
+ * (`src/shared/floorgen/runtime.ts`): a line replaces that room's derived description.
  * `shop` is reserved and never requested from the model.
  */
 export const BIOME_LINE_KINDS = ROOM_KINDS.filter((kind) => kind !== 'shop');

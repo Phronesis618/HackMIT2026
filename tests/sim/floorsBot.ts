@@ -7,7 +7,7 @@ import { PreparedWorldSchema, WorldFixtureSchema, type GameEvent, type GameSnaps
 import { PLAYER_RADIUS, TILE_SIZE, tileToWorld } from '../../src/shared/conventions';
 import { DOOR_SIDES, type BiomeBrief, type FloorPlan } from '../../src/shared/floors';
 import { upgradeToFloors } from '../../src/shared/floorgen';
-import { DANGEROUS_TILES, WALKABLE_TILES } from '../../src/shared/registry';
+import { DANGEROUS_TILES, ENEMY_INFO, WALKABLE_TILES } from '../../src/shared/registry';
 import { buildSolidGrid, createRoomProvider, type RoomProvider, type Simulation } from '../../src/sim';
 import { chaseWaypoint, clearPath } from '../../src/sim/combat';
 
@@ -103,7 +103,7 @@ export function fightIntent(room: RoomSpec, snapshot: GameSnapshot, player: Oper
   // Same rule the sim uses (TILES.md T4): '-' cover blocks the shot, but a strike inside one
   // tile reaches over it. Without this the bot walks up to a barricade and never swings.
   const sight = clearPath(grid, player, target) ||
-    (d <= TILE_SIZE && clearPath(grid, player, target, 1, 'solid'));
+    (d <= TILE_SIZE + ENEMY_INFO[target.enemyId].radius && clearPath(grid, player, target, 1, 'solid'));
   let move = { moveX: 0, moveY: 0 };
   if (!sight || d > 200) move = steerIntent(room, snapshot, player, target, true);
   else if (d < 130) move = { moveX: (player.x - target.x) / d, moveY: (player.y - target.y) / d };
