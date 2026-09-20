@@ -1,5 +1,19 @@
 # Handoff — Agent C (Devin)
 
+## Remove contributed ideas — 2026-09-20
+
+- Branch: `devin/1789915612-remove-world-ideas`, based on `972bb06`.
+- **Implemented:** Remove beside your own HQ ideas, in solo and co-op. Removal frees a
+  contribution slot and affects the next generation; existing worlds and receipts stay intact.
+  The server validates ownership and rejects changes during generation or outside HQ.
+- **Integration:** small additive `removeContribution` session/UI methods and
+  `remove_contribution` client message, with implementations on both transports.
+- **Verified:** `npm run check` passed **1109 tests / 92 files**, typecheck and build;
+  whitespace passed. Eight new cases cover capacity, empty ideas, retained receipts,
+  subsequent generation, stream locking, UI ownership, co-op synchronization and server guards.
+- **Mocked:** fixture generation only; no paid provider calls in tests.
+- **Unverified:** browser interaction and deployment at this commit.
+
 ## Production AI prompt packaging — 2026-09-20
 
 - Branch: `devin/1789914107-fix-generation-image`, based on `aaf9fdf`.

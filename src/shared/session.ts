@@ -41,6 +41,7 @@ export interface GameSession {
 
   // --- headquarters actions ---
   submitContribution(text: string): Contribution | null;
+  removeContribution?(contributionId: string): boolean;
   getContributions(): Contribution[];
   /** Asks the authority (server or host) to prepare a world from current contributions. */
   requestWorld(): Promise<PreparedWorld>;
