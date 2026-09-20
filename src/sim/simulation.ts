@@ -18,7 +18,10 @@ import {
   nearestOpenPosition, type Point, type ProjectilePattern,
 } from './combat';
 import { headquartersRoom } from './headquarters';
-import { isTerrainDamageSource, roomTerrainTuning, terrainSpeedMultiplier, type TerrainState } from '../shared/terrain';
+import {
+  ENV_KILL_CREDIT, isTerrainDamageSource, roomTerrainTuning, terrainSpeedMultiplier,
+  type TerrainDamageSource, type TerrainState,
+} from '../shared/terrain';
 import { createTerrainState, strikeBreakableWalls } from './terrain';
 import { createHazardClock, stepHazardTiles, type HazardClock } from './hazards';
 import { ANCHOR_DISCHARGE_MS, ANCHOR_PULSE_SPEED, ANCHOR_PULSE_WARNING_MS, guardianPhase, RELAY_ACTIVATION_RANGE } from '../shared/finale';
@@ -94,10 +97,20 @@ interface LoreNodeRuntime {
   holdMs: number;
 }
 
+/** Who to bill for an enemy's death. See `damageEnemyFrom` and docs/design/TILES.md §1.1. */
+type DamageSource =
+  | { kind: 'player'; player: PlayerRuntime }
+  /** A hazard floor, a vent, a canister, a pit: the room did it and nobody is credited. */
+  | { kind: 'terrain'; tile: TerrainDamageSource }
+  /** Knocked or pulled into something lethal; `by` is whoever displaced it, if anyone. */
+  | { kind: 'displaced'; by: PlayerRuntime | null };
+
 interface RoomProgress {
   enemies: EnemyRuntime[];
   anchor: AnchorState | null;
   cleared: boolean;
+  /** Kills the room made rather than the crew; each one pays a reduced share of the reward. */
+  environmentalKills: number;
   loreNodes: LoreNodeRuntime[];
   pulseHitPlayers: Set<string>;
   terrain: TerrainState;
@@ -154,7 +167,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   let hostPlayerId: string | null = null;
   /** Floors tier scaling of enemy damage; 1 everywhere else. */
   let enemyDamageScale = 1;
-  let progress: RoomProgress = { enemies: [], anchor: null, cleared: false, loreNodes: [], pulseHitPlayers: new Set(), terrain: createTerrainState() };
+  let progress: RoomProgress = { enemies: [], anchor: null, cleared: false, environmentalKills: 0, loreNodes: [], pulseHitPlayers: new Set(), terrain: createTerrainState() };
   /** Ephemeral bullet-hell bolts; never persisted across room switches (combat gates exits). */
   let projectiles: ProjectileRuntime[] = [];
   let projectileCounter = 0;
@@ -316,6 +329,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         } } : {}),
       } : null,
       cleared: false,
+      environmentalKills: 0,
       pulseHitPlayers: new Set(),
       terrain: createTerrainState(),
       loreNodes: nextPhase === 'expedition' ? room.relics.map((relic) => ({
@@ -409,38 +423,54 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   }
 
   function damageEnemy(e: EnemyRuntime, p: PlayerRuntime, damage: number, events: GameEvent[]): void {
-    damageEnemyFrom(e, p, damage, events);
+    damageEnemyFrom(e, { kind: 'player', player: p }, damage, events);
   }
 
   /**
-   * The one place an enemy loses health. `by` is null when the room itself did it (a hazard
-   * floor, a vent, a canister, a pit): terrain is neutral and has no attacker, so the credit
-   * goes to the nearest operative — which is exactly whoever baited the enemy onto the tile.
+   * The one place an enemy loses health (docs/design/TILES.md §1.1). Before tonight every path
+   * needed a player, because ult charge and `enemy_defeated.byPlayerId` demanded one; terrain
+   * needs a path that credits nobody rather than a fabricated kill credit.
+   *
+   *  - `player`   — exactly today's behaviour, full credit.
+   *  - `displaced`— you knocked it into something lethal, so the kill is yours, at ENV_KILL_CREDIT.
+   *  - `terrain`  — the room did it. Nobody is credited and the event carries a null player.
    */
-  function damageEnemyFrom(e: EnemyRuntime, by: PlayerRuntime | null, damage: number, events: GameEvent[]): void {
+  function damageEnemyFrom(e: EnemyRuntime, source: DamageSource, damage: number, events: GameEvent[]): void {
     const s = e.state;
     if (s.hp <= 0) return;
     const amount = Math.min(s.hp, Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1)));
     if (amount <= 0) return;
-    const credit = by ?? terrainCredit(s);
+    const by = source.kind === 'player' ? source.player : source.kind === 'displaced' ? source.by : null;
+    // An environmental kill pays half: attractive to aim for, never better than fighting.
+    const credit = source.kind === 'player' ? 1 : ENV_KILL_CREDIT;
     s.hp -= amount;
     e.hitMs = 130;
     s.state = s.hp === 0 ? 'dead' : s.telegraph ? 'attacking' : 'hit';
-    if (s.hp === 0) s.telegraph = null;
-    if (credit) {
-      // Ultimates charge from real combat: damage dealt plus a bonus per kill.
-      credit.state.ultCharge = Math.min(ULT_CHARGE_MAX, credit.state.ultCharge + amount * ULT_CHARGE_PER_DAMAGE + (s.hp === 0 ? ULT_CHARGE_PER_KILL : 0));
-      events.push(emit({ type: 'enemy_damaged', enemyId: s.id, byPlayerId: credit.state.id, amount, remainingHp: s.hp }));
-      if (s.hp === 0) events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: credit.state.id }));
+    if (s.hp === 0) {
+      s.telegraph = null;
+      if (source.kind !== 'player') progress.environmentalKills++;
     }
-    if (s.hp === 0) dropRemains(e);
+    if (by) {
+      // Ultimates charge from real combat: damage dealt plus a bonus per kill.
+      by.state.ultCharge = Math.min(ULT_CHARGE_MAX,
+        by.state.ultCharge + (amount * ULT_CHARGE_PER_DAMAGE + (s.hp === 0 ? ULT_CHARGE_PER_KILL : 0)) * credit);
+    }
+    events.push(emit({ type: 'enemy_damaged', enemyId: s.id, byPlayerId: by?.state.id ?? null, amount, remainingHp: s.hp }));
+    if (s.hp === 0) {
+      events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: by?.state.id ?? null }));
+      dropRemains(e);
+    }
   }
 
-  /** Nearest operative to a point; downed ones count only if nobody is up. Null with no crew. */
-  function terrainCredit(at: Point): PlayerRuntime | null {
-    const living = orderedPlayers().filter((p) => p.state.hp > 0);
-    const candidates = living.length > 0 ? living : orderedPlayers();
-    return candidates.sort((a, b) => distance(at, a.state) - distance(at, b.state))[0] ?? null;
+  /**
+   * A room cleared by its own hazards pays less: each environmental kill is worth only
+   * `ENV_KILL_CREDIT` of its per-enemy share of the reward (TILES.md §1.1).
+   */
+  function environmentalShare(reward: number): number {
+    const total = progress.enemies.length;
+    if (total === 0 || progress.environmentalKills === 0) return reward;
+    const paid = total - (1 - ENV_KILL_CREDIT) * Math.min(total, progress.environmentalKills);
+    return Math.max(0, Math.round((reward * paid) / total));
   }
 
   /** The first kill of each enemy kind leaves its lore behind where it fell. */
@@ -1079,7 +1109,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     updateLore(living, busy, events);
     if (!progress.cleared && living.length > 0 && livingEnemies().length === 0) {
       progress.cleared = true;
-      const reward = floorsRun ? clearReward(room) : ROOM_CLEAR_REWARD;
+      const reward = environmentalShare(floorsRun ? clearReward(room) : ROOM_CLEAR_REWARD);
       for (const p of players.values()) p.state.resources += reward;
       events.push(emit({ type: 'room_cleared', worldId: world.worldId, roomIndex: room.index, roomId: room.id, playerIds: playerIds(), reward }));
       if (floorsRun && room.roomId !== undefined) {
@@ -1187,7 +1217,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       if (e.state.hp <= 0) continue;
       const subject = { x: e.state.x, y: e.state.y, kind: 'enemy' as const, enemyId: e.state.enemyId, immune: false };
       for (const hit of stepHazardTiles(room, walls, timeMs, subject, e.hazard, tuning)) {
-        damageEnemyFrom(e, null, hit.damage, events);
+        damageEnemyFrom(e, { kind: 'terrain', tile: hit.source }, hit.damage, events);
       }
     }
   }

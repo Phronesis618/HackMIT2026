@@ -919,7 +919,7 @@ export class RoomScene extends Phaser.Scene {
         case 'enemy_damaged': {
           const target = this.enemyPositions.get(event.enemyId);
           if (target) {
-            this.animate(target.x, target.y, 320, (g, t) => fx.drawImpact(g, t, this.classColor(event.byPlayerId), seed, 1));
+            this.animate(target.x, target.y, 320, (g, t) => fx.drawImpact(g, t, this.classColor(event.byPlayerId ?? ''), seed, 1));
             this.floatText(target.x + (seed % 5) * 3 - 6, target.y - 24, `${event.amount}`, tokens.canvas.telegraph, event.amount >= 30 ? 16 : 13);
           }
           break;

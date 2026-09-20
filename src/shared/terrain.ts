@@ -50,19 +50,21 @@ export function terrainSpeedMultiplier(
 // ---------------------------------------------------------------------------
 
 /**
- * THE demo-safety dial. Terrain is neutral — it damages enemies on the same terms as the
- * crew (R1) — but a judge watching a five-minute demo should not see an operative burn to
- * death on a floor they misread. Tiles therefore deal full damage to enemies and this
- * fraction to players. One constant, one place to change it.
- *
- * It scales the shared tile-damage numbers (`~` hazard floor, `^` vents). It deliberately
- * does NOT scale canisters, whose asymmetry is already explicit (48 enemy / 26 player), nor
- * the fixed 12 of a pit fall, which can never be lethal anyway.
+ * Hazard floor is neutral but weighted toward the crew: an enemy standing in fire takes this
+ * much more than a player would (TILES.md T0). One named constant, one place to change it.
  */
-export const TERRAIN_PLAYER_DAMAGE_SCALE = 0.5;
+export const ENEMY_HAZARD_MUL = 1.6;
 
-/** Elites and bosses take half from floor hazards, so nobody can simply park one in a fire. */
+/** Elites and bosses take half the enemy value, so nobody can simply park one in a puddle. */
 export const TERRAIN_ELITE_DAMAGE_SCALE = 0.5;
+
+/**
+ * What an environmental kill is worth, against an earned one (TILES.md §1.1). Gungeon pays
+ * fewer shells for trap kills and Spelunky scores none at all; half keeps the room attractive
+ * to aim without making terrain strictly better than fighting. Applies to ult charge and to
+ * the per-enemy share of the room-clear reward.
+ */
+export const ENV_KILL_CREDIT = 0.5;
 
 /** Enemies that resist floor hazards. Gatekeepers are one-phase guardians in the sim. */
 export function isEliteEnemy(enemyId: string): boolean {
@@ -88,9 +90,15 @@ export function isTerrainDamageSource(sourceId: string): boolean {
 // Baseline numbers (TILES.md §2, quoted at intensity = 0.5)
 // ---------------------------------------------------------------------------
 
-/** `~`: one damage tick per this many ms of standing. */
-export const HAZARD_INTERVAL_MS = 600;
-export const HAZARD_DAMAGE = 8;
+/**
+ * `~`: one damage tick per this many ms of standing, and the tick RAMPS — 3, 6, 9, 12, 15, 15…
+ * Asphodel's magma is the model: crossing is cheap, standing is fatal, and stepping off or
+ * dashing resets the stack to nothing. A flat tick would punish exactly the traversal we want
+ * players to attempt.
+ */
+export const HAZARD_INTERVAL_MS = 450;
+export const HAZARD_BASE = 3;
+export const HAZARD_STACK_MAX = 5;
 
 /** `^`: the vent cycle. Stateless — see `ventState`. */
 export const VENT_CYCLE_MS = 3000;
@@ -128,7 +136,8 @@ export const COVER_HP = 24;
 
 export interface TerrainTuning {
   hazardIntervalMs: number;
-  hazardDamage: number;
+  hazardBase: number;
+  hazardStackMax: number;
   ventCycleMs: number;
   ventDamage: number;
   canisterFuseMs: number;
@@ -154,8 +163,9 @@ function band(gentle: number, mid: number, harsh: number, intensity: number): nu
  */
 export function terrainTuning(intensity: number = DEFAULT_TERRAIN_INTENSITY): TerrainTuning {
   return {
-    hazardIntervalMs: band(800, HAZARD_INTERVAL_MS, 450, intensity),
-    hazardDamage: band(6, HAZARD_DAMAGE, 11, intensity),
+    hazardIntervalMs: band(600, HAZARD_INTERVAL_MS, 350, intensity),
+    hazardBase: band(2, HAZARD_BASE, 4, intensity),
+    hazardStackMax: band(4, HAZARD_STACK_MAX, 6, intensity),
     ventCycleMs: band(4000, VENT_CYCLE_MS, 2400, intensity),
     ventDamage: band(10, VENT_DAMAGE, 18, intensity),
     canisterFuseMs: band(600, CANISTER_FUSE_MS, 300, intensity),

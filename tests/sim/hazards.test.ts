@@ -1,6 +1,7 @@
 /**
  * T0 — '~' hazard floor is real: it burns whoever stands on it, enemies included.
- * Exact numbers from docs/design/TILES.md §2 plus the demo-safety call (players at 50%).
+ * Exact numbers from docs/design/TILES.md T0: a ramping burn, 3/6/9/12/15, enemies at x1.6,
+ * elites at half that, reset on step-off or dash, and an environmental kill credits nobody.
  */
 import { describe, expect, it } from 'vitest';
 import fixtureJson from '../../fixtures/worlds/vantage-spire.json';
@@ -10,8 +11,8 @@ import {
 } from '../../src/shared/contracts';
 import { TICK_MS } from '../../src/shared/conventions';
 import {
-  HAZARD_DAMAGE, HAZARD_INTERVAL_MS, TERRAIN_DAMAGE_SOURCE, TERRAIN_ELITE_DAMAGE_SCALE,
-  TERRAIN_PLAYER_DAMAGE_SCALE, terrainTuning,
+  ENEMY_HAZARD_MUL, ENV_KILL_CREDIT, HAZARD_BASE, HAZARD_INTERVAL_MS, HAZARD_STACK_MAX,
+  TERRAIN_DAMAGE_SOURCE, TERRAIN_ELITE_DAMAGE_SCALE, terrainTuning,
 } from '../../src/shared/terrain';
 import { createHazardClock, stepHazardTiles } from '../../src/sim/hazards';
 import { createSimulation, type Simulation } from '../../src/sim';
@@ -67,48 +68,62 @@ const playerTile = (sim: Simulation) => Math.floor(sim.getSnapshot().players[0]!
 const hp = (sim: Simulation) => sim.getSnapshot().players[0]!.hp;
 const enemyHp = (sim: Simulation) => sim.getSnapshot().enemies[0]!.hp;
 
+/** Every hazard tick one subject takes while standing still on the band for `ms`. */
+function burnSequence(subject: Parameters<typeof stepHazardTiles>[3], ms: number): number[] {
+  const tuning = terrainTuning();
+  const room = hazardArena();
+  const clock = createHazardClock();
+  const damages: number[] = [];
+  for (let elapsed = TICK_MS; elapsed <= ms + 1e-7; elapsed += TICK_MS) {
+    for (const hit of stepHazardTiles(room, [], elapsed, subject, clock, tuning)) damages.push(hit.damage);
+  }
+  return damages;
+}
+
+const onBand = { x: 5 * 32 + 16, y: 4 * 32 + 16, immune: false };
+
 describe('hazard tiles, as pure rules', () => {
-  it('burns on a fixed interval and never while dashing', () => {
+  it('ramps 3, 6, 9, 12, 15, 15 for a player and resets the moment they step off', () => {
+    expect(burnSequence({ ...onBand, kind: 'player' }, HAZARD_INTERVAL_MS * 6)).toEqual([3, 6, 9, 12, 15, 15]);
+
     const tuning = terrainTuning();
     const room = hazardArena();
     const clock = createHazardClock();
-    const on = { x: 5 * 32 + 16, y: 4 * 32 + 16, kind: 'enemy' as const, immune: false };
     let elapsed = 0;
-    let hits = 0;
-    while (elapsed < HAZARD_INTERVAL_MS - TICK_MS) {
+    while (elapsed < HAZARD_INTERVAL_MS * 4) {
       elapsed += TICK_MS;
-      hits += stepHazardTiles(room, [], elapsed, on, clock, tuning).length;
+      stepHazardTiles(room, [], elapsed, { ...onBand, kind: 'player' }, clock, tuning);
     }
-    expect(hits).toBe(0);
-    expect(stepHazardTiles(room, [], elapsed + TICK_MS, on, clock, tuning))
-      .toEqual([{ source: TERRAIN_DAMAGE_SOURCE.hazard, damage: HAZARD_DAMAGE }]);
-    // Leaving the tile resets the clock: you cannot bank progress towards a burn.
-    stepHazardTiles(room, [], 0, { ...on, x: 4 * 32 + 16 }, clock, tuning);
+    expect(clock.hazardStacks).toBe(4);
+    // One tick on clean floor is enough: like Asphodel, the stack is not banked.
+    stepHazardTiles(room, [], elapsed + TICK_MS, { x: 4 * 32 + 16, y: 4 * 32 + 16, kind: 'player', immune: false }, clock, tuning);
+    expect(clock.hazardStacks).toBe(0);
     expect(clock.hazardMs).toBe(0);
-    for (let i = 0; i < 200; i++) expect(stepHazardTiles(room, [], i * TICK_MS, { ...on, immune: true }, clock, tuning)).toEqual([]);
   });
 
-  it('halves the number for players and for elites, and leaves ordinary enemies at full', () => {
-    const tuning = terrainTuning();
-    const room = hazardArena();
-    const at = { x: 5 * 32 + 16, y: 4 * 32 + 16, immune: false };
-    const run = (subject: Parameters<typeof stepHazardTiles>[3]) => {
-      const clock = createHazardClock();
-      for (let elapsed = TICK_MS; elapsed <= HAZARD_INTERVAL_MS; elapsed += TICK_MS) {
-        const hits = stepHazardTiles(room, [], elapsed, subject, clock, tuning);
-        if (hits.length > 0) return hits[0]!.damage;
-      }
-      return 0;
-    };
-    expect(run({ ...at, kind: 'enemy', enemyId: 'husk' })).toBe(HAZARD_DAMAGE);
-    expect(run({ ...at, kind: 'enemy', enemyId: 'guardian' })).toBe(HAZARD_DAMAGE * TERRAIN_ELITE_DAMAGE_SCALE);
-    expect(run({ ...at, kind: 'player' })).toBe(HAZARD_DAMAGE * TERRAIN_PLAYER_DAMAGE_SCALE);
+  it('weights enemies at x1.6, halves that for elites, and never touches a dash', () => {
+    const first = (subject: Parameters<typeof stepHazardTiles>[3]) => burnSequence(subject, HAZARD_INTERVAL_MS)[0];
+    expect(first({ ...onBand, kind: 'player' })).toBe(HAZARD_BASE);
+    expect(first({ ...onBand, kind: 'enemy', enemyId: 'husk' })).toBe(Math.round(HAZARD_BASE * ENEMY_HAZARD_MUL));
+    expect(first({ ...onBand, kind: 'enemy', enemyId: 'guardian' }))
+      .toBe(Math.round(HAZARD_BASE * ENEMY_HAZARD_MUL * TERRAIN_ELITE_DAMAGE_SCALE));
+    expect(burnSequence({ ...onBand, kind: 'player', immune: true }, HAZARD_INTERVAL_MS * 8)).toEqual([]);
+    expect(burnSequence({ ...onBand, kind: 'enemy', enemyId: 'husk' }, HAZARD_INTERVAL_MS * 5))
+      .toEqual([5, 10, 14, 19, 24]);
+  });
+
+  it('caps the ramp at the stack maximum', () => {
+    const damages = burnSequence({ ...onBand, kind: 'player' }, HAZARD_INTERVAL_MS * 9);
+    expect(Math.max(...damages)).toBe(HAZARD_BASE * HAZARD_STACK_MAX);
+    expect(damages.slice(HAZARD_STACK_MAX)).toEqual(Array(9 - HAZARD_STACK_MAX).fill(HAZARD_BASE * HAZARD_STACK_MAX));
   });
 
   it('interpolates inside the clamped intensity band, with 0.5 exactly on the baseline', () => {
-    expect(terrainTuning(0)).toMatchObject({ hazardIntervalMs: 800, hazardDamage: 6 });
-    expect(terrainTuning(0.5)).toMatchObject({ hazardIntervalMs: HAZARD_INTERVAL_MS, hazardDamage: HAZARD_DAMAGE });
-    expect(terrainTuning(1)).toMatchObject({ hazardIntervalMs: 450, hazardDamage: 11 });
+    expect(terrainTuning(0)).toMatchObject({ hazardIntervalMs: 600, hazardBase: 2, hazardStackMax: 4 });
+    expect(terrainTuning(0.5)).toMatchObject({
+      hazardIntervalMs: HAZARD_INTERVAL_MS, hazardBase: HAZARD_BASE, hazardStackMax: HAZARD_STACK_MAX,
+    });
+    expect(terrainTuning(1)).toMatchObject({ hazardIntervalMs: 350, hazardBase: 4, hazardStackMax: 6 });
     // Out of range and nonsense clamp rather than throw: the model supplies this number.
     expect(terrainTuning(-4)).toEqual(terrainTuning(0));
     expect(terrainTuning(9)).toEqual(terrainTuning(1));
@@ -117,22 +132,20 @@ describe('hazard tiles, as pure rules', () => {
 });
 
 describe('hazard tiles in the simulation', () => {
-  it('costs a standing player exactly half a hazard tick every interval', () => {
+  it('burns a standing player on the ramp, on the clock, from terrain:hazard', () => {
     const sim = expedition();
     while (playerTile(sim) < 5) tick(sim, { moveX: 1 });
-    const expected = HAZARD_DAMAGE * TERRAIN_PLAYER_DAMAGE_SCALE;
     let previous = hp(sim);
-    const burns: number[] = [];
-    for (let i = 0; i < Math.ceil((HAZARD_INTERVAL_MS * 3) / TICK_MS) + 4; i++) {
+    const burns: Array<{ tick: number; damage: number }> = [];
+    for (let i = 0; i < Math.ceil((HAZARD_INTERVAL_MS * 4) / TICK_MS) + 4; i++) {
       const events = tick(sim);
       if (hp(sim) === previous) continue;
-      expect(previous - hp(sim)).toBe(expected);
       expect(events.some((e) => e.type === 'player_damaged' && e.sourceEnemyId === TERRAIN_DAMAGE_SOURCE.hazard)).toBe(true);
+      burns.push({ tick: sim.getTick(), damage: previous - hp(sim) });
       previous = hp(sim);
-      burns.push(sim.getTick());
     }
-    expect(burns.length).toBeGreaterThanOrEqual(3);
-    for (let i = 1; i < burns.length; i++) expect(burns[i]! - burns[i - 1]!).toBe(HAZARD_INTERVAL_MS / TICK_MS);
+    expect(burns.map((b) => b.damage)).toEqual([3, 6, 9, 12]);
+    for (let i = 1; i < burns.length; i++) expect(burns[i]!.tick - burns[i - 1]!.tick).toBe(Math.round(HAZARD_INTERVAL_MS / TICK_MS));
   });
 
   it('lets a dash cross a three-tile band for free, and does not grant i-frames when it burns', () => {
@@ -154,20 +167,25 @@ describe('hazard tiles in the simulation', () => {
     expect(burning.getSnapshot().players[0]!.invulnerableMs).toBe(0);
   });
 
-  it('kills a husk that cannot leave the fire, on the same clock, and credits the crew', () => {
+  it('kills a husk that cannot leave the fire, credits nobody, and pays a reduced reward', () => {
     const sim = expedition();
     expect(enemyHp(sim)).toBe(30);
     const defeats: GameEvent[] = [];
+    const clears: GameEvent[] = [];
     let ticks = 0;
-    while (enemyHp(sim) > 0 && ticks < 400) {
-      defeats.push(...tick(sim).filter((e) => e.type === 'enemy_defeated'));
+    while (ticks < 400 && clears.length === 0) {
+      const events = tick(sim);
+      defeats.push(...events.filter((e) => e.type === 'enemy_defeated'));
+      clears.push(...events.filter((e) => e.type === 'room_cleared'));
       ticks++;
     }
-    // 30 hp at 8 a burn = four burns; the fourth lands at 4 x 600 ms.
-    expect(ticks).toBe((HAZARD_INTERVAL_MS * 4) / TICK_MS);
+    // 30 hp at 5, 10, 14, 19: the fourth burn kills, 4 x 450 ms after it started standing there.
+    expect(ticks).toBe(Math.round((HAZARD_INTERVAL_MS * 4) / TICK_MS));
     expect(defeats).toHaveLength(1);
-    expect(defeats[0]).toMatchObject({ type: 'enemy_defeated', byPlayerId: 'tester' });
-    expect(sim.getSnapshot().players[0]!.ultCharge).toBeGreaterThan(0);
+    // The room did it, so byPlayerId is null: no fabricated kill credit reaches the memory wall.
+    expect(defeats[0]).toMatchObject({ type: 'enemy_defeated', byPlayerId: null });
+    expect(sim.getSnapshot().players[0]!.ultCharge).toBe(0);
+    expect(clears[0]).toMatchObject({ type: 'room_cleared', reward: Math.round(3 * ENV_KILL_CREDIT) });
   });
 
   it('is deterministic: two simulations fed the same intents agree tick for tick', () => {
