@@ -216,3 +216,19 @@ export function drawTerrain(
     }
   }
 }
+
+/**
+ * A canister going up, drawn from `terrain_detonated` alone: the event carries the centre and
+ * the radius, so a co-op client paints exactly the circle the host damaged. `g` sits at the
+ * blast centre; `t` runs 0..1.
+ */
+export function drawCanisterBlast(g: Phaser.GameObjects.Graphics, t: number, radius: number, color: number): void {
+  g.clear();
+  const eased = 1 - (1 - t) * (1 - t);
+  const fade = 1 - t;
+  g.fillStyle(color, 0.35 * fade).fillCircle(0, 0, radius * eased);
+  g.fillStyle(0xffffff, 0.6 * fade * fade).fillCircle(0, 0, radius * 0.45 * eased);
+  // The true damage radius stays on screen for the whole effect, so the lesson is legible.
+  g.lineStyle(3, color, 0.9 * fade).strokeCircle(0, 0, radius);
+}
+

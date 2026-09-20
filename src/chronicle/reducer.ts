@@ -428,9 +428,11 @@ function memoryFromEvent(
     case 'enemy_defeated': {
       const world = ctx.world;
       if (!world || !hasMemory('arrival_keepsake', world.worldId) || hasMemory('milestone', world.worldId)) return null;
-      // An environmental kill credits nobody (TILES.md §1.1): say so rather than inventing one.
-      const participants = resolveParticipants(event.byPlayerId ? [event.byPlayerId] : [], ctx.players);
-      const victor = participants.length > 0 ? joinNames(participants) : 'The room itself';
+      // An environmental kill credits nobody (TILES.md §1.1), and a memory needs a participant:
+      // the "first victory" waits for the first kill somebody in the crew actually landed.
+      if (!event.byPlayerId) return null;
+      const participants = resolveParticipants([event.byPlayerId], ctx.players);
+      const victor = joinNames(participants);
       return {
         id: memoryId('milestone', event),
         kind: 'milestone',

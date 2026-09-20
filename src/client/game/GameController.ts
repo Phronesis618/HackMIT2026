@@ -264,6 +264,7 @@ export class GameController {
       const lawsView = withLookOverrides(worldLawsView(world));
       renderer.showRoom(room, world.art, world.receipt.lines, {
         title: world.recipe.title, tagline: world.recipe.tagline, look: lawsView.look, lightRadius: resolveLaws(lawsView.laws).lightRadius,
+        terrainSkins: world.recipe.terrainSkins ?? [],
       });
       store.set({ room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal }, phase: snapshot.phase, hud: me ? hudFrom(me, snapshot) : store.get().hud });
     }

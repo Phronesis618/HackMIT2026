@@ -42,11 +42,11 @@ function hazardArena(index = 0, isFinal = false): RoomSpec {
   });
 }
 
-function expedition(rooms: RoomSpec[] = [hazardArena(0), hazardArena(1), hazardArena(2, true)]): Simulation {
+function expedition(rooms: RoomSpec[] = [hazardArena(0), hazardArena(1), hazardArena(2, true)], recipeExtra: Record<string, unknown> = {}): Simulation {
   const sim = createSimulation();
   sim.addPlayer({ id: 'tester', displayName: 'Tester', classId: 'bastion' });
   sim.setWorld(PreparedWorldSchema.parse({
-    worldId: 'hazard-test', createdAt: 0, recipe: fixture.recipe, art: fixture.art,
+    worldId: 'hazard-test', createdAt: 0, recipe: { ...fixture.recipe, ...recipeExtra }, art: fixture.art,
     rooms, plannedRoomCount: 3,
     provenance: { source: 'fixture', label: 'TEST FIXTURE', generatedAt: 0, durationMs: 0, attempts: 0, notes: [] },
     receipt: { worldTitle: fixture.recipe.title, source: 'fixture', headline: 'Hazards', lines: [] },
@@ -186,6 +186,14 @@ describe('hazard tiles in the simulation', () => {
     expect(defeats[0]).toMatchObject({ type: 'enemy_defeated', byPlayerId: null });
     expect(sim.getSnapshot().players[0]!.ultCharge).toBe(0);
     expect(clears[0]).toMatchObject({ type: 'room_cleared', reward: Math.round(3 * ENV_KILL_CREDIT) });
+  });
+
+  it('ignores world laws that scale the CREW\'s damage: first_light does not triple a burn tick', () => {
+    const lawful = expedition(undefined, { laws: [{ lawId: 'first_light', name: 'First Light', description: 'The first cut is the deep one.', intensity: 1 }] });
+    const plain = expedition();
+    for (let i = 0; i < Math.round(HAZARD_INTERVAL_MS / TICK_MS) + 2; i++) { tick(lawful); tick(plain); }
+    expect(enemyHp(plain)).toBeLessThan(30);
+    expect(enemyHp(lawful)).toBe(enemyHp(plain));
   });
 
   it('is deterministic: two simulations fed the same intents agree tick for tick', () => {

@@ -104,6 +104,16 @@ describe('reduceChronicle', () => {
     expect(reduceChronicle(first.state, [second], ctx).created).toEqual([]);
   });
 
+  it('does not write a first victory for a kill the room made; the next crew kill gets it', () => {
+    const roomKill = sampleEvents.map((e) => e.type === 'enemy_defeated' || e.type === 'enemy_damaged' ? { ...e, byPlayerId: null } : e);
+    const first = reduceChronicle(createChronicleState(), roomKill, ctx);
+    expect(first.created.some((m) => m.kind === 'milestone')).toBe(false);
+    for (const m of first.created) expect(m.summary).not.toMatch(/undefined|null|Someone/);
+    const crewKill: GameEvent = { id: '421:0', type: 'enemy_defeated', tick: 421, timeMs: 7016, enemyId: 'other', byPlayerId: 'sample-player-remote' };
+    const milestone = reduceChronicle(first.state, [crewKill], ctx).created.find((m) => m.kind === 'milestone')!;
+    expect(milestone.participants.map((p) => p.id)).toEqual(['sample-player-remote']);
+  });
+
   it('scopes recycled event IDs to worlds and assigns distinct storage IDs', () => {
     const first = reduceChronicle(createChronicleState(), sampleEvents, ctx);
     const worldId = 'test-world-two';

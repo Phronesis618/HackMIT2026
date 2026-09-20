@@ -521,18 +521,13 @@ export const AttunementSchema = z.object({
 export type Attunement = z.infer<typeof AttunementSchema>;
 
 /**
- * One world's name for one mechanic (docs/design/TILES.md §4.1). Same shape as
+ * One world's name for one mechanic (docs/design/TILES.md §4.1). Same idea as
  * `AttunementSchema`: the engine owns the mechanic, the world owns the identity. The
  * simulation never reads this, so nothing here can affect determinism or co-op sync.
+ * ONE source of truth: the schema lives in ./laws (what the generation pipeline validates
+ * against) and is re-exported here for the runtime and the renderer.
  */
-export const TerrainSkinSchema = z.object({
-  featureId: z.enum(TERRAIN_FEATURE_IDS),
-  /** In-world name. "tide-gauge vents", "ledger stacks", "the sump". */
-  name: z.string().trim().min(1).max(28),
-  /** Replaces the built-in HUD caption from TERRAIN_CAPTION. */
-  caption: z.string().trim().min(1).max(60),
-});
-export type TerrainSkin = z.infer<typeof TerrainSkinSchema>;
+export { TerrainSkinSchema, TerrainSkinListSchema, type TerrainSkin } from './laws';
 
 export const WorldRecipeSchema = z.object({
   title: z.string().trim().min(1).max(40),
@@ -549,7 +544,7 @@ export const WorldRecipeSchema = z.object({
    * What this world calls its terrain. One entry per feature at most; unknown ids are dropped.
    * Optional rather than defaulted, so a recipe round-trips through the operator byte for byte.
    */
-  terrainSkins: z.array(TerrainSkinSchema).max(15).optional(),
+  terrainSkins: TerrainSkinListSchema.optional(),
 });
 
 /**

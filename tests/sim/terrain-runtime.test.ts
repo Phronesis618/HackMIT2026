@@ -10,6 +10,8 @@ import { collectTerrainTiles, terrainCaption } from '../../src/client/render/ter
 import { TERRAIN_CAPTION } from '../../src/shared/registry';
 import { RoomTerrainSchema, TerrainSkinSchema, WorldRecipeSchema } from '../../src/shared/contracts';
 import { DEFAULT_TERRAIN_INTENSITY, terrainTuning } from '../../src/shared/terrain';
+import { lintProse } from '../../src/shared/prose';
+import * as laws from '../../src/shared/laws';
 
 function arena(tile: string, index = 0): RoomSpec {
   const tiles: string[][] = Array.from({ length: 10 }, (_, y) =>
@@ -160,5 +162,17 @@ describe('the world names its terrain, the engine owns it', () => {
       expect(tuning.canisterFuseMs).toBeLessThanOrEqual(600);
     }
     expect(terrainTuning()).toEqual(terrainTuning(DEFAULT_TERRAIN_INTENSITY));
+  });
+
+  it('has one skin schema, shared by the runtime and the writing pipeline', () => {
+    expect(TerrainSkinSchema).toBe(laws.TerrainSkinSchema);
+  });
+
+  it('ships built-in captions that pass the prose linter (docs/WRITING.md)', () => {
+    for (const [feature, caption] of Object.entries(TERRAIN_CAPTION)) {
+      const result = lintProse(caption, { kind: 'uiLabel' });
+      expect(result.hardFail, `${feature}: ${JSON.stringify(result.issues)}`).toBe(false);
+      expect(caption.length).toBeLessThanOrEqual(60);
+    }
   });
 });
