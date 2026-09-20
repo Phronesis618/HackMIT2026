@@ -52,7 +52,34 @@ pass. UI actions and memory samples in tests are mocks, not gameplay evidence.
 Scope was posted to issue #4 before implementation. Direct messaging to other Devin
 sessions was access-denied; GitHub was used for coordination. This work avoids the active H1
 Stillpoint slice and the floors/writing paths. Browser play, file download and live-generation
-effects have not been tested in this session.
+effects were unverified at the initial implementation.
+
+Subsequent browser testing found direction changes discarding edits; `f5c17eb` retains each
+direction's independent draft. `626ca0d` integrates the new menu layout and archive keyboard
+boundary. That run verified actual fixture records, native tab/select navigation, responsive
+layout, filtered/all-record downloads and clear/reload behavior. A submitted memory idea
+left all 15,213 serialized memory characters unchanged. PR #20 was merged at `638105f`.
+
+The merged build passed `npm run check`: 643 tests / 55 files, typecheck and build. A normal
+Chrome host and Incognito guest generated shared fixture records through actual play.
+The guest's exact 200-character memory contribution arrived once on both clients under the
+confirmed current name; 5,514 serialized memory characters were unchanged. Host-only
+preparation/entry remained enforced. No gameplay state or records were injected.
+
+This run exposed focus falling to BODY after composer submission, preventing immediate
+Escape. Follow-up `40c8b53` / PR #24 restores persistent archive focus after composer/clear
+actions. Focused browser verification passed submit, composer cancel, clear cancel and
+confirmed erase with immediate Escape. At 23 shared ideas the guest composer remained
+enabled; the host's 24th idea disabled it live, and attempted submission added no 25th idea.
+Both clients retained exactly 24 contributions. Guest-only erase persisted after reload;
+the host retained three actual records. Both clients had no fresh console runtime errors.
+
+The testing agent recorded the focused pass and preserved earlier co-op evidence separately;
+the earlier recording includes the subsequently fixed focus defect. Reload temporarily
+duplicated crew entries and transferred host status; this observation is referred to A and
+is not established as a regression from the focus change. Live generation, disconnected/busy
+guards, >18-record pagination, beyond-visible-page exports and exhaustive modal focus
+trapping remain untested in the browser. No state, records or events were injected.
 
 ## Render hosting setup — 2026-09-20
 
