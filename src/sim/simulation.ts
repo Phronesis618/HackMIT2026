@@ -1142,8 +1142,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   }
 
   /**
-   * Line of REACH, for the things an operative does with their hands at arm's length: pulling a
-   * teammate up, reading a relic, planting the Anchor, hitting a relay. It reads the MOVEMENT
+   * Line of REACH, for the things an operative does for the crew rather than to an enemy:
+   * pulling a teammate up, reading a relic, planting the Anchor, hitting a relay, and Rally
+   * (A26 — the only ability aimed at allies). It reads the MOVEMENT
    * layer, so a '-' barricade is open — low cover stops what travels and nothing else
    * (TILES.md T4). A wall, a prop or a pit between the two still refuses; if you could not walk
    * the last half-tile, you cannot reach across it either.
@@ -1353,8 +1354,11 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         break;
       }
       case 'beacon.e.rally':
+        // A26: line of REACH, not line of fire. Rally is the one ability aimed at the crew, and a
+        // waist-high '-' barricade stopped it — a support ability refusing to cross the thing the
+        // crew is taking cover behind (TILES.md T4). A wall, a prop or a pit still refuses.
         for (const ally of orderedPlayers()) {
-          if (ally.state.hp <= 0 || distance(s, ally.state) > 200 || !clearPath(grid, s, ally.state)) continue;
+          if (ally.state.hp <= 0 || distance(s, ally.state) > 200 || !canReach(s, ally.state)) continue;
           heal(ally, p, 35, events);
           ally.state.rallyMs = 4000;
         }

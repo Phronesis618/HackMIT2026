@@ -172,7 +172,9 @@ export class FloorsBot {
     for (let i = 0; i < (options.maxTicks ?? 1500); i++) {
       const snapshot = this.snapshot();
       if (options.until?.() || snapshot.roomId !== startRoom || snapshot.phase !== 'expedition') return true;
-      const lead = snapshot.players.find((player) => player.hp > 0);
+      // The operative with the most Integrity left walks point. Picking the first living seat
+      // instead made a long walk over damaging terrain turn on which seat happened to be hurt.
+      const lead = [...snapshot.players].filter((player) => player.hp > 0).sort((a, b) => b.hp - a.hp)[0];
       if (!lead) throw new Error('crew is down');
       if (Math.hypot(target.x - lead.x, target.y - lead.y) <= (options.reach ?? 4)) return true;
       this.tick((player) => player.id === lead.id ? this.steer(player, target, false) : this.steer(player, lead, false));
