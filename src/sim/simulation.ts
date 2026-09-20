@@ -87,6 +87,17 @@ interface PlayerRuntime {
   /** S1: clear_surge haste left, and the dash_echo burn trail; both derived, never serialised. */
   hasteMs: number;
   trail: DashTrail | null;
+  /**
+   * A23. Skill nodes the operative owns, split by where they are worth anything. The core spine
+   * and the class tree travel with the operative; an ATTUNEMENT is grown by one world
+   * (`recipe.attunements`) and belongs to it, so it is keyed by `worldId`. Without that, a node
+   * bought in world A stayed active in world B that happened to grow the same effect in the same
+   * slot, because the tree gives both the same id (`attune.0.hazard_ward`).
+   *
+   * `state.skillNodeIds` is the view of this for the CURRENT world, and it is all the snapshot
+   * carries: no new field, no growth per world visited.
+   */
+  skills: { carried: string[]; byWorld: Map<string, string[]> };
 }
 
 interface EnemyRuntime {
@@ -759,11 +770,24 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       dashDirection: { x: 1, y: 0 }, attackRemainingMs: 0, hitRemainingMs: 0,
       onExit: false, interacting: false, interactHeld: false, interactPressed: false, damagedThisTick: false, history: [],
       hazard: createHazardClock(), effects: NO_EFFECTS, hasteMs: 0, trail: null,
+      skills: { carried: [], byWorld: new Map() },
     };
   }
 
   function refreshEffects(p: PlayerRuntime): void {
     p.effects = effectsFor(p.state, world);
+  }
+
+  /**
+   * A23. Rewrites `state.skillNodeIds` to the nodes that count in the world the crew is in now —
+   * the operative's own, plus the attunements they bought in THIS world — and re-resolves their
+   * effects. Absent when they own nothing, so a crew that bought nothing stays byte-identical.
+   */
+  function syncSkillNodes(p: PlayerRuntime): void {
+    const owned = [...p.skills.carried, ...(world ? p.skills.byWorld.get(world.worldId) ?? [] : [])];
+    if (owned.length === 0) delete p.state.skillNodeIds;
+    else p.state.skillNodeIds = owned;
+    refreshEffects(p);
   }
 
   function livingEnemies(): EnemyRuntime[] {
@@ -1904,7 +1928,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       }
       world = next;
       worldLaws = resolveLaws(worldLawsView(next, options.deriveLaws).laws);
-      for (const p of players.values()) refreshEffects(p);
+      // A23: the attunements the crew owns are the ones THIS world grew for them.
+      for (const p of players.values()) syncSkillNodes(p);
       // Outside a run the provider follows the latest copy of the world (briefs may arrive late).
       if (!floorsRun) roomProvider = next?.floors ? (options.roomProvider ?? createRoomProvider)(next) : null;
     },
@@ -1985,9 +2010,14 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       const tree = buildSkillTree(p.state.classId, skillWorldContext(world));
       const owned = p.state.skillNodeIds ?? [];
       if (skillPurchaseCheck(tree, nodeId, owned, p.state.resources) !== null) return false;
-      p.state.resources -= tree.nodes.find((n) => n.id === nodeId)!.cost;
-      p.state.skillNodeIds = [...owned, nodeId];
-      refreshEffects(p);
+      const node = tree.nodes.find((n) => n.id === nodeId)!;
+      p.state.resources -= node.cost;
+      // A23: an attunement belongs to the world that grew it; everything else travels with the
+      // operative. (An attunement node only exists in the tree while a world is prepared.)
+      if (node.kind === 'attunement' && world) {
+        p.skills.byWorld.set(world.worldId, [...(p.skills.byWorld.get(world.worldId) ?? []), nodeId]);
+      } else p.skills.carried.push(nodeId);
+      syncSkillNodes(p);
       return true;
     },
     setHostPlayerId(playerId) {

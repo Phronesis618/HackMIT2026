@@ -542,6 +542,42 @@ describe('skill purchases', () => {
     // Snapshots validate with the additive field present.
     expect(() => GameSnapshotSchema.parse(sim.getSnapshot())).not.toThrow();
   });
+
+  /**
+   * A23. An attunement is grown by ONE world. Two worlds that pick the same effect for the same
+   * slot give the node the same id (`attune.0.hazard_ward`), so an owned id used to keep working
+   * in a world that never sold it. Ownership is keyed by `worldId` inside the sim; the snapshot
+   * still carries one flat list — the nodes that count where the crew is standing.
+   */
+  it('an attunement stays in the world that grew it; the core spine travels with the operative', () => {
+    const rooms: RoomOptions[] = [{ hazard: [[6, 7], [7, 7], [8, 7]] }];
+    const first = world(rooms, attunementsFor(ids));
+    // Same recipe, same attunement in the same slot, different world: the ids are identical.
+    const second = PreparedWorldSchema.parse({ ...first, worldId: 'effects-world-2' });
+    const burn = (sim: Simulation) => {
+      sim.enterRoom(PAY_ROOMS);
+      return firstPlayerHit(sim, (e) => e.sourceEnemyId === TERRAIN_DAMAGE_SOURCE.hazard, 600, { moveX: 1 });
+    };
+    const sim = createSimulation();
+    sim.addPlayer({ id: P1, displayName: P1, classId: 'bastion' });
+    sim.setWorld(first);
+    earn(sim, PAY_ROOMS);
+    expect(sim.purchaseSkill(P1, 'core.salvage')).toBe(true);
+    expect(sim.purchaseSkill(P1, 'attune.0.hazard_ward')).toBe(true);
+    expect(me(sim).skillNodeIds).toEqual(['core.salvage', 'attune.0.hazard_ward']);
+
+    // The next world: the core node is still the operative's, the attunement is not.
+    sim.returnToHeadquarters();
+    sim.setWorld(second);
+    expect(me(sim).skillNodeIds).toEqual(['core.salvage']);
+    const unwarded = burn(sim);
+
+    // ...and going back to the world that grew it hands it back, at the number it promised.
+    sim.returnToHeadquarters();
+    sim.setWorld(first);
+    expect(me(sim).skillNodeIds).toEqual(['core.salvage', 'attune.0.hazard_ward']);
+    expect(burn(sim)).toBe(Math.round(unwarded * HAZARD_WARD_MUL));
+  });
 });
 
 describe('determinism and the no-purchase guarantee', () => {
