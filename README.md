@@ -62,8 +62,9 @@ docker run --rm -p 8787:8787 relay
 
 The image runs as a non-root user and serves the built client, API and WebSocket endpoint
 from one Node process. `/api/health` is the healthcheck. No credential is needed for the
-labelled offline fixture mode. For live generation, pass `RELAY_GENERATION_MODE=live`,
-`OPENAI_MODEL`, and `OPENAI_API_KEY` through your hosting provider's secret configuration.
+labelled offline fixture mode. For live Claude generation, pass `RELAY_GENERATION_MODE=live`,
+`RELAY_AI_PROVIDER=anthropic`, and `ANTHROPIC_API_KEY` through your hosting provider's secret
+configuration. Set `ANTHROPIC_MODEL` to override the default `claude-sonnet-4-6`.
 Do not bake secrets into the image.
 
 Static hosting supports the solo fixture demo: if the generation server is unavailable, the
@@ -99,11 +100,45 @@ validated live generation with bounded fallback, and non-root production contain
 access it. This static deployment uses the explicitly labelled bundled fixture; live
 generation and co-op require the Node server.
 
-Verified scope and remaining external prerequisites are in [QA](docs/QA.md). Live OpenAI
+Verified scope and remaining external prerequisites are in [QA](docs/QA.md). Live Claude/OpenAI
 and physical LAN remain unverified; mocked provider tests do not establish live generation.
 
 ## Configuration
 
 Copy `.env.example` to `.env`. All variables are read by the **server only**
-(`src/server/config.ts`). `OPENAI_API_KEY` is optional; without it the server serves the
-fixture and says so. Never commit `.env`.
+(`src/server/config.ts`). Never commit `.env` or put API keys in `VITE_` variables.
+
+### Claude now
+
+Set these values in `.env` (or your Node server's hosting environment), then restart the server:
+
+```dotenv
+RELAY_GENERATION_MODE=live
+RELAY_AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=your-anthropic-api-key
+ANTHROPIC_MODEL=claude-sonnet-4-6
+```
+
+Claude uses the Messages API with a forced recipe tool. Its output goes through the same
+Zod validation, bounded repair, safe compiler, and incremental room delivery as OpenAI.
+
+### Switch back to GPT
+
+Add the OpenAI key and change the provider, then restart; no code changes are needed:
+
+```dotenv
+RELAY_GENERATION_MODE=live
+RELAY_AI_PROVIDER=openai
+OPENAI_API_KEY=your-openai-api-key
+OPENAI_MODEL=gpt-5-mini
+```
+
+You can keep both keys configured. Only the selected provider is called. If
+`RELAY_AI_PROVIDER` is omitted, a nonempty Anthropic key selects Claude; otherwise OpenAI
+is selected, preserving existing OpenAI-only setups. Unsupported provider names fail
+startup with a configuration error.
+
+Generation stays offline unless `RELAY_GENERATION_MODE=live`. A missing selected key uses
+a labelled fixture; provider errors, timeouts and rejected output use a labelled fallback.
+The server never silently switches to the other paid provider. The receipt shows the model
+used, and `/api/config` exposes availability without either key.

@@ -2,6 +2,15 @@
 
 Agent C records only work and verification performed in this session.
 
+## Claude provider integration — 2026-09-20
+
+On `devin/1789878276-claude-provider`, Devin implemented the requested Claude/OpenAI
+server configuration switch and Claude recipe tool adapter, preserving the generation
+validation and bounded fallback. Consulted Anthropic's Messages API and tool-use docs.
+Added mocked Claude safety/cancellation/repair/streaming tests and local HTTP routing
+tests for both providers. `npm run check`: 203 tests / 17 files, typecheck and build passed.
+No credentials were available for live calls; no browser testing was performed.
+
 | Date/time | Commit / branch | What Devin did (files, feature) | Tests run + result | Screenshots / notes |
 | --------- | --------------- | ------------------------------- | ------------------ | ------------------- |
 | 2026-09-19 | `feat/presentation` — `Build the RELAY sanctuary and expressive operative silhouettes` | Read project goals and Agent C ownership; original procedural sanctuary and character rendering; corrected scene depth sorting. | Foundation `npm run check`: 50 passed; visual baseline typecheck and whitespace checks passed. | No browser verification yet. No external art or audio assets. |

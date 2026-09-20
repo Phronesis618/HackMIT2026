@@ -1,5 +1,18 @@
 # Handoff — Agent C (Devin)
 
+## Claude provider integration — 2026-09-20
+
+- Branch: `devin/1789878276-claude-provider`.
+- **Implemented:** user-requested server integration for Claude Messages API tool output,
+  sharing validation, repair, timeout/cancellation, compiler and room delivery with OpenAI.
+  `RELAY_AI_PROVIDER=anthropic|openai` selects credentials and model; setup and switch-back
+  examples are in the README. Keys remain on the Node server.
+- **Verified:** `npm run check`: 17 files / 203 tests passed, including both providers through
+  real local HTTP. Typecheck, build and whitespace checks passed; no standalone lint exists.
+- **Mocked:** external model responses in automated tests; tests make no paid calls.
+- **Unverified:** live Claude/OpenAI calls (no key provisioned), browser interaction.
+- No shared contracts, dependencies, simulation or client changes.
+
 ## Current integration — Devin across all roles
 
 - [PR #10](https://github.com/Phronesis618/HackMIT2026/pull/10), code/test revision
