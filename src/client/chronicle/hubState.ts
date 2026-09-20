@@ -185,7 +185,10 @@ function bump(counts: Record<string, number>, key: string): void {
  * nothing changed so callers can skip persistence.
  */
 export function reduceHubState(state: HubState, events: readonly GameEvent[], ctx: HubIngestContext): HubState {
-  const seen = new Set(state.seenEventIds);
+  const legacyWorldIds = new Set([state.current?.worldId, state.lastRun?.worldId].filter((id): id is string => id !== undefined));
+  const seen = new Set(state.seenEventIds.flatMap((id) => id.startsWith('[')
+    ? [id]
+    : [...legacyWorldIds].map((worldId) => JSON.stringify([worldId, id]))));
   let next: HubState = state;
   let changed = false;
   const local = ctx.localPlayerId;
@@ -193,8 +196,11 @@ export function reduceHubState(state: HubState, events: readonly GameEvent[], ct
     ({ id, displayName: ctx.players.find((p) => p.id === id)?.displayName ?? id });
 
   for (const event of events) {
-    if (seen.has(event.id)) continue;
-    seen.add(event.id);
+    const origin = 'worldId' in event ? event.worldId : undefined;
+    const worldId = origin === undefined ? next.current?.worldId ?? ctx.world?.worldId ?? null : origin;
+    const eventKey = JSON.stringify([worldId, event.id]);
+    if (seen.has(eventKey)) continue;
+    seen.add(eventKey);
 
     if (event.type === 'world_prepared') {
       next = { ...next, current: startRun(event.worldId, event.worldTitle, event.source, ctx) };
@@ -211,6 +217,7 @@ export function reduceHubState(state: HubState, events: readonly GameEvent[], ct
         continue;
       }
     }
+    if (worldId !== run.worldId) continue;
     run = { ...run, abilityUseCounts: { ...run.abilityUseCounts }, sourceEventIds: [...run.sourceEventIds] };
     const stamped = ctx.classByPlayerId[local];
     if (stamped) run.classId = stamped;
