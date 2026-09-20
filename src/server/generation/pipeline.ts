@@ -30,7 +30,7 @@ import { GenerationFailure, assertDisplayText, type ProviderUsage, type RecipePr
 import {
   BiomesToolSchema, FoundationToolSchema, PolishToolSchema, RelicsToolSchema, LawsToolSchema, RemainsToolSchema, RoomsToolSchema, StageParseError,
   applyFixes, assembleRecipe, briefRejections, displayTexts, fitOverlong, isUnsafeText, jsonSchema, lintWorld, parseAttunements, parseBiomes,
-  fitHeader, headerOverflow, parseFoundation, parseLaws, parseLore, parseRooms, planBiomeSlots, planRelicSlots, planRemainsSlots,
+  fitHeader, headerOverflow, parseFoundation, parseLaws, parseLore, parseRooms, planBiomeSlots, planRelicSlots, planRemainsSlots, replaceEngineWords,
   type Foundation, type LawsPart, type ParsedBrief, type RoomsPart, type WorldLint,
 } from './stages';
 import type { z } from 'zod';
@@ -372,6 +372,8 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
       } : {}),
     });
     if (derivedBriefs.length) notes.push(clipNote(`Biome brief(s) ${derivedBriefs.map((index) => index + 1).join(', ')} of 8 were derived by trusted code, not written by the model.`));
+    const swapped = replaceEngineWords(recipe, bible);
+    if (swapped) notes.push(clipNote(`${swapped} line(s) still naming a registry enemy id were rewritten to the bible's former job by trusted code.`));
     const cut = fitOverlong(recipe, bible);
     if (cut) notes.push(clipNote(`${cut} line(s) over their length limit were cut at a sentence or clause end by trusted code.`));
     assertDisplayText(recipe);

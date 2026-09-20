@@ -35,7 +35,7 @@ import {
   type RoomKind,
   type SizeClass,
 } from '../floors';
-import { PROP_INFO, type PropId } from '../registry';
+import { DANGEROUS_TILES, PROP_INFO, type PropId } from '../registry';
 import { rollEncounters } from './director';
 import { createRng, seedKey, type Rng } from './rng';
 import { getTemplate, type RoomTemplate } from './templates';
@@ -92,7 +92,9 @@ export function buildRoom(plan: FloorPlan, roomId: string, brief: BiomeBrief, se
 
   // 4. Mutators.
   if (room.kind === 'combat' || room.kind === 'elite') addPillarClusters(grid, keyPoints, room.sizeClass, rng);
-  if (parsed.hazards && !QUIET_KINDS.has(room.kind)) addHazardPools(grid, keyPoints, room.sizeClass, rng);
+  // 'exit' is excluded as well as the quiet kinds: that room holds the gatekeeper or the Anchor,
+  // and since T0 made '~' burn, a pool on the boss floor decides the fight instead of the boss.
+  if (parsed.hazards && !QUIET_KINDS.has(room.kind) && room.kind !== 'exit') addHazardPools(grid, keyPoints, room.sizeClass, rng);
 
   // 5. Repair: whatever happened above, every key point must reach the spawn.
   repairConnectivity(grid, spawn, keyPoints);
@@ -243,7 +245,9 @@ function addHazardPools(grid: Grid, keyPoints: readonly Coord[], sizeClass: Size
     for (let y = centre.y - radius; y <= centre.y + radius; y++) {
       for (let x = centre.x - radius; x <= centre.x + radius; x++) {
         const ragged = Math.abs(x - centre.x) + Math.abs(y - centre.y) > radius + (rng.chance(0.5) ? 1 : 0);
-        if (ragged || grid[y]?.[x] !== '.' || nearAny(keyPoints, x, y, 1)) continue;
+        // Chebyshev 2, not 1: TILES.md S4 keeps every damaging tile two clear tiles away
+        // from anything a player must stand on, not just off the tile itself.
+        if (ragged || grid[y]?.[x] !== '.' || nearAny(keyPoints, x, y, 2)) continue;
         grid[y]![x] = '~';
         painted.push({ x, y });
       }
@@ -377,16 +381,23 @@ function placeEncounters(
   );
   if (groups.length === 0) return [];
 
-  const reachable = flood(grid, spawn, () => true, blocked);
   const avoid: Coord[] = [spawn, ...doors.map((door) => door.entry)];
-  const standable = floorCells(grid).filter(
-    (cell) => reachable.has(key(cell.x, cell.y)) && !occupied.has(key(cell.x, cell.y)) && !(cell.x === focus.x && cell.y === focus.y),
-  );
-  // Keep the largest door/spawn clearance that still leaves room for every group.
+  // TILES.md S2: prefer somewhere the crew can reach without walking through fire, so clearing
+  // a room is never gated on crossing a hazard. The permissive flood stays as a fallback.
   let candidates: Coord[] = [];
-  for (const clearance of [5, 4, 3, 2, 1]) {
-    candidates = standable.filter((cell) => avoid.every((point) => manhattan(point, cell) >= clearance));
-    if (candidates.length >= groups.length) break;
+  for (const reachable of [
+    flood(grid, spawn, (ch) => !DANGEROUS_TILES.has(ch), blocked),
+    flood(grid, spawn, () => true, blocked),
+  ]) {
+    const standable = floorCells(grid).filter(
+      (cell) => reachable.has(key(cell.x, cell.y)) && !occupied.has(key(cell.x, cell.y)) && !(cell.x === focus.x && cell.y === focus.y),
+    );
+    // Keep the largest door/spawn clearance that still leaves room for every group.
+    for (const clearance of [5, 4, 3, 2, 1]) {
+      candidates = standable.filter((cell) => avoid.every((point) => manhattan(point, cell) >= clearance));
+      if (candidates.length >= groups.length) break;
+    }
+    if (candidates.length > 0) break;
   }
   if (candidates.length === 0) return [];
 

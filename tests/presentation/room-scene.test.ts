@@ -130,6 +130,17 @@ describe('room presentation against authoritative contracts', () => {
     }
   });
 
+  it('draws a canister blast where terrain_detonated says it happened, and survives a kill nobody made', () => {
+    const scene = setup();
+    scene.renderSnapshot(sampleSnapshot, localId);
+    scene.playEvents([
+      { id: '9:0', type: 'terrain_detonated', tick: 9, timeMs: 150, x: 208, y: 144, radius: 76, hitPlayerIds: [], hitEnemyIds: [] },
+      { id: '9:1', type: 'enemy_damaged', tick: 9, timeMs: 150, enemyId: sampleSnapshot.enemies[0]!.id, byPlayerId: null, amount: 48, remainingHp: 0 },
+    ]);
+    expect(effects()[0]!.setPosition).toHaveBeenCalledWith(208, 144);
+    for (const [config] of stage.tweens.add.mock.calls) config.onComplete();
+  });
+
   it('retains the last enemy location when the death snapshot removes it before events arrive', () => {
     const scene = setup();
     scene.renderSnapshot({ ...sampleSnapshot, enemies: [] }, localId);

@@ -20,9 +20,9 @@ writing pipeline, hub, tiles, boss finale, co-op verify, UI audit); `npm run che
   failure in its notes) instead of a canned fixture. `.env` on this laptop runs the composer. Live mode with a missing API key now composes instead of serving fixtures (public deploy is safe before secrets are added).
 - **Retired — my interim world rules.** I had shipped 8 implemented `rules` overnight; when M1's
   laws harness landed (`src/sim/laws.ts`, 8 laws in the sim + long_dark in the renderer) I removed
-  the duplicate system rather than stack two modifier layers. What survives from it: hazard floor
-  ('~') now bites 6 Integrity every 0.7 s while stood in (dashing across is free) and hostiles pay
-  `ENEMY_INFO.shards` (1–8) on defeat. The composer writes 1–2 **laws** per theme in the world's
+  the duplicate system rather than stack two modifier layers. What survives from it: hostiles pay
+  `ENEMY_INFO.shards` (1–8) on defeat (environmental kills at T1's reduced credit). Hazard-floor
+  damage is T1's now (`src/sim/hazards.ts`); my interim bite was removed. The composer writes 1–2 **laws** per theme in the world's
   voice (`THEME_LAWS` / `LAW_VOICE` in `compose.ts`, through `sanitizeLaws`), drawn only from the
   in-force set, so composed worlds show real laws on the world panel and HUD chips.
 - **Implemented — app shell:** `GenerationOverlay` (forming ring with the crew's ideas orbiting →

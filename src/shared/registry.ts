@@ -197,22 +197,65 @@ export const PROP_INFO: Record<PropId, { blocksMovement: boolean; footprint: { w
  *  'P' player spawn (exactly one per room; walkable)
  *  'X' exit (walkable; must have a matching RoomSpec.exits entry)
  *  'A' anchor site (walkable; exactly one in the final room)
+ *  '*' volatile canister (solid; any damage arms it, then it detonates and leaves rubble)
+ *  'o' pit (blocks walking; bolts fly over it and a dash crosses it)
+ *  '^' timed vent (walkable; fires on a fixed cycle with a visible tell)
+ *  '-' low cover (walkable; stops bullets and line of sight, not footsteps)
  */
-export const TILE_CHARS = ['#', '.', ' ', '~', 'P', 'X', 'A', 'B', '=', '>', ':', '+'] as const;
+export const TILE_CHARS = [
+  '#', '.', ' ', '~', 'P', 'X', 'A', 'B', '=', '>', ':', '+', // base + PR #16
+  '*', 'o', '^', '-',                                         // docs/design/TILES.md
+] as const;
 export type TileChar = (typeof TILE_CHARS)[number];
 
-export const SOLID_TILES: ReadonlySet<string> = new Set(['#', ' ', 'B']);
-export const WALKABLE_TILES: ReadonlySet<string> = new Set(['.', '~', 'P', 'X', 'A', '=', '>', ':', '+']);
-export const TERRAIN_FEATURE_IDS = ['breakable_walls', 'bridges', 'rubble', 'conduits'] as const;
+/** Blocks walking. 'o' is here, but see buildSolidGrid: it is open to bolts and to dashes. */
+export const SOLID_TILES: ReadonlySet<string> = new Set(['#', ' ', 'B', '*', 'o']);
+export const WALKABLE_TILES: ReadonlySet<string> = new Set(['.', '~', 'P', 'X', 'A', '=', '>', ':', '+', '^', '-']);
+/**
+ * Tiles that damage or delete an entity. The generator keeps them away from spawns,
+ * doors, the focus and relay sites (see `validateRoomSafety` in src/shared/terrain.ts).
+ */
+export const DANGEROUS_TILES: ReadonlySet<string> = new Set(['~', '*', 'o', '^']);
+export const TERRAIN_FEATURE_IDS = [
+  'breakable_walls', 'bridges', 'rubble', 'conduits', // PR #16 — movement modifiers
+  'hazard_floor', 'canisters', 'pits', 'vents', 'cover', // docs/design/TILES.md — combat-facing
+] as const;
 export type TerrainFeatureId = (typeof TERRAIN_FEATURE_IDS)[number];
-export const TERRAIN_LAYOUT_IDS = ['scattered', 'barricades', 'crossroads'] as const;
+/**
+ * How a room arranges its terrain. 'gauntlet' runs hazards and cover in lanes along the long
+ * axis (the crew picks a lane); 'arena' rings the perimeter and leaves the centre clean.
+ */
+export const TERRAIN_LAYOUT_IDS = ['scattered', 'barricades', 'crossroads', 'gauntlet', 'arena'] as const;
+export type TerrainLayoutId = (typeof TERRAIN_LAYOUT_IDS)[number];
 export const TERRAIN_DENSITIES = ['sparse', 'balanced', 'dense'] as const;
+/** Where hazards prefer to sit. A generator hint only; it never overrides reachability. */
+export const HAZARD_BIAS_IDS = ['none', 'edges', 'centre', 'lanes'] as const;
 export const BREAKABLE_WALL_HP = 36;
 export const TERRAIN_FEATURE_INFO: Record<TerrainFeatureId, string> = {
   breakable_walls: 'B: destructible bulkheads, 36 HP; break into slowing rubble to open a route.',
   bridges: '=: a walkable crossing through a wall run, with > ramps on both sides; no jumping other walls.',
   rubble: ':: debris patches slow walking to 65%; dashes retain their normal speed.',
   conduits: '+: conductive floor lanes boost walking to 125%; dashes retain their normal speed.',
+  hazard_floor: '~: scalding floor. Standing in it ramps 3, 6, 9, 12, 15 damage every 450 ms and enemies take 60% more; stepping off or dashing resets it.',
+  cover: '-: waist-high barricades in runs of two to four. You walk over them; bolts and beams do not, and they break after 24 damage. Melee at one tile still lands.',
+  vents: '^: timed vents in fields of four to nine. Each fires 14 damage for 300 ms on a 3 s cycle after a 500 ms tell; three phase groups mean a third is always safe.',
+  pits: 'o: open pits. Walking into one is blocked, a dash clears up to two tiles of gap, and anything knocked or pulled in is gone; players climb out at 1 HP.',
+  canisters: '*: volatile canisters, solid until any hit arms them; 420 ms later they blast for 48 to enemies and 26 to the crew, break bulkheads and chain.',
+};
+/**
+ * The HUD line shown when a player stands beside a feature. A world may rename it through
+ * `WorldRecipe.terrainSkins` (see TerrainSkinSchema); this is the always-present fallback.
+ */
+export const TERRAIN_CAPTION: Record<TerrainFeatureId, string> = {
+  breakable_walls: 'CRACKED BARRIER · attack to break',
+  bridges: 'RAISED CROSSING · a route over the wall',
+  rubble: 'RUBBLE · slows footsteps, not dashes',
+  conduits: 'CONDUIT · faster footsteps',
+  hazard_floor: 'SCALDING FLOOR · the burn ramps while you stand in it',
+  canisters: 'VOLATILE CANISTER · one hit and it blows, both ways',
+  pits: 'OPEN PIT · dash across it, or knock something into it',
+  vents: 'TIMED VENT · it fires on a beat you can watch',
+  cover: 'LOW COVER · stops shots, not footsteps',
 };
 
 /**

@@ -285,6 +285,7 @@ export class GameController {
       const exitLabel = nextRoom ? `→ ${nextRoom.name}` : !snapshot.floor && nextIndex !== undefined && !room.isFinal ? '→ next room (still forming)' : undefined;
       renderer.showRoom(room, world.art, world.receipt.lines, {
         title: world.recipe.title, tagline: world.recipe.tagline, look: lawsView.look, lightRadius: resolveLaws(lawsView.laws).lightRadius,
+        terrainSkins: world.recipe.terrainSkins ?? [],
         ...(exitLabel ? { exitLabel } : {}),
       });
       store.set({ room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal }, phase: snapshot.phase, hud: me ? hudFrom(me, snapshot) : store.get().hud });

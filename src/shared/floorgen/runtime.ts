@@ -116,11 +116,14 @@ export function createFloorRuntime(rawFloors: WorldFloors, context: FloorRuntime
       const planned = planRoom(ref);
       const biome = brief(ref.biomeId);
       const built = buildRoom(floorPlan, ref.roomId, biome, floors.seed);
-      const tiles = TERRAIN_KINDS.has(built.kind)
-        ? applyBiomeTerrain(built, biome.terrain ?? defaultBiomeTerrain(biome.motifIds[0]!), floors.seed)
-        : built.tiles;
+      const terrain = biome.terrain ?? defaultBiomeTerrain(biome.motifIds[0]!);
+      const tiles = TERRAIN_KINDS.has(built.kind) ? applyBiomeTerrain(built, terrain, floors.seed) : built.tiles;
       const loreRooms = floorPlan.rooms.filter((candidate) => candidate.kind === 'lore').map((candidate) => candidate.id);
-      room = RoomSpecSchema.parse(toRoomSpec(built, tiles, planned, floorPlan, biome, relicFor(ref, loreRooms)));
+      room = RoomSpecSchema.parse({
+        ...toRoomSpec(built, tiles, planned, floorPlan, biome, relicFor(ref, loreRooms)),
+        // The biome's terrain tuning, carried to the sim (docs/design/TILES.md §4.2).
+        ...(terrain.intensity !== undefined ? { terrainIntensity: terrain.intensity } : {}),
+      });
       rooms.set(cacheKey, room);
     }
     return room;
