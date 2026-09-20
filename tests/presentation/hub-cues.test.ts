@@ -13,7 +13,7 @@ import { createHubState, emptyRecords, type LastRun } from '../../src/client/chr
 function lastRun(overrides: Partial<LastRun> = {}): LastRun {
   return {
     worldId: 'world-a', worldTitle: 'Vantage Spire', outcome: 'anchored', classId: 'shade', endedAt: 1_758_300_100_000, durationMs: 4 * 60_000,
-    roomsEntered: 3, deepestRoomIndex: 2, roomsCleared: 2, enemiesDefeated: 5, damageDealt: 120, damageTaken: 33, downs: 0,
+    roomsEntered: 3, deepestRoomIndex: 2, deepestTier: -1, biomesCleared: 0, roomsCleared: 2, enemiesDefeated: 5, damageDealt: 120, damageTaken: 33, downs: 0,
     lastDownedByEnemyId: null, revivesGiven: 0, revivesReceived: 0, loreRead: 1, abilityUnlocked: null,
     crew: [{ id: 'local', displayName: 'Jon' }], worldSource: 'fixture', sourceEventIds: ['1:0', '2:0'],
     ...overrides,
@@ -55,6 +55,11 @@ describe('pickCue', () => {
     expect(pickCue(HUB_CUES, ctx, new Set(['downed_by']))?.id).toBe('collapsed');
   });
 
+  it('floors collapsed beats the legacy collapsed cue when depth is recorded', () => {
+    const ctx = context(lastRun({ outcome: 'collapsed', deepestTier: 2, biomesCleared: 2 }));
+    expect(pickCue(HUB_CUES, ctx, new Set(['downed_by', 'downed_unattributed']))?.id).toBe('floors_collapsed');
+  });
+
   it('never guesses the killer: an unattributed down fires downed_unattributed', () => {
     const ctx = context(lastRun({ outcome: 'collapsed', downs: 1, lastDownedByEnemyId: null }));
     expect(pickCue(HUB_CUES, ctx, new Set())?.id).toBe('downed_unattributed');
@@ -93,7 +98,7 @@ describe('cue suppression', () => {
 describe('line templates', () => {
   it('has exactly three lines for each one-night cue and no cue without lines', () => {
     expect(HUB_CUES.map((c) => c.id).sort()).toEqual(
-      ['aborted', 'anchored_clean', 'anchored_costly', 'collapsed', 'downed_by', 'downed_unattributed', 'fallback_idle', 'first_visit'],
+      ['aborted', 'anchored_clean', 'anchored_costly', 'collapsed', 'downed_by', 'downed_unattributed', 'fallback_idle', 'first_visit', 'floors_aborted', 'floors_collapsed'],
     );
     for (const cue of HUB_CUES) expect(HUB_CUE_LINES[cue.id], cue.id).toHaveLength(3);
   });

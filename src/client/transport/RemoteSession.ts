@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import {
   IDLE_GENERATION_STATUS,
   PlayerIdentitySchema,
@@ -30,9 +31,15 @@ export interface RemoteSessionOptions {
    * reload returns as the same operative instead of leaving a ghost and joining as a new one.
    */
   resumeStorage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+  /** Stable tab identity scope, independent of server-assigned player IDs. */
+  resumeScope?: string;
 }
 
 const RESUME_KEY_PREFIX = 'relay.resume.v1.';
+const ResumeCredentialSchema = z.object({
+  playerId: PlayerIdentitySchema.shape.id,
+  token: z.string().min(16).max(128),
+});
 
 interface Pending<T> {
   resolve: (value: T) => void;
@@ -77,12 +84,12 @@ export class RemoteSession implements GameSession {
 
   constructor(private readonly options: RemoteSessionOptions) {
     this.identity = PlayerIdentitySchema.parse(options.identity);
-    this.resumeKey = RESUME_KEY_PREFIX + this.identity.id;
+    this.resumeKey = RESUME_KEY_PREFIX + (options.resumeScope ?? this.identity.id);
     try {
-      const saved = JSON.parse(options.resumeStorage?.getItem(this.resumeKey) ?? 'null') as { playerId?: unknown; token?: unknown } | null;
-      if (saved && typeof saved.playerId === 'string' && typeof saved.token === 'string') {
-        this.identity = { ...this.identity, id: saved.playerId };
-        this.resumeToken = saved.token;
+      const saved = ResumeCredentialSchema.safeParse(JSON.parse(options.resumeStorage?.getItem(this.resumeKey) ?? 'null'));
+      if (saved.success) {
+        this.identity = { ...this.identity, id: saved.data.playerId };
+        this.resumeToken = saved.data.token;
       }
     } catch { /* unreadable storage: join fresh */ }
   }

@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
+import { createIdentityPersistence } from '../../src/client/game/identity';
 import { RemoteSession, type RemoteSessionOptions } from '../../src/client/transport/RemoteSession';
 import { createGenerationService } from '../../src/server/generation';
 import { attachRealtime, type RealtimeOptions } from '../../src/server/network/realtime';
@@ -96,6 +97,15 @@ function remote(url: string, id: string, options: Partial<RemoteSessionOptions> 
   });
   cleanups.push(() => session.dispose());
   return session;
+}
+
+function memoryStorage() {
+  const data = new Map<string, string>();
+  return {
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => { data.set(key, value); },
+    removeItem: (key: string) => { data.delete(key); },
+  };
 }
 
 function intent(playerId: string, seq: number, moveX = 0, moveY = 0, attack = false): ClientMessage {
@@ -321,6 +331,105 @@ describe('authoritative realtime room', () => {
 });
 
 describe('RemoteSession over real sockets', () => {
+  it('resumes both ordinary tabs after server reassignment and shared device-identity updates during an expedition', async () => {
+    const server = await serve({ generation: fixtureService });
+    const localStorage = memoryStorage();
+    const firstStorage = memoryStorage();
+    const secondStorage = memoryStorage();
+    async function openTab(sessionStorage: ReturnType<typeof memoryStorage>) {
+      const persistence = createIdentityPersistence(null, { localStorage, sessionStorage });
+      const identity = persistence.load();
+      const session = remote(server.url, identity.id, {
+        identity, resumeStorage: sessionStorage, resumeScope: persistence.scope,
+      });
+      session.onLobby(() => persistence.save(session.getLocalPlayer()));
+      await session.start();
+      return { session, persistence };
+    }
+    const first = await openTab(firstStorage);
+    const second = await openTab(secondStorage);
+    const firstId = first.session.localPlayerId;
+    const secondId = second.session.localPlayerId;
+    expect(firstId).not.toBe(secondId);
+    const world = await first.session.requestWorld();
+    first.session.enterPortal();
+    await vi.waitFor(() => expect(second.session.getPhase()).toBe('expedition'));
+
+    second.persistence.save(second.session.getLocalPlayer());
+    expect(first.persistence.load().id).toBe(secondId);
+    first.session.dispose();
+    await vi.waitFor(() => expect(second.session.getIsHost()).toBe(true));
+    const firstReload = await openTab(firstStorage);
+    expect(firstReload.session.localPlayerId).toBe(firstId);
+    expect(firstReload.session.getLobby()?.players).toHaveLength(2);
+    expect(firstReload.session.getSnapshot()).toMatchObject({ worldId: world.worldId, phase: 'expedition' });
+    expect(firstReload.session.getIsHost()).toBe(false);
+
+    firstReload.persistence.save(firstReload.session.getLocalPlayer());
+    expect(second.persistence.load().id).toBe(firstId);
+    second.session.dispose();
+    await vi.waitFor(() => expect(firstReload.session.getIsHost()).toBe(true));
+    const secondReload = await openTab(secondStorage);
+    expect(secondReload.session.localPlayerId).toBe(secondId);
+    expect(secondReload.session.getLobby()?.players.map((player) => player.connected)).toEqual([true, true]);
+    expect(secondReload.session.getSnapshot()).toMatchObject({ worldId: world.worldId, phase: 'expedition' });
+  });
+
+  it('keeps named identity credentials separate within the same tab storage', async () => {
+    const server = await serve();
+    const localStorage = memoryStorage();
+    const sessionStorage = memoryStorage();
+    async function openName(name: string) {
+      const persistence = createIdentityPersistence(name, { localStorage, sessionStorage });
+      const identity = persistence.load();
+      const session = remote(server.url, identity.id, {
+        identity, resumeStorage: sessionStorage, resumeScope: persistence.scope,
+      });
+      session.onLobby(() => persistence.save(session.getLocalPlayer()));
+      await session.start();
+      return session;
+    }
+    const observer = remote(server.url, 'observer');
+    await observer.start();
+    const first = await openName('  First  ');
+    const firstId = first.localPlayerId;
+    first.dispose();
+    await vi.waitFor(() => expect(observer.getLobby()?.players.find((player) => player.identity.id === firstId)?.connected).toBe(false));
+    const second = await openName('Second');
+    expect(second.localPlayerId).not.toBe(firstId);
+    second.dispose();
+    const resumed = await openName('First');
+    expect(resumed.localPlayerId).toBe(firstId);
+    expect(resumed.getLocalPlayer().displayName).toBe('First');
+    expect(resumed.getLobby()?.players).toHaveLength(3);
+  });
+
+  it.each([
+    'not JSON',
+    JSON.stringify({ playerId: 'invalid/id', token: 'x'.repeat(16) }),
+    JSON.stringify({ playerId: 'valid-id', token: 'short' }),
+    JSON.stringify({ playerId: 'valid-id', token: 'x'.repeat(129) }),
+    JSON.stringify({ playerId: 42, token: 'x'.repeat(16) }),
+  ])('ignores invalid stored resume data: %s', async (raw) => {
+    const server = await serve();
+    const session = remote(server.url, 'fresh', {
+      resumeStorage: { getItem: () => raw, setItem: () => {}, removeItem: () => {} },
+    });
+    await session.start();
+    expect(session.localPlayerId).toBe('fresh');
+    expect(session.getLobby()?.players).toHaveLength(1);
+  });
+
+  it('continues without persistence when tab storage is blocked', async () => {
+    const server = await serve();
+    const blocked = () => { throw new Error('Storage blocked'); };
+    const session = remote(server.url, 'private-tab', {
+      resumeStorage: { getItem: blocked, setItem: blocked, removeItem: blocked },
+    });
+    await session.start();
+    expect(session.getConnectionStatus()).toBe('connected');
+  });
+
   it('resolves the first prefix and applies later prefixes without resetting active players', async () => {
     const full = await compactWorld();
     const release = gate();
