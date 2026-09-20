@@ -29,16 +29,24 @@ export interface PreviewFlags {
   fixtureWorld: boolean;
   startRoom: number | null;
   autoEnter: boolean;
+  /**
+   * DEV/QA only (`?tier=N`, 1–4): once a floors run has started, skip it forward to tier N's
+   * first biome and play from there. Null in a production bundle, whatever the URL says.
+   */
+  devTier?: number | null;
 }
 
 export function parsePreviewFlags(search: string): PreviewFlags {
   const params = new URLSearchParams(search);
   const room = params.get('room');
   const startRoom = room !== null && /^\d$/.test(room) ? Number(room) : null;
+  const tier = params.get('tier');
+  const devTier = import.meta.env.DEV && tier !== null && /^[1-4]$/.test(tier) ? Number(tier) : null;
   return {
     fixtureWorld: params.get('world') === 'fixture',
     startRoom,
     autoEnter: params.get('autoenter') === '1' || startRoom !== null,
+    devTier,
   };
 }
 
@@ -388,6 +396,16 @@ export class GameController {
       store.set({ phase: 'training', room: { index: 0, name: trainingRoom.name, description: trainingRoom.description, isFinal: false } });
     } else if (phase === 'debrief') {
       store.set({ phase: 'debrief' });
+    } else if (phase === 'expedition' && this.deps.flags.devTier != null) {
+      // DEV/QA only (`?tier=N`): the run has just started at tier 0; skip it to the requested
+      // tier so the last biome and the ending can be *played* without walking five biomes.
+      // Deferred a tick so the jump never re-enters the session mid-transition; it is a no-op
+      // if the crew is already that deep, so re-entering expedition cannot double-jump.
+      const session = this.deps.session as { devJumpToTier?: (tier: number) => void };
+      if (typeof session.devJumpToTier === 'function') {
+        const tier = this.deps.flags.devTier;
+        setTimeout(() => session.devJumpToTier?.(tier), 0);
+      }
     }
   }
 
