@@ -29,7 +29,7 @@ describe('static player-facing prose', () => {
   it('the source scan finds real UI text and skips code', () => {
     const all = UI_SOURCE_FILES.flatMap((file) => extractSourceStrings(file));
     expect(all).toContain('Prepare world');
-    expect(all).toContain('Locked · not yet active');
+    expect(all).toContain('Buy a node and its effect applies at once, for you only. Attunements are written by the world you are in. Nodes marked planned are not in the game yet.');
     expect(all.filter((text) => /=>|className|^export /.test(text))).toEqual([]);
   });
 
