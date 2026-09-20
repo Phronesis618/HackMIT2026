@@ -14,7 +14,11 @@ export function shouldShowStart(search: string, storage: Pick<Storage, 'getItem'
   const params = new URLSearchParams(search);
   if (params.get('start') === '0' || params.get('world') === 'fixture' || params.get('autoenter') === '1') return false;
   if (params.get('start') === '1') return true;
-  return storage?.getItem(START_SEEN_KEY) !== '1';
+  try {
+    return storage?.getItem(START_SEEN_KEY) !== '1';
+  } catch {
+    return true;
+  }
 }
 
 const CONTROLS: Array<[string, string]> = [
