@@ -85,6 +85,31 @@ Docs: [`docs/PRODUCT.md`](docs/PRODUCT.md) · [`docs/ARCHITECTURE.md`](docs/ARCH
 [`docs/ART_DIRECTION.md`](docs/ART_DIRECTION.md) · [`docs/TEAM_PLAN.md`](docs/TEAM_PLAN.md) ·
 handoffs in [`docs/handoffs/`](docs/handoffs/).
 
+### Claude comments → Devin
+
+The `Claude comments to Devin` GitHub Action forwards new conversation comments on open
+issues and pull requests from `curious-droid` to a Devin automation webhook. The author
+must also be an owner, member, or collaborator. To change the author, set the repository
+Actions variable `CLAUDE_GITHUB_LOGIN`.
+
+Enable it after the workflow is merged to `main`:
+
+1. Create a [Devin automation](https://docs.devin.ai/product-guides/automations) with an
+   incoming webhook trigger and a **Start session** action for `@Phronesis618/HackMIT2026`.
+   Instruct it to act on the supplied comment, skip status-only/already-completed requests,
+   and coordinate with any Devin session already working on the issue or PR.
+2. Copy the webhook URL and its generated secret into repository
+   [Actions secrets](https://github.com/Phronesis618/HackMIT2026/settings/secrets/actions),
+   named `DEVIN_WEBHOOK_URL` and `DEVIN_WEBHOOK_SECRET`. The webhook secret is shown only
+   once; regenerate it in Devin if needed.
+3. Post a new task comment from the configured account and check the **Claude comments to
+   Devin** workflow run.
+
+Edits, inline review comments, comments on closed threads, and other authors do not trigger
+this workflow. Comments posted using a workflow's `GITHUB_TOKEN` do not trigger another
+GitHub Actions workflow; Claude must post through its own user/app credentials.
+The bridge checks out no repository code and has no GitHub token permissions.
+
 ## Current playable loop
 
 HQ contributions → honest creation receipt → portal → three combat rooms → Guardian and
