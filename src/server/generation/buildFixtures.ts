@@ -1,9 +1,16 @@
 import fs from 'node:fs';
 import vantageSpire from '../../../fixtures/worlds/vantage-spire.json';
-import { WorldFixtureSchema, WorldRecipeSchema, type ArtRecipe, type RoomTerrain, type WorldRecipe } from '../../shared/contracts';
+import {
+  WorldFixtureSchema, WorldRecipeSchema,
+  type ArtRecipe, type RoomTerrainInput, type WorldRecipe,
+} from '../../shared/contracts';
 import { compileWorldRecipe } from './compiler';
 
-const vantageTerrain: RoomTerrain[] = [
+const vantageTerrain: RoomTerrainInput[] = [
+  // vantage-spire is the world every floors test plays end to end, so its terrain stays exactly
+  // as PR #16 left it: the whole-run bot's margin against the Custodian is thin enough that a
+  // change of room geometry decides it, and that call is not this branch's to make. The other
+  // two fixtures carry the combat-facing tiles (see below).
   { features: ['breakable_walls', 'bridges', 'conduits'], layout: 'crossroads', density: 'balanced' },
   { features: ['bridges', 'rubble', 'conduits'], layout: 'barricades', density: 'dense' },
   { features: ['breakable_walls', 'bridges', 'rubble', 'conduits'], layout: 'crossroads', density: 'balanced' },
@@ -44,19 +51,19 @@ const themes: {
           name: 'Prism Landing', description: 'Crystal shelves interrupt the violet shallows.',
           motifIds: ['crystals', 'arches'], propIds: ['crystal_cluster', 'crystal_cluster', 'monolith_shard'],
           enemyIds: ['sentinel'], hazards: true,
-          terrain: { features: ['breakable_walls', 'rubble'], layout: 'scattered', density: 'balanced' },
+          terrain: { features: ['breakable_walls', 'rubble', 'pits', 'vents'], layout: 'scattered', density: 'balanced' },
         },
         {
           name: 'Refraction Gallery', description: 'Arched buttresses hold a cracked observatory aloft.',
           motifIds: ['arches', 'crystals'], propIds: ['pillar', 'crystal_cluster', 'monolith_shard', 'crystal_cluster'],
           enemyIds: ['sentinel', 'lurker'], hazards: true,
-          terrain: { features: ['bridges', 'conduits'], layout: 'barricades', density: 'balanced' },
+          terrain: { features: ['bridges', 'conduits', 'canisters', 'cover'], layout: 'barricades', density: 'balanced' },
         },
         {
           name: 'Prism Heart', description: 'The Guardian stands watch over the final crystal lens.',
           motifIds: ['monoliths', 'crystals'], propIds: ['anchor_pedestal', 'crystal_cluster', 'monolith_shard'],
           enemyIds: ['guardian', 'sentinel'], hazards: true,
-          terrain: { features: ['breakable_walls', 'bridges', 'conduits'], layout: 'crossroads', density: 'balanced' },
+          terrain: { features: ['breakable_walls', 'canisters', 'conduits', 'cover'], layout: 'crossroads', density: 'balanced' },
         },
       ],
       contributionMappings: [],
@@ -102,19 +109,19 @@ const themes: {
           name: 'Root Vestibule', description: 'Lanterns light the roots threading through abandoned records.',
           motifIds: ['roots', 'lanterns'], propIds: ['root_mass', 'root_mass', 'lantern', 'terminal'],
           enemyIds: ['lurker', 'husk'], hazards: false,
-          terrain: { features: ['breakable_walls', 'rubble'], layout: 'scattered', density: 'sparse' },
+          terrain: { features: ['breakable_walls', 'rubble', 'cover'], layout: 'scattered', density: 'sparse' },
         },
         {
           name: 'Buried Index', description: 'Broken machines have become planters for a luminous forest.',
           motifIds: ['ruined_machinery', 'roots'], propIds: ['terminal', 'root_mass', 'crate', 'lantern'],
           enemyIds: ['lurker', 'lurker', 'husk'], hazards: false,
-          terrain: { features: ['breakable_walls', 'bridges', 'conduits'], layout: 'crossroads', density: 'balanced' },
+          terrain: { features: ['breakable_walls', 'canisters', 'conduits', 'cover'], layout: 'crossroads', density: 'balanced' },
         },
         {
           name: 'Seed Vault', description: 'The Guardian defends the archive seed beside the Anchor site.',
           motifIds: ['roots', 'lanterns'], propIds: ['anchor_pedestal', 'root_mass', 'lantern', 'terminal'],
           enemyIds: ['guardian', 'lurker'], hazards: false,
-          terrain: { features: ['breakable_walls', 'bridges', 'rubble'], layout: 'barricades', density: 'balanced' },
+          terrain: { features: ['breakable_walls', 'rubble', 'bridges'], layout: 'barricades', density: 'balanced' },
         },
       ],
       contributionMappings: [],

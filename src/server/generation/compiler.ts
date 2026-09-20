@@ -23,8 +23,8 @@ import {
 } from '../../shared/contracts';
 import { ANCHOR_RANGE, LORE_READ_RANGE, PLAYER_RADIUS, TILE_SIZE, tileToWorld } from '../../shared/conventions';
 import { hashString } from '../../shared/ids';
-import { ENEMY_INFO, MOTIF_IDS, PROP_INFO, WALKABLE_TILES, type MotifId } from '../../shared/registry';
-import { buildSolidGrid, circleHitsSolid, type SolidGrid } from '../../sim/collision';
+import { DANGEROUS_TILES, ENEMY_INFO, MOTIF_IDS, PROP_INFO, WALKABLE_TILES, type MotifId } from '../../shared/registry';
+import { buildSolidGrid, circleHitsSolid, isSolidAt, type SolidGrid } from '../../sim/collision';
 import { clearPath } from '../../sim/combat';
 
 export interface CompileWorldRecipeOptions {
@@ -104,9 +104,12 @@ function compileRoom(
   const isFinal = index === plannedRoomCount - 1;
   const grid = createBorderedGrid(width, height);
 
+  // Where the crew must stand: the spawn and the objective. TILES.md S4 keeps every damaging
+  // or blocking tile two clear tiles away from these, so they are known before terrain runs.
+  const keyPoints: Coord[] = [{ x: 1, y: pathY }, { x: isFinal ? width - 3 : width - 1, y: pathY }];
   applyMotifStructure(grid, pathY, blueprint.motifIds[0] ?? recipe.motifIds[0], roomSeed);
-  applyTerrain(grid, pathY, blueprint, roomSeed);
-  if (blueprint.hazards) applyHazards(grid, pathY, roomSeed);
+  applyTerrain(grid, pathY, blueprint, roomSeed, keyPoints, isFinal);
+  if (blueprint.hazards && !isFinal) applyHazards(grid, pathY, roomSeed, keyPoints);
 
   // Reserve and re-clear the critical route after all structural work.
   for (let x = 1; x < width - 1; x++) grid[pathY]![x] = '.';
@@ -131,6 +134,8 @@ function compileRoom(
     isFinal,
     attributions: [],
     relics: [],
+    // The model's one tuning number, carried to the sim (TILES.md §4.2).
+    ...(blueprint.terrain?.intensity !== undefined ? { terrainIntensity: blueprint.terrain.intensity } : {}),
   });
   room.encounters = placeEncounters(room, grid, blueprint, candidates, mappings, notes);
   room.attributions = buildAttributions(grid, blueprint, index, pathY, mappings, room.props, room.encounters);
@@ -199,13 +204,13 @@ function applyMotifStructure(grid: Grid, pathY: number, motif: MotifId, seed: nu
   }
 }
 
-function applyHazards(grid: Grid, pathY: number, seed: number): void {
+function applyHazards(grid: Grid, pathY: number, seed: number, keyPoints: readonly Coord[]): void {
   const width = grid[0]!.length;
   const height = grid.length;
   const hazardY = pathY > 4 && pick(seed, 'hazard-side', 2) === 0 ? pathY - 2 : Math.min(height - 2, pathY + 2);
   const startX = 4 + pick(seed, 'hazard-x', Math.max(1, width - 11));
   for (let x = startX; x < Math.min(width - 2, startX + 4); x++) {
-    if (grid[hazardY]![x] === '.') grid[hazardY]![x] = '~';
+    if (grid[hazardY]![x] === '.' && !nearKeyPoint(keyPoints, x, hazardY)) grid[hazardY]![x] = '~';
   }
 }
 
@@ -219,9 +224,14 @@ function defaultTerrain(motif: MotifId): RoomTerrain {
   return { features: ['bridges', 'conduits'], layout: 'crossroads', density: 'balanced' };
 }
 
-function applyTerrain(grid: Grid, pathY: number, blueprint: RoomBlueprint, seed: number): void {
+function applyTerrain(
+  grid: Grid, pathY: number, blueprint: RoomBlueprint, seed: number, keyPoints: readonly Coord[], isFinal: boolean,
+): void {
   const terrain = blueprint.terrain ?? defaultTerrain(blueprint.motifIds[0]!);
   const features = new Set(terrain.features);
+  // The Anchor room keeps its structure and its cover and none of the damaging tiles: the
+  // Guardian fight is decided by reading the Guardian (see the floors mutator for the same rule).
+  if (isFinal) for (const id of ['hazard_floor', 'vents', 'pits', 'canisters', 'cover'] as const) features.delete(id);
   const density = terrain.density === 'sparse' ? 1 : terrain.density === 'dense' ? 3 : 2;
   const cells = floorCandidates(grid, pathY, seed);
   const width = grid[0]!.length;
@@ -271,6 +281,78 @@ function applyTerrain(grid: Grid, pathY: number, blueprint: RoomBlueprint, seed:
     walls.sort((a, b) => hashString(`${seed}:wall:${a.x}:${a.y}`) - hashString(`${seed}:wall:${b.x}:${b.y}`));
     for (const { x, y } of walls.slice(0, density * 2)) grid[y]![x] = 'B';
   }
+  if (features.has('pits')) {
+    // Blobs of 2-6 tiles, at most two, never touching the guaranteed path row. Pits block
+    // walking, so a blob is only kept when the room's spawn still reaches its objective.
+    let blobs = 0;
+    for (const centre of cells) {
+      if (blobs >= Math.min(2, density === 1 ? 1 : 2)) break;
+      // Two blobs that touch read as one big one: keep a clear tile between them.
+      const clear = (x: number, y: number) => grid[y]?.[x] === '.' && Math.abs(y - pathY) > 1 &&
+        !nearKeyPoint(keyPoints, x, y) &&
+        ![-1, 0, 1].some((dy) => [-1, 0, 1].some((dx) => grid[y + dy]?.[x + dx] === 'o'));
+      if (!clear(centre.x, centre.y)) continue;
+      const blob: Coord[] = [centre];
+      for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]] as const) { // 4-connected, or it reads as two pits
+        if (blob.length >= 2 + (hashString(`${seed}:pit:${centre.x}:${centre.y}`) % 5)) break;
+        const cell = { x: centre.x + dx, y: centre.y + dy };
+        if (clear(cell.x, cell.y)) blob.push(cell);
+      }
+      if (blob.length < 2) continue;
+      for (const cell of blob) grid[cell.y]![cell.x] = 'o';
+      blobs++;
+    }
+  }
+  if (features.has('cover')) {
+    // Runs of 2-4 across the room's short axis, at least three tiles from any wall, never
+    // touching each other. Walkable, so nothing here can strand a room.
+    const [dx, dy] = width >= height ? [0, 1] : [1, 0];
+    let runs = 0;
+    for (const start of cells) {
+      if (runs >= Math.min(3, density)) break;
+      const length = 2 + (hashString(`${seed}:cover:${start.x}:${start.y}`) % 3);
+      const run: Coord[] = [];
+      for (let i = 0; i < length; i++) run.push({ x: start.x + dx * i, y: start.y + dy * i });
+      if (!run.every(({ x, y }) => grid[y]?.[x] === '.' && Math.abs(y - pathY) > 1 && !nearKeyPoint(keyPoints, x, y) &&
+        x >= 3 && x < width - 3 && y >= 3 && y < height - 3 &&
+        ![-1, 0, 1].some((ny) => [-1, 0, 1].some((nx) => grid[y + ny]?.[x + nx] === '-')))) continue;
+      for (const cell of run) grid[cell.y]![cell.x] = '-';
+      runs++;
+    }
+  }
+  if (features.has('vents')) {
+    // Fields of 4 or 9 tiles (2x2 / 3x3), at most two, off the guaranteed path row and never
+    // touching each other. Walkable, so the only thing at risk is the hazard-free route, which
+    // the reserved centre corridor already guarantees.
+    let fields = 0;
+    for (const corner of cells) {
+      if (fields >= Math.min(2, density === 1 ? 1 : 2)) break;
+      const side = 2 + (hashString(`${seed}:vent:${corner.x}:${corner.y}`) % 2);
+      const field: Coord[] = [];
+      for (let dy = 0; dy < side; dy++) for (let dx = 0; dx < side; dx++) field.push({ x: corner.x + dx, y: corner.y + dy });
+      if (!field.every(({ x, y }) => grid[y]?.[x] === '.' && Math.abs(y - pathY) > 1 && !nearKeyPoint(keyPoints, x, y) &&
+        ![-1, 0, 1].some((ny) => [-1, 0, 1].some((nx) => grid[y + ny]?.[x + nx] === '^')))) continue;
+      for (const cell of field) grid[cell.y]![cell.x] = '^';
+      fields++;
+    }
+  }
+  if (features.has('canisters')) {
+    // Solid until something shoots them, so they only sit in open floor (>= 6 of 8 neighbours
+    // walkable) and never within two tiles of each other. See TILES.md T1's generator rules.
+    const placed: Coord[] = [];
+    const open = (x: number, y: number) => ['.', ':', '+', '~', '=', '>'].includes(grid[y]?.[x] ?? '#');
+    for (const cell of cells) {
+      if (placed.length >= Math.min(3, density)) break;
+      if (grid[cell.y]?.[cell.x] !== '.' || Math.abs(cell.y - pathY) <= 1) continue;
+      if (nearKeyPoint(keyPoints, cell.x, cell.y)) continue;
+      let neighbours = 0;
+      for (const dy of [-1, 0, 1]) for (const dx of [-1, 0, 1]) if ((dx || dy) && open(cell.x + dx, cell.y + dy)) neighbours++;
+      if (neighbours < 6) continue;
+      if (placed.some((p) => Math.max(Math.abs(p.x - cell.x), Math.abs(p.y - cell.y)) < 2)) continue;
+      grid[cell.y]![cell.x] = '*';
+      placed.push(cell);
+    }
+  }
   for (const feature of ['rubble', 'conduits'] as const) {
     if (!features.has(feature)) continue;
     let placed = 0;
@@ -286,6 +368,11 @@ function applyTerrain(grid: Grid, pathY: number, blueprint: RoomBlueprint, seed:
       if (++placed >= density) break;
     }
   }
+}
+
+/** TILES.md S4's margin: a dangerous tile needs two clear tiles around anything the crew uses. */
+function nearKeyPoint(keyPoints: readonly Coord[], x: number, y: number): boolean {
+  return keyPoints.some((point) => Math.max(Math.abs(point.x - x), Math.abs(point.y - y)) <= 2);
 }
 
 function floorCandidates(grid: Grid, pathY: number, seed: number): Coord[] {
@@ -558,12 +645,22 @@ function placeAnchorRelays(room: RoomSpec): Coord[] {
       queue.push({ x, y });
     }
   }
+  // TILES.md S4: a relay is a place the crew has to stand still on, so keep two clear tiles
+  // between it and anything that damages. Preference, not a filter — a cramped room must still
+  // produce three relays rather than fail to compile.
+  const dangerous: Coord[] = [];
+  tiles.forEach((row, y) => row.forEach((ch, x) => { if (DANGEROUS_TILES.has(ch)) dangerous.push({ x, y }); }));
+  const safeFromHazards = (candidate: Coord) => !dangerous.some((d) =>
+    Math.max(Math.abs(candidate.x - d.x), Math.abs(candidate.y - d.y)) <= 2);
   const relays: Coord[] = [];
+  // Precomputed once: the check walks every dangerous tile, and a comparator must stay cheap.
+  const safe = new Map(candidates.map((candidate) => [candidate, safeFromHazards(candidate)]));
   for (let i = 0; i < 3; i++) {
     const anchors = [core, spawn, ...relays];
     const score = (candidate: Coord) => Math.min(...anchors.map((anchor) =>
       Math.hypot(candidate.x - anchor.x, candidate.y - anchor.y)));
-    candidates.sort((a, b) => score(b) - score(a) || a.y - b.y || a.x - b.x);
+    candidates.sort((a, b) => Number(safe.get(b)) - Number(safe.get(a)) ||
+      score(b) - score(a) || a.y - b.y || a.x - b.x);
     const point = candidates.shift();
     if (!point) throw new Error(`Room ${room.index + 1} has no safe space for three Anchor relays.`);
     relays.push(point);

@@ -6,7 +6,7 @@
  * Foundation implementation: PhaserWorldRenderer (placeholder art, real wiring).
  */
 import type { ArtRecipe, GameEvent, GameSnapshot, ReceiptLine, RoomSpec } from './contracts';
-import type { WorldLook } from './laws';
+import type { TerrainSkin, WorldLook } from './laws';
 
 export interface WorldRenderer {
   /** Create the canvas inside `container`. Resolves when the first scene is ready. */
@@ -45,4 +45,6 @@ export interface WorldPresentation {
   look?: WorldLook | null;
   /** `long_dark`: px of sight around each living operative; null/absent = fully lit. */
   lightRadius?: number | null;
+  /** The world's own names for its terrain (WorldRecipe.terrainSkins); absent = registry captions. */
+  terrainSkins?: readonly TerrainSkin[];
 }

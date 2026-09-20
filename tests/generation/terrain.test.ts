@@ -15,7 +15,12 @@ import { loadWorldFixtures } from '../../src/server/generation/fixtureService';
 
 const fixtures = loadWorldFixtures(path.resolve(__dirname, '../../fixtures/worlds'));
 const recipe = fixtures.find((fixture) => fixture.fixtureId === 'vantage-spire')!.recipe;
-const allTerrain: RoomTerrain = { features: [...TERRAIN_FEATURE_IDS], layout: 'crossroads', density: 'balanced' };
+/**
+ * PR #16's four movement features. `RoomTerrain.features` is capped at 4, so the combat-facing
+ * ids from docs/design/TILES.md are exercised by their own cases rather than by one mega-list.
+ */
+const MOVEMENT_FEATURES = ['breakable_walls', 'bridges', 'rubble', 'conduits'] as const;
+const allTerrain: RoomTerrain = { features: [...MOVEMENT_FEATURES], layout: 'crossroads', density: 'balanced' };
 
 function reachable(room: RoomSpec): Set<string> {
   const grid = buildSolidGrid(room);

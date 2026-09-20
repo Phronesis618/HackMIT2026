@@ -30,14 +30,14 @@ describe('pure runtime terrain', () => {
     const original = createTerrainState();
     const first = damageBreakableWall(room, original, 3, 2, 20);
     expect(first.hits).toEqual([{ x: 3, y: 2, hp: 16, destroyed: false }]);
-    expect(original).toEqual({ brokenWalls: [], wallDamage: {} });
+    expect(original).toEqual({ brokenWalls: [], wallDamage: {}, canisters: {}, coverDamage: {} });
     expect(isSolidAt(buildSolidGrid(room, first.state.brokenWalls), 3, 2)).toBe(true);
 
     const second = damageBreakableWall(room, first.state, 3, 2, 20);
     expect(second.hits).toEqual([{ x: 3, y: 2, hp: 0, destroyed: true }]);
     expect(first.state.wallDamage).toEqual({ '3,2': 20 });
-    expect(second.state).toEqual({ brokenWalls: ['3,2'], wallDamage: { '3,2': 36 } });
-    expect(damageBreakableWall(room, second.state, 3, 2, 100)).toEqual({ state: second.state, hits: [] });
+    expect(second.state).toEqual({ brokenWalls: ['3,2'], wallDamage: { '3,2': 36 }, canisters: {}, coverDamage: {} });
+    expect(damageBreakableWall(room, second.state, 3, 2, 100)).toEqual({ state: second.state, hits: [], armed: [] });
     const grid = buildSolidGrid(room, second.state.brokenWalls);
     expect(isSolidAt(grid, 3, 2)).toBe(false);
     expect(isSolidAt(grid, 4, 2)).toBe(true);
@@ -48,10 +48,10 @@ describe('pure runtime terrain', () => {
   it('ignores invalid damage, ordinary walls and out-of-bounds coordinates', () => {
     const state = createTerrainState();
     for (const damage of [0, -1, NaN, Infinity]) {
-      expect(damageBreakableWall(room, state, 3, 2, damage)).toEqual({ state, hits: [] });
+      expect(damageBreakableWall(room, state, 3, 2, damage)).toEqual({ state, hits: [], armed: [] });
     }
     for (const [col, row] of [[0, 0], [1, 1], [-1, 2], [100, 100]]) {
-      expect(damageBreakableWall(room, state, col!, row!, 100)).toEqual({ state, hits: [] });
+      expect(damageBreakableWall(room, state, col!, row!, 100)).toEqual({ state, hits: [], armed: [] });
     }
     expect(terrainTileAt(room, -1, 2)).toBe(' ');
     expect(isSolidAt(buildSolidGrid(room, ['0,0']), 0, 0)).toBe(true);
@@ -81,7 +81,7 @@ describe('pure runtime terrain', () => {
     const state = createTerrainState();
     const grid = buildSolidGrid(room);
     for (const field of ['x', 'y', 'facing', 'range', 'arc', 'damage'] as const) {
-      expect(strikeBreakableWalls(room, grid, state, { ...attack, [field]: NaN })).toEqual({ state, hits: [] });
+      expect(strikeBreakableWalls(room, grid, state, { ...attack, [field]: NaN })).toEqual({ state, hits: [], armed: [] });
     }
     expect(strikeBreakableWalls(room, grid, state, { ...attack, range: -1 }).hits).toEqual([]);
     expect(strikeBreakableWalls(room, grid, state, { ...attack, arc: -1 }).hits).toEqual([]);

@@ -20,7 +20,7 @@ import { hexInt, lookPalette, VOID_COLOR } from './color';
 import { DEFAULT_LIGHTING, LIGHTING, drawDarkness, drawLightShafts, drawStormPulse, fixedLights, isLit, type LightSource, type LightingSpec } from './lighting';
 import { drawAnchorRitual } from './anchorRitual';
 import { drawBossFx } from './bossFx';
-import { collectTerrainTiles, drawTerrain, terrainCaption, type TerrainTile } from './terrain';
+import { collectTerrainTiles, drawCanisterBlast, drawTerrain, terrainCaption, type TerrainTile } from './terrain';
 import { drawHeadquartersStations, type HeadquartersStationView } from './headquarters';
 import { drawMotif, drawProp, drawSanctuary, drawVignette } from './drawing';
 import { drawBackdrop, drawFloor, drawLightPools, drawMotes, drawWalls, makeMotes, type Mote } from './environment';
@@ -70,6 +70,7 @@ export class RoomScene extends Phaser.Scene {
   private stormView: Phaser.GameObjects.Graphics | null = null;
   private darkView: Phaser.GameObjects.Graphics | null = null;
   private lightRadius: number | null = null;
+  private terrainSkins: WorldPresentation['terrainSkins'] = [];
   private roomLights: LightSource[] = [];
   private lightSources: LightSource[] = [];
   private projectilesView: Phaser.GameObjects.Graphics | null = null;
@@ -146,6 +147,7 @@ export class RoomScene extends Phaser.Scene {
     this.moteStyle = opts.headquarters ? 'fireflies' : look?.atmosphere ?? MOTE_STYLE[art.motifIds[0] ?? art.skyline];
     this.lighting = look ? LIGHTING[look.lighting] : DEFAULT_LIGHTING;
     this.lightRadius = opts.headquarters ? null : opts.world?.lightRadius ?? null;
+    this.terrainSkins = opts.headquarters ? [] : opts.world?.terrainSkins ?? [];
     this.stormView = null;
     this.darkView = null;
     this.roomLights = this.lightRadius !== null ? fixedLights(room) : [];
@@ -507,9 +509,11 @@ export class RoomScene extends Phaser.Scene {
 
     this.updateLoreCaption(snapshot, localPlayerId);
     this.updateLoreNodes(snapshot, localPlayerId);
-    if (this.terrainView) drawTerrain(this.terrainView, this.room, this.terrainTiles, snapshot.terrain, this.art.palette, this.time.now);
+    // Sim time, not the scene clock: a vent's charge/fire beat is a pure function of
+    // `snapshot.timeMs`, and the tell must match the tick that actually burns (TILES.md T3).
+    if (this.terrainView) drawTerrain(this.terrainView, this.room, this.terrainTiles, snapshot.terrain, this.art.palette, snapshot.timeMs);
     const local = snapshot.players.find((player) => player.id === localPlayerId);
-    const caption = local ? terrainCaption(this.room, this.terrainTiles, snapshot.terrain, local) : null;
+    const caption = local ? terrainCaption(this.room, this.terrainTiles, snapshot.terrain, local, this.terrainSkins) : null;
     if (caption && local && !this.loreCaption?.visible && !this.loreHint?.visible) {
       this.terrainHint?.setPosition(local.x, local.y + 30).setText(caption).setVisible(true);
     }
@@ -917,7 +921,7 @@ export class RoomScene extends Phaser.Scene {
         case 'enemy_damaged': {
           const target = this.enemyPositions.get(event.enemyId);
           if (target) {
-            this.animate(target.x, target.y, 320, (g, t) => fx.drawImpact(g, t, this.classColor(event.byPlayerId), seed, 1));
+            this.animate(target.x, target.y, 320, (g, t) => fx.drawImpact(g, t, this.classColor(event.byPlayerId ?? ''), seed, 1));
             this.floatText(target.x + (seed % 5) * 3 - 6, target.y - 24, `${event.amount}`, tokens.canvas.telegraph, event.amount >= 30 ? 16 : 13);
           }
           break;
@@ -926,6 +930,12 @@ export class RoomScene extends Phaser.Scene {
           const target = this.players.get(event.playerId)?.container;
           if (target) this.animate(target.x, target.y, 320, (g, t) => fx.drawImpact(g, t, hexToInt(tokens.color.danger), seed, 1.2));
           if (event.playerId === this.localPlayerId) this.cameras.main.shake(110, 0.004);
+          break;
+        }
+        case 'terrain_detonated': {
+          const color = hexInt(this.art.palette.hazard);
+          this.animate(event.x, event.y, 420, (g, t) => drawCanisterBlast(g, t, event.radius, color));
+          if (event.hitPlayerIds.includes(this.localPlayerId)) this.cameras.main.shake(140, 0.006);
           break;
         }
         case 'enemy_defeated': {

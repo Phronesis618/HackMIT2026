@@ -13,9 +13,11 @@
  *  - localStorage (Agent C) -> MemoryRecord array.
  */
 import { z } from 'zod';
+import { DEFAULT_TERRAIN_INTENSITY } from './terrain';
 import {
   ABILITY_IDS,
   ATTUNEMENT_EFFECT_IDS,
+  HAZARD_BIAS_IDS,
   CLASS_IDS,
   ENEMY_IDS,
   MOTIF_IDS,
@@ -54,6 +56,8 @@ export const ContributionText = z.string().trim().min(1).max(200);
 export const Paragraph = z.string().trim().min(1).max(600);
 export const Timestamp = z.number().int().nonnegative(); // Unix ms
 export const TileCoord = z.number().int().min(0).max(63);
+/** Sparse per-tile state is keyed "col,row" (TILES.md R6). */
+export const TileKey = z.string().regex(/^\d+,\d+$/);
 
 export const ClassIdSchema = z.enum(CLASS_IDS);
 export const AbilityIdSchema = z.enum(ABILITY_IDS);
@@ -269,6 +273,12 @@ export const RoomSpecSchema = z
     attributions: z.array(AttributionSchema).max(24),
     relics: z.array(RoomRelicSchema).max(6).default([]),
     anchorRelays: z.array(z.object({ x: TileCoord, y: TileCoord })).length(3).optional(),
+    /**
+     * How hard this room's terrain was tuned (docs/design/TILES.md §4.2). The model asks for a
+     * number in [0,1]; trusted code decides what it means (`terrainTuning` in shared/terrain.ts).
+     * Absent = the baseline 0.5, so every legacy room and fixture keeps today's numbers.
+     */
+    terrainIntensity: z.number().min(0).max(1).optional(),
     // --- floors rooms only (all absent on legacy rooms; see docs/design/FLOORS.md) ---
     /** Address of this room: `{biomeId, roomId}`. `id` is `${biomeId}:${roomId}`. */
     biomeId: FloorIdString.optional(),
@@ -439,8 +449,18 @@ export const RoomTerrainSchema = z.object({
   features: z.array(z.enum(TERRAIN_FEATURE_IDS)).max(4),
   layout: z.enum(TERRAIN_LAYOUT_IDS),
   density: z.enum(TERRAIN_DENSITIES),
+  /**
+   * 0 = the gentlest legal room, 1 = the harshest (docs/design/TILES.md §4.2). The model picks
+   * one number; trusted code decides what it means, inside a hard-clamped band it cannot leave
+   * (`terrainTuning` in shared/terrain.ts). Absent = 0.5, today's numbers exactly.
+   */
+  intensity: z.number().min(0).max(1).optional(),
+  /** Where hazards prefer to sit. A generator hint only; it never overrides reachability. */
+  hazardBias: z.enum(HAZARD_BIAS_IDS).optional(),
 });
 export type RoomTerrain = z.infer<typeof RoomTerrainSchema>;
+/** Before defaults: what a recipe (or a fixture author) may write. */
+export type RoomTerrainInput = z.input<typeof RoomTerrainSchema>;
 
 const roomBlueprintShape = {
   name: ShortText,
@@ -500,6 +520,15 @@ export const AttunementSchema = z.object({
 });
 export type Attunement = z.infer<typeof AttunementSchema>;
 
+/**
+ * One world's name for one mechanic (docs/design/TILES.md §4.1). Same idea as
+ * `AttunementSchema`: the engine owns the mechanic, the world owns the identity. The
+ * simulation never reads this, so nothing here can affect determinism or co-op sync.
+ * ONE source of truth: the schema lives in ./laws (what the generation pipeline validates
+ * against) and is re-exported here for the runtime and the renderer.
+ */
+export { TerrainSkinSchema, TerrainSkinListSchema, type TerrainSkin } from './laws';
+
 export const WorldRecipeSchema = z.object({
   title: z.string().trim().min(1).max(40),
   tagline: z.string().trim().min(1).max(80),
@@ -511,6 +540,11 @@ export const WorldRecipeSchema = z.object({
   lore: z.array(LoreFragmentSchema).max(12),
   /** 2–4 world-specific skill nodes; see `src/shared/skills.ts` for how they join the tree. */
   attunements: z.array(AttunementSchema).max(4).default([]),
+  /**
+   * What this world calls its terrain. One entry per feature at most; unknown ids are dropped.
+   * Optional rather than defaulted, so a recipe round-trips through the operator byte for byte.
+   */
+  terrainSkins: TerrainSkinListSchema.optional(),
 });
 
 /**
@@ -809,8 +843,18 @@ export const GameSnapshotSchema = z.object({
   anchor: AnchorStateSchema.nullable(),
   roomCleared: z.boolean().optional(),
   terrain: z.object({
-    brokenWalls: z.array(z.string().regex(/^\d+,\d+$/)).max(2048),
-    wallDamage: z.record(z.string().regex(/^\d+,\d+$/), z.number().nonnegative()),
+    brokenWalls: z.array(TileKey).max(2048),
+    wallDamage: z.record(TileKey, z.number().nonnegative()),
+    /**
+     * Armed '*' canisters and their fuses (docs/design/TILES.md T1). Sparse and omitted
+     * entirely while nothing is lit, so a room without canisters costs nothing to sync.
+     */
+    canisters: z.record(TileKey, z.object({
+      fuseMs: z.number().nonnegative(),
+      depth: z.number().int().nonnegative(),
+    })).optional(),
+    /** Damage on each '-' cover tile (TILES.md T4); omitted while none has been shot. */
+    coverDamage: z.record(TileKey, z.number().nonnegative()).optional(),
   }).optional(),
   /**
    * The collapse after the Anchor discharges: the walk back to the portal, the rooms failing
@@ -902,10 +946,21 @@ export const GameEventSchema = z.discriminatedUnion('type', [
     arcRad: z.number().positive().optional(),
     hitEnemyIds: z.array(IdString),
   }),
-  z.object({ ...eventBase, type: z.literal('enemy_damaged'), enemyId: IdString, byPlayerId: IdString, amount: z.number(), remainingHp: z.number() }),
-  z.object({ ...eventBase, type: z.literal('enemy_defeated'), enemyId: IdString, byPlayerId: IdString, worldId: IdString.nullable().optional() }),
+  // byPlayerId is null when the ROOM did it (a hazard, a vent, a canister, a pit). Terrain is
+  // neutral and has no attacker; a fabricated kill credit would reach the memory wall.
+  z.object({ ...eventBase, type: z.literal('enemy_damaged'), enemyId: IdString, byPlayerId: IdString.nullable(), amount: z.number(), remainingHp: z.number() }),
+  z.object({ ...eventBase, type: z.literal('enemy_defeated'), enemyId: IdString, byPlayerId: IdString.nullable(), worldId: IdString.nullable().optional() }),
   z.object({ ...eventBase, type: z.literal('player_damaged'), playerId: IdString, amount: z.number(), remainingHp: z.number(), sourceEnemyId: IdString.nullable() }),
   z.object({ ...eventBase, type: z.literal('player_downed'), playerId: IdString }),
+  /**
+   * The room went off: a '*' canister detonated (docs/design/TILES.md T1). Renderers draw the
+   * ring and the shake from this; the damage it caused arrives as ordinary damage events.
+   */
+  z.object({
+    ...eventBase, type: z.literal('terrain_detonated'),
+    x: z.number(), y: z.number(), radius: z.number().positive(),
+    hitPlayerIds: z.array(IdString), hitEnemyIds: z.array(IdString),
+  }),
   z.object({ ...eventBase, type: z.literal('player_revived'), playerId: IdString, byPlayerId: IdString, hp: z.number().positive() }),
   z.object({ ...eventBase, type: z.literal('player_healed'), playerId: IdString, byPlayerId: IdString, amount: z.number().positive(), remainingHp: z.number().positive() }),
   z.object({

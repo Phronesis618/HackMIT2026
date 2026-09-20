@@ -101,7 +101,9 @@ describe('mandatory encounter readiness', () => {
             rooms: recipe.rooms.map((room) => ({
               ...room, motifIds: [motif], propIds: [...PROP_IDS.slice(seed % 4, seed % 4 + 6)],
               enemyIds: ['warden', 'sentinel', 'husk'], hazards: seed % 2 === 0,
-              terrain: { features: [...TERRAIN_FEATURE_IDS], layout, density },
+              // RoomTerrain.features is capped at 4; rotate through the registry so every id is
+              // still exercised across the sweep.
+              terrain: { features: [...TERRAIN_FEATURE_IDS.slice(seed % TERRAIN_FEATURE_IDS.length), ...TERRAIN_FEATURE_IDS].slice(0, 4), layout, density },
             })),
           }, { seed, plannedRoomCount: 3 });
           for (const room of compiled.rooms) assertAccessibleEncounters(room);

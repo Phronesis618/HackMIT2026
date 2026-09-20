@@ -1,6 +1,6 @@
 import { ATTACK_ARC_RAD, ATTACK_COOLDOWN_MS, ATTACK_RANGE, PLAYER_SPEED, TICK_MS, tileToWorld, worldToTile } from '../shared/conventions';
 import type { ClassId, EnemyId } from '../shared/registry';
-import { circleHitsSolid, type SolidGrid } from './collision';
+import { circleHitsSolid, type GridLayer, type SolidGrid } from './collision';
 
 export interface Point { x: number; y: number }
 
@@ -89,11 +89,15 @@ export function inArc(origin: Point, target: Point, facing: number, range: numbe
   return difference <= arc / 2 + Math.asin(Math.min(1, radius / d));
 }
 
-export function clearPath(grid: SolidGrid, from: Point, to: Point, radius = 1): boolean {
+/**
+ * Line of fire, not line of walking: it reads the grid's `shots` layer, so a bolt or a beam
+ * crosses a pit and is stopped by low cover (docs/design/TILES.md T2/T4).
+ */
+export function clearPath(grid: SolidGrid, from: Point, to: Point, radius = 1, layer: GridLayer = 'shots'): boolean {
   const steps = Math.max(1, Math.ceil(distance(from, to) / 8));
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
-    if (circleHitsSolid(grid, from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t, radius)) return false;
+    if (circleHitsSolid(grid, from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t, radius, layer)) return false;
   }
   return true;
 }
@@ -115,9 +119,15 @@ export function nearestOpenPosition(grid: SolidGrid, preferred: Point, radius: n
   return best;
 }
 
-/** Cardinal BFS keeps pursuit deterministic around walls and prop footprints. */
+/**
+ * Cardinal BFS keeps pursuit deterministic around walls and prop footprints.
+ *
+ * Every check here is on the MOVEMENT layer: walking is not shooting. Reading the shot layer
+ * would have an enemy refuse to step over a '-' barricade it can see nothing through, and stall
+ * on the spot rather than walk around — which is what happened the first time cover shipped.
+ */
 export function chaseWaypoint(grid: SolidGrid, from: Point, target: Point, radius: number): Point {
-  if (clearPath(grid, from, target, radius)) return target;
+  if (clearPath(grid, from, target, radius, 'solid')) return target;
   const start = worldToTile(from.x, from.y);
   const goalPoint = nearestOpenPosition(grid, target, radius);
   const goal = worldToTile(goalPoint.x, goalPoint.y);
@@ -146,5 +156,5 @@ export function chaseWaypoint(grid: SolidGrid, from: Point, target: Point, radiu
   while (parents.get(next) !== startId && parents.get(next) !== -1) next = parents.get(next)!;
   const waypoint = tileToWorld(next % grid.width, Math.floor(next / grid.width));
   const startCenter = tileToWorld(start.col, start.row);
-  return clearPath(grid, from, waypoint, radius) ? waypoint : startCenter;
+  return clearPath(grid, from, waypoint, radius, 'solid') ? waypoint : startCenter;
 }

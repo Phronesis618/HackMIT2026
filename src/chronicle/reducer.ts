@@ -428,7 +428,11 @@ function memoryFromEvent(
     case 'enemy_defeated': {
       const world = ctx.world;
       if (!world || !hasMemory('arrival_keepsake', world.worldId) || hasMemory('milestone', world.worldId)) return null;
+      // An environmental kill credits nobody (TILES.md §1.1), and a memory needs a participant:
+      // the "first victory" waits for the first kill somebody in the crew actually landed.
+      if (!event.byPlayerId) return null;
       const participants = resolveParticipants([event.byPlayerId], ctx.players);
+      const victor = joinNames(participants);
       return {
         id: memoryId('milestone', event),
         kind: 'milestone',
@@ -438,7 +442,7 @@ function memoryFromEvent(
         createdAt: ctx.now,
         participants,
         title: `First victory — ${world.title}`,
-        summary: `${joinNames(participants)} defeated the first hostile recorded in ${world.title}.`,
+        summary: `${victor} defeated the first hostile recorded in ${world.title}.`,
         sourceEventIds: [event.id],
         provenanceSource: world.provenanceSource,
       };
