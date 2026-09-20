@@ -38,7 +38,7 @@ import {
   type FloorPlan,
   type FloorRoom,
   type RoomKind,
-} from '../../../shared/floors';
+} from '../floors';
 import { createRng, seedKey, type Rng } from './rng';
 import { pickTemplate } from './templates';
 

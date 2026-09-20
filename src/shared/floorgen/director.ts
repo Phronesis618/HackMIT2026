@@ -14,8 +14,8 @@
  *  - `guardian` is never bought as a pack, whatever the brief's pool says;
  *  - RoomSpec limits hold: <= 12 encounter entries, 1..6 per entry.
  */
-import type { BiomeBrief, EncounterRole, RoomKind, SizeClass } from '../../../shared/floors';
-import type { EnemyId } from '../../../shared/registry';
+import type { BiomeBrief, EncounterRole, RoomKind, SizeClass } from '../floors';
+import type { EnemyId } from '../registry';
 import type { Rng } from './rng';
 
 export interface EncounterGroup {

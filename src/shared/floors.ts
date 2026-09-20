@@ -6,9 +6,11 @@
  *
  *  - `BiomeBrief` is the ONLY model-facing shape here. It is bounded, registry-backed
  *    and carries no geometry: the model picks a personality, trusted code builds it.
- *  - `FloorPlan` / `BuiltRoom` are trusted output of src/server/generation/floorgen.
- *  - This file deliberately does not import contracts.ts (it is being rewritten by
- *    F1b); the few primitives it needs are re-declared with identical bounds.
+ *  - `FloorPlan` / `BuiltRoom` are trusted output of src/shared/floorgen.
+ *  - `WorldFloors` is what a floors world ships (`PreparedWorld.floors`); the snapshot and
+ *    biome-choice shapes at the bottom are what the sim publishes about a floors run.
+ *  - contracts.ts imports THIS file, never the reverse; the few primitives needed here are
+ *    re-declared with identical bounds.
  */
 import { z } from 'zod';
 import { ENEMY_IDS, MOTIF_IDS, PROP_IDS } from './registry';
@@ -29,6 +31,19 @@ export const BIOME_TIER_WIDTHS = [1, 2, 2, 2, 1] as const;
 export const BIOME_BRIEF_COUNT = 8;
 export const MIN_ROOM_BUDGET = 6;
 export const MAX_ROOM_BUDGET = 40;
+
+/** Floor room ids are `r00`..`r63`; the number is the room's position in `FloorPlan.rooms`. */
+export const MAX_FLOOR_ROOM_INDEX = 63;
+export const FLOOR_ENTRANCE_ROOM_ID = 'r00';
+export function floorRoomId(index: number): string {
+  return `r${String(index).padStart(2, '0')}`;
+}
+/** `r07` -> 7; undefined for anything that is not a canonical floor room id. */
+export function floorRoomIndex(roomId: string): number | undefined {
+  if (!/^r\d{2}$/.test(roomId)) return undefined;
+  const index = Number(roomId.slice(1));
+  return index <= MAX_FLOOR_ROOM_INDEX ? index : undefined;
+}
 
 export const BiomeTierSchema = z.number().int().min(0).max(BIOME_TIER_COUNT - 1);
 
@@ -283,3 +298,107 @@ export const BuiltRoomSchema = z.object({
   encounters: z.array(BuiltEncounterSchema).max(12),
 });
 export type BuiltRoom = z.infer<typeof BuiltRoomSchema>;
+
+// ---------------------------------------------------------------------------
+// World floors (what a floors world ships) — added by F1b
+// ---------------------------------------------------------------------------
+
+/** Exactly 8 briefs with distinct ids: opener, 2+2+2 choices, finale (in that order before routing). */
+export const BiomeBriefListSchema = z
+  .array(BiomeBriefSchema)
+  .length(BIOME_BRIEF_COUNT)
+  .superRefine((briefs, ctx) => {
+    if (new Set(briefs.map((brief) => brief.id)).size !== briefs.length) ctx.addIssue({ code: 'custom', message: 'biome brief ids must be distinct' });
+  });
+export type BiomeBriefList = z.infer<typeof BiomeBriefListSchema>;
+
+/**
+ * Everything needed to rebuild every room of a run on any machine: rooms are compiled
+ * lazily from `(seed, brief, tier)` by `createFloorRuntime` (src/shared/floorgen/runtime.ts).
+ * Plans and rooms are never persisted or sent.
+ */
+export const WorldFloorsSchema = z
+  .object({
+    seed: z.string().min(1).max(128),
+    route: WorldRouteSchema,
+    briefs: BiomeBriefListSchema,
+  })
+  .superRefine((floors, ctx) => {
+    const { route } = floors;
+    if (route.seed !== floors.seed) ctx.addIssue({ code: 'custom', message: 'route.seed differs from floors.seed' });
+    const widths = route.tiers.map((tier) => tier.length);
+    if (widths.length !== BIOME_TIER_COUNT || widths.some((width, tier) => width !== BIOME_TIER_WIDTHS[tier])) {
+      ctx.addIssue({ code: 'custom', message: `route tiers must be ${BIOME_TIER_WIDTHS.join('/')} wide, found ${widths.join('/')}` });
+      return;
+    }
+    const briefIds = new Set(floors.briefs.map((brief) => brief.id));
+    const routed = route.tiers.flat();
+    if (new Set(routed).size !== routed.length || routed.some((id) => !briefIds.has(id))) {
+      ctx.addIssue({ code: 'custom', message: 'route tiers must place every brief id exactly once' });
+    }
+    route.tiers.forEach((ids, tier) => {
+      for (const id of ids) {
+        const node = route.graph.nodes.find((candidate) => candidate.biomeId === id);
+        if (!node || node.tier !== tier) ctx.addIssue({ code: 'custom', message: `route graph has no tier-${tier} node for ${id}` });
+        else if (node.roomBudget > MAX_FLOOR_ROOM_INDEX + 1) ctx.addIssue({ code: 'custom', message: `biome ${id} room budget exceeds ${MAX_FLOOR_ROOM_INDEX + 1}` });
+        if (tier < BIOME_TIER_COUNT - 1) {
+          for (const next of route.tiers[tier + 1]!) {
+            if (!route.graph.edges.some((edge) => edge.from === id && edge.to === next)) {
+              ctx.addIssue({ code: 'custom', message: `route graph is missing edge ${id}->${next}` });
+            }
+          }
+        }
+      }
+    });
+    if (route.graph.nodes.length !== routed.length) ctx.addIssue({ code: 'custom', message: 'route graph has nodes outside the tiers' });
+  });
+export type WorldFloors = z.infer<typeof WorldFloorsSchema>;
+
+// ---------------------------------------------------------------------------
+// Floors run state (published by the sim in GameSnapshot.floor) — types by F1b, filled by F2
+// ---------------------------------------------------------------------------
+
+/** One room the minimap may draw. Derived from the floor plan; only seen rooms are listed. */
+export const FloorMapRoomSchema = z.object({
+  roomId: FloorIdString,
+  cell: z.object({ x: z.number().int().min(0).max(15), y: z.number().int().min(0).max(15) }),
+  /** `visited` = a player has stood in it. `seen` = a neighbour of a visited room: draw as an outline. */
+  state: z.enum(['visited', 'seen']),
+  /** Hidden (`null`) for `seen` rooms unless the sim decides to reveal it (e.g. the exit). */
+  kind: RoomKindSchema.nullable(),
+  cleared: z.boolean(),
+  /** Sides with a door, so links can be drawn without the plan. */
+  doors: z.array(z.enum(DOOR_SIDES)).max(4),
+});
+export type FloorMapRoom = z.infer<typeof FloorMapRoomSchema>;
+
+/**
+ * Offered once the gatekeeper of a non-final biome exit is dead. Every player may vote;
+ * the host's pick decides in co-op (solo: the only vote). `chosenBiomeId` is set on the
+ * tick the choice resolves, just before the crew is moved to the next biome's entrance.
+ */
+export const BiomeChoiceStateSchema = z.object({
+  fromBiomeId: FloorIdString,
+  /** 1 option before the finale, otherwise 2. Ids index into `PreparedWorld.floors.briefs`. */
+  options: z.array(FloorIdString).min(1).max(2),
+  /** playerId -> biomeId. */
+  votes: z.record(z.string().max(64), FloorIdString),
+  hostPlayerId: z.string().max(64).nullable(),
+  chosenBiomeId: FloorIdString.nullable(),
+});
+export type BiomeChoiceState = z.infer<typeof BiomeChoiceStateSchema>;
+
+export const FloorRunStateSchema = z.object({
+  biomeId: FloorIdString,
+  roomId: FloorIdString,
+  /** Depth of the current biome in the run, 0..4. */
+  tier: BiomeTierSchema,
+  /** Biome ids entered so far, current one last (length = tier + 1). */
+  path: z.array(FloorIdString).min(1).max(BIOME_TIER_COUNT),
+  /** Current biome only: visited rooms plus their not-yet-visited neighbours (fog of war). */
+  map: z.array(FloorMapRoomSchema).max(MAX_FLOOR_ROOM_INDEX + 1),
+  /** True while the current room has live encounters: door tiles are solid. */
+  doorsLocked: z.boolean(),
+  biomeChoice: BiomeChoiceStateSchema.nullable(),
+});
+export type FloorRunState = z.infer<typeof FloorRunStateSchema>;

@@ -5,16 +5,16 @@ Status: **library done, not wired in.** F1a added new files only; nothing in the
 | File | What |
 | --- | --- |
 | `src/shared/floors.ts` | Types + Zod schemas: `BiomeBrief`, `BiomeGraph`, `WorldRoute`, `FloorPlan`, `FloorRoom`, `BuiltRoom`, `RoomDoor`, `RoomAddress`. Imports only `registry.ts`. |
-| `src/server/generation/floorgen/rng.ts` | Seeded PRNG (FNV-1a + murmur3 finaliser → mulberry32). |
+| `src/shared/floorgen/rng.ts` | Seeded PRNG (FNV-1a + murmur3 finaliser → mulberry32). |
 | `…/floorgen/route.ts` | `planWorldRoute`, `nextBiomeChoices`, `DEFAULT_BIOME_BRIEFS` (8 offline briefs). |
 | `…/floorgen/floorplan.ts` | Isaac floor-plan generator, validation, kind assignment, `renderFloorPlan`. |
 | `…/floorgen/templates.ts` | 17 hand-made room templates (6 small 13×9, 6 medium 19×13, 5 large 27×17) + `pickTemplate`. |
 | `…/floorgen/rooms.ts` | Room assembler: flips, doors, pillar/hazard mutators, connectivity repair, props, encounter placement. |
 | `…/floorgen/director.ts` | Encounter director (who is in the room). |
 | `…/floorgen/index.ts` | Public API barrel. |
-| `tests/generation/floorgen/*.test.ts` | 42 tests, ~2.5 s, including a 1 000-seed fuzz per budget. |
+| `tests/shared/floorgen/*.test.ts` | 42 tests, ~2.5 s, including a 1 000-seed fuzz per budget. |
 
-Everything is pure (no `Math.random`, no `Date`, no I/O) and imports only from `src/shared`, so **the client can import floorgen too**. If the bundler objects to a `src/server` path, move the folder to `src/shared/floorgen/` unchanged.
+Everything is pure (no `Math.random`, no `Date`, no I/O) and imports only from `src/shared`, so **the client can import floorgen too**. F1b moved the folder from `src/server/generation/floorgen/` to `src/shared/floorgen/` for that reason.
 
 ## 1 · Public API
 

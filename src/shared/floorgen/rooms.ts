@@ -34,8 +34,8 @@ import {
   type RoomFeature,
   type RoomKind,
   type SizeClass,
-} from '../../../shared/floors';
-import { PROP_INFO, type PropId } from '../../../shared/registry';
+} from '../floors';
+import { PROP_INFO, type PropId } from '../registry';
 import { rollEncounters } from './director';
 import { createRng, seedKey, type Rng } from './rng';
 import { getTemplate, type RoomTemplate } from './templates';

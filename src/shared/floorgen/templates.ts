@@ -17,8 +17,8 @@
  * Following Dead Cells, templates are tagged by purpose (`kinds`) and biomes draw from
  * motif-affinity-weighted pools, so two biomes rarely show the same rooms.
  */
-import type { DoorSide, RoomKind, SizeClass } from '../../../shared/floors';
-import type { MotifId } from '../../../shared/registry';
+import type { DoorSide, RoomKind, SizeClass } from '../floors';
+import type { MotifId } from '../registry';
 import type { Rng } from './rng';
 
 export interface RoomTemplate {
