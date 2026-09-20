@@ -225,12 +225,19 @@ describe('context helpers', () => {
     const base = snapshot({ enemies: [husk()] });
     expect(isBlocked(base, model, ME, false)).toBe(false);
     expect(isBlocked(base, model, ME, true)).toBe(true);
-    const winding = snapshot({ enemies: [husk({ telegraph: { kind: 'melee', x: 0, y: 0, facing: 0, range: 1, arcRad: 1, remainingMs: 200 } })] });
-    expect(isBlocked(winding, model, ME, false)).toBe(true);
+    // A wind-up that can reach the operative (who stands at 100,100) blocks...
+    const near = snapshot({ enemies: [husk({ telegraph: { kind: 'melee', x: 130, y: 100, facing: 0, range: 40, arcRad: 1, remainingMs: 200 } })] });
+    expect(isBlocked(near, model, ME, false)).toBe(true);
+    // ...one across the room does not, or a busy room would never let the layer speak.
+    const far = snapshot({ enemies: [husk({ telegraph: { kind: 'melee', x: 900, y: 900, facing: 0, range: 40, arcRad: 1, remainingMs: 200 } })] });
+    expect(isBlocked(far, model, ME, false)).toBe(false);
     const boss = snapshot({ bossField: { patternId: null, tiles: [], live: true, remainingMs: 100, corrupted: [] } });
     expect(isBlocked(boss, model, ME, false)).toBe(true);
+    // The operative stands at 100,100 = tile 3,3; a fuse on the next tile is a reason to shut up.
     const fuse = snapshot({ terrain: { brokenWalls: [], wallDamage: {}, canisters: { '3,4': { fuseMs: 200, depth: 0 } } } });
     expect(isBlocked(fuse, model, ME, false)).toBe(true);
+    const farFuse = snapshot({ terrain: { brokenWalls: [], wallDamage: {}, canisters: { '30,30': { fuseMs: 200, depth: 0 } } } });
+    expect(isBlocked(farFuse, model, ME, false)).toBe(false);
     const downed = snapshot({ players: [player(ME, { state: 'down' })] });
     expect(isBlocked(downed, model, ME, false)).toBe(true);
     expect(isBlocked(base, uiModel({ phase: 'debrief' }), ME, false)).toBe(true);

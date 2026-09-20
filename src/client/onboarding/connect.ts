@@ -18,6 +18,11 @@ import { clearOnboarding, loadOnboarding, saveOnboarding, type KeyValueStorage }
 import { onboardingBus } from './bus';
 import { emptyFacts, type LessonContext, type RunFacts } from './types';
 
+/** How far past an attack's own reach still counts as "about to be hit", in pixels. */
+const THREAT_MARGIN = 48;
+const TILE = 32;
+const CANISTER_BLAST = 76;
+
 /** Which terrain feature each tile character belongs to (mirrors `client/render/terrain.ts`). */
 const TILE_FEATURE: Readonly<Record<string, string>> = {
   B: 'breakable_walls', ':': 'rubble', '+': 'conduits', '~': 'hazard_floor',
@@ -59,10 +64,28 @@ export function isBlocked(snapshot: GameSnapshot | null, model: UiModel, localPl
   if (!snapshot) return false;
   if (snapshot.floor?.biomeChoice) return true;
   if (snapshot.bossField?.live) return true;
-  if (snapshot.enemies.some((enemy) => (enemy.telegraph?.remainingMs ?? 0) > 0)) return true;
-  if (Object.keys(snapshot.terrain?.canisters ?? {}).length > 0) return true;
+  const me = snapshot.players.find((p) => p.id === localPlayerId);
   // Downed: the HUD strip is already telling them what is happening to them.
-  if (snapshot.players.find((p) => p.id === localPlayerId)?.state === 'down') return true;
+  if (me?.state === 'down') return true;
+  if (me) {
+    /**
+     * Only a wind-up that can actually reach this operative. A room of four husks on a 3 s
+     * attack cycle has *something* telegraphing almost all the time, so blocking on any
+     * telegraph anywhere means the layer never gets to speak. What matters is whether the
+     * player has to move in the next half second.
+     */
+    const threatened = snapshot.enemies.some((enemy) => {
+      const t = enemy.telegraph;
+      if (!t || t.remainingMs <= 0) return false;
+      return Math.hypot(t.x - me.x, t.y - me.y) <= t.range + THREAT_MARGIN;
+    });
+    if (threatened) return true;
+    const fuse = Object.keys(snapshot.terrain?.canisters ?? {}).some((key) => {
+      const [col, row] = key.split(',').map(Number);
+      return Math.hypot((col ?? 0) * TILE + TILE / 2 - me.x, (row ?? 0) * TILE + TILE / 2 - me.y) <= CANISTER_BLAST + THREAT_MARGIN;
+    });
+    if (fuse) return true;
+  }
   return model.phase === 'debrief' || model.phase === 'preparing';
 }
 

@@ -18,6 +18,14 @@ import type { ActivePrompt, FieldNote, Lesson, LessonContext, OnboardingView } f
 
 /** Quiet gap between one prompt leaving and the next arriving. Two lines at once read as noise. */
 export const PROMPT_COOLDOWN_MS = 900;
+/**
+ * A prompt cut off before this has not been read, so it is put back in the queue rather than
+ * counted as taught. Combat interrupts constantly; a line that flashed for a second and was
+ * then retired forever would be worse than no line.
+ */
+export const MIN_VISIBLE_MS = 1800;
+/** How many times one lesson may be interrupted before we stop trying. */
+const MAX_INTERRUPTIONS = 3;
 
 export interface EngineOptions {
   state?: OnboardingState;
@@ -35,6 +43,7 @@ export class OnboardingEngine {
   private runId = '';
   private nextAllowedMs = 0;
   private sessionOff = false;
+  private interruptions = new Map<string, number>();
 
   constructor(private readonly options: EngineOptions = {}) {
     this.state = options.state ?? emptyState();
@@ -71,6 +80,7 @@ export class OnboardingEngine {
     this.state = emptyState();
     this.prompt = null;
     this.shownThisRun.clear();
+    this.interruptions.clear();
     this.nextAllowedMs = 0;
     this.persist();
     this.publishView();
@@ -99,8 +109,10 @@ export class OnboardingEngine {
     if (this.prompt) {
       const lesson = LESSON_BY_ID.get(this.prompt.id);
       const done = this.state.satisfied[this.prompt.id] !== undefined;
-      const stale = !lesson || !lesson.trigger(ctx);
-      if (done || stale || ctx.nowMs >= this.prompt.expiresAtMs || ctx.blocked) {
+      const cut = ctx.blocked || !lesson || !lesson.trigger(ctx);
+      if (done || cut || ctx.nowMs >= this.prompt.expiresAtMs) {
+        // A line that flashed for a second was not read. Put it back rather than call it taught.
+        if (!done && cut && ctx.nowMs - this.prompt.shownAtMs < MIN_VISIBLE_MS) this.requeue(this.prompt.id);
         this.prompt = null;
         this.nextAllowedMs = ctx.nowMs + PROMPT_COOLDOWN_MS;
       }
@@ -121,6 +133,18 @@ export class OnboardingEngine {
   }
 
   // ---- internals -------------------------------------------------------------------
+
+  /** Put an interrupted lesson back in the running. The Field Notes entry stays: it was shown. */
+  private requeue(id: string): void {
+    const count = (this.interruptions.get(id) ?? 0) + 1;
+    this.interruptions.set(id, count);
+    if (count > MAX_INTERRUPTIONS) return;
+    this.shownThisRun.delete(id);
+    const seen = { ...this.state.seen };
+    delete seen[id];
+    this.state = { ...this.state, seen };
+    this.persist();
+  }
 
   private retired(lesson: Lesson): boolean {
     if (this.state.satisfied[lesson.id] !== undefined) return true;

@@ -4,7 +4,7 @@
  * unprompted" rule (docs/design/ONBOARDING.md §3).
  */
 import { describe, expect, it } from 'vitest';
-import { OnboardingEngine, PROMPT_COOLDOWN_MS, loadOnboarding, type OnboardingState } from '../../src/client/onboarding';
+import { MIN_VISIBLE_MS, OnboardingEngine, PROMPT_COOLDOWN_MS, loadOnboarding, type OnboardingState } from '../../src/client/onboarding';
 import { context, ME, MATE, player, snapshot, uiModel, memoryStorage } from './onboardingFixture';
 
 const hqModel = () => uiModel({ phase: 'headquarters' });
@@ -108,6 +108,38 @@ describe('onboarding scheduler', () => {
     engine.tick(context({ snapshot: snapshot({ enemies }), phaseMs: 4000 }));
     expect(engine.getView().prompt?.id).toBe('run.attack');
     engine.tick(context({ snapshot: snapshot({ enemies }), phaseMs: 4100, blocked: true }));
+    expect(engine.getView().prompt).toBeNull();
+  });
+
+  it('gives back a prompt that combat cut off before it could be read', () => {
+    const { engine } = engineWith();
+    const enemies = [{ id: 'e1', enemyId: 'husk' as const, x: 200, y: 200, facing: 0, hp: 10, maxHp: 10, state: 'chasing' as const }];
+    const room = (over = {}) => ({ snapshot: snapshot({ enemies }), phaseMs: 4000, ...over });
+    engine.tick(context({ nowMs: 1000, ...room() }));
+    expect(engine.getView().prompt?.id).toBe('run.attack');
+    // Something winds up half a second later: too short to have been read.
+    engine.tick(context({ nowMs: 1500, ...room({ blocked: true }) }));
+    expect(engine.getView().prompt).toBeNull();
+    engine.tick(context({ nowMs: 3000, ...room() }));
+    expect(engine.getView().prompt?.id).toBe('run.attack');
+    // Read for long enough, then interrupted: that one counts as taught.
+    engine.tick(context({ nowMs: 3000 + MIN_VISIBLE_MS + 100, ...room({ blocked: true }) }));
+    engine.tick(context({ nowMs: 3000 + MIN_VISIBLE_MS + 2000, ...room() }));
+    expect(engine.getView().prompt).toBeNull();
+  });
+
+  it('stops re-offering a prompt that combat keeps interrupting', () => {
+    const { engine } = engineWith();
+    const enemies = [{ id: 'e1', enemyId: 'husk' as const, x: 200, y: 200, facing: 0, hp: 10, maxHp: 10, state: 'chasing' as const }];
+    let now = 0;
+    for (let i = 0; i < 6; i += 1) {
+      now += 2000;
+      engine.tick(context({ nowMs: now, snapshot: snapshot({ enemies }), phaseMs: 4000 }));
+      now += 300;
+      engine.tick(context({ nowMs: now, snapshot: snapshot({ enemies }), phaseMs: 4000, blocked: true }));
+    }
+    now += 5000;
+    engine.tick(context({ nowMs: now, snapshot: snapshot({ enemies }), phaseMs: 4000 }));
     expect(engine.getView().prompt).toBeNull();
   });
 
