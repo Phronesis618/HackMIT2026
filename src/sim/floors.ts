@@ -7,6 +7,7 @@
 import type { RoomSpec } from '../shared/contracts';
 import { ROOM_CLEAR_REWARD, tileToWorld } from '../shared/conventions';
 import { DOOR_SIDES, type BiomeChoiceState, type FloorMapRoom, type FloorRunState, type RoomAddress, type RoomKind } from '../shared/floors';
+import { isSolidAt, type SolidGrid } from './collision';
 import type { RoomProvider } from './floorProvider';
 
 /** Every floors tuning number lives here. */
@@ -148,4 +149,25 @@ export function floorRunState(run: FloorsRun, doorsLocked: boolean): FloorRunSta
     doorsLocked,
     biomeChoice: run.choice ? { ...run.choice, options: [...run.choice.options], votes: { ...run.choice.votes }, hostPlayerId: run.hostPlayerId } : null,
   };
+}
+
+/**
+ * Tiles connected to `from` on the solid grid. A sealed room with an enemy walled into a prop
+ * pocket could never be cleared, so floors spawns must stay connected to their encounter tile.
+ */
+export function connectedTiles(grid: SolidGrid, from: { col: number; row: number }): Set<number> {
+  const start = from.row * grid.width + from.col;
+  const seen = new Set<number>([start]);
+  const queue = [start];
+  for (let i = 0; i < queue.length; i++) {
+    const col = queue[i]! % grid.width;
+    const row = Math.floor(queue[i]! / grid.width);
+    for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]] as const) {
+      const id = (row + dy) * grid.width + col + dx;
+      if (seen.has(id) || isSolidAt(grid, col + dx, row + dy)) continue;
+      seen.add(id);
+      queue.push(id);
+    }
+  }
+  return seen;
 }

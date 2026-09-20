@@ -2,8 +2,8 @@ import { useCallback } from 'react';
 import type { UiActions } from '../../shared/ui';
 import type { UiStore } from '../game/uiStore';
 import { HeadquartersPanel } from './HeadquartersPanel';
-import { Hud } from './Hud';
-import { MemoryWall } from './MemoryWall';
+import { Hud, RunStatus } from './Hud';
+import { MemoryBrief } from './MemoryWall';
 import { ProvenanceBadge } from './ProvenanceBadge';
 import { useUiModel } from './useUiModel';
 import { WorldPanel } from './WorldPanel';
@@ -22,6 +22,7 @@ export interface AppProps {
 export function App({ store, actions, onStageReady }: AppProps) {
   const model = useUiModel(store);
   const inRun = model.phase === 'expedition' || model.phase === 'training';
+  const atHq = model.phase === 'headquarters' || model.phase === 'preparing';
   const stageRef = useCallback(
     (el: HTMLDivElement | null) => {
       if (el) onStageReady(el);
@@ -62,26 +63,26 @@ export function App({ store, actions, onStageReady }: AppProps) {
       </header>
 
       <main className={`layout ${inRun ? 'layout--run' : ''}`}>
-        <section className="stage-wrap">
-          <div className="stage" ref={stageRef} tabIndex={0} aria-label="RELAY game canvas" />
-          <div className="stage-caption" aria-hidden="true">
-            <span>{inRun || model.phase === 'debrief' ? model.room?.name : 'RELAY / SANCTUARY'}</span>
-          </div>
-          {inRun && <Hud model={model} actions={actions} />}
-          {(model.phase === 'headquarters' || model.phase === 'preparing') && <HeadquartersPrompt model={model} actions={actions} />}
+        <div className="stage-col">
+          <section className="stage-wrap">
+            <div className="stage" ref={stageRef} tabIndex={0} aria-label="RELAY game canvas" />
+            {inRun && <Hud model={model} actions={actions} />}
+            {atHq && <HeadquartersPrompt model={model} actions={actions} />}
+          </section>
           {model.phase !== 'debrief' && <AbilityBar model={model} actions={actions} />}
-        </section>
-        {!inRun && (
-          <aside className="side">
-            {(model.phase === 'headquarters' || model.phase === 'preparing') && <HeadquartersStationPanel model={model} actions={actions} />}
-            {(model.phase === 'headquarters' || model.phase === 'preparing') && <HeadquartersPanel model={model} actions={actions} />}
+        </div>
+        <aside className="side" aria-label="Status rail">
+          <div className="side__scroll">
+            {inRun && <RunStatus model={model} />}
+            {atHq && <HeadquartersStationPanel model={model} actions={actions} />}
+            {atHq && <HeadquartersPanel model={model} actions={actions} />}
             {model.phase === 'debrief' && <DebriefPanel model={model} actions={actions} />}
-            {model.world && <WorldPanel world={model.world} discoveredLore={model.discoveredLore} />}
-          </aside>
-        )}
+            {model.world && <WorldPanel world={model.world} discoveredLore={model.discoveredLore} compact={inRun} />}
+            <MemoryBrief memories={model.memories} />
+          </div>
+        </aside>
       </main>
 
-      <MemoryWall memories={model.memories} actions={actions} context={model} />
       <GameMenu model={model} actions={actions} />
 
       {model.notice && (
