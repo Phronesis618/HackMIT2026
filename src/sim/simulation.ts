@@ -756,7 +756,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     // World laws scale what the CREW hits for. A vent is not a player: it neither gets
     // `playerDamageMul` nor spends the `first_light` opening strike's multiplier on a burn tick.
     const lawMul = source.kind === 'player' ? laws.playerDamageMul * (s.hp === s.maxHp ? laws.firstStrikeMul : 1) : 1;
-    const marked = Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1) * lawMul);
+    const fxMul = source.kind === 'player' ? outgoingDamageMul(source.player.effects, s) : 1;
+    const marked = Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1) * lawMul * fxMul);
     // The Custodian caps single hits at 12% of its health, applies its phase-3 shield and any
     // vulnerability window it has opened (BOSS_FINALE §3.2, §4.2).
     const amount = Math.min(s.hp, e.custodian ? custodianIncomingDamage(e.custodian, s, marked) : marked);
