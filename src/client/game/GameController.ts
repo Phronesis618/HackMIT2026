@@ -498,6 +498,13 @@ export class GameController {
           this.notice('error', 'Contribution must be 1–200 characters (max 24 per session).');
         }
       },
+      removeContribution: (contributionId) => {
+        if (!this.canUseHeadquarters()) return;
+        if (session.removeContribution?.(contributionId)) {
+          audio.play('ui_confirm');
+          store.set({ contributions: session.getContributions(), notice: null });
+        }
+      },
       requestWorld: () => {
         store.set({ phase: 'preparing', notice: null });
         session

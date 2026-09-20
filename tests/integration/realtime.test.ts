@@ -185,6 +185,65 @@ function gate() {
 }
 
 describe('authoritative realtime room', () => {
+  it('synchronizes removal by an idea author without changing prepared receipts', async () => {
+    const server = await serve({ generation: fixtureService });
+    const host = remote(server.url, 'remove-host');
+    const guest = remote(server.url, 'remove-guest');
+    await host.start();
+    await guest.start();
+    const hostIdea = host.submitContribution('Castles')!;
+    const guestIdea = guest.submitContribution('Dragons')!;
+    await until(() => expect(host.getContributions()).toHaveLength(2));
+    await until(() => expect(guest.getContributions()).toHaveLength(2));
+    const world = await host.requestWorld();
+    expect(host.removeContribution(guestIdea.id)).toBe(false);
+    expect(guest.removeContribution(guestIdea.id)).toBe(true);
+    await until(() => expect(host.getContributions().map((c) => c.id)).toEqual([hostIdea.id]));
+    await until(() => expect(guest.getContributions()).toEqual(host.getContributions()));
+    expect(guest.getWorld()?.receipt).toEqual(world.receipt);
+    const next = await host.requestWorld();
+    expect(next.receipt.lines.map((line) => line.text)).toEqual(['Castles']);
+    expect(host.removeContribution(hostIdea.id)).toBe(true);
+    await until(() => expect(guest.getContributions()).toEqual([]));
+    const reconnect = remote(server.url, 'remove-observer');
+    await reconnect.start();
+    expect(reconnect.getContributions()).toEqual([]);
+    guest.dispose();
+    expect(guest.removeContribution(guestIdea.id)).toBe(false);
+  });
+
+  it('rejects forged, unknown and in-flight removal requests on the server', async () => {
+    const release = gate();
+    const server = await serve({ generation: {
+      async prepareWorld(request) {
+        await release.promise;
+        return fixtureService.prepareWorld(request);
+      },
+    } });
+    const host = await new Peer(server.url).open();
+    const guest = await new Peer(server.url).open();
+    const hostSeat = await host.hello('remove-host');
+    const guestSeat = await guest.hello('remove-guest');
+    guest.send({ type: 'contribution', text: 'Dragons', contributionId: 'remove-idea' });
+    await host.next('contributions');
+    host.send({ type: 'remove_contribution', contributionId: 'remove-idea' });
+    expect(await host.next('error')).toMatchObject({ action: 'remove_contribution', message: expect.stringContaining('own') });
+    guest.send({ type: 'remove_contribution', contributionId: 'missing' });
+    expect(await guest.next('error')).toMatchObject({ action: 'remove_contribution' });
+    host.send({ type: 'request_world', requestId: 'remove-during-generation' });
+    await host.next('generation_status', (message) => message.status.phase === 'queued');
+    guest.send({ type: 'remove_contribution', contributionId: 'remove-idea' });
+    expect(await guest.next('error')).toMatchObject({ action: 'remove_contribution', message: expect.stringContaining('generation') });
+    release.release();
+    const prepared = await host.next('world');
+    expect(prepared.world.receipt.lines[0]?.contributionId).toBe('remove-idea');
+    await gatherAtGate([{ peer: host, playerId: hostSeat.playerId }, { peer: guest, playerId: guestSeat.playerId }]);
+    host.send({ type: 'enter_portal' });
+    await guest.next('snapshot', (message) => message.snapshot.phase === 'expedition');
+    guest.send({ type: 'remove_contribution', contributionId: 'remove-idea' });
+    expect(await guest.next('error')).toMatchObject({ action: 'remove_contribution', message: expect.stringContaining('headquarters') });
+  });
+
   it('requires hello, enforces unique membership and four seats, rejects forged or replayed intents', async () => {
     const server = await serve();
     const host = await new Peer(server.url).open();

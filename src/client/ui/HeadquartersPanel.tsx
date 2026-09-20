@@ -21,6 +21,8 @@ export function HeadquartersPanel({ model, actions, departure = departureBus }: 
   const host = model.connection.isHost !== false;
   const gen = model.generation;
   const worldReady = model.world !== null;
+  const roomsPending = model.world !== null && model.world.committedRoomCount < model.world.plannedRoomCount
+    && model.generation.phase !== 'failed';
   const full = model.contributions.length >= 24;
   const selectedClass = CLASS_INFO[model.localPlayer.classId];
 
@@ -120,12 +122,24 @@ export function HeadquartersPanel({ model, actions, departure = departureBus }: 
       {model.contributions.length > 0 && (
         <ul className="list contributions" aria-label="Contributed ideas">
           {model.contributions.map((c) => (
-            <li key={c.id} className="list__item">
-              <span className="list__who">{c.playerName}</span> {c.text}
+            <li key={c.id} className="list__item contribution">
+              <span className="contribution__text"><span className="list__who">{c.playerName}</span> {c.text}</span>
+              {actions.removeContribution && c.playerId === model.localPlayer.id && (
+                <button
+                  type="button"
+                  className="btn contribution__remove"
+                  aria-label={`Remove idea: ${c.text}`}
+                  disabled={busy || !connected || roomsPending}
+                  onClick={() => actions.removeContribution?.(c.id)}
+                >
+                  Remove
+                </button>
+              )}
             </li>
           ))}
         </ul>
       )}
+      {worldReady && <p className="hint">Idea changes apply when you prepare another world.</p>}
 
       <div className="actions">
         <button type="button" className="btn btn--primary" onClick={actions.requestWorld} disabled={busy || !connected || !host}>

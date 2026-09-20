@@ -2,6 +2,15 @@
 
 Agent C records only work and verification performed in this session.
 
+## Remove contributed ideas — 2026-09-20
+
+Implemented per-idea removal through the existing HQ/controller/session path, including
+server-authorized co-op updates. Prepared receipts remain historical records; the next
+request receives the remaining ideas. Eight additional regression cases passed, including
+real local WebSocket connections, unauthorized removal, generation/phase guards, the
+24-idea limit and removing the final idea. `npm run check`: **1109 tests / 92 files**,
+typecheck and production build passed. Browser verification remains pending at this commit.
+
 ## Startup storage failure — 2026-09-20
 
 The overnight monitor reproduced a thrown `SecurityError` from `shouldShowStart` on

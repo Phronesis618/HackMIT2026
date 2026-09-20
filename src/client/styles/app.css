@@ -151,6 +151,21 @@ body {
   max-height: 130px;
   overflow-y: auto;
 }
+.contribution {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.contribution__text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.btn.contribution__remove {
+  flex: none;
+  padding: 6px 8px;
+  font-size: 11px;
+}
 .generation {
   padding: 12px;
   margin-top: 12px;
