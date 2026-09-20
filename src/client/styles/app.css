@@ -2066,3 +2066,212 @@ body {
   white-space: nowrap;
 }
 @keyframes plate-critical { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.5); } }
+
+/* ---- Agent A: start screen ---- */
+.start {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  overflow: auto;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(124, 245, 255, 0.16), transparent 55%),
+    radial-gradient(ellipse at 80% 100%, rgba(180, 120, 255, 0.14), transparent 55%),
+    linear-gradient(180deg, #070a12 0%, #05070c 100%);
+  color: var(--color-mist100, #eef5ff);
+}
+.start__stars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.35) 1px, transparent 1.6px) 0 0 / 90px 70px,
+    radial-gradient(circle at 1px 1px, rgba(124, 245, 255, 0.35) 1px, transparent 1.6px) 35px 20px / 130px 110px;
+  animation: start-drift 60s linear infinite;
+  opacity: 0.6;
+}
+@keyframes start-drift { to { background-position: 0 -700px, 35px -1080px; } }
+.start__frame {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  grid-template-areas: 'hero setup' 'controls setup';
+  gap: 22px 32px;
+  max-width: 1080px;
+  min-height: 100vh;
+  align-content: center;
+  margin: 0 auto;
+  padding: 44px 32px 60px;
+  box-sizing: border-box;
+}
+.start__hero { grid-area: hero; }
+.start__setup { grid-area: setup; align-self: start; }
+.start__controls { grid-area: controls; }
+.start__brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.start__brand svg {
+  width: 44px;
+  height: 44px;
+  fill: none;
+  stroke: var(--color-neonCyan, #7cf5ff);
+  stroke-width: 2;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 12px rgba(124, 245, 255, 0.6));
+}
+.start__brand h1 {
+  margin: 0;
+  font: 700 46px var(--font-display);
+  letter-spacing: 0.22em;
+  color: #fff;
+  text-shadow: 0 0 24px rgba(124, 245, 255, 0.55);
+}
+.start__tagline {
+  margin: 6px 0 18px;
+  font: italic 16px var(--font-body);
+  color: var(--color-neonCyan, #7cf5ff);
+}
+.start__premise {
+  margin: 0 0 18px;
+  font: 14.5px/1.6 var(--font-body);
+  color: var(--color-mist100, #eef5ff);
+  max-width: 62ch;
+}
+.start__loop {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+.start__loop li {
+  position: relative;
+  padding: 12px 12px 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hair, rgba(124, 245, 255, 0.16));
+  background: rgba(9, 13, 22, 0.7);
+  counter-increment: step;
+}
+.start__loop li::before {
+  content: counter(step);
+  position: absolute;
+  top: -9px;
+  left: 10px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #0b1220;
+  border: 1px solid rgba(124, 245, 255, 0.4);
+  font: 9px var(--font-mono);
+  color: var(--color-neonCyan, #7cf5ff);
+}
+.start__loop b {
+  display: block;
+  font: 600 12.5px var(--font-display);
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+.start__loop span {
+  font: 11.5px/1.45 var(--font-body);
+  color: var(--color-mist300, #8a9bbf);
+}
+.start__setup {
+  padding: 20px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hair-strong, rgba(124, 245, 255, 0.34));
+  background: rgba(9, 13, 22, 0.86);
+  box-shadow: 0 0 40px rgba(124, 245, 255, 0.08);
+}
+.start__classes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.start__class {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: 'portrait name' 'portrait role' 'portrait weapon';
+  gap: 2px 10px;
+  align-items: center;
+  text-align: left;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 120ms, background 120ms, transform 120ms;
+}
+.start__class:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--plate-accent) 50%, transparent); }
+.start__class--active {
+  border-color: var(--plate-accent);
+  background: color-mix(in srgb, var(--plate-accent) 12%, rgba(255, 255, 255, 0.03));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--plate-accent) 25%, transparent);
+}
+.start__class .plate__portrait { grid-area: portrait; width: 40px; height: 40px; }
+.start__classname { grid-area: name; font: 600 13px var(--font-display); letter-spacing: 0.05em; color: var(--plate-accent); }
+.start__classrole { grid-area: role; font: 11px/1.35 var(--font-body); color: var(--color-mist100, #eef5ff); }
+.start__classweapon { grid-area: weapon; font: 9.5px var(--font-mono); letter-spacing: 0.06em; color: var(--color-mist300, #8a9bbf); }
+.start__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+.start__play {
+  font-size: 15px;
+  padding: 12px 18px;
+  letter-spacing: 0.08em;
+}
+.start__lan {
+  margin: 12px 0 0;
+  font: 10.5px/1.5 var(--font-mono);
+  color: var(--color-mist300, #8a9bbf);
+}
+.start__controls h2 {
+  margin: 0 0 10px;
+  font: 600 12px var(--font-mono);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--color-neonCyan, #7cf5ff);
+}
+.start__controls dl {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 18px;
+  margin: 0;
+}
+.start__control {
+  display: grid;
+  grid-template-columns: 128px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+.start__control dt kbd {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(124, 245, 255, 0.35);
+  border-bottom-width: 2px;
+  background: #0b1220;
+  font: 10.5px var(--font-mono);
+  color: #fff;
+  white-space: nowrap;
+}
+.start__control dd {
+  margin: 0;
+  font: 12px var(--font-body);
+  color: var(--color-mist100, #eef5ff);
+}
+.start__note {
+  margin: 14px 0 0;
+  font: 11px/1.5 var(--font-body);
+  color: var(--color-mist300, #8a9bbf);
+}
+@media (max-width: 860px) {
+  .start__frame { grid-template-columns: 1fr; grid-template-areas: 'hero' 'setup' 'controls'; padding: 28px 18px 40px; }
+  .start__loop { grid-template-columns: 1fr 1fr; }
+  .start__controls dl { grid-template-columns: 1fr; }
+}

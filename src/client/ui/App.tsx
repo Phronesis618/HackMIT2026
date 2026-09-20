@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import type { UiActions } from '../../shared/ui';
 import type { UiStore } from '../game/uiStore';
 import { HeadquartersPanel } from './HeadquartersPanel';
@@ -7,6 +7,7 @@ import { MemoryWall } from './MemoryWall';
 import { GenerationOverlay } from './GenerationOverlay';
 import { PartyPlate } from './PartyPlate';
 import { ProvenanceBadge } from './ProvenanceBadge';
+import { shouldShowStart, StartScreen } from './StartScreen';
 import { useUiModel } from './useUiModel';
 import { WorldPanel } from './WorldPanel';
 import { DebriefPanel } from './DebriefPanel';
@@ -23,6 +24,7 @@ export interface AppProps {
 export function App({ store, actions, onStageReady }: AppProps) {
   const model = useUiModel(store);
   const inRun = model.phase === 'expedition' || model.phase === 'training';
+  const [showStart, setShowStart] = useState(() => typeof window !== 'undefined' && shouldShowStart(window.location.search, safeSessionStorage()));
   const stageRef = useCallback(
     (el: HTMLDivElement | null) => {
       if (el) onStageReady(el);
@@ -32,6 +34,7 @@ export function App({ store, actions, onStageReady }: AppProps) {
 
   return (
     <div className="app">
+      {showStart && <StartScreen model={model} actions={actions} onStart={() => setShowStart(false)} />}
       <header className="topbar">
         <div className="brand">
           <svg className="brand__mark" viewBox="0 0 32 32" aria-hidden="true">
@@ -95,4 +98,12 @@ export function App({ store, actions, onStageReady }: AppProps) {
       )}
     </div>
   );
+}
+
+function safeSessionStorage(): Storage | null {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
 }
