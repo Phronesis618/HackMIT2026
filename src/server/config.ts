@@ -1,7 +1,7 @@
 /**
  * Server-only configuration boundary.
  *
- * Secrets (OPENAI_API_KEY) are read here and ONLY here. Nothing in this module is
+ * Provider API keys are read here and ONLY here. Nothing in this module is
  * imported by client code; `describeForClient()` is the only shape that may leave the
  * process, and it never contains the key or the raw env.
  *
@@ -12,6 +12,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export type GenerationMode = 'fixture' | 'live';
+export type AIProvider = 'anthropic' | 'openai';
+export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 
 export interface ServerConfig {
   port: number;
@@ -19,6 +21,9 @@ export interface ServerConfig {
   nodeEnv: 'development' | 'production' | 'test';
   generation: {
     mode: GenerationMode;
+    provider: AIProvider;
+    anthropicApiKey: string | null;
+    anthropicModel: string;
     openaiApiKey: string | null;
     openaiModel: string;
   };
@@ -62,6 +67,11 @@ export function loadServerConfig(options: LoadConfigOptions = {}): ServerConfig 
   const host = args.host ?? env.HOST ?? (nodeEnv === 'production' ? '0.0.0.0' : '127.0.0.1');
 
   const apiKey = (env.OPENAI_API_KEY ?? '').trim();
+  const anthropicApiKey = (env.ANTHROPIC_API_KEY ?? '').trim();
+  const provider = (env.RELAY_AI_PROVIDER ?? '').trim() || (anthropicApiKey ? 'anthropic' : 'openai');
+  if (provider !== 'anthropic' && provider !== 'openai') {
+    throw new Error('RELAY_AI_PROVIDER must be anthropic or openai.');
+  }
   const requestedMode: GenerationMode = env.RELAY_GENERATION_MODE === 'live' ? 'live' : 'fixture';
 
   const staticDir = path.join(REPO_ROOT, 'dist', 'client');
@@ -72,8 +82,11 @@ export function loadServerConfig(options: LoadConfigOptions = {}): ServerConfig 
     nodeEnv,
     generation: {
       mode: requestedMode,
+      provider,
+      anthropicApiKey: anthropicApiKey || null,
+      anthropicModel: (env.ANTHROPIC_MODEL ?? '').trim() || DEFAULT_ANTHROPIC_MODEL,
       openaiApiKey: apiKey.length > 0 ? apiKey : null,
-      openaiModel: (env.OPENAI_MODEL ?? '').trim() || 'unset',
+      openaiModel: (env.OPENAI_MODEL ?? '').trim() || 'gpt-5-mini',
     },
     staticDir: fs.existsSync(path.join(staticDir, 'index.html')) ? staticDir : null,
     fixturesDir: path.join(REPO_ROOT, 'fixtures', 'worlds'),
@@ -82,9 +95,11 @@ export function loadServerConfig(options: LoadConfigOptions = {}): ServerConfig 
 
 /** Safe, non-secret subset for GET /api/config. */
 export function describeForClient(config: ServerConfig): { generationMode: GenerationMode; liveGenerationAvailable: boolean } {
+  const apiKey = config.generation.provider === 'anthropic'
+    ? config.generation.anthropicApiKey : config.generation.openaiApiKey;
   return {
     generationMode: config.generation.mode,
-    liveGenerationAvailable: config.generation.mode === 'live' && config.generation.openaiApiKey !== null,
+    liveGenerationAvailable: config.generation.mode === 'live' && Boolean(apiKey?.trim()),
   };
 }
 

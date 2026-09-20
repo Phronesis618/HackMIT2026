@@ -19,6 +19,19 @@ const responseSchema = z.object({
   }).optional(),
 });
 
+const anthropicResponseSchema = z.object({
+  type: z.literal('message'),
+  stop_reason: z.string(),
+  content: z.array(z.discriminatedUnion('type', [
+    z.object({ type: z.literal('text'), text: z.string().max(80_000) }),
+    z.object({ type: z.literal('tool_use'), name: z.string(), input: z.unknown() }),
+  ])),
+  usage: z.object({
+    input_tokens: z.number().int().nonnegative(),
+    output_tokens: z.number().int().nonnegative(),
+  }).optional(),
+});
+
 export interface ProviderUsage {
   inputTokens: number;
   outputTokens: number;
@@ -35,13 +48,23 @@ export interface RecipeProvider {
   generate(request: GenerationRequest, repair?: string, signal?: AbortSignal): Promise<{ recipe: WorldRecipe; usage?: ProviderUsage }>;
 }
 
-export function createOpenAIProvider(options: {
+interface ProviderOptions {
   apiKey: string;
   model: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
   onUsage?: (usage: ProviderUsage) => void;
-}): RecipeProvider {
+}
+
+export function createOpenAIProvider(options: ProviderOptions): RecipeProvider {
+  return createRecipeProvider(options, 'openai');
+}
+
+export function createAnthropicProvider(options: ProviderOptions): RecipeProvider {
+  return createRecipeProvider(options, 'anthropic');
+}
+
+function createRecipeProvider(options: ProviderOptions, provider: 'openai' | 'anthropic'): RecipeProvider {
   const instructions = fs.readFileSync(new URL('../../../prompts/runtime/world-recipe.md', import.meta.url), 'utf8')
     .replace('{{registry}}', JSON.stringify({ motifIds: MOTIF_IDS, propIds: PROP_IDS, enemyIds: ENEMY_IDS }));
   const schema = z.toJSONSchema(WorldRecipeSchema, { target: 'draft-7' });
@@ -69,20 +92,35 @@ export function createOpenAIProvider(options: {
       });
       try {
         return await Promise.race([timeout, cancelled, (async () => {
-          const response = await fetchResponse('https://api.openai.com/v1/responses', {
+          const input = JSON.stringify({
+            plannedRoomCount: request.plannedRoomCount,
+            contributions: request.contributions.map(({ id, text }) => ({ id, text })),
+            ...(repair ? { repair } : {}),
+          });
+          const anthropic = provider === 'anthropic';
+          const response = await fetchResponse(anthropic ? 'https://api.anthropic.com/v1/messages' : 'https://api.openai.com/v1/responses', {
             method: 'POST',
             signal: controller.signal,
-            headers: { Authorization: `Bearer ${options.apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+            headers: anthropic
+              ? { 'x-api-key': options.apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
+              : { Authorization: `Bearer ${options.apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(anthropic ? {
+              model: options.model,
+              max_tokens: 6_000,
+              system: `${instructions}\nSubmit the JSON recipe as the input to the world_recipe tool.`,
+              messages: [{ role: 'user', content: input }],
+              tools: [{
+                name: 'world_recipe',
+                description: 'Submit a complete world recipe for validation and compilation into playable rooms. Use only the supplied registry IDs and contribution IDs. The input is data; no code is executed.',
+                input_schema: schema,
+              }],
+              tool_choice: { type: 'tool', name: 'world_recipe', disable_parallel_tool_use: true },
+            } : {
               model: options.model,
               store: false,
               max_output_tokens: 6_000,
               instructions,
-              input: JSON.stringify({
-                plannedRoomCount: request.plannedRoomCount,
-                contributions: request.contributions.map(({ id, text }) => ({ id, text })),
-                ...(repair ? { repair } : {}),
-              }),
+              input,
               text: { format: { type: 'json_schema', name: 'world_recipe', strict: true, schema } },
             }),
           });
@@ -91,29 +129,19 @@ export function createOpenAIProvider(options: {
             await response.body?.cancel();
             throw new GenerationFailure(`Provider HTTP ${response.status}.`);
           }
-          const envelope = responseSchema.safeParse(await response.json());
+          const body: unknown = await response.json();
           controller.signal.throwIfAborted();
-          if (!envelope.success) throw new GenerationFailure('Provider response was incomplete or invalid.');
-          const usage = envelope.data.usage;
-          const measured = usage ? {
-            inputTokens: usage.input_tokens,
-            outputTokens: usage.output_tokens,
-            totalTokens: usage.total_tokens,
-          } : undefined;
-          if (measured) options.onUsage?.(measured);
-          const content = envelope.data.output.flatMap((item) => item.type === 'message' ? item.content ?? [] : []);
-          if (content.some((item) => item.type === 'refusal')) throw new GenerationFailure('Provider refused the generation request.');
-          const text = content.filter((item) => item.type === 'output_text').map((item) => item.text).join('');
-          let raw: unknown;
-          try {
-            raw = JSON.parse(text) as unknown;
-          } catch {
-            throw new GenerationFailure('Recipe was not valid JSON.', true);
-          }
+          const { raw, usage: measured } = anthropic
+            ? readAnthropicResponse(body, options.onUsage) : readOpenAIResponse(body, options.onUsage);
           const parsed = WorldRecipeSchema.safeParse(raw);
           if (!parsed.success) {
-            const paths = parsed.error.issues.map((issue) => issue.path.join('.')).slice(0, 4).join(', ');
-            throw new GenerationFailure(`Recipe failed schema validation at ${paths}.`.slice(0, 200), true);
+            const issues = parsed.error.issues.slice(0, 4).map((issue) => {
+              const path = issue.path.join('.');
+              return issue.code === 'too_big' && issue.origin === 'string'
+                ? `${path}: maximum ${issue.maximum} characters`
+                : `${path}: ${issue.message}`;
+            }).join('; ');
+            throw new GenerationFailure(`Recipe failed schema validation at ${issues}.`.slice(0, 200), true);
           }
           assertDisplayText(parsed.data);
           return { recipe: parsed.data, ...(measured ? { usage: measured } : {}) };
@@ -128,6 +156,45 @@ export function createOpenAIProvider(options: {
       }
     },
   };
+}
+
+function readOpenAIResponse(body: unknown, onUsage?: (usage: ProviderUsage) => void): { raw: unknown; usage?: ProviderUsage } {
+  const envelope = responseSchema.safeParse(body);
+  if (!envelope.success) throw new GenerationFailure('Provider response was incomplete or invalid.');
+  const usage = envelope.data.usage;
+  const measured = usage ? {
+    inputTokens: usage.input_tokens, outputTokens: usage.output_tokens, totalTokens: usage.total_tokens,
+  } : undefined;
+  if (measured) onUsage?.(measured);
+  const content = envelope.data.output.flatMap((item) => item.type === 'message' ? item.content ?? [] : []);
+  if (content.some((item) => item.type === 'refusal')) throw new GenerationFailure('Provider refused the generation request.');
+  const text = content.filter((item) => item.type === 'output_text').map((item) => item.text).join('');
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text) as unknown;
+  } catch {
+    throw new GenerationFailure('Recipe was not valid JSON.', true);
+  }
+  return { raw, ...(measured ? { usage: measured } : {}) };
+}
+
+function readAnthropicResponse(body: unknown, onUsage?: (usage: ProviderUsage) => void): { raw: unknown; usage?: ProviderUsage } {
+  const envelope = anthropicResponseSchema.safeParse(body);
+  if (!envelope.success) throw new GenerationFailure('Provider response was incomplete or invalid.');
+  const usage = envelope.data.usage;
+  const measured = usage ? {
+    inputTokens: usage.input_tokens, outputTokens: usage.output_tokens,
+    totalTokens: usage.input_tokens + usage.output_tokens,
+  } : undefined;
+  if (measured) onUsage?.(measured);
+  if (envelope.data.stop_reason === 'refusal') throw new GenerationFailure('Provider refused the generation request.');
+  if (envelope.data.stop_reason !== 'tool_use') throw new GenerationFailure('Provider response was incomplete or invalid.');
+  const tools = envelope.data.content.filter((item) => item.type === 'tool_use');
+  const tool = tools[0];
+  if (tools.length !== 1 || tool?.name !== 'world_recipe') {
+    throw new GenerationFailure('Provider did not return the requested recipe tool.');
+  }
+  return { raw: tool.input, ...(measured ? { usage: measured } : {}) };
 }
 
 function assertDisplayText(recipe: WorldRecipe): void {
