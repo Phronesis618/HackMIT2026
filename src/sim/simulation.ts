@@ -1026,7 +1026,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const bonus = s.shroudMs > 0 ? 18 : 0;
     s.shroudMs = 0;
     p.attackRemainingMs = ATTACK_DURATION_MS;
-    s.attackCooldownMs = spec.cooldown * (s.rallyMs > 0 ? 0.75 : 1);
+    s.attackCooldownMs = spec.cooldown * (s.rallyMs > 0 ? 0.75 : 1) * hasteAttackCooldownMul(p.hasteMs);
     events.push(emit({ type: 'player_attacked', playerId: s.id, x: s.x, y: s.y, facing: s.facing,
       range: spec.range, arcRad: spec.arc, hitEnemyIds: targets.map((e) => e.state.id) }));
     for (const e of targets) {
@@ -1090,7 +1090,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     p.hazard = createHazardClock();
     // Applied directly rather than through damagePlayer: you cannot i-frame or shield a hole,
     // and the fall must never take the last point of health.
-    const amount = Math.min(PIT_FALL_DAMAGE, Math.max(0, s.hp - 1));
+    const amount = Math.min(Math.round(PIT_FALL_DAMAGE * incomingDamageMul(p.effects, TERRAIN_DAMAGE_SOURCE.pit, false)), Math.max(0, s.hp - 1));
     if (amount > 0) {
       s.hp -= amount;
       s.reviveProgress = 0;
@@ -1250,11 +1250,22 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     }
   }
 
+  function burnDashTrail(p: PlayerRuntime, events: GameEvent[]): void {
+    const enemies = progress.enemies.filter((e) => !e.decoy).map((e) => e.state);
+    const { trail, burned } = stepDashTrail(p.trail!, TICK_MS, enemies);
+    p.trail = trail;
+    for (const id of burned) {
+      const e = progress.enemies.find((it) => it.state.id === id);
+      if (e) damageEnemyFrom(e, { kind: 'player', player: p }, DASH_TRAIL_DAMAGE, events);
+    }
+  }
+
   function stepPlayer(p: PlayerRuntime, events: GameEvent[]): void {
     const s = p.state;
     for (const key of ['dashCooldownMs', 'attackCooldownMs', 'invulnerableMs', 'abilityQCooldownMs', 'abilityECooldownMs', 'abilityRCooldownMs', 'shieldMs', 'shroudMs', 'rallyMs'] as const) s[key] = decay(s[key]);
     p.hitRemainingMs = decay(p.hitRemainingMs);
     s.slowMs = decay(s.slowMs ?? 0);
+    p.hasteMs = decay(p.hasteMs);
     p.damagedThisTick = false;
     const intent = p.intent;
     p.intent = null;
@@ -1278,8 +1289,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       p.dashDirection = length > 0 ? { x: moveX / length, y: moveY / length } : { x: Math.cos(s.facing), y: Math.sin(s.facing) };
       p.dashRemainingMs = DASH_DURATION_MS * laws.dashDurationMul;
       p.attackRemainingMs = 0;
-      s.dashCooldownMs = DASH_COOLDOWN_MS * laws.dashCooldownMul;
-      s.invulnerableMs = Math.max(s.invulnerableMs, DASH_INVULNERABLE_MS);
+      s.dashCooldownMs = DASH_COOLDOWN_MS * laws.dashCooldownMul * dashCooldownMul(p.effects);
+      s.invulnerableMs = Math.max(s.invulnerableMs, DASH_INVULNERABLE_MS + dashInvulnerableBonusMs(p.effects));
       // The event's facing is the direction of travel (renderers draw the trail behind it),
       // not the aim direction — you can dash sideways while looking at an enemy.
       events.push(emit({ type: 'player_dashed', playerId: s.id, x: s.x, y: s.y, facing: Math.atan2(p.dashDirection.y, p.dashDirection.x) }));
@@ -1293,7 +1304,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       s.vy = p.dashDirection.y * DASH_SPEED * laws.dashSpeedMul;
     } else {
       const speed = CLASS_COMBAT[s.classId].speed * laws.walkSpeedMul * (p.attackRemainingMs > 0 ? laws.attackMoveMul : 1) *
-        (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1) * ((s.slowMs ?? 0) > 0 ? 0.6 : 1) *
+        (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1) * ((s.slowMs ?? 0) > 0 ? 0.6 : 1) * hasteMoveMul(p.hasteMs) *
         terrainSpeedMultiplier(room, s.x, s.y, progress.terrain.brokenWalls);
       s.vx = length > 0 ? moveX / length * speed : 0;
       s.vy = length > 0 ? moveY / length * speed : 0;
@@ -1307,6 +1318,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (moved.blockedY) s.vy = 0;
     s.state = p.dashRemainingMs > 0 ? 'dashing' : p.attackRemainingMs > 0 ? 'attacking' :
       p.hitRemainingMs > 0 ? 'hit' : s.vx !== 0 || s.vy !== 0 ? 'moving' : 'idle';
+    if (p.dashRemainingMs > 0) p.trail = dropTrailPoint(p.trail, p.effects, s.x, s.y);
+    if (p.trail) burnDashTrail(p, events);
     p.dashRemainingMs = decay(p.dashRemainingMs);
     p.attackRemainingMs = decay(p.attackRemainingMs);
     if (p.dashRemainingMs === 0 && overPit(s)) resolvePlayerPitFall(p, events);
@@ -1591,7 +1604,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       return;
     }
     anchor.state = 'planting';
-    anchor.progress = Math.min(1, anchor.progress + TICK_MS / ANCHOR_HOLD_MS);
+    anchor.progress = Math.min(1, anchor.progress + TICK_MS * anchorRateMul(planters.map((p) => p.effects)) / ANCHOR_HOLD_MS);
     if (anchor.progress >= 1 - 1e-7) {
       anchor.progress = 1;
       anchor.state = 'planted';
@@ -1610,7 +1623,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (ritual.stage === 'discharging') {
       // Every relic the crew actually read takes 150 ms off the discharge (BOSS_FINALE §6).
       const dischargeMs = anchorDischargeMs(relicsRead([...discoveredLore], world.recipe.lore));
-      ritual.dischargeMs = Math.min(dischargeMs, ritual.dischargeMs + TICK_MS);
+      ritual.dischargeMs = Math.min(dischargeMs, ritual.dischargeMs + TICK_MS * anchorRateMul(living.map((p) => p.effects)));
       anchor.progress = 0.75 + 0.25 * ritual.dischargeMs / dischargeMs;
       if (ritual.dischargeMs >= dischargeMs - 1e-7) {
         anchor.state = 'planted';
@@ -1912,7 +1925,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         tick, timeMs: tick * TICK_MS, phase,
         worldId: phase === 'headquarters' ? null : world?.worldId ?? null,
         roomIndex: phase === 'headquarters' ? null : room.index,
-        roomId: room.id, players: orderedPlayers().map((p) => ({ ...p.state })),
+        roomId: room.id, players: orderedPlayers().map((p) => ({ ...p.state, ...(p.state.skillNodeIds ? { skillNodeIds: [...p.state.skillNodeIds] } : {}) })),
         enemies: progress.enemies.map((e) => ({ ...e.state, telegraph: e.state.telegraph ? { ...e.state.telegraph } : null })),
         projectiles: projectiles.map((pr): ProjectileState => ({
           id: pr.id, ownerEnemyId: pr.ownerEnemyId, x: pr.x, y: pr.y, vx: pr.vx, vy: pr.vy, radius: pr.radius,
