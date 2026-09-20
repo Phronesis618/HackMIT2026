@@ -2,7 +2,9 @@
  * Tiny external store for UiModel. React reads it with useSyncExternalStore; the
  * GameController is the only writer. No framework dependency in this file.
  */
-import type { UiModel } from '../../shared/ui';
+import type { GameSession } from '../../shared/session';
+import type { UiActions, UiModel } from '../../shared/ui';
+import { floorUiFrom, floorUiKey } from '../ui/floorsModel';
 
 export interface UiStore {
   get(): UiModel;
@@ -24,4 +26,24 @@ export function createUiStore(initial: UiModel): UiStore {
       return () => listeners.delete(listener);
     },
   };
+}
+
+// ---- floors (agent F3) -------------------------------------------------------------
+// Additive bridge: publishes `UiModel.floor` from the session's snapshots and adds
+// `chooseBiome` to the UI actions, without touching GameController. One call from main.tsx.
+
+export function connectFloorsUi(session: GameSession, store: UiStore, actions?: UiActions): () => void {
+  let lastKey = '';
+  if (actions) actions.chooseBiome = (biomeId) => session.chooseBiome?.(biomeId);
+  return session.onSnapshot((snapshot) => {
+    const key = snapshot.phase === 'expedition' ? floorUiKey(snapshot) : '';
+    if (key === lastKey) return;
+    lastKey = key;
+    const solo = session.mode === 'local';
+    store.set({
+      floor: key === '' ? null : floorUiFrom(snapshot, session.getWorld(), {
+        playerId: session.localPlayerId, solo, isHost: session.getIsHost?.() ?? solo,
+      }),
+    });
+  });
 }

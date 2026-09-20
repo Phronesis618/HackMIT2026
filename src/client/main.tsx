@@ -17,10 +17,11 @@ import type { GameSession } from '../shared/session';
 import { createBrowserAudio } from './audio';
 import { createBrowserChronicle } from './chronicle';
 import { GameController, IDENTITY_STORAGE_KEY, parsePreviewFlags } from './game/GameController';
-import { createUiStore } from './game/uiStore';
+import { connectFloorsUi, createUiStore } from './game/uiStore';
 import { PhaserWorldRenderer } from './render/PhaserWorldRenderer';
 import { applyTokens } from './styles/applyTokens';
 import './styles/app.css';
+import './styles/floors.css';
 import { LocalSession } from './transport/LocalSession';
 import { RemoteSession } from './transport/RemoteSession';
 import { fixtureWorldProvider, serverWorldProvider } from './transport/worldProviders';
@@ -88,6 +89,7 @@ async function boot(): Promise<void> {
     ? 'No co-op server is reachable. Start the RELAY server or switch to Solo for offline play.'
     : 'No generation server is reachable. Solo play uses a clearly labelled offline fixture.' } });
   const controller = new GameController({ session, renderer, chronicle, audio, store, flags, liveGenerationAvailable });
+  connectFloorsUi(session, store, controller.actions); // floors UI bridge (agent F3): UiModel.floor + actions.chooseBiome
   window.addEventListener('pagehide', (event) => {
     if (!event.persisted) controller.dispose();
   });

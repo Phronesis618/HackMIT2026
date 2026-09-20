@@ -11,6 +11,7 @@ import { DebriefPanel } from './DebriefPanel';
 import { AbilityBar } from './AbilityBar';
 import { GameMenu } from './GameMenu';
 import { HeadquartersPrompt, HeadquartersStationPanel } from './HeadquartersStations';
+import { FloorsHud } from './FloorsHud';
 
 export interface AppProps {
   store: UiStore;
@@ -68,6 +69,7 @@ export function App({ store, actions, onStageReady }: AppProps) {
             <span>{inRun || model.phase === 'debrief' ? model.room?.name : 'RELAY / SANCTUARY'}</span>
           </div>
           {inRun && <Hud model={model} actions={actions} />}
+          <FloorsHud model={model} actions={actions} />
           {(model.phase === 'headquarters' || model.phase === 'preparing') && <HeadquartersPrompt model={model} actions={actions} />}
           {model.phase !== 'debrief' && <AbilityBar model={model} actions={actions} />}
         </section>
