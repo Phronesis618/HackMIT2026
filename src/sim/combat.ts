@@ -102,15 +102,22 @@ export function clearPath(grid: SolidGrid, from: Point, to: Point, radius = 1, l
   return true;
 }
 
-export function nearestOpenPosition(grid: SolidGrid, preferred: Point, radius: number): Point {
+export function nearestOpenPosition(grid: SolidGrid, preferred: Point, radius: number, taken: readonly Point[] = []): Point {
+  // A27: `taken` holds bodies already placed. Without it, a pack whose fanned-out spots all land
+  // in a wall fell back to the SAME nearest open tile — four Wardens stacked on one point, unable
+  // to separate and unable to be reached. Each body now takes the nearest spot nobody else holds.
   if (!circleHitsSolid(grid, preferred.x, preferred.y, radius)) return preferred;
+  // Only the FALLBACK consults `taken`: a spot the geometry already accepts is used as it always
+  // was, so nothing moves in a room where the fan-out fitted.
+  const free = (x: number, y: number): boolean =>
+    !circleHitsSolid(grid, x, y, radius) && taken.every((other) => distance({ x, y }, other) >= radius * 2);
   let best = preferred;
   let bestDistance = Infinity;
   for (let row = 0; row < grid.height; row++) {
     for (let col = 0; col < grid.width; col++) {
       const candidate = tileToWorld(col, row);
       const d = distance(candidate, preferred);
-      if (d < bestDistance && !circleHitsSolid(grid, candidate.x, candidate.y, radius)) {
+      if (d < bestDistance && free(candidate.x, candidate.y)) {
         best = candidate;
         bestDistance = d;
       }

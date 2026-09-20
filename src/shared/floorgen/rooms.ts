@@ -35,7 +35,8 @@ import {
   type RoomKind,
   type SizeClass,
 } from '../floors';
-import { DANGEROUS_TILES, PROP_INFO, type PropId } from '../registry';
+import { TILE_SIZE } from '../conventions';
+import { DANGEROUS_TILES, ENEMY_INFO, PROP_INFO, SOLID_TILES, type PropId } from '../registry';
 import { rollEncounters } from './director';
 import { createRng, seedKey, type Rng } from './rng';
 import { getTemplate, type RoomTemplate } from './templates';
@@ -283,6 +284,81 @@ export function repairConnectivity(grid: Grid, spawn: Coord, keyPoints: readonly
 }
 
 /** 4-connected flood fill over walkable tiles. `allow` can narrow what counts as walkable. */
+// ---------------------------------------------------------------------------
+// A27 — body clearance. A tile is 32 px across; a Guardian's body is 28 px in RADIUS, so it
+// overlaps the tiles around the one it stands on, and a Warden (18) overlaps the four beside it.
+// The generator placed every enemy on any walkable tile, so a wide body could be dropped in a
+// one-tile alcove or a corridor it can never leave — only the sim's "nearest open position"
+// fallback kept it out of the wall, and its chase then fell back to standing still.
+// ---------------------------------------------------------------------------
+
+/**
+ * The tiles AROUND (0,0) that a body of `radius` centred on a tile really overlaps. Empty for
+ * every radius at or under half a tile — every enemy but the Warden and the Guardian — so those
+ * are placed exactly as they were.
+ */
+export function bodyFootprint(radius: number): Coord[] {
+  const reach = Math.max(0, Math.ceil((radius - TILE_SIZE / 2) / TILE_SIZE));
+  const out: Coord[] = [];
+  for (let dy = -reach; dy <= reach; dy++) {
+    for (let dx = -reach; dx <= reach; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      // Nearest point of that tile to the body's centre; inside the radius means it overlaps.
+      const nx = Math.max(0, Math.abs(dx) * TILE_SIZE - TILE_SIZE / 2);
+      const ny = Math.max(0, Math.abs(dy) * TILE_SIZE - TILE_SIZE / 2);
+      if (Math.hypot(nx, ny) < radius) out.push({ x: dx, y: dy });
+    }
+  }
+  return out;
+}
+
+type Tiles = ReadonlyArray<ReadonlyArray<string>> | readonly string[];
+
+/**
+ * Movement-solid, exactly as `buildSolidGrid` reads it: walls, void, a pit, an armed canister.
+ * Low cover ('-') is not — you can walk over a barricade, so a body may stand in one.
+ */
+const openAt = (grid: Tiles, x: number, y: number, blocked: ReadonlySet<string>): boolean => {
+  const ch = grid[y]?.[x];
+  return ch !== undefined && ch !== ' ' && ch !== 'o' && !SOLID_TILES.has(ch) && !blocked.has(key(x, y));
+};
+
+/** Can a body of this footprint stand on (x, y) without any part of it inside something solid? */
+export function bodyFits(
+  grid: Tiles, x: number, y: number, footprint: readonly Coord[], blocked: ReadonlySet<string> = new Set(),
+): boolean {
+  return openAt(grid, x, y, blocked) && footprint.every((off) => openAt(grid, x + off.x, y + off.y, blocked));
+}
+
+/**
+ * Tiles a body of this footprint can both STAND on and WALK to from the places the crew arrives
+ * (`from`: the spawn and every door entry). A door entry is a one-tile opening that a wide body
+ * may not fit in itself, so the flood is seeded from every fitting tile beside each of them.
+ *
+ * An empty footprint gives exactly the old permissive flood, so nothing narrow moves.
+ */
+export function bodyFlood(
+  grid: Tiles, from: readonly Coord[], footprint: readonly Coord[], blocked: ReadonlySet<string> = new Set(),
+): Set<string> {
+  if (footprint.length === 0) return flood(grid, from[0] ?? { x: 0, y: 0 }, () => true, blocked);
+  const seen = new Set<string>();
+  const stack: Coord[] = [];
+  const visit = (x: number, y: number): void => {
+    const id = key(x, y);
+    if (seen.has(id) || !bodyFits(grid, x, y, footprint, blocked)) return;
+    seen.add(id);
+    stack.push({ x, y });
+  };
+  for (const point of from) {
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) visit(point.x + dx, point.y + dy);
+  }
+  while (stack.length > 0) {
+    const at = stack.pop()!;
+    for (const side of DOOR_SIDES) visit(at.x + SIDE_DELTA[side].dx, at.y + SIDE_DELTA[side].dy);
+  }
+  return seen;
+}
+
 export function flood(
   grid: ReadonlyArray<ReadonlyArray<string>> | readonly string[],
   from: Coord,
@@ -382,38 +458,72 @@ function placeEncounters(
   if (groups.length === 0) return [];
 
   const avoid: Coord[] = [spawn, ...doors.map((door) => door.entry)];
+  const arrivals: Coord[] = [spawn, ...doors.map((door) => door.entry)];
   // TILES.md S2: prefer somewhere the crew can reach without walking through fire, so clearing
   // a room is never gated on crossing a hazard. The permissive flood stays as a fallback.
-  let candidates: Coord[] = [];
-  for (const reachable of [
+  const regions = [
     flood(grid, spawn, (ch) => !DANGEROUS_TILES.has(ch), blocked),
     flood(grid, spawn, () => true, blocked),
-  ]) {
-    const standable = floorCells(grid).filter(
-      (cell) => reachable.has(key(cell.x, cell.y)) && !occupied.has(key(cell.x, cell.y)) && !(cell.x === focus.x && cell.y === focus.y),
-    );
-    // Keep the largest door/spawn clearance that still leaves room for every group.
-    for (const clearance of [5, 4, 3, 2, 1]) {
-      candidates = standable.filter((cell) => avoid.every((point) => manhattan(point, cell) >= clearance));
-      if (candidates.length >= groups.length) break;
+  ].map((reachable) => floorCells(grid).filter(
+    (cell) => reachable.has(key(cell.x, cell.y)) && !occupied.has(key(cell.x, cell.y)) && !(cell.x === focus.x && cell.y === focus.y),
+  ));
+
+  /**
+   * Where a body of this footprint may stand. An EMPTY footprint (every enemy but the Warden and
+   * the Guardian) reproduces the original list exactly, so nothing narrow moves.
+   *
+   * A27: for a wide body the same ladder runs over only the tiles its body actually fits on and
+   * can walk to the crew from — the door clearance gives way before the body does, because a
+   * Guardian jammed against a wall is worse than a Guardian a little close to a door.
+   */
+  const candidatesFor = (footprint: readonly Coord[]): Coord[] => {
+    const standing = footprint.length === 0 ? null : bodyFlood(grid, arrivals, footprint, blocked);
+    let out: Coord[] = [];
+    for (const region of regions) {
+      const usable = standing === null ? region : region.filter((cell) => standing.has(key(cell.x, cell.y)));
+      // Keep the largest door/spawn clearance that still leaves room for every group. A wide
+      // body stops at 2: below that it would be standing in the doorway the crew walks through.
+      for (const clearance of standing === null ? [5, 4, 3, 2, 1] : [5, 4, 3, 2]) {
+        out = usable.filter((cell) => avoid.every((point) => manhattan(point, cell) >= clearance));
+        if (out.length >= groups.length) break;
+      }
+      if (out.length > 0) break;
     }
-    if (candidates.length > 0) break;
-  }
+    return out;
+  };
+
+  const candidates = candidatesFor([]);
   if (candidates.length === 0) return [];
+
+  const byRadius = new Map<number, Coord[]>();
+  const fitting = (enemyId: BuiltEncounter['enemyId']): Coord[] => {
+    const radius = ENEMY_INFO[enemyId].radius;
+    const cached = byRadius.get(radius);
+    if (cached) return cached;
+    const footprint = bodyFootprint(radius);
+    // Last resorts, in order: anywhere the body merely fits, then the plain list. The fuzz over
+    // 1920 rooms never needs either, but a hand-written template could be tight enough.
+    const room = footprint.length === 0 ? candidates : candidatesFor(footprint);
+    const fits = room.length > 0 ? room : candidates.filter((cell) => bodyFits(grid, cell.x, cell.y, footprint, blocked));
+    const out = fits.length > 0 ? fits : candidates;
+    byRadius.set(radius, out);
+    return out;
+  };
 
   const taken: Coord[] = [];
   const encounters: BuiltEncounter[] = [];
   groups.forEach((group, index) => {
+    const choices = fitting(group.enemyId);
     let spot: Coord;
     if (group.role === 'guardian' || group.role === 'gatekeeper') {
       // Bosses stand guard next to the focus (pedestal / portal).
-      spot = candidates.reduce((best, cell) => (manhattan(cell, focus) < manhattan(best, focus) ? cell : best), candidates[0]!);
+      spot = choices.reduce((best, cell) => (manhattan(cell, focus) < manhattan(best, focus) ? cell : best), choices[0]!);
     } else if (taken.length === 0) {
-      spot = rng.pick(candidates);
+      spot = rng.pick(choices);
     } else {
       // Farthest-point sampling spreads packs through the room.
       const spread = (cell: Coord) => Math.min(...taken.map((other) => manhattan(other, cell)));
-      spot = candidates.reduce((best, cell) => (spread(cell) > spread(best) ? cell : best), candidates[0]!);
+      spot = choices.reduce((best, cell) => (spread(cell) > spread(best) ? cell : best), choices[0]!);
     }
     taken.push(spot);
     encounters.push({ id: `${room.id}.e${index}`, enemyId: group.enemyId, x: spot.x, y: spot.y, count: group.count, role: group.role });

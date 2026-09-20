@@ -6,10 +6,10 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { RoomSpecSchema, type RoomSpec } from '../../src/shared/contracts';
-import { TERRAIN_DENSITIES, TERRAIN_LAYOUT_IDS, TILE_CHARS } from '../../src/shared/registry';
+import { ENEMY_INFO, PROP_INFO, TERRAIN_DENSITIES, TERRAIN_LAYOUT_IDS, TILE_CHARS } from '../../src/shared/registry';
 import { validateRoomSafety } from '../../src/shared/terrain';
 import {
-  applyBiomeTerrain, buildRoom, deriveBiomeBriefs, generateFloorPlan, DEFAULT_BIOME_BRIEFS,
+  applyBiomeTerrain, bodyFits, bodyFootprint, buildRoom, deriveBiomeBriefs, generateFloorPlan, DEFAULT_BIOME_BRIEFS,
 } from '../../src/shared/floorgen';
 import type { BiomeTerrain } from '../../src/shared/floors';
 import { compileWorldRecipe } from '../../src/server/generation/compiler';
@@ -33,6 +33,7 @@ describe('terrain placement keeps every generated room safe', () => {
     let pitRooms = 0;
     let ventRooms = 0;
     let coverRooms = 0;
+    let wideBodies = 0;
     for (let s = 0; rooms < 1000; s++) {
       const seed = `placement-${s}`;
       const brief = DEFAULT_BIOME_BRIEFS[s % DEFAULT_BIOME_BRIEFS.length]!;
@@ -52,6 +53,24 @@ describe('terrain placement keeps every generated room safe', () => {
           exits: built.doors.map((door) => ({ x: door.x, y: door.y, toRoomIndex: 0, entry: door.entry })),
         } as unknown as RoomSpec;
         expect(validateRoomSafety(room), `${seed}/${planned.id}`).toEqual([]);
+        // A27: terrain is stamped AFTER the encounters are placed, so a pit or a canister could
+        // land inside a Warden's or a Guardian's body and leave it standing in geometry. Every
+        // wide body still fits where it stands once the room is finished.
+        const blocked = new Set<string>();
+        for (const prop of built.props) {
+          const info = PROP_INFO[prop.propId];
+          if (!info.blocksMovement) continue;
+          for (let dy = 0; dy < info.footprint.h; dy++) for (let dx = 0; dx < info.footprint.w; dx++) blocked.add(`${prop.x + dx},${prop.y + dy}`);
+        }
+        for (const encounter of built.encounters) {
+          const footprint = bodyFootprint(ENEMY_INFO[encounter.enemyId].radius);
+          if (footprint.length === 0) continue;
+          wideBodies++;
+          expect(
+            bodyFits(tiles, encounter.x, encounter.y, footprint, blocked),
+            `${seed}/${planned.id}: ${encounter.enemyId} at ${encounter.x},${encounter.y} is crushed by terrain\n${tiles.join('\n')}`,
+          ).toBe(true);
+        }
         if (tiles.join('').includes('*')) canisterRooms++;
         if (tiles.join('').includes('o')) pitRooms++;
         if (tiles.join('').includes('^')) ventRooms++;
@@ -60,6 +79,7 @@ describe('terrain placement keeps every generated room safe', () => {
       }
     }
     // The fuzz is worthless if the feature never actually lands.
+    expect(wideBodies).toBeGreaterThan(50);
     expect(canisterRooms).toBeGreaterThan(50);
     expect(pitRooms).toBeGreaterThan(50);
     expect(ventRooms).toBeGreaterThan(50);

@@ -3,13 +3,16 @@
  */
 import { describe, expect, it } from 'vitest';
 import { BuiltRoomSchema, ROOM_KINDS, SIZE_CLASSES, type BiomeBrief, type BuiltRoom, type DoorSide, type FloorPlan } from '../../../src/shared/floors';
-import { PROP_INFO, TILE_CHARS, WALKABLE_TILES } from '../../../src/shared/registry';
+import { ENEMY_INFO, PROP_INFO, TILE_CHARS, WALKABLE_TILES } from '../../../src/shared/registry';
 import {
   DEFAULT_BIOME_BRIEFS,
   MAX_ENEMIES_BY_SIZE,
   MAX_RANGED_BY_SIZE,
   RANGED_ENEMIES,
   ROOM_TEMPLATES,
+  bodyFits,
+  bodyFlood,
+  bodyFootprint,
   buildFloor,
   buildRoom,
   createLazyFloor,
@@ -24,6 +27,8 @@ import {
 
 const LEGAL = new Set<string>(TILE_CHARS);
 const key = (x: number, y: number) => `${x},${y}`;
+/** A27: how many Warden/Guardian-sized bodies the fuzz actually placed, so the check has teeth. */
+let wideBodies = 0;
 
 function tierOf(brief: BiomeBrief): number {
   return planWorldRoute('t').graph.nodes.find((node) => node.biomeId === brief.id)!.tier;
@@ -101,6 +106,18 @@ function assertRoomInvariants(room: BuiltRoom, plan: FloorPlan): void {
     if (blocked.has(key(encounter.x, encounter.y))) fail(`encounter ${encounter.id} is inside a prop`);
     if (spots.has(key(encounter.x, encounter.y))) fail('two encounters share a tile');
     spots.add(key(encounter.x, encounter.y));
+    // A27: a wide body (Warden 18, Guardian 28 against a 32 px tile) must FIT where it stands
+    // and be able to walk from there to where the crew comes in. Narrow enemies have an empty
+    // footprint, so this is the walkable/reachable check they already passed.
+    const footprint = bodyFootprint(ENEMY_INFO[encounter.enemyId].radius);
+    if (!bodyFits(room.tiles, encounter.x, encounter.y, footprint, blocked)) {
+      fail(`encounter ${encounter.id} (${encounter.enemyId}) does not fit where it stands`);
+    }
+    const arrivals = [room.spawn, ...room.doors.map((door) => door.entry)];
+    if (!bodyFlood(room.tiles, arrivals, footprint, blocked).has(key(encounter.x, encounter.y))) {
+      fail(`encounter ${encounter.id} (${encounter.enemyId}) cannot walk to the crew`);
+    }
+    if (footprint.length > 0) wideBodies++;
     for (const door of room.doors) {
       if (Math.abs(door.entry.x - encounter.x) + Math.abs(door.entry.y - encounter.y) < 2) fail(`encounter ${encounter.id} sits in a doorway`);
     }
@@ -211,6 +228,8 @@ describe('buildRoom / buildFloor', () => {
     expect(rooms).toBe(12 * (10 + 15 * 2 + 20 * 2 + 25 * 2 + 30));
     expect(templatesSeen.size).toBe(ROOM_TEMPLATES.length);
     expect(hazardRooms).toBeGreaterThan(100);
+    // A27: the body-clearance check is only worth anything if wide bodies really turned up.
+    expect(wideBodies).toBeGreaterThan(100);
   });
 
   it('is deterministic, order-independent and lazy', () => {

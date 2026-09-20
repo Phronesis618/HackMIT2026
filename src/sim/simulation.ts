@@ -52,7 +52,7 @@ import { DOOR_SIDES, FLOOR_ENTRANCE_ROOM_ID } from '../shared/floors';
 import { NEUTRAL_LAWS, applyEncounterLaws, lawsSpareEncounter, resolveLaws, worldLawsView, type ResolvedLaws } from './laws';
 import {
   NO_EFFECTS, anchorRateMul, clearBonusResources, clearHasteMs, dashCooldownMul, dashInvulnerableBonusMs, dropTrailPoint, effectsFor,
-  hasteAttackCooldownMul, hasteMoveMul, incomingDamageMul, outgoingDamageMul, relicMendHp, remainsCharge, skillWorldContext, stepDashTrail,
+  hasteAttackCooldownMul, hasteMoveMul, incomingDamageMul, openingStrikeMul, outgoingDamageMul, relicMendHp, remainsCharge, skillWorldContext, stepDashTrail,
   DASH_TRAIL_DAMAGE, type DashTrail, type EffectSet, type IncomingKind,
 } from './effects';
 import { buildSkillTree, skillPurchaseCheck } from '../shared/skills';
@@ -87,6 +87,17 @@ interface PlayerRuntime {
   /** S1: clear_surge haste left, and the dash_echo burn trail; both derived, never serialised. */
   hasteMs: number;
   trail: DashTrail | null;
+  /**
+   * A23. Skill nodes the operative owns, split by where they are worth anything. The core spine
+   * and the class tree travel with the operative; an ATTUNEMENT is grown by one world
+   * (`recipe.attunements`) and belongs to it, so it is keyed by `worldId`. Without that, a node
+   * bought in world A stayed active in world B that happened to grow the same effect in the same
+   * slot, because the tree gives both the same id (`attune.0.hazard_ward`).
+   *
+   * `state.skillNodeIds` is the view of this for the CURRENT world, and it is all the snapshot
+   * carries: no new field, no growth per world visited.
+   */
+  skills: { carried: string[]; byWorld: Map<string, string[]> };
 }
 
 interface EnemyRuntime {
@@ -148,7 +159,12 @@ interface LoreNodeRuntime {
 
 /** Who to bill for an enemy's death. See `damageEnemyFrom` and docs/design/TILES.md §1.1. */
 type DamageSource =
-  | { kind: 'player'; player: PlayerRuntime }
+  /**
+   * A hit the crew landed. `lingering` marks damage that keeps ticking after the strike — the
+   * `dash_echo` trail — which is crew damage but not a strike: it neither takes the opening-strike
+   * bonus nor spends it.
+   */
+  | { kind: 'player'; player: PlayerRuntime; lingering?: boolean }
   /** A hazard floor, a vent, a canister, a pit: the room did it and nobody is credited. */
   | { kind: 'terrain'; tile: TerrainDamageSource }
   /** Knocked or pulled into something lethal; `by` is whoever displaced it, if anyone. */
@@ -296,7 +312,18 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     p.onExit = false;
     p.hazard = createHazardClock();
     p.hasteMs = 0;
+    syncHaste(p);
     p.trail = null;
+  }
+
+  /**
+   * A24. Haste is runtime state, but a client cannot show what it cannot see. The snapshot
+   * carries it only while it is actually running, so a crew without `clear_surge` never pays
+   * for the field (`PlayerState.hasteMs`).
+   */
+  function syncHaste(p: PlayerRuntime): void {
+    if (p.hasteMs > 0) p.state.hasteMs = p.hasteMs;
+    else delete p.state.hasteMs;
   }
 
   function doorsLocked(): boolean {
@@ -569,6 +596,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       encounters.push({ id: 'anchor-guardian', enemyId: 'guardian', x: tile.col, y: tile.row, count: 1 });
     }
     const hpScale = floorsRun && phase === 'expedition' ? tierMultiplier(floorsRun.tier) : 1;
+    // A27: every body already standing in this room. A pack whose fanned-out spots land in a wall
+    // fell back to the nearest open tile — the SAME one for every member, and for the next group
+    // too, so four Wardens ended up on one point, unable to separate or to be reached.
+    const placedBodies: Point[] = [];
     for (const planned of encounters) {
       // Floors biome exits: the gatekeeper is a one-phase Custodian until B1 gives it its own fight.
       const gatekeeper = floorsRun !== null && planned.role === 'gatekeeper';
@@ -588,13 +619,14 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       for (let i = 0; i < encounter.count; i++) {
         const base = tileToWorld(encounter.x, encounter.y);
         const offset = i === 0 ? 0 : (i % 2 === 0 ? 1 : -1) * Math.ceil(i / 2) * (info.radius * 2 + 6);
-        let spawn = nearestOpenPosition(grid, { x: base.x + offset, y: base.y }, info.radius);
+        let spawn = nearestOpenPosition(grid, { x: base.x + offset, y: base.y }, info.radius, placedBodies);
         if (floorsRun && i > 0) {
           // Pack members fan out sideways; never into a pocket the crew cannot reach (sealed doors would never open).
           reachable ??= connectedTiles(grid, { col: encounter.x, row: encounter.y });
           const tile = worldToTile(spawn.x, spawn.y);
-          if (!reachable.has(tile.row * grid.width + tile.col)) spawn = nearestOpenPosition(grid, base, info.radius);
+          if (!reachable.has(tile.row * grid.width + tile.col)) spawn = nearestOpenPosition(grid, base, info.radius, placedBodies);
         }
+        placedBodies.push(spawn);
         enemies.push({
           state: {
             id: `${encounter.id.slice(0, 61)}-${i}`, enemyId: encounter.enemyId,
@@ -754,11 +786,24 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       dashDirection: { x: 1, y: 0 }, attackRemainingMs: 0, hitRemainingMs: 0,
       onExit: false, interacting: false, interactHeld: false, interactPressed: false, damagedThisTick: false, history: [],
       hazard: createHazardClock(), effects: NO_EFFECTS, hasteMs: 0, trail: null,
+      skills: { carried: [], byWorld: new Map() },
     };
   }
 
   function refreshEffects(p: PlayerRuntime): void {
     p.effects = effectsFor(p.state, world);
+  }
+
+  /**
+   * A23. Rewrites `state.skillNodeIds` to the nodes that count in the world the crew is in now —
+   * the operative's own, plus the attunements they bought in THIS world — and re-resolves their
+   * effects. Absent when they own nothing, so a crew that bought nothing stays byte-identical.
+   */
+  function syncSkillNodes(p: PlayerRuntime): void {
+    const owned = [...p.skills.carried, ...(world ? p.skills.byWorld.get(world.worldId) ?? [] : [])];
+    if (owned.length === 0) delete p.state.skillNodeIds;
+    else p.state.skillNodeIds = owned;
+    refreshEffects(p);
   }
 
   function livingEnemies(): EnemyRuntime[] {
@@ -782,17 +827,21 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const s = e.state;
     if (s.hp <= 0) return;
     // World laws scale what the CREW hits for. A vent is not a player: it neither gets
-    // `playerDamageMul` nor spends the `first_light` opening strike on a burn tick — and, because
-    // the bonus is keyed on the first PLAYER hit rather than on full health, a hazard that has
-    // already taken a sliver off an enemy cannot quietly cancel it either.
-    const lawMul = source.kind === 'player' ? laws.playerDamageMul * (e.struckByPlayer === true ? 1 : laws.firstStrikeMul) : 1;
+    // `playerDamageMul` nor spends the opening strike on a burn tick — and, because the bonus is
+    // keyed on the first PLAYER hit rather than on full health, a hazard that has already taken a
+    // sliver off an enemy cannot quietly cancel it either.
+    const strike = source.kind === 'player' && source.lingering !== true;
+    const lawMul = source.kind === 'player' ? laws.playerDamageMul : 1;
+    // The `first_light` law and the `first_strike` attunement share ONE opening strike: the larger
+    // of the two, capped, never their product (`openingStrikeMul`, docs/TUNING.md).
+    const openingMul = strike ? openingStrikeMul(source.player.effects, laws.firstStrikeMul, e.struckByPlayer === true) : 1;
     const fxMul = source.kind === 'player' ? outgoingDamageMul(source.player.effects, s) : 1;
-    const marked = Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1) * lawMul * fxMul);
+    const marked = Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1) * lawMul * openingMul * fxMul);
     // The Custodian caps single hits at 12% of its health, applies its phase-3 shield and any
     // vulnerability window it has opened (BOSS_FINALE §3.2, §4.2).
     const amount = Math.min(s.hp, e.custodian ? custodianIncomingDamage(e.custodian, s, marked) : marked);
     if (amount <= 0) return;
-    if (source.kind === 'player') e.struckByPlayer = true;
+    if (strike) e.struckByPlayer = true;
     const by = source.kind === 'player' ? source.player : source.kind === 'displaced' ? source.by : null;
     // An environmental kill pays half: attractive to aim for, never better than fighting.
     const credit = source.kind === 'player' ? 1 : ENV_KILL_CREDIT;
@@ -1098,8 +1147,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   }
 
   /**
-   * Line of REACH, for the things an operative does with their hands at arm's length: pulling a
-   * teammate up, reading a relic, planting the Anchor, hitting a relay. It reads the MOVEMENT
+   * Line of REACH, for the things an operative does for the crew rather than to an enemy:
+   * pulling a teammate up, reading a relic, planting the Anchor, hitting a relay, and Rally
+   * (A26 — the only ability aimed at allies). It reads the MOVEMENT
    * layer, so a '-' barricade is open — low cover stops what travels and nothing else
    * (TILES.md T4). A wall, a prop or a pit between the two still refuses; if you could not walk
    * the last half-tile, you cannot reach across it either.
@@ -1309,8 +1359,11 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         break;
       }
       case 'beacon.e.rally':
+        // A26: line of REACH, not line of fire. Rally is the one ability aimed at the crew, and a
+        // waist-high '-' barricade stopped it — a support ability refusing to cross the thing the
+        // crew is taking cover behind (TILES.md T4). A wall, a prop or a pit still refuses.
         for (const ally of orderedPlayers()) {
-          if (ally.state.hp <= 0 || distance(s, ally.state) > 200 || !clearPath(grid, s, ally.state)) continue;
+          if (ally.state.hp <= 0 || distance(s, ally.state) > 200 || !canReach(s, ally.state)) continue;
           heal(ally, p, 35, events);
           ally.state.rallyMs = 4000;
         }
@@ -1346,7 +1399,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     p.trail = trail;
     for (const id of burned) {
       const e = progress.enemies.find((it) => it.state.id === id);
-      if (e) damageEnemyFrom(e, { kind: 'player', player: p }, DASH_TRAIL_DAMAGE, events);
+      if (e) damageEnemyFrom(e, { kind: 'player', player: p, lingering: true }, DASH_TRAIL_DAMAGE, events);
     }
   }
 
@@ -1356,6 +1409,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     p.hitRemainingMs = decay(p.hitRemainingMs);
     s.slowMs = decay(s.slowMs ?? 0);
     p.hasteMs = decay(p.hasteMs);
+    syncHaste(p);
     p.damagedThisTick = false;
     const intent = p.intent;
     p.intent = null;
@@ -1669,6 +1723,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       for (const p of players.values()) {
         p.state.resources += reward + clearBonusResources(p.effects);
         p.hasteMs = Math.max(p.hasteMs, clearHasteMs(p.effects));
+        syncHaste(p);
       }
       events.push(emit({ type: 'room_cleared', worldId: world.worldId, roomIndex: room.index, roomId: room.id, playerIds: playerIds(), reward }));
       if (floorsRun && room.roomId !== undefined) {
@@ -1895,7 +1950,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       }
       world = next;
       worldLaws = resolveLaws(worldLawsView(next, options.deriveLaws).laws);
-      for (const p of players.values()) refreshEffects(p);
+      // A23: the attunements the crew owns are the ones THIS world grew for them.
+      for (const p of players.values()) syncSkillNodes(p);
       // Outside a run the provider follows the latest copy of the world (briefs may arrive late).
       if (!floorsRun) roomProvider = next?.floors ? (options.roomProvider ?? createRoomProvider)(next) : null;
     },
@@ -1976,9 +2032,14 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       const tree = buildSkillTree(p.state.classId, skillWorldContext(world));
       const owned = p.state.skillNodeIds ?? [];
       if (skillPurchaseCheck(tree, nodeId, owned, p.state.resources) !== null) return false;
-      p.state.resources -= tree.nodes.find((n) => n.id === nodeId)!.cost;
-      p.state.skillNodeIds = [...owned, nodeId];
-      refreshEffects(p);
+      const node = tree.nodes.find((n) => n.id === nodeId)!;
+      p.state.resources -= node.cost;
+      // A23: an attunement belongs to the world that grew it; everything else travels with the
+      // operative. (An attunement node only exists in the tree while a world is prepared.)
+      if (node.kind === 'attunement' && world) {
+        p.skills.byWorld.set(world.worldId, [...(p.skills.byWorld.get(world.worldId) ?? []), nodeId]);
+      } else p.skills.carried.push(nodeId);
+      syncSkillNodes(p);
       return true;
     },
     setHostPlayerId(playerId) {
@@ -2019,6 +2080,11 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       return events;
     },
     getSnapshot() {
+      // A24: the dash_echo trail, so the renderer can draw what the sim is burning enemies with.
+      // Sparse: absent entirely unless somebody bought the attunement and is mid-dash.
+      const trails = orderedPlayers().flatMap((p) => (p.trail?.points ?? []).map((point) => ({
+        playerId: p.state.id, x: point.x, y: point.y, remainingMs: point.remainingMs,
+      })));
       return {
         tick, timeMs: tick * TICK_MS, phase,
         worldId: phase === 'headquarters' ? null : world?.worldId ?? null,
@@ -2047,6 +2113,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
             : {}),
         },
         ...(floorsRun && phase !== 'headquarters' ? { floor: floorRunState(floorsRun, doorsLocked()) } : {}),
+        ...(trails.length > 0 ? { trails } : {}),
       };
     },
     getTick() { return tick; },

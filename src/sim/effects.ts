@@ -15,6 +15,7 @@
 import type { PlayerState, PreparedWorld } from '../shared/contracts';
 import { isTerrainDamageSource } from '../shared/terrain';
 import { buildSkillTree, ownedSkillEffects, type SkillEffectId, type SkillWorldContext } from '../shared/skills';
+import { DEMO_TUNING } from './tuning';
 
 export interface EffectSet {
   readonly ids: readonly SkillEffectId[];
@@ -81,14 +82,33 @@ export function incomingDamageMul(fx: EffectSet, sourceId: string, ranged: boole
 
 export const FIRST_STRIKE_MUL = 2;
 export const GUARDIAN_BANE_MUL = 1.2;
+/** The opening strike never exceeds this, whatever the law and the attunement say together. */
+export const OPENING_STRIKE_MAX_MUL = DEMO_TUNING.openingStrikeMaxMul;
 
 /**
- * Multiplier on a direct hit the player lands, after `laws.playerDamageMul` and the laws'
- * own opening-strike multiplier. Gatekeepers and the Custodian are both `enemyId: 'guardian'`.
+ * The crew's opening strike on one enemy, resolved in ONE place.
+ *
+ * The `first_light` LAW (x2–3) and the `first_strike` ATTUNEMENT (x2) name the same moment, so
+ * they do NOT multiply — that reached x6 on a single hit. The larger of the two applies, capped
+ * at `OPENING_STRIKE_MAX_MUL` (`DEMO_TUNING.openingStrikeMaxMul`).
+ *
+ * Both key on the first PLAYER hit on that enemy (`struckByPlayer`), never on full health, so a
+ * burn tick, a vent or a canister cannot spend the crew's opening strike before anyone swings.
+ * A lingering `dash_echo` trail tick is crew damage but not a strike: the caller passes
+ * `struckByPlayer` unchanged for it, so it neither takes the bonus nor spends it.
  */
-export function outgoingDamageMul(fx: EffectSet, target: { enemyId: string; hp: number; maxHp: number }): number {
-  return (fx.has('first_strike') && target.hp === target.maxHp ? FIRST_STRIKE_MUL : 1) *
-    (fx.has('guardian_bane') && target.enemyId === 'guardian' ? GUARDIAN_BANE_MUL : 1);
+export function openingStrikeMul(fx: EffectSet, lawFirstStrikeMul: number, struckByPlayer: boolean): number {
+  if (struckByPlayer) return 1;
+  const attunement = fx.has('first_strike') ? FIRST_STRIKE_MUL : 1;
+  return Math.min(Math.max(lawFirstStrikeMul, attunement), OPENING_STRIKE_MAX_MUL);
+}
+
+/**
+ * Multiplier on a hit the player lands, after `laws.playerDamageMul` and independent of the
+ * opening strike above. Gatekeepers and the Custodian are both `enemyId: 'guardian'`.
+ */
+export function outgoingDamageMul(fx: EffectSet, target: { enemyId: string }): number {
+  return fx.has('guardian_bane') && target.enemyId === 'guardian' ? GUARDIAN_BANE_MUL : 1;
 }
 
 // ---------------------------------------------------------------------------------------------

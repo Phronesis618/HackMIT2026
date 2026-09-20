@@ -16,9 +16,9 @@
  *    the spawn (no '~', no 'B', props in place) is still reachable. `flood` is floorgen's.
  */
 import type { BiomeTerrain, BuiltRoom } from '../floors';
-import { PROP_INFO } from '../registry';
+import { ENEMY_INFO, PROP_INFO } from '../registry';
 import { createRng, seedKey, type Rng } from './rng';
-import { flood } from './rooms';
+import { bodyFootprint, flood } from './rooms';
 
 type Grid = string[][];
 interface Coord { x: number; y: number }
@@ -64,7 +64,14 @@ export function applyBiomeTerrain(room: BuiltRoom, terrain: BiomeTerrain, seed: 
       }
     }
   }
-  for (const encounter of room.encounters) taken.add(key(encounter.x, encounter.y));
+  // A27: a wide body (Warden, Guardian) overlaps the tiles around the one it stands on, so the
+  // whole footprint is off limits — a pit or a canister stamped beside a Guardian used to leave
+  // it standing inside geometry, and the sim's nearest-open-position fallback then dropped the
+  // whole pack on one tile.
+  for (const encounter of room.encounters) {
+    taken.add(key(encounter.x, encounter.y));
+    for (const off of bodyFootprint(ENEMY_INFO[encounter.enemyId].radius)) taken.add(key(encounter.x + off.x, encounter.y + off.y));
+  }
   const free = (x: number, y: number) =>
     grid[y]?.[x] === '.' && !taken.has(key(x, y)) &&
     !keyPoints.some((point) => Math.max(Math.abs(point.x - x), Math.abs(point.y - y)) <= MARGIN);

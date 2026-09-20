@@ -1,6 +1,28 @@
-import type { UiActions, UiModel } from '../../shared/ui';
+import type { UiActions, UiFloor, UiModel } from '../../shared/ui';
 import { anchorInstruction } from '../../shared/finale';
 import { CLASS_INFO, CLASS_THEME } from '../../shared/registry';
+
+/**
+ * A25. Where the crew is, in one line, for the top bar and the world brief.
+ *
+ * A floors run has one room list per biome, so "room 3" and "1/1 rooms" were both meaningless
+ * there: `plannedRoomCount` is 1 in a floors world and the room index restarts every biome. It
+ * counts the rooms of the CURRENT biome against that biome's budget instead, and says which
+ * biome of the five it is. Legacy worlds keep the line they had.
+ */
+export function floorLocationLabel(floor: UiFloor): string {
+  return `biome ${floor.depth}/${floor.depthCount} · room ${floor.roomsVisited} of ${floor.roomCount}`;
+}
+
+/** The top bar's one-line telemetry: the world, then where in it the crew is standing. */
+export function telemetryLabel(model: UiModel): string {
+  const where = model.phase === 'expedition'
+    ? model.floor ? floorLocationLabel(model.floor) : model.room ? `room ${model.room.index + 1}` : null
+    : model.phase === 'training' ? 'training range'
+      : model.phase === 'debrief' ? 'debrief'
+        : model.phase === 'preparing' ? 'preparing' : 'sanctuary';
+  return `${model.world ? `${model.world.title} · ` : ''}${where ?? 'sanctuary'}`;
+}
 
 /**
  * In-the-moment prompts only, overlaid on the canvas. Everything explanatory (abilities,
@@ -68,7 +90,31 @@ export function HudVitals({ model }: { model: UiModel }) {
         <span className="vitals__label">{down ? 'Down' : 'Integrity'}</span>
         <span className="vitals__num">{hud ? Math.round(hp) : '—'}<small>/{hud ? maxHp : '—'}</small></span>
       </div>
+      <StatusChips model={model} />
     </div>
+  );
+}
+
+/**
+ * A24. The two timed states the simulation applies to an operative, where they can see them:
+ * the `clear_surge` haste and a slow. One tiny chip each, only while it is running.
+ */
+export function StatusChips({ model }: { model: UiModel }) {
+  const hud = model.hud;
+  const chips = [
+    { key: 'quick', label: 'Quickened', ms: hud?.hasteMs ?? 0 },
+    { key: 'slow', label: 'Slowed', ms: hud?.slowMs ?? 0 },
+  ].filter((chip) => chip.ms > 0);
+  if (chips.length === 0) return null;
+  return (
+    <ul className="vitals__chips">
+      {chips.map((chip) => (
+        <li key={chip.key} className={`status-chip status-chip--${chip.key}`}>
+          <span className="status-chip__label">{chip.label}</span>
+          <span className="status-chip__time">{(chip.ms / 1000).toFixed(1)}s</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
