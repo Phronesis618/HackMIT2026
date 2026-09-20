@@ -1,8 +1,29 @@
+import { useState, useSyncExternalStore } from 'react';
 import { ABILITY_UNLOCK_COST } from '../../shared/conventions';
 import { headquartersRecords, headquartersStation } from '../../shared/headquarters';
-import { ABILITY_DETAILS, CLASS_ABILITIES, CLASS_INFO, CLASS_THEME } from '../../shared/registry';
+import { ABILITY_DETAILS, CLASS_ABILITIES, CLASS_IDS, CLASS_INFO, CLASS_THEME, ENEMY_INFO, type AbilityId, type ClassId, type EnemyId } from '../../shared/registry';
 import type { UiActions, UiModel } from '../../shared/ui';
+import { renderCue, type HubCueContext } from '../chronicle/hubCues';
+import { HUB_SHELF_BRACKETS, hubStateBus, shelfRelics, type ClassRecord, type HubState, type HubStateBus } from '../chronicle/hubState';
 import '../styles/headquarters.css';
+
+const DEVICE_LOCAL_FOOTER = 'Counts reflect events recorded on this browser. They are not lifetime totals.';
+
+function useHubState(bus: HubStateBus): HubState {
+  return useSyncExternalStore(bus.subscribe, bus.get, bus.get);
+}
+
+function sourceLabel(source: string): string {
+  return source === 'live' ? 'Live generation' : source === 'live_fallback_fixture' ? 'Fallback fixture' : 'Offline fixture';
+}
+
+function topKey<K extends string>(counts: Readonly<Record<string, number>>): K | null {
+  let best: string | null = null;
+  for (const [key, count] of Object.entries(counts)) {
+    if (count > 0 && (best === null || count > counts[best]! || (count === counts[best]! && key < best))) best = key;
+  }
+  return best as K | null;
+}
 
 export function HeadquartersPrompt({ model, actions }: { model: UiModel; actions: UiActions }) {
   const station = headquartersStation(model.headquarters?.nearbyStationId);
@@ -21,8 +42,10 @@ export function HeadquartersPrompt({ model, actions }: { model: UiModel; actions
   );
 }
 
-export function HeadquartersStationPanel({ model, actions }: { model: UiModel; actions: UiActions }) {
+export function HeadquartersStationPanel({ model, actions, hub = hubStateBus }: { model: UiModel; actions: UiActions; hub?: HubStateBus }) {
   const station = headquartersStation(model.headquarters?.activeStationId);
+  const hubState = useHubState(hub);
+  const [recordsTab, setRecordsTab] = useState<ClassId | null>(null);
   if (!station) return null;
   const classId = station.classId;
   const records = headquartersRecords(model.memories);
@@ -42,7 +65,7 @@ export function HeadquartersStationPanel({ model, actions }: { model: UiModel; a
       <p className="muted">{station.description}</p>
       {classId && abilities && (
         <>
-          <p className="hq-attunement" role="status">{model.localPlayer.classId === classId ? `Attuned · ${CLASS_INFO[classId].name}` : `Current attunement · ${CLASS_INFO[model.localPlayer.classId].name}`}</p>
+          <p className="hq-status" role="status">{model.localPlayer.classId === classId ? `CURRENT · ${CLASS_THEME[classId].weapon}` : `Carrying · ${CLASS_THEME[model.localPlayer.classId].weapon}`}</p>
           {model.localPlayer.classId !== classId && <button type="button" className="btn" disabled={!ready} onClick={actions.activateHeadquartersStation}>{station.action}</button>}
           <p>{CLASS_INFO[classId].role}</p>
           <dl className="hq-abilities">
@@ -51,7 +74,7 @@ export function HeadquartersStationPanel({ model, actions }: { model: UiModel; a
               return <div key={key}><dt><kbd>{key.toUpperCase()}</kbd> {ability.name}</dt><dd>{ability.description}<span>{ability.stats}</span></dd></div>;
             })}
           </dl>
-          <p className="hint">E {model.localPlayer.classId === classId && model.hud?.abilityEUnlocked ? 'unlocked' : `unlocks for ${ABILITY_UNLOCK_COST} resources`}. R charges in combat. Your attunement is free to change here.</p>
+          <p className="hint">E {model.localPlayer.classId === classId && model.hud?.abilityEUnlocked ? 'unlocked' : `unlocks for ${ABILITY_UNLOCK_COST} resources`}. R charges in combat. Swap weapons here at no cost.</p>
           {model.localPlayer.classId === classId && !model.hud?.abilityEUnlocked && actions.unlockAbility && (
             <button type="button" className="btn" disabled={!ready || (model.hud?.resources ?? 0) < ABILITY_UNLOCK_COST} onClick={actions.unlockAbility}>
               Unlock E · {model.hud?.resources ?? 0}/{ABILITY_UNLOCK_COST} resources
@@ -61,7 +84,7 @@ export function HeadquartersStationPanel({ model, actions }: { model: UiModel; a
       )}
       {station.id === 'archive' && (
         <>
-          <p className="hq-attunement">Device-local records</p>
+          <p className="hq-status">Device-local records</p>
           <p className="hint">Counts reflect saved event-derived memories on this browser. Clearing the Chronicle clears these records. They are not lifetime totals or win counts.</p>
           <dl className="hq-records">
             {[
@@ -81,9 +104,12 @@ export function HeadquartersStationPanel({ model, actions }: { model: UiModel; a
           )}
         </>
       )}
+      {station.id === 'quartermaster' && <QuartermasterPanel model={model} hub={hubState} />}
+      {station.id === 'records' && <RecordsPanel hub={hubState} tab={recordsTab ?? model.localPlayer.classId} onTab={setRecordsTab} />}
+      {station.id === 'relics' && <RelicsPanel hub={hubState} />}
       {station.id === 'observatory' && (
         <>
-          <p className="hq-attunement">{model.contributions.length} / 24 signals collected</p>
+          <p className="hq-status">{model.contributions.length} / 24 signals collected</p>
           <p className="hint">The contribution console below remains available anywhere in headquarters. Add an idea, then prepare a world.</p>
           <button type="button" className="btn" onClick={() => document.getElementById('contribution')?.focus()} disabled={!ready}>Write a world signal</button>
           {model.world && <p className="muted">Charted destination: {model.world.title}</p>}
@@ -98,12 +124,114 @@ export function HeadquartersStationPanel({ model, actions }: { model: UiModel; a
       )}
       {station.id === 'portal' && (
         <>
-          <p className="hq-attunement">{model.world?.title ?? 'No destination charted'}</p>
+          <p className="hq-status">{model.world?.title ?? 'No destination charted'}</p>
           <p className="hint">{model.world ? 'Walk into the gate or enter here when the crew is ready.' : 'Contribute an idea in the console below and prepare a world first.'}</p>
           <button type="button" className="btn btn--primary" onClick={actions.enterPortal} disabled={!ready || !model.world || !host}>Enter portal</button>
           {!host && <p className="hint">The crew leader opens the gate for everyone.</p>}
         </>
       )}
     </section>
+  );
+}
+
+function QuartermasterPanel({ model, hub }: { model: UiModel; hub: HubState }) {
+  const ctx: HubCueContext = {
+    lastRun: hub.lastRun,
+    records: hub.records,
+    totals: hub.totals,
+    session: {
+      classId: model.localPlayer.classId,
+      classChangedSinceLastRun: hub.lastRun !== null && hub.lastRun.classId !== model.localPlayer.classId,
+      worldPrepared: model.world !== null,
+      crewSize: Math.max(1, model.players?.length ?? 1),
+    },
+  };
+  const cue = renderCue(ctx);
+  const run = hub.lastRun;
+  return (
+    <>
+      <blockquote className="hq-speech">{cue ? cue.lines.map((line) => <p key={line}>{line}</p>) : <p>…</p>}</blockquote>
+      {run ? (
+        <dl className="hq-records hq-records--compact">
+          {[
+            ['Last world', run.worldTitle],
+            ['Outcome', run.outcome],
+            ['Weapon', CLASS_THEME[run.classId].weapon],
+            ['Deepest room', String(run.deepestRoomIndex + 1)],
+            ['Times downed', String(run.downs)],
+            ['Crew', run.crew.map((member) => member.displayName).join(', ') || '—'],
+          ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+        </dl>
+      ) : <p className="muted">No expedition has been recorded on this browser yet.</p>}
+      <p className="hint hq-evidence">{cue?.evidence ?? 'from: nothing recorded'}</p>
+      <p className="hint">Lines derive only from events recorded on this browser. {DEVICE_LOCAL_FOOTER}</p>
+    </>
+  );
+}
+
+function RecordsPanel({ hub, tab, onTab }: { hub: HubState; tab: ClassId; onTab: (classId: ClassId) => void }) {
+  const record: ClassRecord = hub.records[tab];
+  const ability = topKey<AbilityId>(record.abilityUseCounts);
+  const nemesis = topKey<EnemyId>(record.nemesisCounts);
+  const rows: [string, string][] = [
+    ['Expeditions', String(record.runs)],
+    ['Anchored', String(record.anchors)],
+    ['Collapsed', String(record.collapses)],
+    ['Deepest room', record.runs > 0 ? String(record.deepestRoomIndex + 1) : '—'],
+    ['Rooms cleared', String(record.roomsCleared)],
+    ['Hostiles down', String(record.enemiesDefeated)],
+    ['Damage dealt', String(Math.round(record.damageDealt))],
+    ['Damage taken', String(Math.round(record.damageTaken))],
+    ['Times downed', String(record.timesDowned)],
+    ['Picked up', String(record.revivesReceived)],
+    ['Picked up others', String(record.revivesGiven)],
+    ['Fragments read', String(record.loreRead)],
+  ];
+  if (ability) rows.push(['Most used ability', `${ability in ABILITY_DETAILS ? ABILITY_DETAILS[ability].name : ability} ×${record.abilityUseCounts[ability]}`]);
+  if (nemesis) rows.push(['Nemesis', `${nemesis in ENEMY_INFO ? ENEMY_INFO[nemesis].name : nemesis} ×${record.nemesisCounts[nemesis]}`]);
+  return (
+    <>
+      <div className="hq-tabs" role="tablist" aria-label="Weapon records">
+        {CLASS_IDS.map((id) => (
+          <button
+            key={id} type="button" role="tab" aria-selected={id === tab} className={`hq-tab${id === tab ? ' hq-tab--active' : ''}${hub.records[id].runs === 0 ? ' hq-tab--unlit' : ''}`}
+            style={{ ['--station-color' as string]: CLASS_THEME[id].primary }} onClick={() => onTab(id)}
+          >
+            {CLASS_INFO[id].name}
+          </button>
+        ))}
+      </div>
+      {record.runs === 0 ? (
+        <p className="muted">No expedition recorded with the {CLASS_THEME[tab].weapon.toLowerCase()} on this browser.</p>
+      ) : (
+        <dl className="hq-records hq-records--compact">
+          {rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+        </dl>
+      )}
+      <p className="hint">{DEVICE_LOCAL_FOOTER}</p>
+    </>
+  );
+}
+
+function RelicsPanel({ hub }: { hub: HubState }) {
+  const shelf = shelfRelics(hub);
+  return (
+    <>
+      <p className="hq-status">{hub.totals.relics} recovered · {shelf.length} of {HUB_SHELF_BRACKETS} brackets filled</p>
+      {shelf.length === 0 ? (
+        <p className="muted">Empty brackets. A relic is shelved when a fragment marked relic is read and the run ends anchored.</p>
+      ) : (
+        <ul className="hq-echoes hq-shelf">
+          {shelf.map((relic) => (
+            <li key={relic.id}>
+              <strong>{relic.title}</strong>
+              <p>{relic.text}</p>
+              <small>{relic.worldTitle} · {sourceLabel(relic.worldSource)} · recovered by {relic.recoveredBy.map((member) => member.displayName).join(', ') || 'unknown'}</small>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="hint">Relics derive from lore_discovered events with kind relic, kept only when run_ended reports anchored. {DEVICE_LOCAL_FOOTER}</p>
+    </>
   );
 }

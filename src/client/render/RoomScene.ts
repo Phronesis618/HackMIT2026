@@ -21,6 +21,8 @@ import { collectTerrainTiles, drawTerrain, terrainCaption, type TerrainTile } fr
 import { drawHeadquartersStations, type HeadquartersStationView } from './headquarters';
 import { drawMotif, drawProp, drawSanctuary, drawVignette } from './drawing';
 import { drawBackdrop, drawFloor, drawLightPools, drawMotes, drawWalls, makeMotes, type Mote } from './environment';
+import { artForRoom } from './biomeArt';
+import { drawRoomKindDynamic, drawRoomKindStatic, featurePrompt, roomKindState, type RoomKindState } from './roomKinds';
 import { drawDoorFrames, drawDoorStates, selectDoorViews, stepSeal, type DoorView } from './doors';
 import { drawFloorDressing, drawOverhead, drawWallDressing, FLOOR_PATTERN, MOTE_STYLE, stencilColors, type MoteStyle } from './dressing';
 import * as fx from './fx';
@@ -72,12 +74,14 @@ export class RoomScene extends Phaser.Scene {
   private terrainHint: Phaser.GameObjects.Text | null = null;
   private terrainTiles: TerrainTile[] = [];
   private headquartersStations: HeadquartersStationView | null = null;
-  private statusLabels = new Map<string, Phaser.GameObjects.Text>();
   private portalPulse = 0;
   /** Floors rooms only: per-door look for the latest snapshot and the eased shutter position. */
   private doorsView: Phaser.GameObjects.Graphics | null = null;
   private doorViews: DoorView[] = [];
   private doorSeal = 0;
+  private kindView: Phaser.GameObjects.Graphics | null = null;
+  private kindHint: Phaser.GameObjects.Text | null = null;
+  private kindState: RoomKindState = { roomCleared: false, featureUsed: false, choiceOpen: false };
   private players = new Map<string, EntityView>();
   private enemies = new Map<string, EntityView>();
   private anchorView: Phaser.GameObjects.Graphics | null = null;
@@ -119,6 +123,8 @@ export class RoomScene extends Phaser.Scene {
     opts: { headquarters: boolean; world?: { title: string; tagline: string } },
     loreLines: ReceiptLine[] = [],
   ): void {
+    // Floors: the biome's own motifs and palette turn (no-op for legacy rooms and the hub).
+    art = artForRoom(room, art);
     this.room = room;
     this.art = art;
     this.isHeadquarters = opts.headquarters;
@@ -144,12 +150,14 @@ export class RoomScene extends Phaser.Scene {
     this.terrainHint = null;
     this.terrainTiles = collectTerrainTiles(room);
     this.headquartersStations = null;
-    this.statusLabels.clear();
     this.loreNodesView = null;
     this.loreHint = null;
     this.doorsView = null;
     this.doorViews = [];
     this.doorSeal = 0;
+    this.kindView = null;
+    this.kindHint = null;
+    this.kindState = { roomCleared: false, featureUsed: false, choiceOpen: false };
 
     const layer = this.add.layer();
     this.roomLayer = layer;
@@ -218,6 +226,19 @@ export class RoomScene extends Phaser.Scene {
     layer.add(this.terrainView);
     drawTerrain(this.terrainView, room, this.terrainTiles, undefined, p, this.time.now);
     if (room.kind !== undefined) {
+      // Floors room: what the room is for, readable from the door (roomKinds.ts).
+      const kindStatic = this.add.graphics().setDepth(DEPTH.floorDecal + 2);
+      drawRoomKindStatic(kindStatic, room, p);
+      layer.add(kindStatic);
+      this.kindView = this.add.graphics().setDepth(DEPTH.propsBehind + 1.5);
+      layer.add(this.kindView);
+      this.kindHint = this.text(0, 0, '', {
+        fontFamily: tokens.font.mono, fontSize: '9px', color: p.text, letterSpacing: 1,
+        backgroundColor: 'rgba(4, 5, 10, 0.8)', padding: { left: 6, right: 6, top: 3, bottom: 3 },
+      }).setOrigin(0.5, 1).setDepth(DEPTH.overlay - 1).setVisible(false);
+      layer.add(this.kindHint);
+    }
+    if (room.kind !== undefined) {
       // Floors room: real doorways on the border wall. Frames are static; the light, the
       // chevron and the combat shutter are redrawn per frame in update().
       const frames = this.add.graphics().setDepth(DEPTH.propsBehind + 0.2);
@@ -279,7 +300,7 @@ export class RoomScene extends Phaser.Scene {
     }).setOrigin(0.5, 1).setDepth(DEPTH.overlay).setVisible(false);
     layer.add(this.loreHint);
 
-    // In-world Integrity strip; one row per crew member.
+    // Boss bar (crew Integrity lives in the React HUD).
     this.statusView = this.add.graphics().setDepth(DEPTH.overlay - 1);
     layer.add(this.statusView);
     this.terrainHint = this.text(0, 0, '', {
@@ -318,24 +339,9 @@ export class RoomScene extends Phaser.Scene {
     drawVignette(fog, roomW, roomH, art.fog * 0.6, p);
     layer.add(fog);
 
-    const title = this
-      .text(roomW / 2, -28, opts.headquarters ? room.name.toUpperCase() : `${room.index + 1} · ${room.name.toUpperCase()}`, {
-        fontFamily: tokens.font.display,
-        fontSize: '14px',
-        color: p.text,
-        letterSpacing: 3,
-      })
-      .setOrigin(0.5)
-      .setAlpha(0.85)
-      .setDepth(DEPTH.overlay);
-    layer.add(title);
-
+    // The room title and the crew's Integrity bars live in the React HUD now (U1); the canvas
+    // keeps only what belongs to the place itself: the world's name set into the arrival floor.
     if (!opts.headquarters && opts.world) {
-      // Which world this is, in every room; the full title stencilled into the floor of
-      // the arrival room so the generated name is the first thing players read.
-      layer.add(this.text(roomW / 2, -13, opts.world.title.toUpperCase(), {
-        fontFamily: tokens.font.mono, fontSize: '9px', color: p.accent, letterSpacing: 2,
-      }).setOrigin(0.5).setAlpha(0.7).setDepth(DEPTH.overlay));
       if (room.index === 0) this.drawWorldStencil(layer, room, opts.world, p);
     }
 
@@ -353,6 +359,17 @@ export class RoomScene extends Phaser.Scene {
     this.localPlayerId = localPlayerId;
     this.headquartersStations?.update(snapshot, localPlayerId);
     if (this.doorsView) this.doorViews = selectDoorViews(this.room, snapshot.floor);
+    if (this.kindView) {
+      this.kindState = roomKindState(this.room, snapshot);
+      const prompt = featurePrompt(this.room, this.kindState);
+      const me = snapshot.players.find((player) => player.id === localPlayerId);
+      const focus = this.room.focus ? tileToWorld(this.room.focus.x, this.room.focus.y) : null;
+      const near = me && focus ? Math.hypot(me.x - focus.x, me.y - focus.y) < TILE_SIZE * 4.5 : false;
+      if (prompt && focus && near) {
+        if (this.kindHint?.text !== prompt) this.kindHint?.setText(prompt);
+        this.kindHint?.setPosition(focus.x, focus.y - (this.room.feature === 'biome_exit' ? 34 : 30)).setVisible(true);
+      } else this.kindHint?.setVisible(false);
+    }
 
     const seenPlayers = new Set<string>();
     for (const player of snapshot.players) {
@@ -581,7 +598,7 @@ export class RoomScene extends Phaser.Scene {
     caption.setPosition(nearest.x, nearest.y - 30).setVisible(true);
   }
 
-  /** In-world Integrity strip above the room: one compact bar per crew member. */
+  /** Boss bar under the room. Crew Integrity is shown by the React HUD, not in the canvas. */
   private updateStatusStrip(snapshot: GameSnapshot, localPlayerId: string): void {
     const bars = this.statusView;
     if (!bars) return;
@@ -604,36 +621,6 @@ export class RoomScene extends Phaser.Scene {
       }
       this.bossLabel.setVisible(true).setText(`${guardianTitle(boss)}${(boss.recoveryMs ?? 0) > 0 ? ' · EXPOSED' : ''}`);
     } else this.bossLabel?.setVisible(false);
-    const rowH = 15;
-    const barX = 14;
-    const barW = 108;
-    snapshot.players.forEach((player, i) => {
-      const y = -50 + i * rowH;
-      const pct = player.maxHp > 0 ? Math.max(0, Math.min(1, player.hp / player.maxHp)) : 0;
-      const down = player.state === 'down';
-      const isLocal = player.id === localPlayerId;
-      const fillColor = down ? hexToInt(tokens.color.danger) : pct <= 0.25 ? hexToInt(tokens.color.danger) : hexToInt(tokens.color.success);
-      const edgeColor = hexToInt(isLocal ? tokens.canvas.localPlayerAccent : tokens.canvas.remotePlayerAccent);
-      bars.fillStyle(0x000000, 0.55).fillRoundedRect(barX, y, barW, 8, 3);
-      if (!down) bars.fillStyle(fillColor, 0.95).fillRoundedRect(barX, y, barW * pct, 8, 3);
-      bars.lineStyle(1, edgeColor, isLocal ? 0.9 : 0.5).strokeRoundedRect(barX, y, barW, 8, 3);
-
-      let label = this.statusLabels.get(player.id);
-      if (!label) {
-        label = this.text(0, 0, '', { fontFamily: tokens.font.mono, fontSize: '9px', color: tokens.color.mist100 }).setOrigin(0, 0.5).setDepth(DEPTH.overlay);
-        this.roomLayer?.add(label);
-        this.statusLabels.set(player.id, label);
-      }
-      label.setPosition(barX + barW + 6, y + 4);
-      const text = `${player.displayName}${down ? ' · down' : ''}`;
-      if (label.text !== text) label.setText(text);
-    });
-    for (const [id, label] of this.statusLabels) {
-      if (!snapshot.players.some((p) => p.id === id)) {
-        label.destroy();
-        this.statusLabels.delete(id);
-      }
-    }
   }
 
   /** Windup telegraph: danger zone brightens and a ring fills as the strike approaches. */
@@ -1058,6 +1045,10 @@ export class RoomScene extends Phaser.Scene {
       this.doorSeal = stepSeal(this.doorSeal, this.doorViews.some((door) => door.state === 'sealed') ? 1 : 0, delta);
       this.doorsView.clear();
       drawDoorStates(this.doorsView, this.doorViews, this.art.palette, this.doorSeal, t, this.room.kind === 'exit');
+    }
+    if (this.kindView) {
+      this.kindView.clear();
+      drawRoomKindDynamic(this.kindView, this.room, this.art.palette, this.kindState, t);
     }
     for (const exit of this.doorsView ? [] : this.room.exits) {
       const c = tileToWorld(exit.x, exit.y);
