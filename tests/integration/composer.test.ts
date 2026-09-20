@@ -197,6 +197,21 @@ describe('composer through the generation service', () => {
     expect(() => parseWorldPrefix(world, req)).not.toThrow();
   });
 
+  it('in floors mode the service ships a floors world built on the composer\'s own briefs', async () => {
+    const service = createGenerationService({
+      mode: 'live', provider: 'composer', openaiApiKey: null, openaiModel: 'unused', fixturesDir, log: () => {},
+      recipeProvider: { provider: createComposerProvider(), model: COMPOSER_MODEL }, floors: true,
+    });
+    const req = request(['a haunted space station overrun by ghost pirates'], 'req-composer-floors');
+    const world = PreparedWorldSchema.parse(await service.prepareWorld(req));
+    expect(world.floors).toBeDefined();
+    expect(world.rooms).toHaveLength(1);
+    expect(world.rooms[0]!.biomeId).toBeDefined();
+    expect(world.floors!.briefs.map((b) => b.id)).toEqual(['b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8']);
+    expect(world.floors!.briefs.map((b) => b.name)).toEqual(world.recipe.biomes!.map((b) => b.name));
+    expect(world.provenance.source).toBe('procedural');
+  });
+
   it('is used as the fallback when a live provider fails, instead of a canned fixture', async () => {
     const broken: RecipeProvider = { async generate() { throw new GenerationFailure('Provider HTTP 500.'); } };
     const service = createGenerationService({
