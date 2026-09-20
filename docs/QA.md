@@ -62,14 +62,16 @@ Server started with `RELAY_FLOORS=1 RELAY_LAWS=1`; client on `:6973`; cold brows
 - [x] **Terrain tiles** — conduit, rubble, hazard floor and breakable wall observed in played
       rooms, read from the room's own `tiles`.
 - [x] **All three shipped fixtures entered** with their authored laws on — see the table below.
-- [ ] **A biome gate (gatekeeper) and a biome choice, reached by playing.** **Unverified.** The
-      bot never reached a `biome_exit` room inside a 30-minute budget: biome 0's route is longer
-      than the bot's patience and one run ended in a legitimate death four rooms in. Both are
-      **unit-tested** (`tests/sim/floors-run.test.ts`) and the co-op script reaches them
-      (`docs/QA_COOP.md` 9d). The UI, keys and host-only rule are read from source, not seen.
-- [ ] **A full floors route to the Custodian, played.** **Unverified**, same reason. The route is
-      five tiers (`b0 → … → b7`) with room budgets 10/15/20/25/30; a bot that fights honestly does
-      not get through it in the time this pass had.
+- [x] **A biome gate (gatekeeper) and a biome choice, reached by playing — but in CO-OP, not
+      solo.** Observed: after 6 door traversals over 7 rooms of `b0-threshold-concourse`, two
+      players cleared the exit room and the choice screen offered `b3-kiosk-row` and
+      `b5-rope-store`. The guest pressed `1` and was correctly ignored; the host pressed `1` and
+      **both screens moved into `b3-kiosk-row`** (`--floors`, checkpoint 9d). The **solo** bot
+      never got there inside a 30-minute budget — biome 0's route is longer than its patience,
+      and one run ended in a legitimate death four rooms in.
+- [ ] **A full floors route to the Custodian, played.** **Unverified.** The route is five tiers
+      (`b0 → … → b7`) with room budgets 10/15/20/25/30; no bot, solo or co-op, got through it in
+      the time this pass had. Tier 1 was reached (above); tiers 2–4 were not.
 
 ## The end of a run (`--only finale`)
 
@@ -175,7 +177,18 @@ collapse debrief on both screens, host-only return, and memories on each device.
   both browsers. This is what server-authoritative flags exist to guarantee
   (`src/shared/flags.ts`).
 
-<!-- COOP_FLOORS -->
+`--floors` (flags on), on merged `main`: **5/5 checkpoints passed, 0 skipped**.
+
+- `9e` laws and the look identical on both clients — `the_many` / `committed_strike` / `thin_air`,
+  each with its resolved numbers ("Enemy groups 1.8x size, up to 12 per room. Enemy health 0.53x,
+  damage -23%."), `lawsDerived:false` (these are authored), string-for-string equal on both.
+- `9a` `snapshot.floor` present and identical on both screens.
+- `9b` 6 door traversals, alternating who walks through, 7 rooms visited, floor state identical.
+- `9c` doors seal in combat on both screens; the guest pushed into a sealed door with real input
+  and the crew stayed put.
+- `9d` **the gatekeeper and the biome choice, played** — offered `b3-kiosk-row` /
+  `b5-rope-store`; the guest pressed `1` and was ignored; the host pressed `1` and both screens
+  entered `b3-kiosk-row`.
 
 Not added for lack of time, and therefore **unverified**: an attunement bought by the *guest*
 specifically (the purchase path is per-player and is observed solo), and the collapse escape with
