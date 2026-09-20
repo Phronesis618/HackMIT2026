@@ -52,7 +52,7 @@ describe('renderer boot lifecycle', () => {
     expect(mock.buildRoom).not.toHaveBeenCalled();
     mock.boot();
     await mounting;
-    expect(mock.buildRoom).toHaveBeenCalledExactlyOnceWith(headquartersRoom, headquartersArt, { headquarters: true });
+    expect(mock.buildRoom).toHaveBeenCalledExactlyOnceWith(headquartersRoom, headquartersArt, { headquarters: true }, []);
     renderer.destroy();
     expect(mock.destroy).toHaveBeenCalledExactlyOnceWith(true);
   });

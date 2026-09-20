@@ -53,7 +53,6 @@ export function App({ store, actions, onStageReady }: AppProps) {
           <div className="stage" ref={stageRef} tabIndex={0} aria-label="RELAY game canvas" />
           <div className="stage-caption" aria-hidden="true">
             <span>{model.phase === 'expedition' || model.phase === 'debrief' ? model.room?.name : 'RELAY / SANCTUARY'}</span>
-            <span>WASD move · Shift dash · J attack · Q / E ability · hold F interact</span>
           </div>
         </section>
         <aside className="side">

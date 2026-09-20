@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { ArtRecipe, EnemyState, GameEvent, GameSnapshot, PlayerState, RoomSpec } from '../../shared/contracts';
+import type { ArtRecipe, EnemyState, GameEvent, GameSnapshot, PlayerState, ReceiptLine, RoomSpec } from '../../shared/contracts';
 import { ATTACK_ARC_RAD, ATTACK_RANGE, DEPTH, PLAYER_RADIUS, TILE_SIZE, tileToWorld } from '../../shared/conventions';
 import { ENEMY_INFO } from '../../shared/registry';
 import { hexToInt, tokens } from '../../shared/tokens';
@@ -16,6 +16,17 @@ interface EntityView {
   isLocal: boolean;
 }
 
+/** A player-authored idea that shaped a specific spot in this room (from `RoomSpec.attributions`). */
+interface LoreMarker {
+  x: number;
+  y: number;
+  quote: string;
+  playerName: string;
+}
+
+/** Player proximity, in px, before an in-world lore caption reveals its text. */
+const LORE_REVEAL_RADIUS = 56;
+
 export class RoomScene extends Phaser.Scene {
   static readonly KEY = 'room';
 
@@ -31,6 +42,13 @@ export class RoomScene extends Phaser.Scene {
   private enemies = new Map<string, EntityView>();
   private anchorView: Phaser.GameObjects.Graphics | null = null;
   private anchorLabel: Phaser.GameObjects.Text | null = null;
+  /** In-world DM-style narration: markers over the props/encounters a real idea shaped. */
+  private loreMarkers: LoreMarker[] = [];
+  private loreView: Phaser.GameObjects.Graphics | null = null;
+  private loreCaption: Phaser.GameObjects.Text | null = null;
+  /** In-world Integrity/status strip above the room, replacing the old sidebar meter. */
+  private statusView: Phaser.GameObjects.Graphics | null = null;
+  private statusLabels = new Map<string, Phaser.GameObjects.Text>();
   private latestSnapshot: GameSnapshot | null = null;
   private localPlayerId = '';
   private enemyPositions = new Map<string, { x: number; y: number }>();
@@ -50,7 +68,7 @@ export class RoomScene extends Phaser.Scene {
 
   // ---- room ------------------------------------------------------------------
 
-  buildRoom(room: RoomSpec, art: ArtRecipe, opts: { headquarters: boolean }): void {
+  buildRoom(room: RoomSpec, art: ArtRecipe, opts: { headquarters: boolean }, loreLines: ReceiptLine[] = []): void {
     this.room = room;
     this.art = art;
     this.isHeadquarters = opts.headquarters;
@@ -64,6 +82,11 @@ export class RoomScene extends Phaser.Scene {
     this.anchorView?.destroy();
     this.anchorView = null;
     this.anchorLabel = null;
+    this.loreView = null;
+    this.loreCaption = null;
+    this.loreMarkers = this.computeLoreMarkers(room, loreLines);
+    this.statusView = null;
+    this.statusLabels.clear();
 
     const layer = this.add.layer();
     this.roomLayer = layer;
@@ -148,6 +171,8 @@ export class RoomScene extends Phaser.Scene {
     }
     layer.add(props);
 
+    if (opts.headquarters) this.drawControlsFloorHint(layer, roomW / 2, 7 * TILE_SIZE, p);
+
     // Portal / exits glow (animated in update()).
     this.portalGlow = this.add.graphics().setDepth(DEPTH.floorDecal + 3);
     layer.add(this.portalGlow);
@@ -155,6 +180,25 @@ export class RoomScene extends Phaser.Scene {
     layer.add(this.telegraphs);
     this.projectilesView = this.add.graphics().setDepth(DEPTH.effects - 1);
     layer.add(this.projectilesView);
+
+    // DM-style narration: a quiet glow over anything a real idea shaped, plus one
+    // reusable caption that reveals the quote when a player walks up to it.
+    this.loreView = this.add.graphics().setDepth(DEPTH.floorDecal + 2);
+    layer.add(this.loreView);
+    this.loreCaption = this.add
+      .text(0, 0, '', {
+        fontFamily: tokens.font.body, fontSize: '11px', color: p.text, align: 'center',
+        wordWrap: { width: 220 }, backgroundColor: 'rgba(7, 9, 15, 0.78)',
+        padding: { left: 7, right: 7, top: 5, bottom: 5 },
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(DEPTH.overlay)
+      .setVisible(false);
+    layer.add(this.loreCaption);
+
+    // In-world Integrity strip (replaces the old sidebar meter); one row per crew member.
+    this.statusView = this.add.graphics().setDepth(DEPTH.overlay - 1);
+    layer.add(this.statusView);
 
     const fog = this.add.graphics().setDepth(DEPTH.fog);
     drawVignette(fog, roomW, roomH, art.fog, p);
@@ -171,6 +215,27 @@ export class RoomScene extends Phaser.Scene {
       .setAlpha(0.8)
       .setDepth(DEPTH.overlay);
     layer.add(title);
+
+    // A DM-style beat on arrival: the room's mood in its own words, then it fades and
+    // leaves the (now much smaller) sidebar to the mechanical stuff.
+    if (room.description) {
+      const descriptionCard = this.add
+        .text(roomW / 2, Math.min(96, roomH * 0.3), room.description, {
+          fontFamily: tokens.font.body, fontSize: '12px', color: p.text, align: 'center',
+          wordWrap: { width: Math.min(roomW - 40, 420) },
+          backgroundColor: 'rgba(7, 9, 15, 0.55)',
+          padding: { left: 10, right: 10, top: 8, bottom: 8 },
+        })
+        .setOrigin(0.5, 0)
+        .setAlpha(0)
+        .setDepth(DEPTH.overlay);
+      layer.add(descriptionCard);
+      // Fade in, hold, fade back out — one tween (yoyo) instead of a chained pair.
+      this.tweens.add({
+        targets: descriptionCard, alpha: 1, duration: tokens.motion.slowMs, delay: 320,
+        hold: 4200, yoyo: true, onComplete: () => descriptionCard.destroy(),
+      });
+    }
 
     // Camera: frame the whole room.
     const cam = this.cameras.main;
@@ -276,6 +341,71 @@ export class RoomScene extends Phaser.Scene {
       this.anchorView?.clear();
       this.anchorLabel?.setVisible(false);
     }
+
+    this.updateLoreCaption(snapshot, localPlayerId);
+    if (!this.isHeadquarters) this.updateStatusStrip(snapshot, localPlayerId);
+  }
+
+  /** Reveals the nearest lore marker's quote only while a player stands close to it. */
+  private updateLoreCaption(snapshot: GameSnapshot, localPlayerId: string): void {
+    const caption = this.loreCaption;
+    if (!caption || this.loreMarkers.length === 0) return;
+    const me = snapshot.players.find((p) => p.id === localPlayerId);
+    let nearest: LoreMarker | null = null;
+    let nearestDistance = LORE_REVEAL_RADIUS;
+    if (me) {
+      for (const marker of this.loreMarkers) {
+        const d = Math.hypot(me.x - marker.x, me.y - marker.y);
+        if (d <= nearestDistance) {
+          nearest = marker;
+          nearestDistance = d;
+        }
+      }
+    }
+    if (!nearest) {
+      caption.setVisible(false);
+      return;
+    }
+    const text = `“${nearest.quote}”\n— ${nearest.playerName}`;
+    if (caption.text !== text) caption.setText(text);
+    caption.setPosition(nearest.x, nearest.y - 30).setVisible(true);
+  }
+
+  /** In-world Integrity strip above the room: one compact bar per crew member. */
+  private updateStatusStrip(snapshot: GameSnapshot, localPlayerId: string): void {
+    const bars = this.statusView;
+    if (!bars) return;
+    bars.clear();
+    const rowH = 15;
+    const barX = 14;
+    const barW = 108;
+    snapshot.players.forEach((player, i) => {
+      const y = -50 + i * rowH;
+      const pct = player.maxHp > 0 ? Math.max(0, Math.min(1, player.hp / player.maxHp)) : 0;
+      const down = player.state === 'down';
+      const isLocal = player.id === localPlayerId;
+      const fillColor = down ? hexToInt(tokens.color.danger) : pct <= 0.25 ? hexToInt(tokens.color.danger) : hexToInt(tokens.color.success);
+      const edgeColor = hexToInt(isLocal ? tokens.canvas.localPlayerAccent : tokens.canvas.remotePlayerAccent);
+      bars.fillStyle(0x000000, 0.55).fillRoundedRect(barX, y, barW, 8, 3);
+      if (!down) bars.fillStyle(fillColor, 0.95).fillRoundedRect(barX, y, barW * pct, 8, 3);
+      bars.lineStyle(1, edgeColor, isLocal ? 0.9 : 0.5).strokeRoundedRect(barX, y, barW, 8, 3);
+
+      let label = this.statusLabels.get(player.id);
+      if (!label) {
+        label = this.add.text(0, 0, '', { fontFamily: tokens.font.mono, fontSize: '9px', color: tokens.color.mist100 }).setOrigin(0, 0.5).setDepth(DEPTH.overlay);
+        this.roomLayer?.add(label);
+        this.statusLabels.set(player.id, label);
+      }
+      label.setPosition(barX + barW + 6, y + 4);
+      const text = `${player.displayName}${down ? ' · down' : ''}`;
+      if (label.text !== text) label.setText(text);
+    });
+    for (const [id, label] of this.statusLabels) {
+      if (!snapshot.players.some((p) => p.id === id)) {
+        label.destroy();
+        this.statusLabels.delete(id);
+      }
+    }
   }
 
   private createEntityView(name: string, isLocal: boolean, radius: number, kind: 'player' | 'enemy'): EntityView {
@@ -357,6 +487,79 @@ export class RoomScene extends Phaser.Scene {
     const y = radius + 6;
     g.fillStyle(0x000000, 0.6).fillRect(-w / 2, y, w, 4);
     g.fillStyle(color, 1).fillRect(-w / 2, y, (w * Math.max(0, hp)) / maxHp, 4);
+  }
+
+  /**
+   * Turns `RoomSpec.attributions` (compiled, position-anchored) into in-world markers by
+   * pairing each one with the original player's words from the creation receipt. This is
+   * the DM-style alternative to listing contributions as sidebar prose: a real idea shows
+   * up as a small glowing waypoint near the exact prop/encounter/hazard it shaped, and only
+   * speaks when a player walks up to it. Fixture worlds have no attributions, so this is a
+   * no-op until a live-generated world with real contributions is played.
+   */
+  private computeLoreMarkers(room: RoomSpec, loreLines: ReceiptLine[]): LoreMarker[] {
+    if (room.attributions.length === 0) return [];
+    const byContribution = new Map(loreLines.map((line) => [line.contributionId, line]));
+    const markers: LoreMarker[] = [];
+    for (const attribution of room.attributions) {
+      if (!attribution.target || attribution.target.roomIndex !== room.index) continue;
+      const line = byContribution.get(attribution.contributionId);
+      if (!line || !line.used) continue;
+      const c = tileToWorld(attribution.target.x, attribution.target.y);
+      markers.push({ x: c.x, y: c.y, quote: line.text, playerName: line.playerName });
+    }
+    return markers;
+  }
+
+  /**
+   * Crude Isaac-style floor tutorial: WASD + mouse + the action keys, drawn once on the
+   * headquarters floor instead of repeating the same sentence in the HUD every room.
+   */
+  private drawControlsFloorHint(layer: Phaser.GameObjects.Layer, cx: number, cy: number, palette: ArtRecipe['palette']): void {
+    const g = this.add.graphics().setDepth(DEPTH.floorDecal + 1);
+    const ink = hexToInt(palette.wallEdge);
+    const accent = hexToInt(palette.accent);
+    const key = (x: number, y: number, w: number, h: number): void => {
+      g.fillStyle(hexToInt(palette.wall), 0.9).fillRoundedRect(x - w / 2, y - h / 2, w, h, 4);
+      g.lineStyle(1.5, ink, 0.8).strokeRoundedRect(x - w / 2, y - h / 2, w, h, 4);
+    };
+    const labels: Phaser.GameObjects.Text[] = [];
+    const letter = (x: number, y: number, text: string): void => {
+      labels.push(this.add.text(x, y, text, { fontFamily: tokens.font.mono, fontSize: '11px', color: palette.text }).setOrigin(0.5));
+    };
+    const caption = (x: number, y: number, text: string): void => {
+      labels.push(this.add.text(x, y, text, { fontFamily: tokens.font.mono, fontSize: '8px', color: palette.text }).setOrigin(0.5).setAlpha(0.6));
+    };
+
+    // WASD cluster, left side.
+    const wasdX = cx - 150;
+    key(wasdX, cy - 16, 22, 22);
+    letter(wasdX, cy - 16, 'W');
+    for (const [dx, ch] of [[-24, 'A'], [0, 'S'], [24, 'D']] as const) {
+      key(wasdX + dx, cy + 8, 22, 22);
+      letter(wasdX + dx, cy + 8, ch);
+    }
+    caption(wasdX, cy + 30, 'MOVE');
+
+    // Mouse glyph, aim.
+    const mouseX = cx - 70;
+    g.lineStyle(1.5, ink, 0.85).fillStyle(hexToInt(palette.wall), 0.9);
+    g.fillRoundedRect(mouseX - 12, cy - 24, 24, 34, 12).strokeRoundedRect(mouseX - 12, cy - 24, 24, 34, 12);
+    g.lineStyle(1.5, accent, 0.9).lineBetween(mouseX, cy - 24, mouseX, cy - 8);
+    caption(mouseX, cy + 22, 'AIM');
+
+    // Action keys, right side: attack, dash, abilities, interact.
+    const actions: Array<[string, string]> = [['J', 'ATTACK'], ['SHIFT', 'DASH'], ['Q', 'Q'], ['E', 'E'], ['F', 'HOLD']];
+    actions.forEach(([label, cap], i) => {
+      const x = cx + 10 + i * 40;
+      const w = label.length > 1 ? 34 : 22;
+      key(x, cy - 6, w, 22);
+      letter(x, cy - 6, label);
+      caption(x, cy + 16, cap);
+    });
+
+    layer.add(g);
+    layer.add(labels);
   }
 
   private clearEntities(): void {
@@ -482,6 +685,18 @@ export class RoomScene extends Phaser.Scene {
     const g = this.portalGlow;
     g.clear();
     const pulse = 0.5 + 0.5 * Math.sin(this.portalPulse * 2.2);
+
+    if (this.loreView && this.loreMarkers.length > 0) {
+      this.loreView.clear();
+      for (const marker of this.loreMarkers) {
+        const lp = 0.5 + 0.5 * Math.sin(this.portalPulse * 1.6 + marker.x * 0.01);
+        this.loreView.fillStyle(accent, 0.07 + 0.05 * lp).fillCircle(marker.x, marker.y, 18 + lp * 3);
+        this.loreView.lineStyle(1.5, accent, 0.55 + 0.3 * lp);
+        this.loreView.beginPath()
+          .moveTo(marker.x, marker.y - 7).lineTo(marker.x + 7, marker.y).lineTo(marker.x, marker.y + 7).lineTo(marker.x - 7, marker.y)
+          .closePath().strokePath();
+      }
+    }
     for (const exit of this.room.exits) {
       const c = tileToWorld(exit.x, exit.y);
       if (this.isHeadquarters) {

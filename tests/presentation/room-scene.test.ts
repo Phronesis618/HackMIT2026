@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RoomScene } from '../../src/client/render/RoomScene';
-import { WorldFixtureSchema, type GameSnapshot } from '../../src/shared/contracts';
-import { ATTACK_ARC_RAD, ATTACK_RANGE, DEPTH } from '../../src/shared/conventions';
+import { RoomSpecSchema, WorldFixtureSchema, type GameSnapshot, type ReceiptLine } from '../../src/shared/contracts';
+import { ATTACK_ARC_RAD, ATTACK_RANGE, DEPTH, tileToWorld } from '../../src/shared/conventions';
 import { sampleEvents, sampleSnapshot } from '../../src/shared/samples';
+import { headquartersArt, headquartersRoom } from '../../src/sim/headquarters';
 import fixtureData from '../../fixtures/worlds/vantage-spire.json';
 
 const stage = vi.hoisted(() => {
@@ -34,13 +35,21 @@ const stage = vi.hoisted(() => {
     strokeRect = vi.fn(() => this);
     fillCircle = vi.fn(() => this);
     fillEllipse = vi.fn(() => this);
+    fillRoundedRect = vi.fn(() => this);
     strokeCircle = vi.fn(() => this);
     strokeTriangle = vi.fn(() => this);
+    strokeRoundedRect = vi.fn(() => this);
     lineBetween = vi.fn(() => this);
     beginPath = vi.fn(() => this);
     arc = vi.fn(() => this);
+    moveTo = vi.fn(() => this);
+    lineTo = vi.fn(() => this);
+    closePath = vi.fn(() => this);
     strokePath = vi.fn(() => this);
+    fillPath = vi.fn(() => this);
+    slice = vi.fn(() => this);
     clear = vi.fn(() => this);
+    setPadding = vi.fn(() => this);
   }
   const nodes: Display[] = [];
   const node = () => { const item = new Display(); nodes.push(item); return item; };
@@ -101,7 +110,8 @@ describe('room presentation against authoritative contracts', () => {
     expect(effects()[1]!.arc).toHaveBeenCalledWith(
       0, 0, ATTACK_RANGE, attack.facing - ATTACK_ARC_RAD / 2, attack.facing + ATTACK_ARC_RAD / 2, false,
     );
-    expect(stage.tweens.add).toHaveBeenCalledTimes(2);
+    // 1 for the room-description fade card (buildRoom) + 2 for the dash/attack effects.
+    expect(stage.tweens.add).toHaveBeenCalledTimes(3);
     for (const [config] of stage.tweens.add.mock.calls) {
       config.onComplete();
       expect(config.targets.destroy).toHaveBeenCalledOnce();
@@ -187,5 +197,54 @@ describe('room presentation against authoritative contracts', () => {
     expect(label.text).toBe('ANCHOR DORMANT');
     scene.renderSnapshot({ ...snapshot, anchor: null }, localId);
     expect(label.visible).toBe(false);
+  });
+
+  it('draws a crude controls hint on the headquarters floor instead of repeating the HUD instructions', () => {
+    const scene = new RoomScene();
+    scene.buildRoom(headquartersRoom, headquartersArt, { headquarters: true });
+    const labels = stage.nodes.map((n) => n.text);
+    for (const key of ['W', 'A', 'S', 'D', 'J', 'SHIFT', 'Q', 'E', 'F']) expect(labels).toContain(key);
+  });
+
+  it('draws an in-world Integrity strip above the room during an expedition, but not in headquarters', () => {
+    setup();
+    const expeditionBars = stage.nodes.find((n) => n.depth === DEPTH.overlay - 1)!;
+    expect(expeditionBars.fillRoundedRect).toHaveBeenCalled();
+
+    stage.nodes.length = 0;
+    const hq = new RoomScene();
+    hq.buildRoom(headquartersRoom, headquartersArt, { headquarters: true });
+    hq.renderSnapshot({ ...sampleSnapshot, roomId: headquartersRoom.id }, localId);
+    const hqBars = stage.nodes.find((n) => n.depth === DEPTH.overlay - 1)!;
+    expect(hqBars.fillRoundedRect).not.toHaveBeenCalled();
+  });
+
+  it('reveals a contributed idea in-world only once a player walks up to what it shaped', () => {
+    const marker = tileToWorld(5, 4);
+    const room = RoomSpecSchema.parse({
+      ...firstRoom,
+      attributions: [{
+        contributionId: 'sample-contrib-1', kind: 'prop', featureDescription: 'a crate',
+        target: { roomIndex: firstRoom.index, x: 5, y: 4 },
+      }],
+    });
+    const loreLines: ReceiptLine[] = [{
+      contributionId: 'sample-contrib-1', playerId: 'sample-player-local', playerName: 'Ari',
+      text: 'a crate stuffed with old maps', used: true, featureDescription: 'a crate',
+    }];
+    const scene = new RoomScene();
+    scene.buildRoom(room, fixture.art, { headquarters: false }, loreLines);
+    const caption = stage.nodes.find((n) => n.depth === DEPTH.overlay && n.visible === false)!;
+    expect(caption).toBeDefined();
+
+    const near: GameSnapshot = { ...sampleSnapshot, roomId: room.id, players: [{ ...sampleSnapshot.players[0]!, x: marker.x, y: marker.y }] };
+    scene.renderSnapshot(near, localId);
+    expect(caption.visible).toBe(true);
+    expect(caption.text).toContain('a crate stuffed with old maps');
+    expect(caption.text).toContain('Ari');
+
+    const far: GameSnapshot = { ...sampleSnapshot, roomId: room.id, players: [{ ...sampleSnapshot.players[0]!, x: marker.x + 500, y: marker.y + 500 }] };
+    scene.renderSnapshot(far, localId);
+    expect(caption.visible).toBe(false);
   });
 });

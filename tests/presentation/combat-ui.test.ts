@@ -67,7 +67,6 @@ describe('combat HUD', () => {
     const full = renderToStaticMarkup(createElement(Hud, { model: ui, actions }));
     expect(full).not.toContain('Integrity critical');
     expect(full).toContain('aria-valuenow="100"');
-    expect(full).toContain('width:100%');
   });
 });
 

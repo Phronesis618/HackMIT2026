@@ -14,9 +14,8 @@ export function Hud({ model, actions }: { model: UiModel; actions: UiActions }) 
   const room = model.room;
   if (!hud || !room) return null;
   const hp = Math.max(0, Math.min(hud.maxHp, hud.hp));
-  const hpPct = (hp / hud.maxHp) * 100;
   const down = hud.state === 'down';
-  const critical = !down && hpPct <= 25;
+  const critical = !down && hp / hud.maxHp <= 0.25;
   const ability = abilities[model.localPlayer.classId];
   const qCooldown = hud.abilityQCooldownMs ?? 0;
   const eCooldown = hud.abilityECooldownMs ?? 0;
@@ -24,30 +23,20 @@ export function Hud({ model, actions }: { model: UiModel; actions: UiActions }) 
   const host = model.connection.isHost !== false;
   return (
     <div className={`panel panel--hud ${down || critical ? 'panel--danger' : ''}`}>
-      <p className="eyebrow">{CLASS_INFO[model.localPlayer.classId].name} · Expedition {room.index + 1}</p>
       <div className="panel__row">
-        <h2 className="panel__title">
-          Room {room.index + 1} · {room.name}
-        </h2>
-        {room.isFinal && <span className="badge badge--fixture">ANCHOR ROOM</span>}
+        <p className="eyebrow">
+          {CLASS_INFO[model.localPlayer.classId].name} · Room {room.index + 1}
+          {room.isFinal ? ' · Anchor room' : ''}
+        </p>
       </div>
-      <p className="muted">{room.description}</p>
       {(down || critical) && (
         <p className="combat-status" role="status">
           {down ? `Operative down. A nearby teammate can hold F to revive you.${hud.reviveProgress ? ` Reviving ${Math.floor(hud.reviveProgress * 100)}%.` : ''}` : 'Integrity critical. Watch your next move.'}
         </p>
       )}
-
-      <div className={`meter ${down || critical ? 'meter--danger' : ''}`}>
-        <div className="meter__label">
-          <span>Integrity</span>
-          <span>
-            {Math.round(hp)}/{hud.maxHp}
-          </span>
-        </div>
-        <div className="meter__bar" role="meter" aria-label="Integrity" aria-valuenow={hp} aria-valuemin={0} aria-valuemax={hud.maxHp}>
-          <div className="meter__fill" style={{ width: `${hpPct}%` }} />
-        </div>
+      {/* Visible Integrity bar lives in-world, above the room (RoomScene); this stays for screen readers. */}
+      <div className="sr-only" role="meter" aria-label="Integrity" aria-valuenow={hp} aria-valuemin={0} aria-valuemax={hud.maxHp}>
+        Integrity {Math.round(hp)}/{hud.maxHp}
       </div>
 
       <div className="abilities">
@@ -69,10 +58,6 @@ export function Hud({ model, actions }: { model: UiModel; actions: UiActions }) 
         </div>
       </div>
 
-      <p className="muted">
-        State: <strong>{hud.state}</strong> · Hostiles: {hud.enemiesRemaining} · Players: {model.players.length}
-      </p>
-      {!down && <p className="hint">WASD / arrows to move · mouse to aim · J / click to attack · Shift / Space to dash. Hold F near a fallen teammate to revive. Clear the room, then walk into a glowing exit to move on.</p>}
       <p className="hint">{ability.description}</p>
       <p className="muted">{hud.roomCleared ? 'Room cleared' : 'Clear hostiles to earn resources'} · Resources: {resources}</p>
       {!hud.abilityEUnlocked && (

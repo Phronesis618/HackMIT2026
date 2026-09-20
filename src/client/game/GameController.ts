@@ -206,7 +206,7 @@ export class GameController {
     const world = session.getWorld();
     const room = snapshot.roomIndex === null ? null : world?.rooms[snapshot.roomIndex];
     if (world && room && (store.get().room?.index !== room.index || store.get().phase === 'headquarters')) {
-      renderer.showRoom(room, world.art);
+      renderer.showRoom(room, world.art, world.receipt.lines);
       store.set({ room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal }, phase: snapshot.phase });
     }
   }
