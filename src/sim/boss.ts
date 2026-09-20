@@ -23,6 +23,7 @@ import {
 import { createRng, seedKey } from '../shared/floorgen/rng';
 import { terrainTileAt } from '../shared/terrain';
 import type { EnemyId } from '../shared/registry';
+import { DEMO_TUNING } from './tuning';
 
 export interface BossPlayerView {
   id: string;
@@ -126,8 +127,8 @@ export interface CustodianRuntime {
   attacks: number;
 }
 
-const HAZARD_TICK_MS = 600;
-const CORRUPTION_DAMAGE = 10;
+const HAZARD_TICK_MS = DEMO_TUNING.corruptedFloorTickMs;
+const CORRUPTION_DAMAGE = DEMO_TUNING.corruptedFloorDamage;
 const RING_BOLTS: BossBolts = { count: 12, spacing: (Math.PI * 2) / 12, speed: 240, radius: 6, life: 1600 };
 const SWEEP_RATE = (300 * Math.PI / 180) / 1.4; // 300 degrees over 1400 ms, in radians per second
 const SWEEP_MS = 1400;

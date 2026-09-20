@@ -24,6 +24,7 @@ browser (solo)                                    Node server (one process)
 | ------------------------------ | ----- | -------------------------------------------------------------------- |
 | `src/shared/`                  | A     | Zod contracts, registry, conventions, tokens keys, interfaces        |
 | `src/sim/`                     | A     | Pure simulation (no Phaser/React/DOM/HTTP/timers)                    |
+| `src/sim/tuning.ts`            | A     | `DEMO_TUNING`: the demo knobs, in one dependency-free leaf. See `docs/TUNING.md` |
 | `src/client/main.tsx`          | A     | Application assembly                                                 |
 | `src/client/game/`             | A     | `GameController`, input, UI store                                    |
 | `src/client/transport/`        | A     | `LocalSession`, streaming world providers, `RemoteSession`            |

@@ -8,6 +8,7 @@
 import type { RoomSpec } from './contracts';
 import { worldToTile } from './conventions';
 import { DANGEROUS_TILES, PROP_INFO, TILE_CHARS, type TileChar } from './registry';
+import { DEMO_TUNING } from '../sim/tuning';
 
 /** An armed canister, counting down to its blast. Sparse: only armed tiles have an entry. */
 export interface CanisterState {
@@ -64,7 +65,7 @@ export function terrainSpeedMultiplier(
  * Hazard floor is neutral but weighted toward the crew: an enemy standing in fire takes this
  * much more than a player would (TILES.md T0). One named constant, one place to change it.
  */
-export const ENEMY_HAZARD_MUL = 1.6;
+export const ENEMY_HAZARD_MUL = DEMO_TUNING.enemyHazardMul;
 
 /** Elites and bosses take half the enemy value, so nobody can simply park one in a puddle. */
 export const TERRAIN_ELITE_DAMAGE_SCALE = 0.5;
@@ -75,7 +76,7 @@ export const TERRAIN_ELITE_DAMAGE_SCALE = 0.5;
  * to aim without making terrain strictly better than fighting. Applies to ult charge and to
  * the per-enemy share of the room-clear reward.
  */
-export const ENV_KILL_CREDIT = 0.5;
+export const ENV_KILL_CREDIT = DEMO_TUNING.envKillCredit;
 
 /** Enemies that resist floor hazards. Gatekeepers are one-phase guardians in the sim. */
 export function isEliteEnemy(enemyId: string): boolean {
@@ -107,9 +108,9 @@ export function isTerrainDamageSource(sourceId: string): boolean {
  * dashing resets the stack to nothing. A flat tick would punish exactly the traversal we want
  * players to attempt.
  */
-export const HAZARD_INTERVAL_MS = 450;
-export const HAZARD_BASE = 3;
-export const HAZARD_STACK_MAX = 5;
+export const HAZARD_INTERVAL_MS = DEMO_TUNING.hazardIntervalMs;
+export const HAZARD_BASE = DEMO_TUNING.hazardBase;
+export const HAZARD_STACK_MAX = DEMO_TUNING.hazardStackMax;
 
 /** `^`: the vent cycle. Stateless — see `ventState`. */
 export const VENT_CYCLE_MS = 3000;
