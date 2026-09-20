@@ -82,12 +82,13 @@ export function createAnthropicProvider(options: ProviderOptions): RecipeProvide
 }
 
 export const TOOL_NAME = 'world_recipe';
-/** Hard ceiling for any single model call. */
-export const MAX_CALL_TIMEOUT_MS = 25_000;
+/** Hard ceilings for any single model call (main raised Claude's to 55 s after measuring). */
+export const MAX_CALL_TIMEOUT_MS = { anthropic: 55_000, openai: 25_000 } as const;
 
 function createRecipeProvider(options: ProviderOptions, provider: 'openai' | 'anthropic'): Required<RecipeProvider> {
   const fetchResponse = options.fetch ?? fetch;
-  const timeoutMs = Math.min(MAX_CALL_TIMEOUT_MS, Math.max(1, options.timeoutMs ?? MAX_CALL_TIMEOUT_MS));
+  const maxTimeoutMs = MAX_CALL_TIMEOUT_MS[provider];
+  const timeoutMs = Math.min(maxTimeoutMs, Math.max(1, options.timeoutMs ?? maxTimeoutMs));
 
   async function callStage(call: StageCall, signal?: AbortSignal): Promise<{ raw: unknown; usage?: ProviderUsage }> {
     signal?.throwIfAborted();

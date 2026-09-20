@@ -194,6 +194,8 @@ export class RemoteSession implements GameSession {
   enterPortal(): void { this.sendAction({ type: 'enter_portal' }); }
   returnToHeadquarters(): void { this.sendAction({ type: 'return_to_hq' }); }
   unlockAbility(): void { this.sendAction({ type: 'unlock_ability' }); }
+  /** Floors: everyone may vote; the server lets only the host's vote decide. */
+  chooseBiome(biomeId: string): void { this.sendAction({ type: 'choose_biome', biomeId }); }
 
   private sendAction(message: ClientMessage): void {
     if (!this.send(message)) this.notifyError('Not connected to the co-op server.');

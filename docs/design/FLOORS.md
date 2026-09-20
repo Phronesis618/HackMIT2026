@@ -1,6 +1,6 @@
-# FLOORS — spec as implemented (F1a) + integration guide (F1b / F2 / F3)
+# FLOORS — spec as implemented (F1a + F1b) + checklists for F2 / F3
 
-Status: **library done, not wired in.** F1a added new files only; nothing in the game calls this yet.
+Status: **generator, contracts, shared room provider and server path done; behind a flag (default off).** The sim, netcode, renderer and UI do not use floors yet: that is F2 and F3, see §9–§11. With the flag off every output is byte-identical to before.
 
 | File | What |
 | --- | --- |
@@ -11,8 +11,12 @@ Status: **library done, not wired in.** F1a added new files only; nothing in the
 | `…/floorgen/templates.ts` | 17 hand-made room templates (6 small 13×9, 6 medium 19×13, 5 large 27×17) + `pickTemplate`. |
 | `…/floorgen/rooms.ts` | Room assembler: flips, doors, pillar/hazard mutators, connectivity repair, props, encounter placement. |
 | `…/floorgen/director.ts` | Encounter director (who is in the room). |
-| `…/floorgen/index.ts` | Public API barrel. |
-| `tests/shared/floorgen/*.test.ts` | 42 tests, ~2.5 s, including a 1 000-seed fuzz per budget. |
+| `…/floorgen/briefs.ts` | **F1b** `deriveBiomeBriefs`, `resolveBiomeBriefs`: 8 briefs for any recipe. |
+| `…/floorgen/terrain.ts` | **F1b** `applyBiomeTerrain`: PR #16 terrain as a post-build mutator. |
+| `…/floorgen/runtime.ts` | **F1b** `createFloorRuntime` (the shared room provider), `upgradeToFloors`. |
+| `…/floorgen/index.ts` | Public API barrel. Import from `src/shared/floorgen`. |
+| `tests/shared/floorgen/*.test.ts` | F1a: 42 tests incl. a 1 000-seed fuzz per budget. F1b: `runtime.test.ts` (480 rooms over all 3 fixtures). |
+| `tests/shared/floors-contracts.test.ts`, `tests/generation/floors-service.test.ts` | **F1b** schema strictness, bad floors worlds, flag on/off, HTTP. |
 
 Everything is pure (no `Math.random`, no `Date`, no I/O) and imports only from `src/shared`, so **the client can import floorgen too**. F1b moved the folder from `src/server/generation/floorgen/` to `src/shared/floorgen/` for that reason.
 
@@ -105,7 +109,7 @@ Budget points = `round((5 + 3·tier) · (0.8 + 0.5·depth/maxDepth) · kindFacto
 - exit: one `role: 'gatekeeper'` (warden if pooled, else the toughest) plus escorts. Final biome: `guardian` with `role: 'guardian'`, and an `anchor_pedestal` prop on the `A` tile. Bosses stand next to the focus.
 - Packs are split into groups of ≤ 3 and spread by farthest-point sampling, keeping the largest door/spawn clearance (Manhattan 5 → 1) that fits.
 
-## 7 · Integration guide for F1b
+## 7 · Integration guide F1a wrote for F1b (all five points are now implemented; kept for the reasoning)
 
 1. **Doors vs legacy exits.** `BuiltRoom.doors[] = {x, y, direction, toRoomId, entry{x,y}}`; each door is an `X` tile, so `X`-count == `doors.length` holds like the legacy rule. `RoomExit.toRoomIndex` (0..2) cannot address a graph. Add `toRoomId: IdString` to `RoomExitSchema` (keep `toRoomIndex` optional for 3-room worlds) and map `doors[i] → {x, y, direction, toRoomId}`. When a player walks through door `d` of room R, place them on the `entry` of the door in room `d.toRoomId` whose `toRoomId === R` (the twin always exists; direction is the opposite).
 2. **`P` is only the default spawn.** Use it for the entrance room at biome start and for HQ-style teleports. Every other arrival uses a door `entry`. The legacy "non-final room needs ≥1 exit" rule still holds (every room has ≥1 door).
@@ -123,7 +127,111 @@ Also worth knowing:
 
 ## 8 · Not done
 
-- Nothing is wired into contracts/compiler/sim/renderer (by design).
+- The sim, sessions, realtime server, renderer and UI ignore `world.floors` (F2 / F3).
 - Secret rooms (Isaac's "empty cell touching 3+ rooms" pass) are not generated.
 - No per-biome exclusive template sets yet: affinity weighting only. More templates = more distinct biomes.
 - Encounter numbers are untuned against real play.
+
+## 9 · Contracts as landed (F1b)
+
+Everything is additive and optional. `src/shared/floors.ts` never imports `contracts.ts`; `contracts.ts` imports `floors.ts`.
+
+**Flags.** Server: env `RELAY_FLOORS=1` (`config.generation.floors`, passed to `createGenerationService({ floors })`). Per request: `GenerationRequest.floors?: boolean` wins over the env. Browser: `?floors=1` makes `worldProviders.ts` send `floors: true` and upgrades the bundled offline fixture. Default off.
+
+**Rooms.** A `RoomSpec` is either legacy or a floors room, never a mix (`refineRoomAddressing`).
+
+| | legacy room | floors room |
+| --- | --- | --- |
+| `biomeId`, `roomId`, `kind`, `feature`, `focus` | must be absent | all required (`depth` optional, always set by the runtime) |
+| `index` | 0..2, position in `world.rooms` | floor-plan index: `r07` → 7 (max 63) |
+| `exits[].toRoomIndex` | 0..2 | plan index of `toRoomId` (so old code reads a number) |
+| `exits[].toRoomId`, `exits[].entry` | must be absent | required; `entry` is the walkable tile next to the door, **inside this room** |
+| `isFinal` | last planned room | `feature === 'anchor'` (only the tier-4 exit room) |
+| `id` | free | `${biomeId}:${roomId}`, for logs and event keys only. Never parse it. |
+| `encounters[].role` | absent | `pack · elite · gatekeeper · guardian` |
+| `relics` | compiler | lore rooms: one relic on `focus`, a `relic` fragment of `recipe.lore` |
+| `anchorRelays` | final room | the anchor room (3 sites) |
+
+Helpers in `floors.ts`: `floorRoomId(7) === 'r07'`, `floorRoomIndex('r07') === 7`, `FLOOR_ENTRANCE_ROOM_ID = 'r00'`, `MAX_FLOOR_ROOM_INDEX = 63`.
+
+**Recipe.** `WorldRecipeSchema` is unchanged because it is the JSON schema sent to the model and strict structured output rejects optional keys. `FloorsWorldRecipeSchema = WorldRecipeSchema.extend({ biomes?: BiomeBrief[8] })` is what worlds and fixtures store, and `type WorldRecipe` is inferred from it. The `bible` extension point for W2 is marked in a comment there. `BiomeBrief` gained optional `terrain {features, layout, density}`.
+
+**World.** `PreparedWorld.floors?: WorldFloors = { seed, route: WorldRoute, briefs: BiomeBrief[8] }`. `WorldFloorsSchema` checks: distinct brief ids · `route.seed === seed` · tiers exactly 1/2/2/2/1 wide · every brief routed once · graph nodes match tiers · full bipartite edges. When `floors` is present:
+
+- `rooms` is exactly `[entrance]` = room `r00` of `floors.route.tiers[0][0]`, byte-identical to what the runtime builds.
+- `plannedRoomCount` is `1` and means "`rooms` is complete, nothing else streams". Run length = `floors.route.graph.nodes[].roomBudget`.
+- `rooms[0].isFinal` is false. Entrance exits must stay inside the opening biome's room budget (a dangling `toRoomId` is rejected).
+- A world without `floors` may not contain floors rooms.
+
+**Snapshot / events / protocol (types only; F2 fills them).**
+
+```ts
+GameSnapshot.floor?: FloorRunState = {
+  biomeId, roomId, tier /*0..4*/, path: string[] /*biomes entered, current last*/,
+  map: FloorMapRoom[] /*{roomId, cell, state:'visited'|'seen', kind|null, cleared, doors:('n'|'s'|'e'|'w')[]}*/,
+  doorsLocked: boolean,
+  biomeChoice: { fromBiomeId, options: string[1..2], votes: Record<playerId, biomeId>, hostPlayerId|null, chosenBiomeId|null } | null }
+room_entered  + biomeId?, floorRoomId?, kind?        exit_reached + toRoomId?
+biome_choice_offered { worldId, fromBiomeId, options }
+biome_entered { worldId, biomeId, biomeName, tier, chosenByPlayerId|null, playerIds }
+ClientMessage { type: 'choose_biome', biomeId }      GameSession.chooseBiome?(biomeId)
+```
+
+**Runtime API** (`src/shared/floorgen`, pure, safe in the browser):
+
+```ts
+createFloorRuntime(floors: WorldFloors, context?: { recipe?: Pick<WorldRecipe,'lore'> }): FloorRuntime
+createWorldFloorRuntime(world)        // = createFloorRuntime(world.floors, { recipe: world.recipe }); use this one
+isFloorsWorld(world): boolean
+upgradeToFloors(world: PreparedWorld, seed: string): PreparedWorld   // pure, idempotent; also exported from src/server/generation
+floorsSeedFor(world, requestSeed?): string                            // String(seed) or the worldId
+deriveBiomeBriefs(recipe, seed): BiomeBrief[]   resolveBiomeBriefs(recipe, seed)   // recipe.biomes if valid, else derived
+applyBiomeTerrain(built: BuiltRoom, terrain, seed): string[]
+
+FloorRuntime {
+  floors; entranceRef(); biomeEntranceRef(biomeId); brief(biomeId); tier(biomeId); plan(biomeId): FloorPlan;
+  getRoom(ref: RoomAddress): RoomSpec;            // lazy, cached, RoomSpecSchema-validated, throws on a bad address
+  neighbours(ref): { side, direction, ref, kind }[];
+  arrivalTile(from, to): {x,y};                   // entry tile of the twin door in `to`
+  nextBiomeChoices(biomeId): string[];            // 2, then 1 before the finale, [] after it
+  exitRef(biomeId); isBiomeExit(ref); isFinalRoom(ref);
+  mapRooms(biomeId, visitedRoomIds, clearedRoomIds?): FloorMapRoom[] }
+```
+
+Always create the runtime with the recipe (`createWorldFloorRuntime`): relics depend on `recipe.lore`, so a runtime without it builds lore rooms that differ from the other machine's.
+
+**Terrain.** Combat, elite and exit rooms get the brief's `terrain` (default by first motif, same table as the legacy compiler). Rubble and conduits replace free floor; `B` replaces interior walls that do not touch the void; a bridge is a new wall run with a `=` crossing and `>` ramps, kept only if everything reachable before is still reachable (no `~`, no `B`, props in place). Nothing is stamped within 2 tiles of the spawn, the focus or a door entry, or on a prop or encounter tile.
+
+**Derived briefs.** `biome-1`…`biome-8`. The recipe's first and last blueprint become opener and finale (name, motifs, hazards, terrain). The six between take one archetype each (Warren, Wall, Crossing, Vaults, Shelter, Works: different linearity, branchiness and specials), one world motif plus one motif the world lacks, and an enemy pool that starts from the world's own enemies and adds registry enemies the brief's tier can afford.
+
+## 10 · Checklist for F2 (sim / netcode)
+
+1. Branch on `isFloorsWorld(world)`. Legacy worlds keep today's `rooms[toRoomIndex]` path untouched.
+2. One runtime per world on whichever machine runs the sim: `createWorldFloorRuntime(world)` in `LocalSession` and in `realtime.ts`. Remote clients need one too, but only for `getRoom` (rendering): rooms are never sent.
+3. `enterPortal` → `runtime.getRoom(runtime.entranceRef())` (equal to `world.rooms[0]`), players on the `P` tile.
+4. Door: on an `X` tile, `exit.toRoomId` gives the target `{biomeId: current, roomId}`; place players on `runtime.arrivalTile(from, to)`, not on `P`. Today's `LocalSession`/`realtime` handle `exit_reached` by `toRoomIndex < rooms.length`; with a floors world that is false for every door, so nothing happens until you add the floors branch (no crash). Put `toRoomId` on the event.
+5. Door locks: while the room has live encounters treat every `X` as solid and publish `floor.doorsLocked = true`. Cleared rooms stay cleared when re-entered: keep a per-biome set of cleared room ids, and do not respawn their encounters. Also keep dead-enemy/terrain/relic state per visited room if you want it to persist; nothing in the contracts stores it.
+6. Snapshot: `roomId = room.id`, `roomIndex = room.index`, and `floor` per §9. Build `floor.map` with `runtime.mapRooms(biomeId, visited, cleared)`.
+7. Biome exit: `runtime.isBiomeExit(ref) && !runtime.isFinalRoom(ref)`. When the `gatekeeper` group is dead, open the choice at `room.focus` (hold F, like the Anchor): set `floor.biomeChoice` with `options = runtime.nextBiomeChoices(biomeId)`, emit `biome_choice_offered`. Votes arrive as `choose_biome` (remote) or `chooseBiome()` (local); the host's pick decides, solo decides at once. Then emit `biome_entered`, move everyone to `runtime.biomeEntranceRef(next)` on `P`, reset visited/cleared for the new biome, push to `floor.path`.
+8. Final room: `room.isFinal` already drives the existing Anchor + relay code (`A` tile, `anchorRelays`, `guardian` encounter). The sim adds a guardian when a final room has none; floors rooms always have one.
+9. `encounters[].role === 'gatekeeper'` is the hook for B1's scaled Custodian. Until then it is an ordinary enemy of that id.
+10. `feature: 'treasure' | 'rest'` rooms have an empty `focus` tile and no mechanics yet: yours or B1's to define. `lore` rooms already carry a `RoomRelic`, which the existing lore code reads.
+11. Determinism: never build rooms from anything but the runtime; never mutate a returned `RoomSpec` (it is the cached instance).
+12. Two-client test: both sides `createWorldFloorRuntime(world)` from the same `world` JSON and compare `JSON.stringify(getRoom(ref))`.
+
+## 11 · Checklist for F3 (renderer / minimap / biome-choice UI)
+
+1. Room to draw: if `snapshot.floor` is set, `createWorldFloorRuntime(world).getRoom({ biomeId: floor.biomeId, roomId: floor.roomId })`; keep the runtime per world id. Otherwise `world.rooms[snapshot.roomIndex]` as today.
+2. Theme per biome: `runtime.brief(biomeId)` gives `name`, `tagline`, `motifIds`, `propPool`. `world.art.palette` is still one palette per world; per-biome tinting from `motifIds` is yours.
+3. Dressing by `room.kind` and `room.feature`; draw the feature at `room.focus` (store for `treasure`, camp for `rest`, portal for `biome_exit` once the room is cleared; `lore` has a relic there; `anchor` is the existing `A` tile).
+4. Doors: every `room.exits[i]` is an `X` tile with a `direction`. Draw them shut while `floor.doorsLocked`.
+5. Minimap: `floor.map` only. `cell` is the grid position (max 15×13), `doors` the links, `state: 'seen'` = outline with `kind` hidden, `cleared` for a tick mark, current room = `floor.roomId`. `renderFloorPlan(plan)` shows the intended look in ASCII. Do not read `runtime.plan()` for the minimap: it would reveal the whole floor.
+6. Biome choice: shown while `floor.biomeChoice && !chosenBiomeId`. One card per `options[i]` from `runtime.brief(id)` (name, tagline, motifs, enemy pool; room count from `floors.route.graph.nodes`). Click → `session.chooseBiome?.(biomeId)`. Show `votes` next to player names and mark the host. One option (before the finale) is a confirm, not a choice.
+7. HUD depth: `floor.tier + 1` of 5, `floor.path` for the breadcrumb, `runtime.brief(floor.biomeId).name` as the area title. Room names and descriptions are plain placeholders until W2 writes them.
+8. New tiles never appear in floors rooms beyond the registry's `TILE_CHARS`; terrain chars `B = > : +` do appear in combat, elite and exit rooms.
+
+## 12 · For W2 (prompt / pipeline)
+
+- To have the model write briefs, parse with `FloorsWorldRecipeSchema` (or a second call returning `BiomeBriefListSchema`) and put them on `recipe.biomes`; `upgradeToFloors` picks them up. Order matters: first = opener, last = finale; the middle six are dealt onto tiers 1–3 by the seed. An invalid set falls back to derived briefs without an error.
+- `withFloors` in `src/server/generation/index.ts` wraps any service: it takes the first world the legacy pipeline yields and upgrades it, so `liveService.ts` and `provider.ts` were not touched.
+- Known gap: a live floors world keeps `recipe.contributionMappings` and the receipt, but floors rooms have no `attributions`, and `LoreFragment.roomIndex` / `ContributionMapping.roomIndex` are still 0..2. The client check in `parseWorldPrefix` skips the mapping↔attribution match for floors worlds. Mapping ideas to briefs is open.
