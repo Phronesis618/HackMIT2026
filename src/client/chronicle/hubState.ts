@@ -24,7 +24,8 @@ const Participant = z.object({ id: z.string(), displayName: z.string() });
 export const LastRunSchema = z.object({
   worldId: z.string(),
   worldTitle: z.string(),
-  outcome: z.enum(['anchored', 'collapsed', 'aborted']),
+  // `stranded`: the Anchor held and the crew did not make it back out (BOSS_FINALE.md §7.5).
+  outcome: z.enum(['anchored', 'collapsed', 'aborted', 'stranded']),
   classId: ClassIdSchema,
   endedAt: z.number(),
   durationMs: z.number().nonnegative(),
@@ -285,6 +286,15 @@ export function reduceHubState(state: HubState, events: readonly GameEvent[], ct
           };
         }
         break;
+      case 'relic_carried':
+        // The crew chose one thing to carry out of the collapse; that, not the last thing read,
+        // is what the shelf gets (BOSS_FINALE.md §8).
+        run.lastRelic = {
+          id: `carried-${run.worldId}-${event.key}`.slice(0, 64), title: event.title, source: 'carried out of the collapse',
+          text: event.detail, recoveredAt: ctx.now, sourceEventIds: [event.id],
+          playerId: event.playerIds.includes(local) ? local : event.playerIds[0] ?? local,
+        };
+        break;
       case 'anchor_planted':
         if (event.playerIds.includes(local)) run.anchors += 1;
         break;
@@ -360,6 +370,7 @@ function finishRun(
   };
 
   let relics = state.relics;
+  // `stranded` keeps the anchor and the run summary but never a relic: the crew lost the souvenir.
   if (event.outcome === 'anchored' && run.lastRelic) {
     const { playerId, ...rest } = run.lastRelic;
     const relic: HubRelic = { ...rest, worldId: run.worldId, worldTitle: run.worldTitle, worldSource: run.worldSource, recoveredBy: [nameOf(playerId)] };

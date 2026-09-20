@@ -1,6 +1,15 @@
 # BOSS + FINALE — the world-built Custodian and the run's last five minutes
 
-**Status: design only. Nothing here is implemented.** This is the B1 brief (OVERNIGHT_PLAN §4 Wave 3).
+**Status: implemented on `feat/boss-finale` (agent B1).** §1-§9 are in `src/shared/custodian.ts`,
+`src/sim/boss.ts`, `src/sim/escape.ts`, `src/client/render/bossFx.ts` and
+`src/client/ui/{EscapeTimer,RelicChoice}.tsx`, with tests in `tests/sim/finale*.test.ts`.
+Three deviations, each argued in the code: the phase-3 shield is fed by the relays the crew leaves
+COLD, so a solo operative tops out at 0.60 rather than 0.90 (the co-op table is unchanged); the
+solo latch is 8000 ms, not 5000, because the round trip is longer than the design assumed; and the
+Custodian's health is fixed at spawn from the crew size rather than recomputed per living player.
+Measured solo, no items: bastion 26 s, beacon 25 s, shade 35 s all win; weaver loses. Phase 1 runs
+5-9 s, not the §3.1 target of 18 s — the health number is still the human call §"Needs a human
+call" asks for. This is the B1 brief (OVERNIGHT_PLAN §4 Wave 3).
 It **extends** PR #16's `shared/finale.ts`, its three `bossPhase` HP phases and its three-relay ritual.
 Nothing in #16 is thrown away.
 

@@ -27,6 +27,7 @@ import {
   TILE_CHARS,
   WALKABLE_TILES,
 } from './registry';
+import { CustodianPatternIdSchema, CustodianSchema } from './custodian';
 import {
   BiomeBriefListSchema,
   EncounterRoleSchema,
@@ -40,7 +41,7 @@ import {
   WorldFloorsSchema,
 } from './floors';
 import { BiomeRoomLinesListSchema, LoreRefsShape, WorldBibleSchema } from './bible';
-import { CustodianSchema, TerrainSkinListSchema, WorldLawListSchema, WorldLookSchema } from './laws';
+import { TerrainSkinListSchema, WorldLawListSchema, WorldLookSchema } from './laws';
 
 // ---------------------------------------------------------------------------
 // Primitives
@@ -537,8 +538,8 @@ export const FloorsWorldRecipeSchema = WorldRecipeSchema.extend({
   look: WorldLookSchema.optional(),
   /** The world's names for the terrain mechanics it uses (TILES.md 4.1). NOT yet read by the renderer. */
   terrainSkins: TerrainSkinListSchema.optional(),
-  /** Final-boss title, phase titles and three named moves from the closed registry (BOSS_FINALE.md 2). NOT yet read by the sim. */
-  custodian: CustodianSchema.optional(),
+  /** Final-boss title, phase titles and three named moves from the closed registry (BOSS_FINALE.md 2). Read by src/sim/boss.ts; absent = derived from the world seed. */
+  custodian: CustodianSchema.nullable().optional(),
 });
 export type WorldRecipe = z.infer<typeof FloorsWorldRecipeSchema>;
 
@@ -691,6 +692,8 @@ export const PlayerStateSchema = z.object({
   shieldMs: z.number().nonnegative().optional(),
   shroudMs: z.number().nonnegative().optional(),
   rallyMs: z.number().nonnegative().optional(),
+  /** Hauled or mired: movement runs at 60% while this is above zero. */
+  slowMs: z.number().nonnegative().optional(),
   reviveProgress: z.number().min(0).max(1).optional(),
   /** Ultimate charge 0..100; R fires at 100 and resets to 0. */
   ultCharge: z.number().min(0).max(100).optional(),
@@ -739,6 +742,10 @@ export const EnemyStateSchema = z.object({
   markMs: z.number().nonnegative().optional(),
   bossPhase: z.number().int().min(1).max(3).optional(),
   recoveryMs: z.number().nonnegative().optional(),
+  /** Custodian only: the attack pattern currently queued or in flight (drives the named-move banner). */
+  patternId: CustodianPatternIdSchema.optional(),
+  /** Custodian phase 3 only: damage reduction from the relay shield, 0..1. */
+  shieldDr: z.number().min(0).max(1).optional(),
 });
 export type EnemyState = z.infer<typeof EnemyStateSchema>;
 
@@ -763,8 +770,17 @@ export const AnchorStateSchema = z.object({
   state: z.enum(['dormant', 'planting', 'planted']),
   progress: z.number().min(0).max(1),
   ritual: z.object({
-    stage: z.enum(['locked', 'relays', 'core', 'discharging', 'complete']),
-    relays: z.array(z.object({ x: z.number(), y: z.number(), activated: z.boolean() })).length(3),
+    /** `collapse`/`extraction`/`stranded` are the run's last minutes (BOSS_FINALE.md §7). */
+    stage: z.enum(['locked', 'relays', 'core', 'discharging', 'collapse', 'extraction', 'complete', 'stranded']),
+    relays: z.array(z.object({
+      x: z.number(),
+      y: z.number(),
+      activated: z.boolean(),
+      /** Phase-3 shield: how long this relay keeps counting after the operative steps off. */
+      latchedMs: z.number().nonnegative().optional(),
+      /** Phase-3 shield: the Custodian has darkened this relay; it cannot be held. */
+      inert: z.boolean().optional(),
+    })).length(3),
     activeRelay: z.number().int().min(0).max(3),
     pulseRadius: z.number().nonnegative(),
     pulseWarningMs: z.number().nonnegative(),
@@ -796,6 +812,42 @@ export const GameSnapshotSchema = z.object({
     brokenWalls: z.array(z.string().regex(/^\d+,\d+$/)).max(2048),
     wallDamage: z.record(z.string().regex(/^\d+,\d+$/), z.number().nonnegative()),
   }).optional(),
+  /**
+   * The collapse after the Anchor discharges: the walk back to the portal, the rooms failing
+   * behind the crew, and the three pedestals at the end of it. Absent until the Anchor holds.
+   */
+  collapse: z.object({
+    /** Mirrors `anchor.ritual.stage`, which is only visible in the Anchor room itself. */
+    stage: z.enum(['collapse', 'extraction', 'complete', 'stranded']),
+    remainingMs: z.number().nonnegative(),
+    totalMs: z.number().positive(),
+    ringDepth: z.number().int().min(0).max(3),
+    portalRoomId: IdString,
+    /** Rooms already lost behind the crew; the minimap greys them. */
+    lostRoomIds: z.array(IdString).max(40),
+    /** The room the crew should head for next, for the floor chevron and the minimap pulse. */
+    nextRoomId: IdString.optional(),
+    /** Extraction only: what the run earned the right to carry out. */
+    offer: z.array(z.object({
+      key: z.string().max(40),
+      title: z.string().max(40),
+      x: z.number(),
+      y: z.number(),
+      votes: z.array(IdString).max(4),
+    })).max(3),
+    chosenKey: z.string().max(40).nullable(),
+  }).nullable().optional(),
+  /**
+   * The Custodian's floor: tiles one of its arena patterns has marked right now, plus the tiles
+   * its phase-2 corruption turned hostile for the rest of the fight. Absent outside a boss fight.
+   */
+  bossField: z.object({
+    patternId: CustodianPatternIdSchema.nullable(),
+    tiles: z.array(z.string().regex(/^\d+,\d+$/)).max(512),
+    live: z.boolean(),
+    remainingMs: z.number().nonnegative(),
+    corrupted: z.array(z.string().regex(/^\d+,\d+$/)).max(512),
+  }).nullable().optional(),
   /**
    * Floors runs only (absent in HQ, training and legacy worlds): where the crew is in the
    * biome graph, the fog-of-war map, door locks and the pending biome choice. In a floors
@@ -886,11 +938,26 @@ export const GameEventSchema = z.discriminatedUnion('type', [
     tier: z.number().int().min(0).max(4), chosenByPlayerId: IdString.nullable(), playerIds: z.array(IdString),
   }),
   z.object({ ...eventBase, type: z.literal('anchor_planted'), worldId: IdString, roomIndex: z.number().int().min(0), playerIds: z.array(IdString) }),
+  // --- Custodian and finale (docs/design/BOSS_FINALE.md §8.3) ---
+  z.object({ ...eventBase, type: z.literal('boss_phase_changed'), enemyId: IdString, phase: z.number().int().min(1).max(3), title: z.string().max(80) }),
+  z.object({
+    ...eventBase, type: z.literal('boss_pattern_started'), enemyId: IdString, patternId: CustodianPatternIdSchema,
+    name: z.string().max(32), tell: z.string().max(60), firstUse: z.boolean(),
+  }),
+  z.object({ ...eventBase, type: z.literal('terrain_corrupted'), roomId: IdString, enemyId: IdString, tilesChanged: z.number().int().nonnegative() }),
+  z.object({ ...eventBase, type: z.literal('collapse_started'), worldId: IdString, totalMs: z.number().positive(), hops: z.number().int().nonnegative() }),
+  z.object({ ...eventBase, type: z.literal('room_lost'), worldId: IdString, roomId: IdString }),
+  z.object({ ...eventBase, type: z.literal('extraction_reached'), worldId: IdString, playerIds: z.array(IdString), remainingMs: z.number().nonnegative() }),
+  z.object({
+    ...eventBase, type: z.literal('relic_carried'), worldId: IdString, key: z.string().max(40),
+    title: z.string().max(40), detail: z.string().max(200), playerIds: z.array(IdString),
+  }),
   z.object({
     ...eventBase,
     type: z.literal('run_ended'),
     worldId: IdString,
-    outcome: z.enum(['anchored', 'collapsed', 'aborted']),
+    /** `stranded`: the Anchor held and the crew did not get out. The world is saved; no relic. */
+    outcome: z.enum(['anchored', 'collapsed', 'aborted', 'stranded']),
     playerIds: z.array(IdString),
   }),
 ]);
