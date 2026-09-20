@@ -408,6 +408,11 @@ describe('lenient parsing and transport helpers', () => {
     // never stop on a word that was leading somewhere ("...faces the photocopier that")
     expect(fitText("Eighty toner units ordered on Day 4; Dalgaard's desk faces the photocopier that jammed.", 80))
       .toBe("Eighty toner units ordered on Day 4; Dalgaard's desk faces the photocopier");
+    // what is left of a clause the cut landed inside is dropped; a clause with content is kept
+    expect(fitText('4 of 12 anchor bolts failed at 340 kPa; the remaining 8 are still in the ceiling.', 80))
+      .toBe('4 of 12 anchor bolts failed at 340 kPa');
+    expect(fitText('Brine monitors at 14 posts, one stamped pay claim filed in a tray and never opened.', 80))
+      .toBe('Brine monitors at 14 posts, one stamped pay claim filed in a tray');
     const long = { ...briefRaw('Bay C'), tagline: `${'Beds bolted down. '.repeat(12)}`.trim(), motifIds: ['cables', 'velvet', 'arches'], propPool: ['crate', 'crate', 'anchor_pedestal'] };
     const parsed = parseBrief(long, 2)!;
     expect(parsed.brief.tagline.length).toBeLessThanOrEqual(140);
@@ -438,7 +443,7 @@ describe('lenient parsing and transport helpers', () => {
     expect(parsed).toBeDefined();
     expect(parsed!.lines.map((line) => line.kind)).not.toContain('rest');
     expect(parsed!.lines.map((line) => line.kind)).not.toContain('elite');
-    expect(parsed!.lines.find((line) => line.kind === 'combat')!.text.length).toBeLessThanOrEqual(100);
+    expect(parsed!.lines.find((line) => line.kind === 'combat')!.text.length).toBeLessThanOrEqual(140);
     // roomLines that are not an object at all cost the lines, never the floor
     expect(parseBrief({ ...briefRaw('Bay C'), roomLines: 'entrance: the airlock' }, 4)!.lines).toEqual([]);
   });

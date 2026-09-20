@@ -40,16 +40,18 @@ export const ModelLoreFragmentSchema = z.object({
 export type ModelLoreFragment = z.infer<typeof ModelLoreFragmentSchema>;
 
 /**
- * The house limits, not the storage limits: `BiomeRoomLineSchema` stores 140 characters and
- * the linter fails a room line over 100, so a schema that advertised 140 bought three
- * over-long lines per run that then needed a polish call to cut. The schema now says 100.
+ * The storage limit (`BiomeRoomLineSchema`), deliberately, not the house target of 100.
+ * Measured: the model writes room lines of 110 to 130 characters whatever the schema says
+ * (407 of 448 in one run were over 100), and a line over 100 is a warning, never a hard
+ * fail. Advertising 100 therefore bought no score and cost complete sentences: trusted code
+ * cut 407 lines, some of them mid-phrase. The prompt asks for one short sentence instead.
  */
-const roomLineText = z.string().trim().min(1).max(100);
+const roomLineText = z.string().trim().min(1).max(140);
 /** One line per room kind, as fixed keys: cheaper in output tokens than a list of {kind, text}. */
 const ModelRoomLinesSchema = z.object({
   entrance: roomLineText, combat: roomLineText, elite: roomLineText, treasure: roomLineText, lore: roomLineText, rest: roomLineText, exit: roomLineText,
 });
-export const MODEL_ROOM_LINE_MAX = 100;
+export const MODEL_ROOM_LINE_MAX = 140;
 
 /** BiomeBrief (same bounds as src/shared/floors.ts) plus the per-kind room lines. */
 export const ModelBriefSchema = z.object({
@@ -159,7 +161,7 @@ function issuesText(error: z.ZodError, prefix = ''): string {
  * A word that was leading somewhere. A cut that ends on one reads as a truncation even
  * though it is a whole word: "Dalgaard's desk faces the photocopier that" (seen live).
  */
-const DANGLING_WORD = /[\s,;:·-]+(?:an?|the|and|or|but|of|to|in|on|at|by|for|from|with|into|onto|over|under|through|that|which|who|whose|while|when|as|is|was|were|are|has|had|its|his|her|their|this|these|those|one|two|three|four|no|not|still|then|after|before|since)$/i;
+const DANGLING_WORD = /[\s,;:·-]+(?:an?|the|and|or|but|of|to|in|on|at|by|for|from|with|into|onto|over|under|through|that|which|who|whose|while|when|as|is|was|were|are|has|had|its|his|her|their|this|these|those|one|two|three|four|no|not|still|never|only|just|both|each|every|then|after|before|since)$/i;
 
 /** Cuts at the last sentence end inside the limit, else at a clause or word end; never mid-word, never an ellipsis. */
 export function fitText(text: string, max: number): string {
@@ -173,9 +175,12 @@ export function fitText(text: string, max: number): string {
   if (clause >= max * 0.5) return tidy(head.slice(0, clause));
   const word = head.lastIndexOf(' ');
   let byWord = tidy(word > 0 ? head.slice(0, word) : trimmed.slice(0, max));
-  // A clause end too early to use still beats stopping on a word that led somewhere.
   while (byWord.length > max * 0.3 && DANGLING_WORD.test(byWord)) byWord = tidy(byWord.replace(DANGLING_WORD, ''));
-  return clause > 0 && byWord.length <= max * 0.3 ? tidy(head.slice(0, clause)) : byWord;
+  // What is left of a clause the cut landed inside is noise ("...; the remaining 8"); a
+  // clause with something in it is content ("...; Dalgaard's desk faces the photocopier").
+  const stub = /[,;:]\s+[^,;:]{1,20}$/.exec(byWord);
+  const trimmedStub = stub ? tidy(byWord.slice(0, stub.index)) : byWord;
+  return trimmedStub.length >= max * 0.3 ? trimmedStub : byWord;
 }
 
 /**
