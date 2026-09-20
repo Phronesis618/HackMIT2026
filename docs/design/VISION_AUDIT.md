@@ -36,7 +36,7 @@ Three things can be produced by the engine when the model did not write them: wo
 
 | Where | Evidence | Verdict |
 | --- | --- | --- |
-| Laws panel | `src/client/ui/WorldPanel.tsx:51` — "Laws of this world · N" and no authorship claim anywhere near it | honest by omission (agent Z1 is adding the explicit derived label) |
+| Laws panel | Landed while this audit was being written (agent Z1): `src/client/ui/WorldPanel.tsx:40` — "No model wrote laws for this world. The engine picked these from its motifs and named them.", with "· engine-chosen" on the heading at `WorldPanel.tsx:58` | honest, explicitly |
 | Biome doors | `src/client/ui/BiomeChoice.tsx:61-67` — name, tagline and "Built from:" motifs, no authorship claim | honest by omission |
 | Boss callouts | `src/sim/boss.ts:275` emits `name` and `tell` with no authorship claim | honest by omission |
 | Derivation is disclosed in provenance | `src/server/generation/pipeline.ts` — "Biome brief(s) N of 8 were derived by trusted code, not written by the model"; `src/server/generation/stages.ts` `parseCustodian` — "Replaced N Custodian move(s) … with defaults" | honest, but only inside **World dossier › generation details › Provenance notes** |
@@ -53,8 +53,8 @@ was string-only in other people's files.
 so, and tests assert it. */` on `source: 'recipe' | 'derived'`. No client code reads it. The
 comment describes a disclosure that was never built. Either build it or correct the comment.
 
-Also stale: `worldLawsView` returns `derived` (`src/sim/laws.ts:278-292`) and the only caller
-drops it (`src/client/game/GameController.ts:356-358`). Agent Z1 is working in that file.
+(`worldLawsView`'s `derived` flag was dead plumbing when this audit started; it now reaches the
+UI as `UiWorldSummary.lawsDerived`, `src/client/game/GameController.ts:367`.)
 
 ## 3. The creation receipt
 
@@ -88,11 +88,18 @@ PRODUCT.md, "Full target": *"Unlocks introduce **new behaviour**, not stat perce
 
 Twelve of the authored nodes are a number and nothing else. **Violation of the stated design
 rule**, flagged here for the agent making the tree real rather than fixed in this pass, because
-changing a node's text without changing what it does would only move the dishonesty:
+changing a node's text without changing what it does would only move the dishonesty.
 
-- `src/shared/skills.ts:50` `core.plating` — "+20 max Integrity."
-- `src/shared/skills.ts:51` `core.wind` — "Dash cooldown −25%; invulnerability window +50 ms."
-- `src/shared/skills.ts:52` `core.salvage` — "Cleared rooms yield +1 resource."
+The tree stopped being a design preview while this audit was being written: `core.root`,
+`core.wind` and `core.salvage` and all ten attunement effects are now `implemented` and apply
+in the simulation (`src/shared/skills.ts:61-64`, `src/shared/registry.ts:271-282`), and the menu
+says which nodes are not (`src/client/ui/GameMenu.tsx:344` — "Nodes marked planned are not in
+the game yet."). The twelve below are still the class tree's unbuilt nodes, so the rule still
+bites, and `core.wind`'s newly live effect is itself two percentages:
+
+- `src/shared/skills.ts:62` `core.plating` — "+20 max Integrity." (still `planned`)
+- `src/shared/skills.ts:63` `core.wind` — "Dash cooldown 25% shorter; dash invulnerability 50 ms longer." (live)
+- `src/shared/skills.ts:64` `core.salvage` — "Every room you clear pays 1 more resource." (live)
 - `src/shared/skills.ts:58` `bastion.plate` — "Bulwark lasts 3.2 s and blocks 90% of melee instead of 80%."
 - `src/shared/skills.ts:61` `bastion.radius` — "Shockwave radius 135 → 180; stun +0.5 s."
 - `src/shared/skills.ts:68` `shade.edge` — "Phase blades +4 damage; attack cadence +10%."
@@ -112,9 +119,9 @@ The nodes that do obey the rule are the interesting ones and show what the other
 
 | Claim | Evidence | Verdict |
 | --- | --- | --- |
-| Skill tree | every node is `status: 'planned'` (`src/shared/skills.ts:46,116`), and the page says so: `src/client/ui/GameMenu.tsx:325` "Design preview: effects are not wired to the simulation yet", plus per-node `GameMenu.tsx:373` "Locked · not yet active" | honest |
-| Attunement effects | all ten are `status: 'planned'` (`src/shared/registry.ts:271-281`); their only surface is the skill page above | honest |
-| World laws | nine of eighteen are not applied by the engine (`src/sim/laws.ts:55-59`). Fixed in this branch: fixtures and the live prompt now offer only implemented laws, the pipeline drops an unimplemented pick with a provenance note, and `src/client/ui/WorldPanel.tsx:47` filters the panel and the world rail to laws that are in force. A dead law can no longer reach a player at all. | honest (was a violation) |
+| Skill tree | mixed since agent Devin's work landed: `live()` nodes apply in the sim, `planned()` nodes do not, `skillPurchaseCheck` refuses to sell a planned node (`src/shared/skills.ts:85`), and the page says "Nodes marked planned are not in the game yet." (`src/client/ui/GameMenu.tsx:344`) | honest |
+| Attunement effects | all ten are now `status: 'implemented'` with real summaries (`src/shared/registry.ts:271-282`) and `src/sim/effects.ts` applies them | honest |
+| World laws | eight of eighteen are not applied by the engine (`src/sim/laws.ts:57-60`). Fixed in this branch: fixtures and the live prompt now offer only implemented laws, the pipeline drops an unimplemented pick with a provenance note, and `src/client/ui/WorldPanel.tsx:47` filters the panel and the world rail to laws that are in force. A dead law can no longer reach a player at all. | honest (was a violation) |
 | Proving chamber | `src/shared/headquarters.ts:39` — "Practice range with every enemy attack pattern"; `src/sim/training.ts:59-67` has a pen for all eight enemy ids | honest |
 | Abilities and enemies | `src/shared/registry.ts:45-60,136+` — every entry is `'implemented'` | honest |
 
