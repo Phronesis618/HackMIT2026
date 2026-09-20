@@ -2,6 +2,21 @@
 
 Agent C records only work and verification performed in this session.
 
+## Stranded-world Anchor accounting — 2026-09-20
+
+The 09:43 UTC watch checked main `2353463`: typecheck, **899 tests / 76 files**, build,
+and production CLI smoke all passed. On ephemeral port 40387, explicit fixture mode with
+empty provider keys served health/config, HTML, four referenced and all six built assets,
+and a schema-valid three-room Vantage Spire. The owned server exited cleanly.
+
+Review reproduced `anchor_planted` → `run_ended(stranded)` leaving the class Anchor count
+at one and the total at zero. `BOSS_FINALE.md` §7.5 specifies that this world was saved.
+Commit `b68a9e0` includes stranded outcomes in that total. One added regression failed
+against the original reducer and verifies no relic, storage round-trip and replay safety.
+The corrected full check passed **900 tests / 76 files**, typecheck, build and whitespace.
+Events/storage are scripted/in-memory; existing HTTP/WebSocket suites use local sockets.
+No browser, live-provider, physical LAN or historical-total backfill is claimed.
+
 ## Overnight hub event scope — 2026-09-20
 
 The overnight monitor reproduced an actual `LocalSession` reload defect on `dc2c934`:
