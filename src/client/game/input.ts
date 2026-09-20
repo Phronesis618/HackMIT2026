@@ -108,6 +108,12 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
  */
 export const FULL_MAP_KEYS: readonly string[] = ['KeyM'];
 
+/** Typing into a field must never toggle a hold key. */
+function isTextTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+}
+
 export function createHoldKey(codes: readonly string[], onChange: (held: boolean) => void): () => void {
   let held = false;
   const set = (next: boolean): void => {
