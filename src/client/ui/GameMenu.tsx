@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ABILITY_UNLOCK_COST } from '../../shared/conventions';
 import {
   ABILITY_DETAILS, CLASS_ABILITIES, CLASS_INFO, CLASS_THEME, ENEMY_IDS, ENEMY_INFO, type EnemyId,
@@ -7,6 +8,7 @@ import { buildSkillTree, type SkillNode } from '../../shared/skills';
 import { tokens } from '../../shared/tokens';
 import type { UiActions, UiModel } from '../../shared/ui';
 import { ENEMY_LORE } from '../../sim/training';
+import { focusMenu, installMenuKeyboard } from '../game/keyboardFocus';
 import { AbilityIcon } from './AbilityIcon';
 import { ProvenanceBadge } from './ProvenanceBadge';
 import { Codex } from './WorldPanel';
@@ -17,37 +19,26 @@ export type MenuPage = (typeof MENU_PAGES)[number];
 
 const PAGE_LABEL: Record<MenuPage, string> = { codex: 'Codex', bestiary: 'Bestiary', operative: 'Operative', skills: 'Skills', controls: 'Controls', memories: 'Memories' };
 
-function isTextTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
-}
-
 /**
- * Hollow-Knight-style full-screen menu: Tab toggles, Esc closes, 1–4 jump between pages.
+ * Hollow-Knight-style full-screen menu: Tab opens from the stage, Esc closes, 1–6 select pages.
  * The game keeps running underneath (co-op cannot pause); this is a place to read, not a
  * pause screen. Everything the old sidebar used to say lives here instead.
  */
 export function GameMenu({ model, actions }: { model: UiModel; actions: UiActions }) {
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState<MenuPage>('codex');
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => installMenuKeyboard({
+    isOpen: () => open,
+    menu: () => menuRef.current,
+    open: () => setOpen(true),
+    close: () => setOpen(false),
+    selectPage: (index) => setPage(MENU_PAGES[index]!),
+  }), [open]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (isTextTarget(e.target)) return;
-      if (e.code === 'Tab') {
-        e.preventDefault();
-        if (!e.repeat) setOpen((v) => !v);
-        return;
-      }
-      if (!open) return;
-      if (e.code === 'Escape') {
-        e.preventDefault();
-        setOpen(false);
-      }
-      const index = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].indexOf(e.code);
-      if (index >= 0) setPage(MENU_PAGES[index]!);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    if (open && menuRef.current) return focusMenu(menuRef.current);
   }, [open]);
 
   useEffect(() => {
@@ -60,15 +51,18 @@ export function GameMenu({ model, actions }: { model: UiModel; actions: UiAction
     return () => window.removeEventListener(OPEN_MENU_EVENT, onOpen);
   }, []);
 
-  if (!open) return <button type="button" className="menu-hint" onClick={() => setOpen(true)} tabIndex={-1}>Tab · menu</button>;
-
   return (
-    <div className="menu" role="dialog" aria-modal="false" aria-label="Expedition menu">
+    <>
+    <button type="button" className="btn btn--ghost" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? 'expedition-menu' : undefined} onClick={() => setOpen(true)}>
+      Menu
+    </button>
+    {!open && <div className="menu-hint" aria-hidden="true">Tab · menu</div>}
+    {open && createPortal(<div id="expedition-menu" ref={menuRef} className="menu" role="dialog" aria-modal="true" aria-label="Expedition menu" tabIndex={-1}>
       <div className="menu__backdrop" onClick={() => setOpen(false)} />
       <div className="menu__frame">
         <nav className="menu__tabs" aria-label="Menu pages">
           {MENU_PAGES.map((id, i) => (
-            <button key={id} type="button" className={`menu__tab ${page === id ? 'menu__tab--active' : ''}`} onClick={() => setPage(id)}>
+            <button key={id} type="button" data-menu-page={i} aria-current={page === id ? 'page' : undefined} className={`menu__tab ${page === id ? 'menu__tab--active' : ''}`} onClick={() => setPage(id)}>
               <span className="menu__tabkey">{i + 1}</span>
               {PAGE_LABEL[id]}
             </button>
@@ -86,7 +80,8 @@ export function GameMenu({ model, actions }: { model: UiModel; actions: UiAction
           {page === 'memories' && <MemoryWall memories={model.memories} actions={actions} />}
         </section>
       </div>
-    </div>
+    </div>, document.body)}
+    </>
   );
 }
 

@@ -20,6 +20,7 @@ import { cueForEvent } from '../audio';
 import type { BrowserChronicle } from '../chronicle';
 import type { LocalSession } from '../transport/LocalSession';
 import { createKeyboardMouseInput, type InputSampler } from './input';
+import { stageOwnsInput } from './keyboardFocus';
 import type { UiStore } from './uiStore';
 
 export interface PreviewFlags {
@@ -111,7 +112,7 @@ export class GameController {
     if (session.onError) this.disposers.push(session.onError((message) => this.notice('error', message)));
     // Floors stopgap until the biome-choice panel (agent F3) lands: 1 / 2 pick an offered biome.
     const pickBiome = (event: KeyboardEvent): void => {
-      if (event.target instanceof HTMLElement && /^(INPUT|TEXTAREA)$/.test(event.target.tagName)) return;
+      if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey || !stageOwnsInput(event.target, stage)) return;
       const choice = this.latestSnapshot?.floor?.biomeChoice;
       const biomeId = choice?.options[event.code === 'Digit1' ? 0 : event.code === 'Digit2' ? 1 : -1];
       if (biomeId !== undefined) session.chooseBiome?.(biomeId);
