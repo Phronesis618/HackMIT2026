@@ -23,7 +23,7 @@ import {
 } from '../../src/server/generation/stages';
 
 const fixtures = loadWorldFixtures(path.resolve(__dirname, '../../fixtures/worlds'));
-const legacyRecipe = fixtures.find((fixture) => fixture.fixtureId === 'vantage-spire')!.recipe;
+const { bible: _bible, ...legacyRecipe } = fixtures.find((fixture) => fixture.fixtureId === 'vantage-spire')!.recipe;
 const bank = loadExemplarBank();
 const ward = bank.find((world) => world.world === 'Cinder Ward 9')!;
 const request: GenerationRequest = { requestId: 'pipeline-req', sessionId: 'pipeline-session', contributions: sampleContributions, plannedRoomCount: 3 };
