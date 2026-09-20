@@ -17,7 +17,10 @@ import {
 import { createHazardClock, stepHazardTiles } from '../../src/sim/hazards';
 import { createSimulation, type Simulation } from '../../src/sim';
 
-const fixture = WorldFixtureSchema.parse(fixtureJson);
+// The fixture's own world laws are stripped: these cases measure the base rules, and
+// vantage-spire now carries laws the engine really applies (tests/sim/laws.test.ts covers those).
+const { laws: _laws, look: _look, custodian: _custodian, ...bareRecipe } = WorldFixtureSchema.parse(fixtureJson).recipe;
+const fixture = { ...WorldFixtureSchema.parse(fixtureJson), recipe: bareRecipe };
 
 /**
  * 16x10 arena. A three-tile hazard band at (5..7, 4) sits on the walking line from the spawn,

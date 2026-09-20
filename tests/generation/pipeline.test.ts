@@ -201,7 +201,10 @@ describe('two-call flow', () => {
     expect(recipe.lore.filter((fragment) => fragment.kind === 'remains').map((fragment) => fragment.enemyId).sort()).toEqual(['guardian', 'husk', 'sentinel', 'spewer']);
     expect(recipe.lore.every((fragment) => fragment.authorIndex != null && fragment.eventIndex != null)).toBe(true);
     expect(recipe.attunements).toHaveLength(3);
-    expect(recipe.laws?.map((law) => law.lawId)).toEqual(['long_dark', 'restless']);
+    // The model offered `restless`, which the engine does not apply yet: the pipeline drops it
+    // rather than show the crew a law that does nothing (tests/sim/law-honesty.test.ts).
+    expect(recipe.laws?.map((law) => law.lawId)).toEqual(['long_dark']);
+    expect(world.provenance.notes.join(' ')).toContain('not implemented by the engine');
     expect(recipe.look?.paletteFamily).toBe('sodium');
     expect(recipe.terrainSkins).toEqual(legacyRecipe.rooms.some((room) => room.terrain?.features.includes('rubble')) ? lawsRaw.terrainSkins : undefined);
     expect(recipe.custodian?.moves.map((move) => move.patternId)).toEqual(['siege_charge', 'ring_bloom', 'arena_flood']);
