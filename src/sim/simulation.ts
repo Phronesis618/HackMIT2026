@@ -25,7 +25,7 @@ import { TRAINING_REGEN_PER_TICK, TRAINING_RESPAWN_MS, TRAINING_WAKE_RANGE, trai
 import { FLOOR_ENTRANCE_ROOM_ID } from '../shared/floors';
 import { createRoomProvider, type RoomProvider } from './floorProvider';
 import {
-  FLOOR_TUNING, TREASURE_REWARD, advanceBiome, clearReward, createFloorsRun, doorArrival, floorRunState, focusPoint,
+  FLOOR_TUNING, TREASURE_REWARD, advanceBiome, clearReward, connectedTiles, createFloorsRun, doorArrival, floorRunState, focusPoint,
   markCleared, markVisited, sealsDoors, tierMultiplier, type FloorsRun,
 } from './floors';
 
@@ -249,10 +249,17 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       const encounter = gatekeeper ? { ...planned, enemyId: 'guardian' as const, count: 1 } : planned;
       const info = ENEMY_INFO[encounter.enemyId];
       const maxHp = Math.round(info.maxHp * hpScale * (gatekeeper ? FLOOR_TUNING.gatekeeperHpShare : 1));
+      let reachable: Set<number> | undefined;
       for (let i = 0; i < encounter.count; i++) {
         const base = tileToWorld(encounter.x, encounter.y);
         const offset = i === 0 ? 0 : (i % 2 === 0 ? 1 : -1) * Math.ceil(i / 2) * (info.radius * 2 + 6);
-        const spawn = nearestOpenPosition(grid, { x: base.x + offset, y: base.y }, info.radius);
+        let spawn = nearestOpenPosition(grid, { x: base.x + offset, y: base.y }, info.radius);
+        if (floorsRun && i > 0) {
+          // Pack members fan out sideways; never into a pocket the crew cannot reach (sealed doors would never open).
+          reachable ??= connectedTiles(grid, { col: encounter.x, row: encounter.y });
+          const tile = worldToTile(spawn.x, spawn.y);
+          if (!reachable.has(tile.row * grid.width + tile.col)) spawn = nearestOpenPosition(grid, base, info.radius);
+        }
         enemies.push({
           state: {
             id: `${encounter.id.slice(0, 61)}-${i}`, enemyId: encounter.enemyId,
