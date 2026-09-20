@@ -84,6 +84,7 @@ describe('RevealCard', () => {
       committedRoomCount: 3, plannedRoomCount: 3, lore: [], attunements: [],
       palette: { background: '#000000', floor: '#111111', floorAlt: '#121212', wall: '#222222', wallEdge: '#333333', accent: '#b8f5c8', accentSoft: '#e7c46a', glow: '#ffffff', hazard: '#ff0000', text: '#ffffff' },
       roomNames: ["Mourners' Path", 'Signal Gallery', 'Rest of the Ghost'],
+      laws: [{ lawId: 'long_dark', name: 'Pale Dark', description: 'Sight fails past 215 px in the graveyard.', effect: 'Sight radius 215 px; lanterns add light.', active: true }],
     };
     const html = renderToStaticMarkup(createElement(RevealCard, { world, onEnter: () => {}, onDismiss: () => {} }));
     expect(html).toContain('The Mourning Ossuary');
@@ -93,5 +94,10 @@ describe('RevealCard', () => {
     expect(html).toContain('Signal Gallery');
     expect(html).toContain('Enter portal');
     expect(html).not.toContain('relay-composer · relay-composer');
+    // Laws show the world's name beside the engine's effect; composed worlds name the inscription.
+    expect(html).toContain('Pale Dark');
+    expect(html).toContain('Sight radius 215 px');
+    expect(html).toContain('ghost pirates');
+    expect(html).toContain('cut into the wall of the arrival room');
   });
 });
