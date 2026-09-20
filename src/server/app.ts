@@ -124,6 +124,8 @@ export function createRelayServer(config: ServerConfig, deps: { log?: (m: string
         });
         res.flushHeaders();
         let committedRooms = 0;
+        // A floors world is complete with its entrance room (plannedRoomCount 1), whatever the request asked for.
+        let plannedRooms = parsed.data.plannedRoomCount;
         const stream = generation.prepareWorldStream(parsed.data, (rawStatus) => {
           controller.signal.throwIfAborted();
           const status = GenerationStatusSchema.parse(rawStatus);
@@ -136,10 +138,11 @@ export function createRelayServer(config: ServerConfig, deps: { log?: (m: string
             const world = PreparedWorldSchema.parse(rawWorld);
             const writable = res.write(`${JSON.stringify({ type: 'world', world })}\n`);
             committedRooms = world.rooms.length;
+            if (world.floors) plannedRooms = world.plannedRoomCount;
             if (!writable) await once(res, 'drain', { signal: controller.signal });
             await setImmediate(undefined, { signal: controller.signal });
           }
-          if (committedRooms !== parsed.data.plannedRoomCount) throw new Error('Generation produced an incomplete world.');
+          if (committedRooms !== plannedRooms) throw new Error('Generation produced an incomplete world.');
         } catch {
           if (!controller.signal.aborted && !res.destroyed) {
             res.write(`${JSON.stringify({

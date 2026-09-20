@@ -2,6 +2,30 @@
 
 Agent C records only work and verification performed in this session.
 
+## Render hosting setup — 2026-09-20
+
+On `devin/1789889059-render-deploy` (`4c70ab3`, PR #17), Devin added a Render Blueprint and
+deployment instructions after consulting Render's official Blueprint, deploy-button, free
+instance, and WebSocket documentation. The Blueprint passed Render's published JSON Schema.
+`npm run check` passed: 288 tests / 30 files, typecheck and build. The existing Dockerfile
+built successfully; its production container became healthy on port 10000. Shell-driven
+checks verified HTML/assets, health/config, validated three-room fixture generation with
+Claude selected but no key, and two WebSocket clients sharing a host/guest crew.
+The user subsequently supplied https://relay-a3yv.onrender.com. Public HTTP checks verified
+HTML/assets, health/config and schema-valid fixture generation; a secure WebSocket client
+received welcome and pong messages. After the user added the key in Render, health/config
+reported Anthropic live mode. Two actual `POST /api/world` calls with sample contributions
+each returned a validated `live_fallback_fixture` after 25 seconds. Neither produced live AI.
+
+The follow-up on the same branch enables `autoDeployTrigger: commit` for `main` and extends
+Claude's bounded request deadline to 55 seconds, retaining OpenAI's 25-second limit. New
+mocked tests accept a validated 30-second Claude response and enforce the 55-second abort
+for both the default and an oversized timeout. Latest `npm run check`: 333 tests / 32 files,
+typecheck and build passed. Render schema validation and whitespace checks also passed.
+Live verification of the longer deadline and automatic deployment await merging PR #17 and
+syncing/redeploying the service. Browser play was not tested. The session could not access
+Render settings; no real provider credential was read, stored, or committed.
+
 ## Gameplay expansion — 2026-09-20
 
 On `devin/1789887155-terrain-boss-sanctuary`, Devin integrated tactical terrain, the phased

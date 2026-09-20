@@ -1,0 +1,63 @@
+name: Claude comments to Devin
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+jobs:
+  start-devin:
+    if: >-
+      github.repository == 'Phronesis618/HackMIT2026' &&
+      github.event.issue.state == 'open' &&
+      github.event.comment.user.login == (vars.CLAUDE_GITHUB_LOGIN || 'curious-droid') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Forward the comment to Devin
+        env:
+          DEVIN_WEBHOOK_URL: ${{ secrets.DEVIN_WEBHOOK_URL }}
+          DEVIN_WEBHOOK_SECRET: ${{ secrets.DEVIN_WEBHOOK_SECRET }}
+          WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [[ -z "$DEVIN_WEBHOOK_URL" || -z "$DEVIN_WEBHOOK_SECRET" ]]; then
+            echo "::error::Add DEVIN_WEBHOOK_URL and DEVIN_WEBHOOK_SECRET in repository Actions secrets."
+            exit 1
+          fi
+
+          jq --arg run_url "$WORKFLOW_RUN_URL" '{
+            source: "github",
+            event: "issue_comment",
+            action: .action,
+            repository: {
+              full_name: .repository.full_name,
+              html_url: .repository.html_url
+            },
+            issue: {
+              number: .issue.number,
+              title: .issue.title,
+              html_url: .issue.html_url,
+              is_pull_request: (.issue.pull_request != null)
+            },
+            comment: {
+              id: .comment.id,
+              body: .comment.body,
+              html_url: .comment.html_url,
+              author: .comment.user.login,
+              created_at: .comment.created_at
+            },
+            workflow_run_url: $run_url
+          }' "$GITHUB_EVENT_PATH" > "$RUNNER_TEMP/devin-event.json"
+
+          curl --fail --silent --show-error \
+            --connect-timeout 10 --max-time 45 \
+            --proto '=https' \
+            --request POST "$DEVIN_WEBHOOK_URL" \
+            --header 'Content-Type: application/json' \
+            --header "X-Webhook-Secret: $DEVIN_WEBHOOK_SECRET" \
+            --data-binary "@$RUNNER_TEMP/devin-event.json" \
+            --output /dev/null
+
+          echo "Comment delivered to Devin."

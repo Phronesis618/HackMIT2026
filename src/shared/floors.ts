@@ -13,7 +13,7 @@
  *    re-declared with identical bounds.
  */
 import { z } from 'zod';
-import { ENEMY_IDS, MOTIF_IDS, PROP_IDS } from './registry';
+import { ENEMY_IDS, MOTIF_IDS, PROP_IDS, TERRAIN_DENSITIES, TERRAIN_FEATURE_IDS, TERRAIN_LAYOUT_IDS } from './registry';
 
 // ---------------------------------------------------------------------------
 // Primitives (same bounds as contracts.ts IdString / ShortText / TileCoord)
@@ -70,6 +70,14 @@ export const BiomeLayoutSchema = z.object({
 });
 export type BiomeLayout = z.infer<typeof BiomeLayoutSchema>;
 
+/** Same shape and bounds as contracts `RoomTerrain` (PR #16); applied to the biome's fighting rooms. */
+export const BiomeTerrainSchema = z.object({
+  features: z.array(z.enum(TERRAIN_FEATURE_IDS)).max(4),
+  layout: z.enum(TERRAIN_LAYOUT_IDS),
+  density: z.enum(TERRAIN_DENSITIES),
+});
+export type BiomeTerrain = z.infer<typeof BiomeTerrainSchema>;
+
 export const BiomeBriefSchema = z
   .object({
     id: FloorIdString,
@@ -82,6 +90,8 @@ export const BiomeBriefSchema = z
     propPool: z.array(z.enum(PROP_IDS)).min(1).max(5),
     hazards: z.boolean(),
     layout: BiomeLayoutSchema,
+    /** Optional terrain dressing; absent = a default picked from the first motif. floorgen ignores it, the runtime applies it. */
+    terrain: BiomeTerrainSchema.optional(),
   })
   .superRefine((brief, ctx) => {
     if (!brief.enemyPool.some((id) => id !== 'guardian')) {

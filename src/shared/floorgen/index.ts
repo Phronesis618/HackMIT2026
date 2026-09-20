@@ -33,3 +33,16 @@ export {
 } from './director';
 export { ROOM_TEMPLATES, getTemplate, pickTemplate, FALLBACK_TEMPLATE_ID, type RoomTemplate } from './templates';
 export { createRng, hashSeed, seedKey, type Rng } from './rng';
+// --- F1b: world-level API (briefs for any recipe, terrain mutator, the shared room provider) ---
+export { deriveBiomeBriefs, resolveBiomeBriefs, defaultBiomeTerrain, DERIVED_BIOME_IDS } from './briefs';
+export { applyBiomeTerrain } from './terrain';
+export {
+  createFloorRuntime,
+  createWorldFloorRuntime,
+  isFloorsWorld,
+  upgradeToFloors,
+  floorsSeedFor,
+  type FloorRuntime,
+  type FloorRuntimeContext,
+  type FloorNeighbour,
+} from './runtime';

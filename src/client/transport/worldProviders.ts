@@ -16,6 +16,7 @@ import {
   type GenerationStatus,
   type PreparedWorld,
 } from '../../shared/contracts';
+import { floorsSeedFor, upgradeToFloors } from '../../shared/floorgen';
 import { hashString } from '../../shared/ids';
 import fixtureJson from '../../../fixtures/worlds/vantage-spire.json';
 
@@ -39,11 +40,19 @@ const StreamRecordSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('error'), message: z.string().min(1).max(200) }),
 ]);
 
+/** `?floors=1` opts this browser into floors worlds (F1b hook; default off). */
+function floorsRequested(): boolean {
+  return typeof location !== 'undefined' && new URLSearchParams(location.search).get('floors') === '1';
+}
+
 export function parseWorldPrefix(raw: unknown, rawRequest: GenerationRequestInput, previous?: PreparedWorld): PreparedWorld {
   const request = GenerationRequestSchema.parse(rawRequest);
   const world = PreparedWorldSchema.parse(raw);
   const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
-  if (world.plannedRoomCount !== request.plannedRoomCount
+  // A floors world carries only its entrance room (plannedRoomCount 1); its contribution
+  // mappings are recipe-level, so they are not matched against per-room attributions.
+  const floors = world.floors !== undefined;
+  if (world.plannedRoomCount !== (floors ? 1 : request.plannedRoomCount)
     || world.receipt.source !== world.provenance.source || world.receipt.worldTitle !== world.recipe.title) {
     throw new Error('World identity or provenance does not match the request.');
   }
@@ -55,7 +64,7 @@ export function parseWorldPrefix(raw: unknown, rawRequest: GenerationRequestInpu
     mapping.contributionId === attribution.contributionId && mapping.roomIndex === attribution.roomIndex
     && mapping.kind === attribution.kind && mapping.featureDescription === attribution.featureDescription;
   if (mappings.some((mapping) => !request.contributions.some((c) => c.id === mapping.contributionId)
-    || !attributions.some((attribution) => matches(mapping, attribution)))
+    || (!floors && !attributions.some((attribution) => matches(mapping, attribution))))
     || attributions.some((attribution) => !mappings.some((mapping) => matches(mapping, attribution)))
     || (world.provenance.source !== 'live' && (mappings.length > 0 || attributions.length > 0))) {
     throw new Error('World attribution does not match committed features.');
@@ -127,7 +136,7 @@ async function fetchWorld(request: GenerationRequestInput, accept: string, signa
   const response = await fetch('/api/world', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: accept },
-    body: JSON.stringify(GenerationRequestSchema.parse(request)),
+    body: JSON.stringify({ ...GenerationRequestSchema.parse(request), ...(request.floors === undefined && floorsRequested() ? { floors: true } : {}) }),
     signal,
   });
   if (!response.ok) {
@@ -239,6 +248,7 @@ export const fixtureWorldProvider: WorldProvider = {
         })),
       },
     };
-    return PreparedWorldSchema.parse(world);
+    const prepared = PreparedWorldSchema.parse(world);
+    return request.floors ?? floorsRequested() ? upgradeToFloors(prepared, floorsSeedFor(prepared, request.seed)) : prepared;
   },
 };
