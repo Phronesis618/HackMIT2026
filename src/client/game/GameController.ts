@@ -60,7 +60,8 @@ export class GameController {
   private thumbnailTimers = new Set<ReturnType<typeof setTimeout>>();
   /** Floors worlds: rooms are compiled here from `world.floors`, the snapshot only names them. */
   private floorRooms: { worldId: string; provider: RoomProvider } | null = null;
-  private shownFloorRoomId: string | null = null;
+  private shownWorldId: string | null = null;
+  private shownRoomId: string | null = null;
 
   constructor(private readonly deps: GameControllerDeps) {
     this.actions = this.createActions();
@@ -227,17 +228,23 @@ export class GameController {
     audio.setScene?.(snapshot.phase);
     if (snapshot.phase === 'training') {
       if (store.get().phase !== 'training') {
+        this.shownWorldId = null;
+        this.shownRoomId = trainingRoom.id;
         renderer.showRoom(trainingRoom, trainingArt);
         store.set({ phase: 'training', room: { index: 0, name: trainingRoom.name, description: trainingRoom.description, isFinal: false }, hud: me ? hudFrom(me, snapshot) : null });
       }
       return;
     }
+    if (snapshot.phase !== 'headquarters' && store.get().phase !== snapshot.phase) {
+      store.set({ phase: snapshot.phase });
+    }
     const world = session.getWorld();
     const room = snapshot.floor && world ? this.floorRoom(world, snapshot.floor)
       : snapshot.roomIndex === null ? null : world?.rooms[snapshot.roomIndex];
-    const roomChanged = snapshot.floor ? this.shownFloorRoomId !== room?.id : store.get().room?.index !== room?.index;
-    if (world && room && snapshot.phase !== 'headquarters' && (roomChanged || store.get().phase === 'headquarters' || store.get().phase === 'training')) {
-      this.shownFloorRoomId = snapshot.floor ? room.id : null;
+    const roomChanged = this.shownWorldId !== world?.worldId || this.shownRoomId !== room?.id;
+    if (world && room && snapshot.worldId === world.worldId && snapshot.roomId === room.id && snapshot.phase !== 'headquarters' && roomChanged) {
+      this.shownWorldId = world.worldId;
+      this.shownRoomId = room.id;
       renderer.showRoom(room, world.art, world.receipt.lines, { title: world.recipe.title, tagline: world.recipe.tagline });
       store.set({ room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal }, phase: snapshot.phase, hud: me ? hudFrom(me, snapshot) : store.get().hud });
     }
@@ -320,10 +327,14 @@ export class GameController {
     audio.setScene?.(phase);
     store.set({ headquarters: { nearbyStationId: null, activeStationId: null } });
     if (phase === 'headquarters') {
+      this.shownWorldId = null;
+      this.shownRoomId = headquartersRoom.id;
       renderer.showHeadquarters(headquartersRoom, headquartersArt);
       store.set({ phase: 'headquarters', room: null, hud: null });
     } else if (phase === 'training') {
-      renderer.showRoom(trainingRoom, trainingArt);
+      if (this.shownWorldId !== null || this.shownRoomId !== trainingRoom.id) renderer.showRoom(trainingRoom, trainingArt);
+      this.shownWorldId = null;
+      this.shownRoomId = trainingRoom.id;
       store.set({ phase: 'training', room: { index: 0, name: trainingRoom.name, description: trainingRoom.description, isFinal: false } });
     } else if (phase === 'debrief') {
       store.set({ phase: 'debrief' });
