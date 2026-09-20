@@ -65,6 +65,17 @@ describe('run rail and command bar', () => {
     expect(renderToStaticMarkup(createElement(RunStatus, { model: ui }))).toContain('Clear');
   });
 
+  it('marks a crew seat whose client has gone away (A11)', () => {
+    const ui = model();
+    ui.players = ui.players.map((p, i) => ({ ...p, connected: i !== 1 }));
+    const html = renderToStaticMarkup(createElement(RunStatus, { model: ui }));
+    expect(html).toContain('is-offline');
+    expect(html).toContain('· offline');
+    // Everyone present: no marker anywhere.
+    ui.players = ui.players.map((p) => ({ ...p, connected: true }));
+    expect(renderToStaticMarkup(createElement(RunStatus, { model: ui }))).not.toContain('offline');
+  });
+
   it('puts a readable Integrity number and resources beside the abilities', () => {
     const ui = model();
     ui.hud = { ...ui.hud!, hp: 42, resources: 5, dashCooldownMs: 400 };
@@ -130,7 +141,7 @@ describe('event-derived debrief', () => {
     const ui = debrief(sampleEvents);
     const html = renderToStaticMarkup(createElement(DebriefPanel, { model: ui, actions }));
     expect(html).toContain('No expedition outcome has been recorded yet');
-    expect(html).toContain('Arrival preserved');
+    expect(html).toContain('Arrival keepsake');
     expect(html).toContain('defeated the first hostile');
     expect(html).toContain('3 memories from this world');
     expect(html).not.toContain('world anchored');
@@ -156,7 +167,7 @@ describe('event-derived debrief', () => {
     ui.world = { ...ui.world!, worldId: 'test-other-world' };
     const html = renderToStaticMarkup(createElement(DebriefPanel, { model: ui, actions }));
     expect(html).toContain('No memories from this world');
-    expect(html).not.toContain('Arrival preserved');
+    expect(html).not.toContain('Arrival keepsake');
     expect(html).not.toContain('planted the Anchor');
     ui.world = null;
     expect(renderToStaticMarkup(createElement(DebriefPanel, { model: ui, actions }))).toContain('No expedition outcome');

@@ -23,6 +23,7 @@ import {
 import { createRng, seedKey } from '../shared/floorgen/rng';
 import { terrainTileAt } from '../shared/terrain';
 import type { EnemyId } from '../shared/registry';
+import { DEMO_TUNING } from './tuning';
 
 export interface BossPlayerView {
   id: string;
@@ -45,7 +46,8 @@ export interface BossContext {
   room: RoomSpec;
   /** Living operatives, in the simulation's deterministic order. */
   players(): BossPlayerView[];
-  damagePlayer(playerId: string, sourceEnemyId: string, damage: number, ranged: boolean): boolean;
+  /** `floor`: the hit is the arena floor (flood, corruption), not a strike — hazard_ward covers it, melee_ward does not. */
+  damagePlayer(playerId: string, sourceEnemyId: string, damage: number, ranged: boolean, floor?: boolean): boolean;
   /** Collision-aware nudge of a player by a world-space delta. */
   pushPlayer(playerId: string, dx: number, dy: number): void;
   slowPlayer(playerId: string, ms: number): void;
@@ -126,8 +128,8 @@ export interface CustodianRuntime {
   attacks: number;
 }
 
-const HAZARD_TICK_MS = 600;
-const CORRUPTION_DAMAGE = 10;
+const HAZARD_TICK_MS = DEMO_TUNING.corruptedFloorTickMs;
+const CORRUPTION_DAMAGE = DEMO_TUNING.corruptedFloorDamage;
 const RING_BOLTS: BossBolts = { count: 12, spacing: (Math.PI * 2) / 12, speed: 240, radius: 6, life: 1600 };
 const SWEEP_RATE = (300 * Math.PI / 180) / 1.4; // 300 degrees over 1400 ms, in radians per second
 const SWEEP_MS = 1400;
@@ -546,7 +548,7 @@ function stepHazardTiles(rt: CustodianRuntime, s: EnemyState, ctx: BossContext, 
       rt.hazardCooldown.set(p.id, 0);
       continue;
     }
-    ctx.damagePlayer(p.id, s.id, onFlood ? floodDamage : CORRUPTION_DAMAGE, false);
+    ctx.damagePlayer(p.id, s.id, onFlood ? floodDamage : CORRUPTION_DAMAGE, false, true);
     rt.hazardCooldown.set(p.id, HAZARD_TICK_MS);
   }
 }

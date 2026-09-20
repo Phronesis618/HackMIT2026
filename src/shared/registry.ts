@@ -253,7 +253,7 @@ export const TERRAIN_CAPTION: Record<TerrainFeatureId, string> = {
   hazard_floor: 'SCALDING FLOOR · the burn ramps while you stand in it',
   canisters: 'VOLATILE CANISTER · one hit and it blows, both ways',
   pits: 'OPEN PIT · dash across it, or knock something into it',
-  vents: 'TIMED VENT · it fires on a beat you can watch',
+  vents: 'TIMED VENT · lights up before it fires',
   cover: 'LOW COVER · stops shots, not footsteps',
 };
 
@@ -269,16 +269,16 @@ export const ATTUNEMENT_EFFECT_IDS = [
 export type AttunementEffectId = (typeof ATTUNEMENT_EFFECT_IDS)[number];
 
 export const ATTUNEMENT_EFFECT_INFO: Record<AttunementEffectId, { summary: string; status: ImplementationStatus }> = {
-  hazard_ward: { summary: 'Hazard floor and area-denial bolts deal 40% less.', status: 'planned' },
-  bolt_ward: { summary: 'Enemy projectiles deal 25% less.', status: 'planned' },
-  melee_ward: { summary: 'Melee and charge hits deal 25% less.', status: 'planned' },
-  relic_mend: { summary: 'Reading a relic restores 25 Integrity.', status: 'planned' },
-  remains_charge: { summary: 'Recovering remains adds 40% ultimate charge.', status: 'planned' },
-  clear_surge: { summary: 'Clearing a room grants 4 s of haste.', status: 'planned' },
-  first_strike: { summary: 'Your first hit on an untouched enemy deals double.', status: 'planned' },
-  guardian_bane: { summary: 'The Guardian takes 20% more from you.', status: 'planned' },
-  dash_echo: { summary: 'Dashing leaves a short trail that burns enemies.', status: 'planned' },
-  anchor_grace: { summary: 'The Anchor plants in half the time.', status: 'planned' },
+  hazard_ward: { summary: 'Hazard floors, vents, canisters, pits and the collapse deal 40% less to you.', status: 'implemented' },
+  bolt_ward: { summary: 'Enemy bolts and beams deal 25% less to you.', status: 'implemented' },
+  melee_ward: { summary: 'Enemy melee, charge and slam hits deal 25% less to you.', status: 'implemented' },
+  relic_mend: { summary: 'Reading a relic restores 25 Integrity.', status: 'implemented' },
+  remains_charge: { summary: 'Recovering remains adds 40 ultimate charge.', status: 'implemented' },
+  clear_surge: { summary: 'Clearing a room grants 4 seconds of haste: 30% faster movement, 20% shorter attack cooldown.', status: 'implemented' },
+  first_strike: { summary: 'Your first hit on an untouched enemy deals double.', status: 'implemented' },
+  guardian_bane: { summary: 'The Guardian, gatekeepers and the Custodian take 20% more from you.', status: 'implemented' },
+  dash_echo: { summary: 'Dashing leaves a 1.5 second trail that burns enemies for 8 per second.', status: 'implemented' },
+  anchor_grace: { summary: 'The Anchor plants and discharges in half the time.', status: 'implemented' },
 };
 
 export function isClassId(value: string): value is ClassId {

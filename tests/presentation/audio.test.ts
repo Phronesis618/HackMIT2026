@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { AUDIO_CUE_IDS, cueForEvent, voiceForWorld } from '../../src/client/audio';
 import { WorldFixtureSchema, type GameEvent } from '../../src/shared/contracts';
@@ -37,5 +39,16 @@ describe('event cues', () => {
     expect(cues).toEqual(['hit', 'player_hit', 'lore', 'anchor', 'enemy_shot']);
     for (const cue of cues) expect(AUDIO_CUE_IDS).toContain(cue);
     expect(cueForEvent({ ...base, type: 'exit_reached', playerId: 'p', roomIndex: 0, toRoomIndex: 1 })).toBeNull();
+  });
+
+  // A21: a canister going up and the departure ritual both had pictures and no sound.
+  it('gives the canister blast a cue, and keeps every cue documented in design/audio/cues.json', () => {
+    const base = { id: 'x', tick: 1, timeMs: 16 };
+    expect(cueForEvent({ ...base, type: 'terrain_detonated', x: 10, y: 10, radius: 70, hitPlayerIds: ['p'], hitEnemyIds: ['e'] })).toBe('terrain_blast');
+    expect(AUDIO_CUE_IDS).toContain('departure'); // played by GameController from the departure bus
+
+    const documented = JSON.parse(readFileSync(join(__dirname, '../../design/audio/cues.json'), 'utf8')) as { cues: Record<string, string> };
+    expect(Object.keys(documented.cues).sort()).toEqual([...AUDIO_CUE_IDS].sort());
+    for (const line of Object.values(documented.cues)) expect(line.length).toBeGreaterThan(10);
   });
 });

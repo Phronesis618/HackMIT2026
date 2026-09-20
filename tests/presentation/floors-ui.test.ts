@@ -10,8 +10,10 @@ import { BiomeChoice, choiceKeyAction, pickBiome } from '../../src/client/ui/Bio
 import { FullMap } from '../../src/client/ui/FullMap';
 import { Minimap } from '../../src/client/ui/Minimap';
 import { buildMinimap, describeLayout, floorUiFrom, minimapPitch } from '../../src/client/ui/floorsModel';
-import type { GameSnapshot } from '../../src/shared/contracts';
+import { RunStatus } from '../../src/client/ui/Hud';
+import { IDLE_GENERATION_STATUS, type GameSnapshot } from '../../src/shared/contracts';
 import { ROOM_BUDGETS } from '../../src/shared/floors';
+import { lintProse } from '../../src/shared/prose';
 import { samplePlayers, sampleSnapshot } from '../../src/shared/samples';
 import type { GameSession } from '../../src/shared/session';
 import type { UiActions, UiModel } from '../../src/shared/ui';
@@ -91,7 +93,7 @@ describe('biome choice', () => {
     const specials = { treasure: 0, lore: 0, rest: 0, elite: 0 };
     expect(describeLayout({ linearity: 0.9, branchiness: 0.1, specials })).toBe('Long and direct. Few side rooms.');
     expect(describeLayout({ linearity: 0.5, branchiness: 0.9, specials })).toBe('Winding. Many dead ends.');
-    expect(describeLayout({ linearity: 0.1, branchiness: 0.5, specials })).toBe('Wide and sprawling. Some side rooms.');
+    expect(describeLayout({ linearity: 0.1, branchiness: 0.5, specials })).toBe('Wide and branching. Some side rooms.');
   });
 
   it('builds one card per option with name, tier, room count, enemies and hazards from the brief', () => {
@@ -150,6 +152,63 @@ describe('biome choice', () => {
     expect(floorUiFrom({ floor, players }, world, local)!.choice).toMatchObject({ confirmOnly: true });
     floor.biomeChoice!.chosenBiomeId = nextOptions[0]!;
     expect(floorUiFrom({ floor, players }, world, local)!.choice).toBeNull();
+  });
+});
+
+describe('run rail in floors mode', () => {
+  /** A floors UiModel: `plannedRoomCount` is 1 in a floors world, which is what used to leak out. */
+  const railModel = (visited: string[]): UiModel => ({
+    phase: 'expedition',
+    connection: { mode: 'local', status: 'connected' },
+    localPlayer: { ...samplePlayers[0]!, isLocal: true },
+    players: [{ ...samplePlayers[0]!, isLocal: true }],
+    contributions: [], generation: IDLE_GENERATION_STATUS, liveGenerationAvailable: false,
+    world: {
+      worldId: world.worldId, title: world.recipe.title, tagline: world.recipe.tagline, themeSummary: world.recipe.themeSummary,
+      provenance: world.provenance, receipt: world.receipt,
+      committedRoomCount: 1, plannedRoomCount: 1, lore: [], attunements: [],
+    },
+    room: { index: 0, name: 'Entrance hall', description: 'A room', isFinal: false },
+    hud: { hp: 100, maxHp: 100, state: 'idle', dashReady: true, dashCooldownMs: 0, attackReady: true, enemiesRemaining: 0 },
+    discoveredLore: [], memories: [],
+    classStatus: { bastion: 'partial', shade: 'planned', beacon: 'planned', weaver: 'planned' },
+    preview: { fixtureWorld: true, startRoom: null }, notice: null,
+    floor: floorUiFrom({ floor: runState(visited), players }, world, local),
+  });
+
+  it('counts rooms of the biome and names the biome depth instead of the legacy "1/1"', () => {
+    const next = Object.values(plan.rooms.find((room) => room.id === plan.entranceId)!.doors)[0]!;
+    const ui = railModel([plan.entranceId, next]);
+    expect(ui.floor).toMatchObject({ roomsVisited: 2, roomCount: ROOM_BUDGETS[0], depth: 1, depthCount: 5 });
+    const html = renderToStaticMarkup(createElement(RunStatus, { model: ui }));
+    expect(html).toContain('<dt>Rooms</dt>');
+    expect(html).toContain(`<dd>2<small>/${ROOM_BUDGETS[0]}</small></dd>`);
+    expect(html).toContain('<dt>Biome</dt>');
+    expect(html).toContain('<dd>1<small>/5</small></dd>');
+    expect(html).toContain(runtime.brief(biomeId).name);
+    expect(html).toContain('aria-label="Biome 1 of 5"');
+    // the legacy world-room tile and its 1/1 reading are gone
+    expect(html).not.toContain('<dt>Room</dt>');
+    expect(html).not.toContain('1<small>/1</small>');
+  });
+
+  it('leaves the legacy room tile alone when there is no floors run', () => {
+    const ui = { ...railModel([plan.entranceId]), floor: null };
+    ui.world = { ...ui.world!, committedRoomCount: 3, plannedRoomCount: 3 };
+    const html = renderToStaticMarkup(createElement(RunStatus, { model: ui }));
+    expect(html).toContain('<dt>Room</dt>');
+    expect(html).toContain('<dd>1<small>/3</small></dd>');
+    expect(html).not.toContain('<dt>Biome</dt>');
+  });
+});
+
+describe('the full map legend', () => {
+  it('says a rest site works once, so nobody walks back for a second one (A4)', () => {
+    const floor = floorUiFrom({ floor: runState([plan.entranceId]), players }, world, local)!;
+    const html = renderToStaticMarkup(createElement(FullMap, { floor, onClose: () => {} }));
+    expect(html).toContain('Rest site · mends the crew once');
+    const lint = lintProse('Rest site · mends the crew once', { kind: 'uiLabel' });
+    expect(lint.hardFail, JSON.stringify(lint.issues)).toBe(false);
   });
 });
 

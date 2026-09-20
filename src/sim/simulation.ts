@@ -50,6 +50,12 @@ import {
 import { TRAINING_REGEN_PER_TICK, TRAINING_RESPAWN_MS, TRAINING_WAKE_RANGE, trainingRoom } from './training';
 import { DOOR_SIDES, FLOOR_ENTRANCE_ROOM_ID } from '../shared/floors';
 import { NEUTRAL_LAWS, applyEncounterLaws, lawsSpareEncounter, resolveLaws, worldLawsView, type ResolvedLaws } from './laws';
+import {
+  NO_EFFECTS, anchorRateMul, clearBonusResources, clearHasteMs, dashCooldownMul, dashInvulnerableBonusMs, dropTrailPoint, effectsFor,
+  hasteAttackCooldownMul, hasteMoveMul, incomingDamageMul, outgoingDamageMul, relicMendHp, remainsCharge, skillWorldContext, stepDashTrail,
+  DASH_TRAIL_DAMAGE, type DashTrail, type EffectSet, type IncomingKind,
+} from './effects';
+import { buildSkillTree, skillPurchaseCheck } from '../shared/skills';
 import { createRoomProvider, type RoomProvider } from './floorProvider';
 import {
   FLOOR_TUNING, TREASURE_REWARD, advanceBiome, clearReward, connectedTiles, createFloorsRun, doorArrival, floorRunState, focusPoint,
@@ -76,6 +82,11 @@ interface PlayerRuntime {
   history: Array<Point & { hp: number }>;
   /** T1: damaging-tile bookkeeping; derived from sim state, never serialised. */
   hazard: HazardClock;
+  /** S1: `effectsFor(state, world)`, cached; refreshed on purchase, class change and world change. */
+  effects: EffectSet;
+  /** S1: clear_surge haste left, and the dash_echo burn trail; both derived, never serialised. */
+  hasteMs: number;
+  trail: DashTrail | null;
 }
 
 interface EnemyRuntime {
@@ -100,7 +111,16 @@ interface EnemyRuntime {
   waveTag?: string;
   /** Mirror-shade decoys: they telegraph, they deal nothing, they hold one point. */
   decoy?: boolean;
+  /**
+   * True once a PLAYER's hit has landed on it. `first_light` keys its opening-strike bonus on
+   * this rather than on full health, so a burn tick from the room cannot spend the crew's
+   * opening strike before anyone has swung (docs/design/WORLD_MUTATORS.md).
+   */
+  struckByPlayer?: boolean;
 }
+
+/** `unstable_matter`: a pack shoulder to shoulder must not chain for ever. */
+const DEATH_BLAST_MAX_CHAIN = 8;
 
 /** Floors: the crew arrives through a door, on its `entry` tile, facing `inward`. */
 interface DoorArrival {
@@ -160,11 +180,23 @@ export interface Simulation {
   returnToHeadquarters(): GameEvent[];
   /** From HQ only: the practice range (respawning targets, all abilities, no run). */
   enterTraining(): GameEvent[];
+  /**
+   * Co-op: the transport tells the sim when a client goes away and when it comes back. An
+   * operative with nobody behind them is not a target and not a participant; their seat is
+   * still held (see PlayerState.connected).
+   */
+  setPlayerConnected(playerId: string, connected: boolean): void;
   /** Floors co-op: whose `chooseBiome` decides. Null = the first operative (solo). */
   setHostPlayerId(playerId: string | null): void;
   /** Floors: vote while the biome choice is open; the host's vote moves the crew on the next step. */
   chooseBiome(playerId: string, biomeId: string): void;
   unlockAbility(playerId: string): GameEvent[];
+  /**
+   * Buys one skill-tree node for one operative with their own resources (S1). Authoritative:
+   * refuses unknown, planned, owned, unmet-prerequisite or unaffordable nodes. Returns whether
+   * the purchase happened; the result is visible in `PlayerState.skillNodeIds` and `resources`.
+   */
+  purchaseSkill(playerId: string, nodeId: string): boolean;
   /** Buttons are pressed this tick; interact is held this tick. */
   applyIntent(intent: PlayerIntent): void;
   step(): GameEvent[];
@@ -213,6 +245,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   let collapse: CollapseRun | null = null;
   /** Written when the Custodian falls; the extraction offers it as a thing to carry out. */
   let custodianLog: { title: string; detail: string } | null = null;
+  /** `unstable_matter` chain guard: how deep the current burst chain is. */
+  let deathBlastDepth = 0;
 
   function emit(data: GameEventInput): GameEvent {
     return { ...data, id: `${tick}:${eventCounter++}`, tick, timeMs: tick * TICK_MS };
@@ -224,6 +258,15 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
 
   function playerIds(): string[] {
     return orderedPlayers().map((p) => p.state.id);
+  }
+
+  /**
+   * Operatives with somebody behind them. A co-op seat whose client has dropped keeps its body
+   * in the room for the reconnect grace, but it is nobody's target, it triggers nothing, and it
+   * does not keep a downed crew alive (docs/QA_COOP.md, "ghost seats are invisible as such").
+   */
+  function presentPlayers(): PlayerRuntime[] {
+    return orderedPlayers().filter((p) => p.state.connected !== false);
   }
 
   function findTile(ch: string): Point | null {
@@ -252,6 +295,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     p.history = [];
     p.onExit = false;
     p.hazard = createHazardClock();
+    p.hasteMs = 0;
+    p.trail = null;
   }
 
   function doorsLocked(): boolean {
@@ -346,12 +391,12 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   function bossContext(events: GameEvent[]): BossContext {
     return {
       room,
-      players: () => orderedPlayers().filter((p) => p.state.hp > 0)
+      players: () => presentPlayers().filter((p) => p.state.hp > 0)
         .map((p) => ({ id: p.state.id, x: p.state.x, y: p.state.y, hp: p.state.hp, hidden: (p.state.shroudMs ?? 0) > 0 })),
-      damagePlayer: (playerId, sourceEnemyId, damage, ranged) => {
+      damagePlayer: (playerId, sourceEnemyId, damage, ranged, floor) => {
         const p = players.get(playerId);
         // Boss numbers are absolute: the tier curve scales the biome's enemies, never the Custodian.
-        return p ? damagePlayer(p, sourceEnemyId, damage, ranged, events, 350, false) : false;
+        return p ? damagePlayer(p, sourceEnemyId, damage, ranged, events, 350, false, floor ? 'terrain' : undefined) : false;
       },
       pushPlayer: (playerId, dx, dy) => {
         const p = players.get(playerId);
@@ -440,8 +485,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       worldId: world?.worldId ?? '',
       room,
       roomKey: escapeKey(room),
-      players: () => orderedPlayers().map((p) => ({ id: p.state.id, x: p.state.x, y: p.state.y, hp: p.state.hp })),
-      crewSize: () => players.size,
+      // A dropped seat is not part of the escape either: it cannot bleed out and it cannot vote.
+      players: () => presentPlayers().map((p) => ({ id: p.state.id, x: p.state.x, y: p.state.y, hp: p.state.hp })),
+      crewSize: () => presentPlayers().length,
       damagePlayer: (playerId, source, damage) => {
         const p = players.get(playerId);
         return p ? damagePlayer(p, source, damage, false, events, 350, false) : false;
@@ -587,6 +633,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       e.cooldownMs = 600;
       e.hitMs = 0;
       e.hazard = createHazardClock();
+      e.struckByPlayer = false; // a fresh target is a fresh opening strike
     }
   }
 
@@ -706,8 +753,12 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       intent: null, unlockedClasses: new Set(), dashRemainingMs: 0,
       dashDirection: { x: 1, y: 0 }, attackRemainingMs: 0, hitRemainingMs: 0,
       onExit: false, interacting: false, interactHeld: false, interactPressed: false, damagedThisTick: false, history: [],
-      hazard: createHazardClock(),
+      hazard: createHazardClock(), effects: NO_EFFECTS, hasteMs: 0, trail: null,
     };
+  }
+
+  function refreshEffects(p: PlayerRuntime): void {
+    p.effects = effectsFor(p.state, world);
   }
 
   function livingEnemies(): EnemyRuntime[] {
@@ -731,13 +782,17 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const s = e.state;
     if (s.hp <= 0) return;
     // World laws scale what the CREW hits for. A vent is not a player: it neither gets
-    // `playerDamageMul` nor spends the `first_light` opening strike's multiplier on a burn tick.
-    const lawMul = source.kind === 'player' ? laws.playerDamageMul * (s.hp === s.maxHp ? laws.firstStrikeMul : 1) : 1;
-    const marked = Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1) * lawMul);
+    // `playerDamageMul` nor spends the `first_light` opening strike on a burn tick — and, because
+    // the bonus is keyed on the first PLAYER hit rather than on full health, a hazard that has
+    // already taken a sliver off an enemy cannot quietly cancel it either.
+    const lawMul = source.kind === 'player' ? laws.playerDamageMul * (e.struckByPlayer === true ? 1 : laws.firstStrikeMul) : 1;
+    const fxMul = source.kind === 'player' ? outgoingDamageMul(source.player.effects, s) : 1;
+    const marked = Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1) * lawMul * fxMul);
     // The Custodian caps single hits at 12% of its health, applies its phase-3 shield and any
     // vulnerability window it has opened (BOSS_FINALE §3.2, §4.2).
     const amount = Math.min(s.hp, e.custodian ? custodianIncomingDamage(e.custodian, s, marked) : marked);
     if (amount <= 0) return;
+    if (source.kind === 'player') e.struckByPlayer = true;
     const by = source.kind === 'player' ? source.player : source.kind === 'displaced' ? source.by : null;
     // An environmental kill pays half: attractive to aim for, never better than fighting.
     const credit = source.kind === 'player' ? 1 : ENV_KILL_CREDIT;
@@ -759,6 +814,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: by?.state.id ?? null,
         worldId: phase === 'expedition' ? world?.worldId ?? null : null }));
       dropRemains(e);
+      detonateBody(e, events);
       // The fight writes its own record: the world's name for the Custodian, its three moves, how
       // long it took and who landed the last hit. The extraction may offer it as a thing to carry.
       if (e.custodian && e.maxBossPhase === undefined) {
@@ -769,6 +825,49 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
           detail: `${e.custodian.custodian.title}: ${moves}. ${Math.round(tick * TICK_MS / 1000)} seconds. Last hit by ${by?.state.displayName ?? 'the room'}.`.slice(0, 200),
         };
       }
+    }
+  }
+
+  /**
+   * `unstable_matter` (WORLD_MUTATORS.md): a body that comes apart takes the room with it.
+   *
+   * The blast IS the canister's (TILES.md T1) with the law's numbers: linear falloff to 0.35 at
+   * the rim, line of sight required, and any `*` inside the circle lights its fuse. A chain is
+   * capped so one pack standing shoulder to shoulder cannot recurse for ever.
+   *
+   * The crew's damage is credited to the enemy that burst, because that is what happened; the
+   * enemy-side damage is the room's, so nobody is paid full price for a kill they did not make.
+   */
+  function detonateBody(dead: EnemyRuntime, events: GameEvent[]): void {
+    const blast = laws.deathBlast;
+    if (!blast || deathBlastDepth >= DEATH_BLAST_MAX_CHAIN) return;
+    const at = { x: dead.state.x, y: dead.state.y };
+    deathBlastDepth++;
+    try {
+      progress.terrain = armCanistersInCircle(room, progress.terrain, at.x, at.y, blast.radius,
+        roomTerrainTuning(room).canisterFuseMs).state;
+      const hitEnemyIds: string[] = [];
+      const hitPlayerIds: string[] = [];
+      for (const e of progress.enemies) {
+        if (e.state.hp <= 0) continue;
+        const falloff = blastFalloff(distance(at, e.state) - ENEMY_INFO[e.state.enemyId].radius, blast.radius);
+        if (falloff <= 0 || !clearPath(grid, at, e.state)) continue;
+        hitEnemyIds.push(e.state.id);
+        damageEnemyFrom(e, { kind: 'terrain', tile: TERRAIN_DAMAGE_SOURCE.canister },
+          Math.max(1, Math.round(blast.enemyDamage * falloff)), events);
+      }
+      for (const p of orderedPlayers()) {
+        if (p.state.hp <= 0) continue;
+        const falloff = blastFalloff(distance(at, p.state) - PLAYER_RADIUS, blast.radius);
+        if (falloff <= 0 || !clearPath(grid, at, p.state)) continue;
+        if (damagePlayer(p, dead.state.id, Math.max(1, Math.round(blast.playerDamage * falloff)), false, events)) {
+          hitPlayerIds.push(p.state.id);
+        }
+      }
+      // The renderer's blast effect; `terrain_detonated` is the cue it already knows how to draw.
+      events.push(emit({ type: 'terrain_detonated', x: at.x, y: at.y, radius: blast.radius, hitPlayerIds, hitEnemyIds }));
+    } finally {
+      deathBlastDepth--;
     }
   }
 
@@ -804,6 +903,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     node.holdMs = 0;
     if (!fragment || discoveredLore.has(node.state.fragmentIndex)) return;
     discoveredLore.add(node.state.fragmentIndex);
+    if (node.state.kind === 'relic') by.state.hp = Math.min(by.state.maxHp, by.state.hp + relicMendHp(by.effects));
+    else by.state.ultCharge = Math.min(ULT_CHARGE_MAX, by.state.ultCharge + remainsCharge(by.effects));
     events.push(emit({
       type: 'lore_discovered', worldId: world.worldId, playerId: by.state.id, fragmentIndex: node.state.fragmentIndex, kind: fragment.kind,
       title: fragment.title, source: fragment.source, text: fragment.text, x: node.state.x, y: node.state.y,
@@ -823,7 +924,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         continue;
       }
       const reader = living.find((p) => !busy.has(p.state.id) && p.interacting && !p.damagedThisTick &&
-        distance(p.state, node.state) <= LORE_READ_RANGE && clearPath(grid, p.state, node.state));
+        distance(p.state, node.state) <= LORE_READ_RANGE && canReach(p.state, node.state));
       if (!reader) {
         node.holdMs = 0;
         node.state.state = 'sealed';
@@ -846,7 +947,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
    */
   function damagePlayer(
     p: PlayerRuntime, sourceEnemyId: string, damage: number, ranged: boolean, events: GameEvent[],
-    invulnerableMsAfter = 350, scaled = true,
+    invulnerableMsAfter = 350, scaled = true, wardKind?: IncomingKind,
   ): boolean {
     const s = p.state;
     if (s.hp <= 0 || s.invulnerableMs > 0 || (ranged && s.shieldMs > 0)) return false;
@@ -854,6 +955,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (scaled && enemyDamageScale !== 1 && sourceEnemyId !== 'anchor-pulse' && !isTerrainDamageSource(sourceEnemyId)) {
       damage = Math.round(damage * enemyDamageScale);
     }
+    const wardMul = incomingDamageMul(p.effects, sourceEnemyId, ranged, wardKind);
+    if (wardMul !== 1) damage = Math.round(damage * wardMul);
     let amount = Math.min(s.hp, s.shieldMs > 0 ? Math.ceil(damage * 0.2) : damage);
     // Training range: hits land (so the telegraphs teach), but nobody goes down.
     if (phase === 'training') amount = Math.min(amount, Math.max(0, s.hp - 1));
@@ -976,7 +1079,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   function arcTargets(origin: Point, facing: number, range: number, arc: number): EnemyRuntime[] {
     return livingEnemies().filter((e) =>
       inArc(origin, e.state, facing, range, arc, ENEMY_INFO[e.state.enemyId].radius) &&
-      canStrike(origin, e.state),
+      canStrike(origin, e.state, ENEMY_INFO[e.state.enemyId].radius),
     ).sort((a, b) => distance(origin, a.state) - distance(origin, b.state));
   }
 
@@ -985,9 +1088,24 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
    * movement layer, where '-' cover is open but walls are not: you can hit the thing standing
    * on the other side of a barricade, and still not the thing behind a wall (TILES.md T4).
    */
-  function canStrike(origin: Point, target: Point): boolean {
+  function canStrike(origin: Point, target: Point, radius = 0): boolean {
     if (clearPath(grid, origin, target)) return true;
-    return distance(origin, target) <= TILE_SIZE && clearPath(grid, origin, target, 1, 'solid');
+    // Measured to the target's BODY, not its centre: a Warden is 18 px across its half, so it can
+    // stand with its shoulder against the far side of a barricade while its centre is more than a
+    // tile away. Without the radius the crew could never touch a big enemy holding cover, and
+    // neither side could shoot the other — a stand-off that ends the room only when the clock does.
+    return distance(origin, target) <= TILE_SIZE + radius && clearPath(grid, origin, target, 1, 'solid');
+  }
+
+  /**
+   * Line of REACH, for the things an operative does with their hands at arm's length: pulling a
+   * teammate up, reading a relic, planting the Anchor, hitting a relay. It reads the MOVEMENT
+   * layer, so a '-' barricade is open — low cover stops what travels and nothing else
+   * (TILES.md T4). A wall, a prop or a pit between the two still refuses; if you could not walk
+   * the last half-tile, you cannot reach across it either.
+   */
+  function canReach(from: Point, to: Point): boolean {
+    return clearPath(grid, from, to, 1, 'solid');
   }
 
   function basicAttack(p: PlayerRuntime, events: GameEvent[]): void {
@@ -998,7 +1116,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const bonus = s.shroudMs > 0 ? 18 : 0;
     s.shroudMs = 0;
     p.attackRemainingMs = ATTACK_DURATION_MS;
-    s.attackCooldownMs = spec.cooldown * (s.rallyMs > 0 ? 0.75 : 1);
+    s.attackCooldownMs = spec.cooldown * (s.rallyMs > 0 ? 0.75 : 1) * hasteAttackCooldownMul(p.hasteMs);
     events.push(emit({ type: 'player_attacked', playerId: s.id, x: s.x, y: s.y, facing: s.facing,
       range: spec.range, arcRad: spec.arc, hitEnemyIds: targets.map((e) => e.state.id) }));
     for (const e of targets) {
@@ -1062,7 +1180,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     p.hazard = createHazardClock();
     // Applied directly rather than through damagePlayer: you cannot i-frame or shield a hole,
     // and the fall must never take the last point of health.
-    const amount = Math.min(PIT_FALL_DAMAGE, Math.max(0, s.hp - 1));
+    const amount = Math.min(Math.round(PIT_FALL_DAMAGE * incomingDamageMul(p.effects, TERRAIN_DAMAGE_SOURCE.pit, false)), Math.max(0, s.hp - 1));
     if (amount > 0) {
       s.hp -= amount;
       s.reviveProgress = 0;
@@ -1222,11 +1340,22 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     }
   }
 
+  function burnDashTrail(p: PlayerRuntime, events: GameEvent[]): void {
+    const enemies = progress.enemies.filter((e) => !e.decoy).map((e) => e.state);
+    const { trail, burned } = stepDashTrail(p.trail!, TICK_MS, enemies);
+    p.trail = trail;
+    for (const id of burned) {
+      const e = progress.enemies.find((it) => it.state.id === id);
+      if (e) damageEnemyFrom(e, { kind: 'player', player: p }, DASH_TRAIL_DAMAGE, events);
+    }
+  }
+
   function stepPlayer(p: PlayerRuntime, events: GameEvent[]): void {
     const s = p.state;
     for (const key of ['dashCooldownMs', 'attackCooldownMs', 'invulnerableMs', 'abilityQCooldownMs', 'abilityECooldownMs', 'abilityRCooldownMs', 'shieldMs', 'shroudMs', 'rallyMs'] as const) s[key] = decay(s[key]);
     p.hitRemainingMs = decay(p.hitRemainingMs);
     s.slowMs = decay(s.slowMs ?? 0);
+    p.hasteMs = decay(p.hasteMs);
     p.damagedThisTick = false;
     const intent = p.intent;
     p.intent = null;
@@ -1250,8 +1379,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       p.dashDirection = length > 0 ? { x: moveX / length, y: moveY / length } : { x: Math.cos(s.facing), y: Math.sin(s.facing) };
       p.dashRemainingMs = DASH_DURATION_MS * laws.dashDurationMul;
       p.attackRemainingMs = 0;
-      s.dashCooldownMs = DASH_COOLDOWN_MS * laws.dashCooldownMul;
-      s.invulnerableMs = Math.max(s.invulnerableMs, DASH_INVULNERABLE_MS);
+      s.dashCooldownMs = DASH_COOLDOWN_MS * laws.dashCooldownMul * dashCooldownMul(p.effects);
+      s.invulnerableMs = Math.max(s.invulnerableMs, DASH_INVULNERABLE_MS + dashInvulnerableBonusMs(p.effects));
       // The event's facing is the direction of travel (renderers draw the trail behind it),
       // not the aim direction — you can dash sideways while looking at an enemy.
       events.push(emit({ type: 'player_dashed', playerId: s.id, x: s.x, y: s.y, facing: Math.atan2(p.dashDirection.y, p.dashDirection.x) }));
@@ -1265,7 +1394,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       s.vy = p.dashDirection.y * DASH_SPEED * laws.dashSpeedMul;
     } else {
       const speed = CLASS_COMBAT[s.classId].speed * laws.walkSpeedMul * (p.attackRemainingMs > 0 ? laws.attackMoveMul : 1) *
-        (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1) * ((s.slowMs ?? 0) > 0 ? 0.6 : 1) *
+        (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1) * ((s.slowMs ?? 0) > 0 ? 0.6 : 1) * hasteMoveMul(p.hasteMs) *
         terrainSpeedMultiplier(room, s.x, s.y, progress.terrain.brokenWalls);
       s.vx = length > 0 ? moveX / length * speed : 0;
       s.vy = length > 0 ? moveY / length * speed : 0;
@@ -1279,6 +1408,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (moved.blockedY) s.vy = 0;
     s.state = p.dashRemainingMs > 0 ? 'dashing' : p.attackRemainingMs > 0 ? 'attacking' :
       p.hitRemainingMs > 0 ? 'hit' : s.vx !== 0 || s.vy !== 0 ? 'moving' : 'idle';
+    if (p.dashRemainingMs > 0) p.trail = dropTrailPoint(p.trail, p.effects, s.x, s.y);
+    if (p.trail) burnDashTrail(p, events);
     p.dashRemainingMs = decay(p.dashRemainingMs);
     p.attackRemainingMs = decay(p.attackRemainingMs);
     if (p.dashRemainingMs === 0 && overPit(s)) resolvePlayerPitFall(p, events);
@@ -1455,7 +1586,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       }
       return;
     }
-    const target = orderedPlayers().filter((p) => p.state.hp > 0 && p.state.shroudMs === 0)
+    const target = presentPlayers().filter((p) => p.state.hp > 0 && p.state.shroudMs === 0)
       .sort((a, b) => distance(s, a.state) - distance(s, b.state))[0];
     if (!target || (phase === 'training' && distance(s, target.state) > TRAINING_WAKE_RANGE)) {
       // Training targets doze in their pens until an operative walks up to them.
@@ -1505,17 +1636,18 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
 
   function updateObjectives(events: GameEvent[]): void {
     if (phase !== 'expedition' || !world) return;
-    const living = orderedPlayers().filter((p) => p.state.hp > 0);
+    const present = presentPlayers();
+    const living = present.filter((p) => p.state.hp > 0);
     // During the collapse a downed crew is escape.ts's business: a solo last stand, or a bleed-out
     // that ends the run as `stranded` rather than as a wipe.
-    if (players.size > 0 && living.length === 0 && collapse === null) {
+    if (present.length > 0 && living.length === 0 && collapse === null) {
       finishRun('collapsed', events);
       return;
     }
     const busy = new Set<string>();
     for (const downed of orderedPlayers().filter((p) => p.state.hp === 0)) {
       const rescuer = living.find((p) => !busy.has(p.state.id) && p.interacting && !p.damagedThisTick &&
-        distance(p.state, downed.state) <= REVIVE_RANGE && clearPath(grid, p.state, downed.state));
+        distance(p.state, downed.state) <= REVIVE_RANGE && canReach(p.state, downed.state));
       if (!rescuer) {
         downed.state.reviveProgress = 0;
         continue;
@@ -1534,7 +1666,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (!progress.cleared && living.length > 0 && livingEnemies().length === 0) {
       progress.cleared = true;
       const reward = environmentalShare(floorsRun ? clearReward(room) : ROOM_CLEAR_REWARD);
-      for (const p of players.values()) p.state.resources += reward;
+      for (const p of players.values()) {
+        p.state.resources += reward + clearBonusResources(p.effects);
+        p.hasteMs = Math.max(p.hasteMs, clearHasteMs(p.effects));
+      }
       events.push(emit({ type: 'room_cleared', worldId: world.worldId, roomIndex: room.index, roomId: room.id, playerIds: playerIds(), reward }));
       if (floorsRun && room.roomId !== undefined) {
         markCleared(floorsRun, room.roomId);
@@ -1553,14 +1688,14 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       return;
     }
     const planters = living.filter((p) => p.interacting && !p.damagedThisTick && !busy.has(p.state.id) &&
-      distance(p.state, anchor) <= ANCHOR_RANGE && clearPath(grid, p.state, anchor));
+      distance(p.state, anchor) <= ANCHOR_RANGE && canReach(p.state, anchor));
     if (planters.length === 0) {
       anchor.state = 'dormant';
       anchor.progress = 0;
       return;
     }
     anchor.state = 'planting';
-    anchor.progress = Math.min(1, anchor.progress + TICK_MS / ANCHOR_HOLD_MS);
+    anchor.progress = Math.min(1, anchor.progress + TICK_MS * anchorRateMul(planters.map((p) => p.effects)) / ANCHOR_HOLD_MS);
     if (anchor.progress >= 1 - 1e-7) {
       anchor.progress = 1;
       anchor.state = 'planted';
@@ -1579,7 +1714,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (ritual.stage === 'discharging') {
       // Every relic the crew actually read takes 150 ms off the discharge (BOSS_FINALE §6).
       const dischargeMs = anchorDischargeMs(relicsRead([...discoveredLore], world.recipe.lore));
-      ritual.dischargeMs = Math.min(dischargeMs, ritual.dischargeMs + TICK_MS);
+      ritual.dischargeMs = Math.min(dischargeMs, ritual.dischargeMs + TICK_MS * anchorRateMul(living.map((p) => p.effects)));
       anchor.progress = 0.75 + 0.25 * ritual.dischargeMs / dischargeMs;
       if (ritual.dischargeMs >= dischargeMs - 1e-7) {
         anchor.state = 'planted';
@@ -1617,7 +1752,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const target = ritual.stage === 'core' ? anchor : ritual.relays[ritual.activeRelay];
     if (!target) return;
     const actor = living.find((p) => !busy.has(p.state.id) && p.state.hp > 0 && p.interactPressed && !p.damagedThisTick &&
-      distance(p.state, target) <= RELAY_ACTIVATION_RANGE && clearPath(grid, p.state, target));
+      distance(p.state, target) <= RELAY_ACTIVATION_RANGE && canReach(p.state, target));
     if (!actor) return;
     anchor.state = 'planting';
     if (ritual.stage === 'core') {
@@ -1746,6 +1881,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         p.state.classId = identity.classId;
         p.state.abilityEUnlocked = p.unlockedClasses.has(identity.classId);
         resetTransient(p);
+        refreshEffects(p);
       }
     },
     getPlayerIds: playerIds,
@@ -1759,6 +1895,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       }
       world = next;
       worldLaws = resolveLaws(worldLawsView(next, options.deriveLaws).laws);
+      for (const p of players.values()) refreshEffects(p);
       // Outside a run the provider follows the latest copy of the world (briefs may arrive late).
       if (!floorsRun) roomProvider = next?.floors ? (options.roomProvider ?? createRoomProvider)(next) : null;
     },
@@ -1826,6 +1963,24 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       return [emit({ type: 'ability_unlocked', playerId, abilityId: CLASS_ABILITIES[p.state.classId].e,
         cost: ABILITY_UNLOCK_COST, remainingResources: p.state.resources })];
     },
+    setPlayerConnected(playerId, connected) {
+      const p = players.get(playerId);
+      if (!p) return;
+      // Absent means present: a solo snapshot and every legacy snapshot stay byte-identical.
+      if (connected) delete p.state.connected;
+      else p.state.connected = false;
+    },
+    purchaseSkill(playerId, nodeId) {
+      const p = players.get(playerId);
+      if (!p || phase === 'debrief' || p.state.hp <= 0) return false;
+      const tree = buildSkillTree(p.state.classId, skillWorldContext(world));
+      const owned = p.state.skillNodeIds ?? [];
+      if (skillPurchaseCheck(tree, nodeId, owned, p.state.resources) !== null) return false;
+      p.state.resources -= tree.nodes.find((n) => n.id === nodeId)!.cost;
+      p.state.skillNodeIds = [...owned, nodeId];
+      refreshEffects(p);
+      return true;
+    },
     setHostPlayerId(playerId) {
       hostPlayerId = playerId;
       if (floorsRun) floorsRun.hostPlayerId = playerId;
@@ -1868,7 +2023,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         tick, timeMs: tick * TICK_MS, phase,
         worldId: phase === 'headquarters' ? null : world?.worldId ?? null,
         roomIndex: phase === 'headquarters' ? null : room.index,
-        roomId: room.id, players: orderedPlayers().map((p) => ({ ...p.state })),
+        roomId: room.id, players: orderedPlayers().map((p) => ({ ...p.state, ...(p.state.skillNodeIds ? { skillNodeIds: [...p.state.skillNodeIds] } : {}) })),
         enemies: progress.enemies.map((e) => ({ ...e.state, telegraph: e.state.telegraph ? { ...e.state.telegraph } : null })),
         projectiles: projectiles.map((pr): ProjectileState => ({
           id: pr.id, ownerEnemyId: pr.ownerEnemyId, x: pr.x, y: pr.y, vx: pr.vx, vy: pr.vy, radius: pr.radius,

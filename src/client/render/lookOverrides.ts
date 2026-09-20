@@ -36,7 +36,7 @@ export function withLookOverrides(view: WorldLawsView, search: string = typeof l
   if (params.has('dark') && Number.isFinite(dark) && !laws.some((law) => law.lawId === 'long_dark')) {
     // intensity from the radius, inverted from the law's 260..170 band
     const intensity = Math.max(0, Math.min(1, (260 - Math.max(170, Math.min(260, dark || 215))) / 90));
-    laws.push({ lawId: 'long_dark', name: 'The Long Dark', description: 'Bring your own light.', intensity });
+    laws.push({ lawId: 'long_dark', name: 'Dark (debug override)', description: 'Forced by the ?dark= URL parameter. Not part of this world.', intensity });
   }
   if (Object.keys(overrides).length === 0 && laws.length === view.laws.length) return view;
   return { ...view, laws, look: Object.keys(overrides).length > 0 || view.look ? { ...(view.look ?? BASE_LOOK), ...overrides } : null };

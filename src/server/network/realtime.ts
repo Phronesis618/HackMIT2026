@@ -290,6 +290,7 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
     clearTimeout(client.helloTimer);
     member.client = client;
     member.disconnectedAt = null;
+    sim.setPlayerConnected(member.identity.id, true);
     member.intent = null;
     member.lastSequence = -1;
     client.member = member;
@@ -403,6 +404,10 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
         publishEvents(events);
         break;
       }
+      case 'purchase_skill':
+        // Buys for the sender only: the node id is data, the player id is the socket's.
+        if (sim.purchaseSkill(member.identity.id, message.nodeId)) publishSnapshot();
+        break;
     }
   }
 
@@ -448,6 +453,8 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
       if (client.member) {
         client.member.client = null;
         client.member.disconnectedAt = Date.now();
+        // The seat is held for the grace period, but nobody is behind it: mark it on every screen.
+        sim.setPlayerConnected(client.member.identity.id, false);
         client.member.intent = null;
         electHost();
         broadcast({ type: 'lobby', lobby: lobby() });

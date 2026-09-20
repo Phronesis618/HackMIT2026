@@ -18,11 +18,11 @@ export function DebriefPanel({ model, actions }: { model: UiModel; actions: UiAc
       {anchored && (
         <div className="debrief__keepsake">
           <div>
-            <p className="eyebrow">A signal that remains</p>
-            <h3 className="panel__subtitle">This world can hold itself now.</h3>
+            <p className="eyebrow">Anchor planted</p>
+            <h3 className="panel__subtitle">The world is anchored.</h3>
             <p className="muted">
-              The Custodian falls silent. Your Anchor answers from the other side of the portal.
-              Return to the sanctuary; the Archive will keep what happened here.
+              The Custodian is down and the Anchor is planted. The records below are saved on this
+              device and appear in the headquarters archive.
             </p>
           </div>
         </div>
@@ -33,7 +33,7 @@ export function DebriefPanel({ model, actions }: { model: UiModel; actions: UiAc
             <img className="debrief__thumb" src={arrival.thumbnailDataUrl} alt={`Arrival in ${arrival.worldTitle}`} />
           )}
           <div>
-            <h3 className="panel__subtitle">Arrival preserved</h3>
+            <h3 className="panel__subtitle">Arrival keepsake</h3>
             <p className="muted">{arrival.summary}</p>
           </div>
         </div>

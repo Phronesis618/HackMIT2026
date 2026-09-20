@@ -32,6 +32,8 @@ export interface UiPlayer {
   displayName: string;
   classId: ClassId;
   isLocal: boolean;
+  /** Co-op: false while this operative's client is away and the server is holding their seat. */
+  connected?: boolean;
 }
 
 export interface UiWorldSummary {
@@ -49,6 +51,12 @@ export interface UiWorldSummary {
   attunements: Attunement[];
   /** World laws (agent M1): the world's name for each law beside the engine's plain effect. Absent = none. */
   laws?: UiWorldLaw[];
+  /**
+   * True when the ENGINE chose these laws from the world's motifs because no model wrote any.
+   * The panel says so: a derived law's name and line are the engine's, not the world's writing
+   * (docs/PRODUCT.md — never present engine output as the model's).
+   */
+  lawsDerived?: boolean;
 }
 
 export interface UiWorldLaw {
@@ -92,6 +100,8 @@ export interface UiHud {
   training?: { awakeEnemyIds: string[] } | null;
   /** B1: the collapse after the Anchor holds — the clock, and the pedestals at the end of it. */
   collapse?: GameSnapshot['collapse'];
+  /** S1: skill-tree nodes this operative has bought (`src/shared/skills.ts`). */
+  skillNodeIds?: string[];
 }
 
 /** One biome offered on the choice screen (agent F3). Every field is plain, checkable fact. */
@@ -132,6 +142,8 @@ export interface UiFloor {
   depthCount: number;
   /** Rooms in the current biome (its budget; shown on the choice card before entering, so not a spoiler). */
   roomCount: number;
+  /** Rooms of the current biome the crew has stood in, including this one. Never above `roomCount`. */
+  roomsVisited: number;
   choice: UiBiomeChoice | null;
 }
 
@@ -173,6 +185,8 @@ export interface UiActions {
   dismissNotice(): void;
   toggleAudio?(): void;
   unlockAbility?(): void;
+  /** S1: buy one skill-tree node for yourself; the sim decides whether it goes through. */
+  purchaseSkill?(nodeId: string): void;
   /** Solo only: enter the HQ training range (respawning targets, every ability unlocked). */
   enterTraining?(): void;
   activateHeadquartersStation?(): void;

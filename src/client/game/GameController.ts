@@ -21,7 +21,6 @@ import type { BrowserChronicle } from '../chronicle';
 import type { LocalSession } from '../transport/LocalSession';
 import { departureBus, isDeparting } from '../ui/HeadquartersDeparture';
 import { createKeyboardMouseInput, type InputSampler } from './input';
-import { stageOwnsInput } from './keyboardFocus';
 import type { UiStore } from './uiStore';
 import { IMPLEMENTED_LAW_IDS, lawEffectText, resolveLaws, worldLawsView } from '../../sim/laws';
 import { withLookOverrides } from '../render/lookOverrides';
@@ -114,17 +113,14 @@ export class GameController {
       chronicle.subscribe((memories) => store.set({ memories })),
     );
     if (session.onError) this.disposers.push(session.onError((message) => this.notice('error', message)));
-    // Floors stopgap until the biome-choice panel (agent F3) lands: 1 / 2 pick an offered biome.
-    const pickBiome = (event: KeyboardEvent): void => {
-      if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey || !stageOwnsInput(event.target, stage)) return;
-      const choice = this.latestSnapshot?.floor?.biomeChoice;
-      const biomeId = choice?.options[event.code === 'Digit1' ? 0 : event.code === 'Digit2' ? 1 : -1];
-      if (biomeId !== undefined) session.chooseBiome?.(biomeId);
-    };
-    if (typeof window !== 'undefined') {
-      window.addEventListener('keydown', pickBiome);
-      this.disposers.push(() => window.removeEventListener('keydown', pickBiome));
-    }
+    // The departure ritual is device-local presentation state, so it raises no game event: the
+    // cue hangs off the bus the UI and the renderer already share (HUB.md §8).
+    let departing = false;
+    this.disposers.push(departureBus.subscribe(() => {
+      const now = isDeparting(departureBus.get());
+      if (now && !departing) this.deps.audio.play('departure');
+      departing = now;
+    }));
 
     this.loop();
     await session.start();
@@ -191,6 +187,7 @@ export class GameController {
           prev.maxHp !== hud.maxHp ||
           prev.resources !== hud.resources ||
           prev.abilityEUnlocked !== hud.abilityEUnlocked ||
+          (prev.skillNodeIds?.length ?? 0) !== (hud.skillNodeIds?.length ?? 0) ||
           prev.abilityQCooldownMs !== hud.abilityQCooldownMs ||
           prev.abilityECooldownMs !== hud.abilityECooldownMs ||
           prev.reviveProgress !== hud.reviveProgress ||
@@ -210,9 +207,13 @@ export class GameController {
           store.set({ hud });
         }
       }
-      const players = snapshot.players.map((p) => ({ id: p.id, displayName: p.displayName, classId: p.classId, isLocal: p.id === session.localPlayerId }));
+      const players = snapshot.players.map((p) => ({
+        id: p.id, displayName: p.displayName, classId: p.classId, isLocal: p.id === session.localPlayerId,
+        connected: p.connected !== false,
+      }));
       const prevPlayers = store.get().players;
-      if (prevPlayers.length !== players.length || prevPlayers.some((p, i) => p.id !== players[i]!.id || p.displayName !== players[i]!.displayName || p.classId !== players[i]!.classId)) {
+      if (prevPlayers.length !== players.length || prevPlayers.some((p, i) => p.id !== players[i]!.id || p.displayName !== players[i]!.displayName
+        || p.classId !== players[i]!.classId || (p.connected !== false) !== players[i]!.connected)) {
         store.set({ players });
       }
       const discoveredLore = snapshot.discoveredLore ?? [];
@@ -231,7 +232,15 @@ export class GameController {
       this.latestSnapshot?.worldId !== snapshot.worldId ||
       this.latestSnapshot?.roomId !== snapshot.roomId ||
       this.latestSnapshot?.phase !== snapshot.phase
-    ) this.viewVersion++;
+    ) {
+      this.viewVersion++;
+      // An info notice is about the moment it was raised. Once the crew is somewhere else the
+      // prompt is stale, so it goes with the room — nobody should have to dismiss yesterday's
+      // offer on their own screen (docs/QA_COOP.md, the biome choice on a guest's screen).
+      // Errors are not transient and stay until they are dismissed. The very first snapshot is
+      // not a move: it is the session catching up, and it must not eat a prompt raised before it.
+      if (this.latestSnapshot !== null && this.deps.store.get().notice?.kind === 'info') this.deps.store.set({ notice: null });
+    }
     this.latestSnapshot = snapshot;
     const { session, store, renderer, audio } = this.deps;
     const nearbyStationId = nearbyHeadquartersStation(snapshot, session.localPlayerId)?.id ?? null;
@@ -290,10 +299,8 @@ export class GameController {
       const cue = cueForEvent(e);
       if (cue) audio.play(cue);
       if (e.type === 'contribution_submitted') store.set({ contributions: session.getContributions() });
-      if (e.type === 'biome_choice_offered') {
-        const names = e.options.map((id, i) => `[${i + 1}] ${session.getWorld()?.floors?.briefs.find((brief) => brief.id === id)?.name ?? id}`);
-        this.notice('info', `The way on is open. ${session.getIsHost?.() === false ? 'The host chooses' : 'Choose'}: ${names.join('  ·  ')}`);
-      }
+      // `biome_choice_offered` raises no notice: the BiomeChoice screen (FloorsHud) shows the
+      // doors, the room counts and who picks, and 1 / 2 / Enter work there.
     }
 
     const world = session.getWorld();
@@ -334,6 +341,7 @@ export class GameController {
   }
 
   private handleWorld(world: PreparedWorld): void {
+    const lawsView = withLookOverrides(worldLawsView(world));
     this.deps.audio.setWorld?.(world.art);
     this.deps.chronicle.refreshReceipt({
       worldId: world.worldId,
@@ -353,9 +361,10 @@ export class GameController {
         plannedRoomCount: world.plannedRoomCount,
         lore: world.recipe.lore,
         attunements: world.recipe.attunements,
-        laws: withLookOverrides(worldLawsView(world)).laws.map((law) => ({
+        laws: lawsView.laws.map((law) => ({
           lawId: law.lawId, name: law.name, description: law.description, effect: lawEffectText(law), active: IMPLEMENTED_LAW_IDS.includes(law.lawId),
         })),
+        lawsDerived: lawsView.lawsDerived,
       },
       notice: null,
     });
@@ -461,10 +470,14 @@ export class GameController {
         store.set({ audioMuted: audio.isMuted() });
       },
       unlockAbility: () => session.unlockAbility?.(),
+      purchaseSkill: (nodeId) => session.purchaseSkill?.(nodeId),
       enterTraining: () => {
         const ok = session.enterTraining?.() ?? false;
         if (!ok) this.notice('info', 'The training range is available in solo play from headquarters.');
       },
+      // Floors: the BiomeChoice screen's only way through. `connectFloorsUi` rebinds this to the
+      // same call; it lives here too so the action exists even without the floors bridge.
+      chooseBiome: (biomeId: string) => session.chooseBiome?.(biomeId),
       activateHeadquartersStation: () => this.activateHeadquartersStation(),
       closeHeadquartersStation: () => store.set((model) => ({
         ...model,
@@ -486,6 +499,7 @@ function hudFrom(me: PlayerState, snapshot: GameSnapshot): NonNullable<UiModel['
     enemiesRemaining: snapshot.enemies.filter((e) => e.state !== 'dead').length,
     resources: me.resources ?? 0,
     abilityEUnlocked: me.abilityEUnlocked ?? false,
+    ...(me.skillNodeIds ? { skillNodeIds: me.skillNodeIds } : {}),
     abilityQCooldownMs: Math.ceil((me.abilityQCooldownMs ?? 0) / 100) * 100,
     abilityECooldownMs: Math.ceil((me.abilityECooldownMs ?? 0) / 100) * 100,
     reviveProgress: me.reviveProgress ?? 0,

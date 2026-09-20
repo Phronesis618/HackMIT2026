@@ -115,7 +115,7 @@ const MOTIF_WORDS: Record<MotifId, string> = {
 
 /** Layout personality in plain words, from the brief's linearity and branchiness. */
 export function describeLayout(layout: BiomeBrief['layout']): string {
-  const shape = layout.linearity >= 0.66 ? 'Long and direct' : layout.linearity <= 0.34 ? 'Wide and sprawling' : 'Winding';
+  const shape = layout.linearity >= 0.66 ? 'Long and direct' : layout.linearity <= 0.34 ? 'Wide and branching' : 'Winding';
   const sides = layout.branchiness >= 0.66 ? 'Many dead ends.' : layout.branchiness <= 0.34 ? 'Few side rooms.' : 'Some side rooms.';
   return `${shape}. ${sides}`;
 }
@@ -149,6 +149,7 @@ export function floorUiFrom(
   if (!run || !world?.floors) return null;
   const briefName = (id: string): string => world.floors?.briefs.find((brief) => brief.id === id)?.name ?? id;
   const brief = world.floors.briefs.find((candidate) => candidate.id === run.biomeId);
+  const roomCount = world.floors.route.graph.nodes.find((node) => node.biomeId === run.biomeId)?.roomBudget ?? run.map.length;
   let choice: UiBiomeChoice | null = null;
   if (run.biomeChoice && !run.biomeChoice.chosenBiomeId) {
     const state = run.biomeChoice;
@@ -172,7 +173,8 @@ export function floorUiFrom(
     pathNames: run.path.map(briefName),
     depth: run.tier + 1,
     depthCount: BIOME_TIER_COUNT,
-    roomCount: world.floors.route.graph.nodes.find((node) => node.biomeId === run.biomeId)?.roomBudget ?? run.map.length,
+    roomCount,
+    roomsVisited: Math.min(roomCount, run.map.filter((entry) => entry.state === 'visited').length),
     choice,
   };
 }

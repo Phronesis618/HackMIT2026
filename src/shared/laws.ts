@@ -37,25 +37,33 @@ export const LAW_INFO: Record<WorldLawId, {
   summary: string;
   /** Difficulty budget: negative helps the crew, positive hurts. */
   budget: -2 | -1 | 0 | 1 | 2;
+  /**
+   * True when the simulation or renderer applies this law today. Unimplemented laws are never
+   * offered to the model (`lawsAndLookRegistry`), fixtures do not use them and `WorldLaws`
+   * lists only laws in force, so no player is shown a law that does nothing.
+   * tests/sim/law-honesty.test.ts keeps this in step
+   * with `IMPLEMENTED_LAW_IDS` in src/sim/laws.ts.
+   */
+  implemented: boolean;
 }> = {
-  thin_air: { group: 'movement', budget: -1, summary: 'Dashes carry about 65% farther on a 25% longer cooldown. Gaps and hazard fields become crossable in one move.' },
-  tidal_drag: { group: 'movement', budget: 0, summary: 'Crew and enemies walk about 17% slower; dash cooldown drops by a third. Movement becomes dashes with short walks between.' },
-  committed_strike: { group: 'movement', budget: 0, summary: 'Operatives are rooted for the 220 ms of their own attack and hit 25% harder.' },
-  glass_lattice: { group: 'combat', budget: 2, summary: 'Operatives have 48 Integrity instead of 100 and deal 1.8x damage. Every hit and hazard matters.' },
-  long_echo: { group: 'combat', budget: -1, summary: 'Ability cooldowns are about a third shorter; the ultimate charges 25% slower.' },
-  bleeding_light: { group: 'combat', budget: 2, summary: 'Abilities heal nothing. Reading a relic restores 32 Integrity to every living operative, once per relic.' },
-  first_light: { group: 'combat', budget: -1, summary: 'The first hit on an untouched enemy deals 2.5x damage.' },
-  few_and_terrible: { group: 'enemies', budget: 1, summary: 'Half as many enemies, each with 2.2x health and 28% more damage. Fights become duels.' },
-  the_many: { group: 'enemies', budget: 1, summary: '1.8x as many enemies, each at 55% health and 78% damage. Wide attacks are the answer.' },
-  wardens_watch: { group: 'enemies', budget: 2, summary: 'About 37% of enemies are elites: +60% health, +25% damage, a visible ring, better drops.' },
-  restless: { group: 'enemies', budget: 1, summary: 'A defeated enemy stands back up once after 11.5 s at 42% health unless an operative walks over its marker first.' },
-  unstable_matter: { group: 'enemies', budget: 1, summary: 'Enemies burst when they fall: 70 px radius, 12 damage to crew, 20 to other enemies. Bursts chain through packs.' },
-  hollow_ground: { group: 'terrain', budget: 1, summary: 'Rooms get one extra terrain feature and, at high intensity, one step denser terrain.' },
-  slow_fire: { group: 'terrain', budget: 0, summary: 'Within 3 tiles of a live hazard everything moves at 57% speed and bolts at 72%. Dashes are exempt.' },
-  sealed_halls: { group: 'terrain', budget: 1, summary: 'Every combat room is split by a sealing door or gate, with the exit on the far side.' },
-  long_dark: { group: 'vision', budget: 2, summary: 'Sight fails past about 215 px from an operative; enemies beyond it are not drawn. Lanterns and conduits add light.' },
-  mirror_halls: { group: 'vision', budget: 1, summary: 'The minimap is hidden and a room name is withheld until the room is entered.' },
-  held_breath: { group: 'vision', budget: 0, summary: 'Enemy attack sounds are muted; in exchange every telegraph lasts about 32% longer and draws brighter.' },
+  thin_air: { group: 'movement', budget: -1, implemented: true, summary: 'Dashes carry about 65% farther on a 25% longer cooldown. Gaps and hazard fields become crossable in one move.' },
+  tidal_drag: { group: 'movement', budget: 0, implemented: true, summary: 'Crew and enemies walk about 17% slower; dash cooldown drops by a third. Movement becomes dashes with short walks between.' },
+  committed_strike: { group: 'movement', budget: 0, implemented: true, summary: 'Operatives are rooted for the 220 ms of their own attack and hit 25% harder.' },
+  glass_lattice: { group: 'combat', budget: 2, implemented: true, summary: 'Operatives have 48 Integrity instead of 100 and deal 1.8x damage. Every hit and hazard matters.' },
+  long_echo: { group: 'combat', budget: -1, implemented: true, summary: 'Ability cooldowns are about a third shorter; the ultimate charges 25% slower.' },
+  bleeding_light: { group: 'combat', budget: 2, implemented: false, summary: 'Abilities heal nothing. Reading a relic restores 32 Integrity to every living operative, once per relic.' },
+  first_light: { group: 'combat', budget: -1, implemented: true, summary: "The crew's first hit on an enemy deals 2.5x damage." },
+  few_and_terrible: { group: 'enemies', budget: 1, implemented: true, summary: 'Half as many enemies, each with 2.2x health and 28% more damage. Fights become duels.' },
+  the_many: { group: 'enemies', budget: 1, implemented: true, summary: '1.8x as many enemies, each at 55% health and 78% damage. One wide attack can catch four of them.' },
+  wardens_watch: { group: 'enemies', budget: 2, implemented: false, summary: 'About 37% of enemies are elites: +60% health, +25% damage, a visible ring, better drops.' },
+  restless: { group: 'enemies', budget: 1, implemented: false, summary: 'A defeated enemy stands back up once after 11.5 s at 42% health unless an operative walks over its marker first.' },
+  unstable_matter: { group: 'enemies', budget: 1, implemented: true, summary: 'Enemies burst when they fall: 70 px radius, 12 damage to crew, 20 to other enemies. Bursts chain through packs.' },
+  hollow_ground: { group: 'terrain', budget: 1, implemented: false, summary: 'Rooms get one extra terrain feature and, at high intensity, one step denser terrain.' },
+  slow_fire: { group: 'terrain', budget: 0, implemented: false, summary: 'Within 3 tiles of a live hazard everything moves at 57% speed and bolts at 72%. Dashes are exempt.' },
+  sealed_halls: { group: 'terrain', budget: 1, implemented: false, summary: 'Every combat room is split by a sealing door or gate, with the exit on the far side.' },
+  long_dark: { group: 'vision', budget: 2, implemented: true, summary: 'Sight fails past about 215 px from an operative; enemies beyond it are not drawn. Lanterns and conduits add light.' },
+  mirror_halls: { group: 'vision', budget: 1, implemented: false, summary: 'The minimap is hidden and a room name is withheld until the room is entered.' },
+  held_breath: { group: 'vision', budget: 0, implemented: false, summary: 'Enemy attack sounds are muted; in exchange every telegraph lasts about 32% longer and draws brighter.' },
 };
 
 /** WORLD_MUTATORS.md section 3.1. */
@@ -256,8 +264,9 @@ export function sanitizeCustodian(custodian: Custodian, nonBossPoolSize: number)
 /** Compact registry text for prompts and the operator request file. */
 export function lawsAndLookRegistry(): Record<string, unknown> {
   return {
-    laws: Object.fromEntries(WORLD_LAW_IDS.map((id) => [id, `${LAW_INFO[id].summary} [group ${LAW_INFO[id].group}, difficulty ${LAW_INFO[id].budget}]`])),
-    lawConflicts: LAW_CONFLICTS,
+    // Only laws the engine applies are offered: the model cannot pick a law that does nothing.
+    laws: Object.fromEntries(WORLD_LAW_IDS.filter((id) => LAW_INFO[id].implemented).map((id) => [id, `${LAW_INFO[id].summary} [group ${LAW_INFO[id].group}, difficulty ${LAW_INFO[id].budget}]`])),
+    lawConflicts: LAW_CONFLICTS.filter(([a, b]) => LAW_INFO[a].implemented && LAW_INFO[b].implemented),
     look: LOOK_INFO,
   };
 }
