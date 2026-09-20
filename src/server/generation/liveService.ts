@@ -10,6 +10,7 @@ import { hashString } from '../../shared/ids';
 import { compileWorldRecipe } from './compiler';
 import { prepareFromFixture } from './fixtureService';
 import { GenerationFailure, type RecipeProvider } from './provider';
+import { DEFAULT_WORLD_BUDGET_MS, generateRecipe, type GeneratedRecipe, type GenerationMetrics } from './pipeline';
 import { buildReceipt } from './receipt';
 
 export function createLiveGenerationService(options: {
@@ -17,6 +18,12 @@ export function createLiveGenerationService(options: {
   model: string;
   fixtures: WorldFixture[];
   log: (message: string) => void;
+  /** Floors default when the request does not say (mirrors RELAY_FLOORS): the model then writes the 8 biome briefs. */
+  floors?: boolean;
+  /** Wall-clock budget for all model calls of one world; call-2 work still running at the deadline is dropped. */
+  worldBudgetMs?: number;
+  /** Per-world measurements (latency per call, tokens, lint before/after). Used by scripts/eval-worldgen.ts. */
+  onMetrics?: (metrics: GenerationMetrics) => void;
 }) {
   async function* prepareWorldStream(
     rawRequest: GenerationRequest,
@@ -32,6 +39,7 @@ export function createLiveGenerationService(options: {
     status('queued', 'Preparing live world generation…');
     const notes: string[] = [];
     let attempts = 0;
+    const worldId = `world-live-${hashString(`${request.sessionId}:${request.requestId}`).toString(36)}`;
     const fallback = (): PreparedWorld => {
       const world = prepareFromFixture({
         fixture: options.fixtures[seed % options.fixtures.length]!,
@@ -41,24 +49,26 @@ export function createLiveGenerationService(options: {
       status('fallback', 'Live generation failed; a labelled offline fixture is ready.');
       return world;
     };
-    let repair: string | undefined;
-    let result: Awaited<ReturnType<RecipeProvider['generate']>> | undefined;
-    while (attempts < 2) {
-      attempts++;
-      status('generating', repair ? 'Repairing the generated recipe…' : 'Generating a world from your ideas…');
-      try {
-        result = await options.provider.generate(request, repair, signal);
-        signal?.throwIfAborted();
-        break;
-      } catch (error) {
-        signal?.throwIfAborted();
-        const failure = error instanceof GenerationFailure ? error : new GenerationFailure('Live generation failed.');
-        notes.push(failure.message);
-        if (!failure.repairable || attempts === 2) break;
-        repair = failure.message;
-        status('validating', 'Recipe rejected; requesting one bounded repair…');
-      }
+    let generated: GeneratedRecipe | undefined;
+    try {
+      generated = await generateRecipe({
+        provider: options.provider, request, seed, signal, notes, status,
+        floors: request.floors ?? options.floors ?? false,
+        budgetMs: options.worldBudgetMs ?? DEFAULT_WORLD_BUDGET_MS,
+        startedAt,
+        floorsSeed: request.seed === undefined ? worldId : String(request.seed),
+        countCall: () => { attempts++; },
+      });
+    } catch (error) {
+      signal?.throwIfAborted();
+      notes.push((error instanceof GenerationFailure ? error : new GenerationFailure('Live generation failed.')).message);
     }
+    if (generated) {
+      options.onMetrics?.(generated.metrics);
+      const { lint } = generated.metrics;
+      options.log(`Prose lint: score ${lint.before.score} -> ${lint.after.score}, failing fields ${lint.before.failedFields} -> ${lint.after.failedFields}, ${attempts} model call(s).`);
+    }
+    const result = generated;
     if (!result) {
       yield fallback();
       return;
@@ -85,7 +95,7 @@ export function createLiveGenerationService(options: {
           roomIndex: room.index,
         })));
         const world = PreparedWorldSchema.parse({
-          worldId: `world-live-${hashString(`${request.sessionId}:${request.requestId}`).toString(36)}`,
+          worldId,
           createdAt: generatedAt,
           recipe: { ...recipe, contributionMappings: mappings },
           rooms: compiled.rooms,

@@ -5,6 +5,9 @@ enemy ids, at least one that is not guardian, no duplicates), propPool (1 to 5 p
 never anchor_pedestal), hazards, and layout, which sets the SHAPE of the floor:
   linearity 0..1 (0 sprawling, 1 one long spine), branchiness 0..1 (0 few side rooms,
   1 a maze of dead ends), specials: treasure 0-2, lore 0-4, rest 0-2, elite 0-4.
+terrain (or null for defaults): features (up to four of breakable_walls, bridges, rubble,
+conduits), layout (scattered, barricades, crossroads), density (sparse, balanced, dense);
+this decides how the biome's fighting rooms play.
 Choose the shape from what the place was: an archive is a maze with many lore rooms; a
 siege wall or a rail platform is a spine with elites; a ward has rest rooms. Biomes of one
 world must differ from each other in shape, enemy pool and motifs.

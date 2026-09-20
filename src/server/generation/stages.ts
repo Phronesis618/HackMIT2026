@@ -12,7 +12,7 @@ import {
   WorldRecipeSchema, MotifIdSchema, type WorldRecipe,
 } from '../../shared/contracts';
 import { BIOME_LINE_KINDS, WorldBibleSchema, clampLoreRefs, type BiomeRoomLines, type WorldBible } from '../../shared/bible';
-import { BIOME_BRIEF_COUNT, BiomeBriefSchema, ROOM_KINDS, type BiomeBrief } from '../../shared/floors';
+import { BIOME_BRIEF_COUNT, BiomeBriefSchema, BiomeTerrainSchema, ROOM_KINDS, type BiomeBrief } from '../../shared/floors';
 import { hashString } from '../../shared/ids';
 import { WorldLawSchema, WorldLookSchema, sanitizeLaws, type WorldLaw, type WorldLook } from '../../shared/laws';
 import { KIND_SPECS, lintProse, lintRecipeText, formatRepairFeedback, type ProseKind } from '../../shared/prose';
@@ -48,6 +48,7 @@ export const ModelBriefSchema = z.object({
   propPool: z.array(z.enum(PROP_IDS)).min(1).max(5),
   hazards: z.boolean(),
   layout: BiomeBriefSchema.shape.layout,
+  terrain: BiomeTerrainSchema.nullable(),
   roomLines: z.array(ModelRoomLineSchema).max(ROOM_KINDS.length),
 });
 
@@ -109,8 +110,8 @@ const slug = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]+/g,
 export function parseBrief(raw: unknown, index: number): ParsedBrief | undefined {
   const model = ModelBriefSchema.safeParse(raw);
   if (!model.success) return undefined;
-  const { roomLines, ...rest } = model.data;
-  const brief = BiomeBriefSchema.safeParse({ ...rest, tagline: rest.tagline, id: `b${index}-${slug(rest.name)}` });
+  const { roomLines, terrain, ...rest } = model.data;
+  const brief = BiomeBriefSchema.safeParse({ ...rest, ...(terrain ? { terrain } : {}), id: `b${index}-${slug(rest.name)}` });
   if (!brief.success) return undefined;
   const seen = new Set<string>();
   const lines = roomLines.filter((line) => line.kind !== 'shop' && !seen.has(line.kind) && Boolean(seen.add(line.kind)));
@@ -224,14 +225,19 @@ export function planRemainsEnemies(foundation: Foundation, relicCount: number): 
   return [...ids].slice(0, Math.max(1, 12 - relicCount));
 }
 
-export interface BiomeSlot { index: number; tier: number; setting: string; focusEvent: string }
+export interface BiomeSlot { index: number; position: 'middle' | 'finale'; setting: string; focusEvent: string }
 const SLOT_TIERS = [0, 1, 1, 2, 2, 3, 3, 4] as const;
-/** Slots 1..7. Each gets a bible place and event so parallel calls do not name the same biome twice. */
+/**
+ * Slots 1..7. Each gets a bible place and event so parallel calls do not name the same biome
+ * twice. The six middle briefs are dealt onto tiers 1-3 by the route seed (FLOORS.md section 12),
+ * so the model is told only middle / finale.
+ */
 export function planBiomeSlots(bible: WorldBible, seed: number): BiomeSlot[] {
   const places = shuffled([...bible.places, ...bible.objects], `${seed}:biome-place`);
   return SLOT_TIERS.slice(1).map((tier, offset) => {
+    const position = tier === 4 ? 'finale' as const : 'middle' as const;
     const event = bible.events[Math.min(bible.events.length - 1, Math.round((offset / 6) * (bible.events.length - 1)))]!;
-    return { index: offset + 1, tier, setting: places[offset % places.length]!, focusEvent: `${event.date}: ${event.fact}` };
+    return { index: offset + 1, position, setting: places[offset % places.length]!, focusEvent: `${event.date}: ${event.fact}` };
   });
 }
 
