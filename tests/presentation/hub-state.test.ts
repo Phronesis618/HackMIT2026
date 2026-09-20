@@ -138,6 +138,22 @@ describe('reduceHubState', () => {
     expect(state.relics).toHaveLength(2);
   });
 
+  it('counts a stranded world as anchored without a relic, including across storage replay', () => {
+    const events = anchoredRun().map((event): GameEvent =>
+      event.type === 'run_ended' ? { ...event, outcome: 'stranded' } : event);
+    const state = reduceHubState(createHubState(), events, ctx);
+    expect(state.lastRun?.outcome).toBe('stranded');
+    expect(state.records.shade).toMatchObject({ runs: 1, anchors: 1, collapses: 0, aborts: 0 });
+    expect(state.totals).toEqual({ runs: 1, anchors: 1, worldsVisited: 1, relics: 0 });
+    expect(state.relics).toEqual([]);
+
+    const storage = memoryStorage();
+    saveHubState(storage, state);
+    const loaded = loadHubState(storage);
+    expect(loaded).toEqual(state);
+    expect(reduceHubState(loaded, events, ctx)).toBe(loaded);
+  });
+
   it('keeps at most 24 relics in the store and shows five on the shelf', () => {
     let state = createHubState();
     for (let n = 0; n < 30; n++) state = reduceHubState(state, anchoredRun(`w-${n}`, `World ${n}`), ctx);

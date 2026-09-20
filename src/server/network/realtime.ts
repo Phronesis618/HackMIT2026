@@ -404,6 +404,10 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
         publishEvents(events);
         break;
       }
+      case 'purchase_skill':
+        // Buys for the sender only: the node id is data, the player id is the socket's.
+        if (sim.purchaseSkill(member.identity.id, message.nodeId)) publishSnapshot();
+        break;
     }
   }
 

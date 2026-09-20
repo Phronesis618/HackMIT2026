@@ -78,13 +78,38 @@ describe('Tab menu', () => {
     expect(html).toContain('Return to headquarters');
   });
 
-  it('skills page grows the class tree plus the branch this world wrote, all still locked', () => {
+  it('skills page grows the class tree plus the branch this world wrote', () => {
     const html = render(createElement(SkillsPage, { model: model() }));
     expect(html).toContain('Reinforced Plating');
     expect(html).toContain('Bastion of Last Light');
     for (const a of fixture.recipe.attunements) expect(html).toContain(a.name.replace(/'/g, '&#x27;'));
     expect(html).toContain(`Attuned to ${fixture.recipe.title}`);
-    expect(html).toContain('not wired');
+    expect(html).not.toContain('not wired');
     expect(html).not.toContain('Never Seen');
+  });
+
+  it('skills page says Active only for a node that is implemented AND bought', () => {
+    const attunement = fixture.recipe.attunements[0]!;
+    const nodeId = `attune.0.${attunement.effectId}`;
+    const withHud = (hud: Partial<NonNullable<UiModel['hud']>>): UiModel => {
+      const m = model();
+      return { ...m, hud: { ...m.hud!, ...hud } };
+    };
+    // Unbought, implemented, affordable: offered for sale, not Active.
+    const unbought = render(createElement(SkillsPage, { model: withHud({ resources: 10, skillNodeIds: ['core.salvage'] }), actions, selectedId: nodeId }));
+    expect(unbought).toContain(`Buy · 3 resources`);
+    expect(unbought).not.toContain('<dd>Active</dd>');
+    // Unbought and broke: the button says why.
+    const broke = render(createElement(SkillsPage, { model: withHud({ resources: 1, skillNodeIds: ['core.salvage'] }), actions, selectedId: nodeId }));
+    expect(broke).toContain('Not enough resources');
+    // Bought: Active, and nothing left to buy on this node.
+    const bought = render(createElement(SkillsPage, { model: withHud({ skillNodeIds: ['core.salvage', nodeId] }), actions, selectedId: nodeId }));
+    expect(bought).toContain('<dd>Active</dd>');
+    expect(bought).not.toContain('Buy ·');
+    // Planned nodes are never Active, even if a stale client claims to own them.
+    const planned = render(createElement(SkillsPage, { model: withHud({ skillNodeIds: ['core.plating'] }), actions, selectedId: 'core.plating' }));
+    expect(planned).toContain('Planned · not in the game yet');
+    expect(planned).not.toContain('<dd>Active</dd>');
+    expect(planned).not.toContain('Buy ·');
   });
 });

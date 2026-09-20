@@ -46,7 +46,8 @@ export interface BossContext {
   room: RoomSpec;
   /** Living operatives, in the simulation's deterministic order. */
   players(): BossPlayerView[];
-  damagePlayer(playerId: string, sourceEnemyId: string, damage: number, ranged: boolean): boolean;
+  /** `floor`: the hit is the arena floor (flood, corruption), not a strike — hazard_ward covers it, melee_ward does not. */
+  damagePlayer(playerId: string, sourceEnemyId: string, damage: number, ranged: boolean, floor?: boolean): boolean;
   /** Collision-aware nudge of a player by a world-space delta. */
   pushPlayer(playerId: string, dx: number, dy: number): void;
   slowPlayer(playerId: string, ms: number): void;
@@ -547,7 +548,7 @@ function stepHazardTiles(rt: CustodianRuntime, s: EnemyState, ctx: BossContext, 
       rt.hazardCooldown.set(p.id, 0);
       continue;
     }
-    ctx.damagePlayer(p.id, s.id, onFlood ? floodDamage : CORRUPTION_DAMAGE, false);
+    ctx.damagePlayer(p.id, s.id, onFlood ? floodDamage : CORRUPTION_DAMAGE, false, true);
     rt.hazardCooldown.set(p.id, HAZARD_TICK_MS);
   }
 }

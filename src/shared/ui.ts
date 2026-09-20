@@ -100,6 +100,8 @@ export interface UiHud {
   training?: { awakeEnemyIds: string[] } | null;
   /** B1: the collapse after the Anchor holds — the clock, and the pedestals at the end of it. */
   collapse?: GameSnapshot['collapse'];
+  /** S1: skill-tree nodes this operative has bought (`src/shared/skills.ts`). */
+  skillNodeIds?: string[];
 }
 
 /** One biome offered on the choice screen (agent F3). Every field is plain, checkable fact. */
@@ -183,6 +185,8 @@ export interface UiActions {
   dismissNotice(): void;
   toggleAudio?(): void;
   unlockAbility?(): void;
+  /** S1: buy one skill-tree node for yourself; the sim decides whether it goes through. */
+  purchaseSkill?(nodeId: string): void;
   /** Solo only: enter the HQ training range (respawning targets, every ability unlocked). */
   enterTraining?(): void;
   activateHeadquartersStation?(): void;

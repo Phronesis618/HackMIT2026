@@ -55,6 +55,8 @@ export interface GameSession {
   getConnectionStatus(): ConnectionStatus;
   getIsHost?(): boolean;
   unlockAbility?(): void;
+  /** S1: buy one skill-tree node for the local operative; the sim is authoritative. */
+  purchaseSkill?(nodeId: string): void;
   /** Floors: vote for (solo/host: decide) the next biome while `snapshot.floor.biomeChoice` is open. */
   chooseBiome?(biomeId: string): void;
   getWorld(): PreparedWorld | null;

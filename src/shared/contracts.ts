@@ -740,6 +740,8 @@ export const PlayerStateSchema = z.object({
    * operative when the sim asks whether the crew is down.
    */
   connected: z.boolean().optional(),
+  /** Skill-tree nodes this operative bought (`src/shared/skills.ts`); absent until the first purchase. */
+  skillNodeIds: z.array(z.string().max(64)).max(64).optional(),
 });
 export type PlayerState = z.infer<typeof PlayerStateSchema>;
 
