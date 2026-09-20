@@ -10,6 +10,7 @@ import { WorldPanel } from './WorldPanel';
 import { DebriefPanel } from './DebriefPanel';
 import { AbilityBar } from './AbilityBar';
 import { GameMenu } from './GameMenu';
+import { HeadquartersPrompt, HeadquartersStationPanel } from './HeadquartersStations';
 
 export interface AppProps {
   store: UiStore;
@@ -67,10 +68,12 @@ export function App({ store, actions, onStageReady }: AppProps) {
             <span>{inRun || model.phase === 'debrief' ? model.room?.name : 'RELAY / SANCTUARY'}</span>
           </div>
           {inRun && <Hud model={model} actions={actions} />}
+          {(model.phase === 'headquarters' || model.phase === 'preparing') && <HeadquartersPrompt model={model} actions={actions} />}
           {model.phase !== 'debrief' && <AbilityBar model={model} actions={actions} />}
         </section>
         {!inRun && (
           <aside className="side">
+            {(model.phase === 'headquarters' || model.phase === 'preparing') && <HeadquartersStationPanel model={model} actions={actions} />}
             {(model.phase === 'headquarters' || model.phase === 'preparing') && <HeadquartersPanel model={model} actions={actions} />}
             {model.phase === 'debrief' && <DebriefPanel model={model} actions={actions} />}
             {model.world && <WorldPanel world={model.world} discoveredLore={model.discoveredLore} />}
