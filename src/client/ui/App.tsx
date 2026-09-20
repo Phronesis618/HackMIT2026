@@ -81,7 +81,7 @@ export function App({ store, actions, onStageReady }: AppProps) {
         )}
       </main>
 
-      <MemoryWall memories={model.memories} actions={actions} />
+      <MemoryWall memories={model.memories} actions={actions} context={model} />
       <GameMenu model={model} actions={actions} />
 
       {model.notice && (

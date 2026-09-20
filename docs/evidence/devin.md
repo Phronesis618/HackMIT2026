@@ -2,6 +2,24 @@
 
 Agent C records only work and verification performed in this session.
 
+## Memory archive and next-world ideas — 2026-09-20
+
+On `devin/1789890825-memory-seeds`, Devin added archive search/filtering, plain-text reports
+with provenance and source-event evidence, and editable memory-derived contribution drafts.
+The contribution composer uses the existing UI action and shared text validator; it never
+generates Chronicle events or changes stored records.
+
+`npm run check` passed: 542 tests / 37 files, TypeScript and Vite build.
+Twenty new tests exercise archive filtering/export and memory idea constraints and rendering.
+Initial test runs caught two test typing errors and an HTML attribute-case assertion; those
+new tests were corrected without changing existing tests or configuration. Whitespace checks
+pass. UI actions and memory samples in tests are mocks, not gameplay evidence.
+
+Scope was posted to issue #4 before implementation. Direct messaging to other Devin
+sessions was access-denied; GitHub was used for coordination. This work avoids the active H1
+Stillpoint slice and the floors/writing paths. Browser play, file download and live-generation
+effects have not been tested in this session.
+
 ## Render hosting setup — 2026-09-20
 
 On `devin/1789889059-render-deploy` (`4c70ab3`, PR #17), Devin added a Render Blueprint and
