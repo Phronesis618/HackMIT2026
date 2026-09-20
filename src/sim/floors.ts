@@ -147,12 +147,19 @@ function buildMap(run: FloorsRun): FloorMapRoom[] {
   return map;
 }
 
-export function floorRunState(run: FloorsRun, doorsLocked: boolean): FloorRunState {
+export function floorRunState(run: FloorsRun, doorsLocked: boolean, lostRoomIds: readonly string[] = []): FloorRunState {
   run.mapCache ??= buildMap(run);
+  const blockedDoorRoomIds = lostRoomIds.length === 0 ? [] : run.provider.getRoom(run).exits
+    .flatMap((exit) => {
+      if (!exit.toRoomId) return [];
+      const destination = run.provider.getRoom({ biomeId: run.biomeId, roomId: exit.toRoomId });
+      return lostRoomIds.includes(destination.id) ? [exit.toRoomId] : [];
+    });
   return {
     biomeId: run.biomeId, roomId: run.roomId, tier: run.tier, path: [...run.path],
     map: run.mapCache.map((room) => ({ ...room, cell: { ...room.cell }, doors: [...room.doors] })),
     doorsLocked,
+    ...(blockedDoorRoomIds.length > 0 ? { blockedDoorRoomIds } : {}),
     biomeChoice: run.choice ? { ...run.choice, options: [...run.choice.options], votes: { ...run.choice.votes }, hostPlayerId: run.hostPlayerId } : null,
   };
 }

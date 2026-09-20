@@ -2,6 +2,65 @@
 
 Agent C records only work and verification performed in this session.
 
+## Parallel bug hunt — 2026-09-20
+
+Six isolated specialists plus an integration agent produced PR #48. Fifteen reproduced
+defects received 58 regression cases. Browser testing additionally reproduced compact
+HUD overlap and a 1079px expedition layout at a 1024px viewport; commits `6e476cc` and
+`acd9b38` correct these. The final full check passed **1159 tests / 102 files**, TypeScript
+and Vite build; whitespace and GitHub CI passed.
+
+Delegated testing used genuine held movement through the physical portal and into room
+two. Four enemies were defeated, resources rose 3→10, Q/dash activated, and unlocking E
+spent 3 resources before activation. HQ return/reload retained event-derived memories,
+including an honest aborted two-room expedition. Two co-op tabs retained consecutive
+name/class edits; guest reload preserved identity, position and exactly two seats.
+The repaired expedition fits 1024px, with the rail ending at 1008px. HUD checks also
+passed at 819 and 1400 CSSpx. The recording is delivered in the Devin session, with
+screenshots embedded in the PR. No synthetic gameplay events, paid providers or fabricated history.
+
+The deadline limited full-route/finale, adversarial disconnect and exact lifecycle-race
+browser coverage; automated regressions cover relevant code paths. Menu wheel scrolling
+and one automated uppercase-name attempt remain inconclusive. Merge was denied by the
+session's command policy, so PR #48 is left for a repository owner.
+
+## Remove contributed ideas — 2026-09-20
+
+Implemented per-idea removal through the existing HQ/controller/session path, including
+server-authorized co-op updates. Prepared receipts remain historical records; the next
+request receives the remaining ideas. Eight additional regression cases passed, including
+real local WebSocket connections, unauthorized removal, generation/phase guards, the
+24-idea limit and removing the final idea. `npm run check`: **1109 tests / 92 files**,
+typecheck and production build passed. Browser verification remains pending at this commit.
+
+## Startup storage failure — 2026-09-20
+
+The overnight monitor reproduced a thrown `SecurityError` from `shouldShowStart` on
+main `972bb06` by supplying a storage object whose `getItem` throws. App calls this
+helper during state initialization; access to the storage object alone was guarded.
+Commit `7e456d6` falls back to showing the start screen when the read fails.
+Two regression cases (solo and co-op query modes) failed before the implementation.
+
+`npm run check`: **1103 tests / 93 files**, typecheck and production build passed.
+Storage failure is simulated; no browser failure or recovery was observed in this cycle.
+The unchanged base also passed its full check and a production fixture smoke on
+ephemeral port 43869, with empty API keys. It served health/config, root HTML, all four
+referenced assets and a schema-valid Root Archive with honest fixture receipts, then
+exited 0 on SIGTERM. All eight prompt stages and exemplar pools loaded locally.
+
+## Production AI prompt packaging — 2026-09-20
+
+A fresh request to `https://relay-a3yv.onrender.com/api/world` returned
+`COMPOSED · relay-composer`; live generation failed before contacting the provider.
+The image built from `aaf9fdf` reproduced `ENOENT` for `/app/prompts/exemplars/` and
+zero intercepted provider calls. Mounting that directory allowed prompt assembly and
+one intercepted call. The repaired image includes those assets and validates all prompt
+stages during its build. Its isolated provider check also reached one intercepted call.
+These container checks used no real credentials and had networking disabled.
+
+`npm run check`: **1101 tests / 92 files**, typecheck and production build passed.
+Post-deploy live provider acceptance remains to be verified; no browser test is claimed.
+
 ## Stranded-world Anchor accounting — 2026-09-20
 
 The 09:43 UTC watch checked main `2353463`: typecheck, **899 tests / 76 files**, build,

@@ -75,6 +75,41 @@ async function setup() {
 }
 
 describe('snapshot-driven headquarters controller', () => {
+  it('removes one idea at capacity, updates the UI and preserves the existing world receipt', async () => {
+    const { session, store, actions } = await setup();
+    for (let i = 0; i < 24; i++) actions.submitContribution(`Idea ${i}`);
+    const original = [...session.getContributions()];
+    const world = await session.requestWorld();
+    await Promise.resolve();
+    const receipt = structuredClone(world.receipt);
+    const removed = original[5]!;
+    actions.removeContribution?.(removed.id);
+    expect(store.get().contributions).toEqual(original.filter((c) => c.id !== removed.id));
+    expect(session.getWorld()?.receipt).toEqual(receipt);
+    expect(session.removeContribution(removed.id)).toBe(false);
+    expect(session.removeContribution('missing')).toBe(false);
+    actions.submitContribution('Replacement');
+    expect(store.get().contributions).toHaveLength(24);
+    const next = await session.requestWorld();
+    expect(next.receipt.lines.map((line) => line.text)).toEqual([
+      ...original.filter((c) => c.id !== removed.id).map((c) => c.text), 'Replacement',
+    ]);
+  });
+
+  it('allows removing the last idea but blocks removal outside headquarters', async () => {
+    const { session, store, actions } = await setup();
+    actions.submitContribution('Dragons');
+    const id = session.getContributions()[0]!.id;
+    actions.enterTraining?.();
+    actions.removeContribution?.(id);
+    expect(session.removeContribution(id)).toBe(false);
+    expect(store.get().contributions).toHaveLength(1);
+    actions.returnToHeadquarters();
+    actions.removeContribution?.(id);
+    expect(store.get().contributions).toEqual([]);
+    expect((await session.requestWorld()).receipt.lines).toEqual([]);
+  });
+
   it('attunes once on an F edge at a physical shrine; moving away closes the station', async () => {
     const { session, store, tick, walk } = await setup();
     const select = vi.spyOn(session, 'setClass');

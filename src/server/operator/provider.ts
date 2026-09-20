@@ -188,11 +188,14 @@ export function createOperatorProvider(options: OperatorProviderOptions): Operat
     }
   }
 
-  /** Next inbox/outbox file pair for a request; attempts count up across re-issues. */
+  /**
+   * Next inbox/outbox file pair for a request; attempts count up across re-issues. The id is
+   * percent-encoded rather than stripped, so two distinct request ids cannot share a filename.
+   */
   function nextAttempt(request: GenerationRequest): { attempt: number; name: string; inboxPath: string; outboxPath: string } {
     const attempt = (attempts.get(request.requestId) ?? 0) + 1;
     attempts.set(request.requestId, attempt);
-    const name = `${request.requestId.replace(/[^A-Za-z0-9_-]/g, '_')}-${attempt}.json`;
+    const name = `${encodeURIComponent(request.requestId)}-${attempt}.json`;
     return { attempt, name, inboxPath: path.join(inboxDir, name), outboxPath: path.join(outboxDir, name) };
   }
 

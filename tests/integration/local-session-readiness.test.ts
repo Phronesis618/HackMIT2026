@@ -102,6 +102,32 @@ async function waitingSession() {
 }
 
 describe('LocalSession generation entry readiness', () => {
+  it('keeps ideas immutable until the generation stream finishes', async () => {
+    const first = gate();
+    const rest = gate();
+    const { local } = await session({
+      kind: 'server', prepareWorld: fixtureWorldProvider.prepareWorld,
+      async *prepareWorldStream(request) {
+        const world = await fixtureWorldProvider.prepareWorld(request);
+        await first.promise;
+        yield prefix(world, 1);
+        await rest.promise;
+        yield world;
+      },
+    });
+    const idea = local.submitContribution('A lighthouse')!;
+    const preparing = requestWorld(local);
+    expect(local.removeContribution(idea.id)).toBe(false);
+    first.release();
+    await preparing;
+    expect(local.removeContribution(idea.id)).toBe(false);
+    rest.release();
+    await vi.waitFor(() => expect(local.getWorld()?.rooms).toHaveLength(3));
+    expect(local.removeContribution(idea.id)).toBe(true);
+    expect(local.getContributions()).toEqual([]);
+    expect(local.getWorld()?.receipt.lines[0]?.contributionId).toBe(idea.id);
+  });
+
   it.each(['walk', 'portal', 'preview'] as const)('blocks %s entry into a previous world until the replacement first prefix', async (entry) => {
     const first = gate();
     const rest = gate();
