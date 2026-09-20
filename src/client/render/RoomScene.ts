@@ -21,6 +21,8 @@ import { collectTerrainTiles, drawTerrain, terrainCaption, type TerrainTile } fr
 import { drawHeadquartersStations, type HeadquartersStationView } from './headquarters';
 import { drawMotif, drawProp, drawSanctuary, drawVignette } from './drawing';
 import { drawBackdrop, drawFloor, drawLightPools, drawMotes, drawWalls, makeMotes, type Mote } from './environment';
+import { artForRoom } from './biomeArt';
+import { drawRoomKindDynamic, drawRoomKindStatic, featurePrompt, roomKindState, type RoomKindState } from './roomKinds';
 import { drawDoorFrames, drawDoorStates, selectDoorViews, stepSeal, type DoorView } from './doors';
 import { drawFloorDressing, drawOverhead, drawWallDressing, FLOOR_PATTERN, MOTE_STYLE, stencilColors, type MoteStyle } from './dressing';
 import * as fx from './fx';
@@ -78,6 +80,9 @@ export class RoomScene extends Phaser.Scene {
   private doorsView: Phaser.GameObjects.Graphics | null = null;
   private doorViews: DoorView[] = [];
   private doorSeal = 0;
+  private kindView: Phaser.GameObjects.Graphics | null = null;
+  private kindHint: Phaser.GameObjects.Text | null = null;
+  private kindState: RoomKindState = { roomCleared: false, featureUsed: false, choiceOpen: false };
   private players = new Map<string, EntityView>();
   private enemies = new Map<string, EntityView>();
   private anchorView: Phaser.GameObjects.Graphics | null = null;
@@ -119,6 +124,8 @@ export class RoomScene extends Phaser.Scene {
     opts: { headquarters: boolean; world?: { title: string; tagline: string } },
     loreLines: ReceiptLine[] = [],
   ): void {
+    // Floors: the biome's own motifs and palette turn (no-op for legacy rooms and the hub).
+    art = artForRoom(room, art);
     this.room = room;
     this.art = art;
     this.isHeadquarters = opts.headquarters;
@@ -150,6 +157,9 @@ export class RoomScene extends Phaser.Scene {
     this.doorsView = null;
     this.doorViews = [];
     this.doorSeal = 0;
+    this.kindView = null;
+    this.kindHint = null;
+    this.kindState = { roomCleared: false, featureUsed: false, choiceOpen: false };
 
     const layer = this.add.layer();
     this.roomLayer = layer;
@@ -217,6 +227,19 @@ export class RoomScene extends Phaser.Scene {
     this.terrainView = this.add.graphics().setDepth(DEPTH.propsBehind + 0.5);
     layer.add(this.terrainView);
     drawTerrain(this.terrainView, room, this.terrainTiles, undefined, p, this.time.now);
+    if (room.kind !== undefined) {
+      // Floors room: what the room is for, readable from the door (roomKinds.ts).
+      const kindStatic = this.add.graphics().setDepth(DEPTH.floorDecal + 2);
+      drawRoomKindStatic(kindStatic, room, p);
+      layer.add(kindStatic);
+      this.kindView = this.add.graphics().setDepth(DEPTH.propsBehind + 1.5);
+      layer.add(this.kindView);
+      this.kindHint = this.text(0, 0, '', {
+        fontFamily: tokens.font.mono, fontSize: '9px', color: p.text, letterSpacing: 1,
+        backgroundColor: 'rgba(4, 5, 10, 0.8)', padding: { left: 6, right: 6, top: 3, bottom: 3 },
+      }).setOrigin(0.5, 1).setDepth(DEPTH.overlay - 1).setVisible(false);
+      layer.add(this.kindHint);
+    }
     if (room.kind !== undefined) {
       // Floors room: real doorways on the border wall. Frames are static; the light, the
       // chevron and the combat shutter are redrawn per frame in update().
@@ -353,6 +376,17 @@ export class RoomScene extends Phaser.Scene {
     this.localPlayerId = localPlayerId;
     this.headquartersStations?.update(snapshot, localPlayerId);
     if (this.doorsView) this.doorViews = selectDoorViews(this.room, snapshot.floor);
+    if (this.kindView) {
+      this.kindState = roomKindState(this.room, snapshot);
+      const prompt = featurePrompt(this.room, this.kindState);
+      const me = snapshot.players.find((player) => player.id === localPlayerId);
+      const focus = this.room.focus ? tileToWorld(this.room.focus.x, this.room.focus.y) : null;
+      const near = me && focus ? Math.hypot(me.x - focus.x, me.y - focus.y) < TILE_SIZE * 4.5 : false;
+      if (prompt && focus && near) {
+        if (this.kindHint?.text !== prompt) this.kindHint?.setText(prompt);
+        this.kindHint?.setPosition(focus.x, focus.y - (this.room.feature === 'biome_exit' ? 34 : 30)).setVisible(true);
+      } else this.kindHint?.setVisible(false);
+    }
 
     const seenPlayers = new Set<string>();
     for (const player of snapshot.players) {
@@ -1058,6 +1092,10 @@ export class RoomScene extends Phaser.Scene {
       this.doorSeal = stepSeal(this.doorSeal, this.doorViews.some((door) => door.state === 'sealed') ? 1 : 0, delta);
       this.doorsView.clear();
       drawDoorStates(this.doorsView, this.doorViews, this.art.palette, this.doorSeal, t, this.room.kind === 'exit');
+    }
+    if (this.kindView) {
+      this.kindView.clear();
+      drawRoomKindDynamic(this.kindView, this.room, this.art.palette, this.kindState, t);
     }
     for (const exit of this.doorsView ? [] : this.room.exits) {
       const c = tileToWorld(exit.x, exit.y);
