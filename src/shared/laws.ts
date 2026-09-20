@@ -218,20 +218,11 @@ const DEFAULT_MOVE_TEXT: Record<(typeof DEFAULT_CUSTODIAN_MOVES)[number], { name
   arena_flood: { name: 'Marked floor', tell: 'MARKED FLOOR GOES LIVE. FOLLOW THE CLEAR LANE.' },
 };
 
-export const CustodianMoveSchema = z.object({
-  patternId: z.enum(CUSTODIAN_PATTERN_IDS),
-  /** The world's name for this attack. */
-  name: z.string().trim().min(1).max(32),
-  /** One line shown the first time the pattern is used: names the bible object about to hurt the crew. */
-  tell: z.string().trim().min(1).max(80),
-});
-export const CustodianSchema = z.object({
-  /** Replaces "THE LAST CUSTODIAN": a bible person or machine with their title. */
-  title: z.string().trim().min(1).max(40),
-  phaseTitles: z.array(z.string().trim().min(1).max(80)).length(3),
-  moves: z.array(CustodianMoveSchema).length(3),
-});
-export type Custodian = z.infer<typeof CustodianSchema>;
+// Single source of truth for the recipe's Custodian slot is src/shared/custodian.ts (agent B1's
+// runtime reads it). Re-exported here so the generation pipeline keeps importing from laws.ts.
+import { CustodianSchema, CustodianMoveSchema, type CustodianRecipe } from './custodian';
+export { CustodianSchema, CustodianMoveSchema };
+export type Custodian = CustodianRecipe;
 
 /** True when the three moves are legal under BOSS_FINALE section 2.1. */
 export function custodianMovesValid(patternIds: readonly CustodianPatternId[], nonBossPoolSize: number): boolean {

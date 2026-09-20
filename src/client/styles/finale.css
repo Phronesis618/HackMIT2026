@@ -1,0 +1,144 @@
+/*
+ * The finale (agent B1): the collapse clock and the three pedestals at the extraction.
+ * app.css is not touched; colours come from the design tokens already on :root.
+ */
+:root {
+  --finale-plane: rgba(6, 8, 14, 0.82);
+  --finale-warn: var(--color-danger, #ff5c7a);
+  --finale-calm: var(--color-accent, #7cf5ff);
+}
+
+.escape {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 18px;
+  border: 1px solid rgba(255, 92, 122, 0.4);
+  border-radius: 10px;
+  background: var(--finale-plane);
+  pointer-events: none;
+  text-align: center;
+}
+
+.escape__label {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.escape__clock {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 34px;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+.escape__line {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.escape--urgent {
+  border-color: var(--finale-warn);
+}
+
+.escape--urgent .escape__clock {
+  color: var(--finale-warn);
+  animation: escape-tick 1s steps(2, end) infinite;
+}
+
+.escape--clear,
+.escape--stranded {
+  border-color: rgba(124, 245, 255, 0.4);
+}
+
+.escape--clear .escape__label {
+  color: var(--finale-calm);
+}
+
+@keyframes escape-tick {
+  0%, 60% { opacity: 1; }
+  61%, 100% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .escape--urgent .escape__clock { animation: none; }
+}
+
+.relic-choice {
+  position: absolute;
+  bottom: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  width: min(640px, calc(100% - 32px));
+  padding: 12px 14px;
+  border: 1px solid rgba(124, 245, 255, 0.3);
+  border-radius: 12px;
+  background: var(--finale-plane);
+  pointer-events: none;
+  text-align: center;
+}
+
+.relic-choice__head {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.relic-choice__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.relic-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.relic-card--held {
+  border-color: rgba(124, 245, 255, 0.6);
+  background: rgba(124, 245, 255, 0.08);
+}
+
+.relic-card--chosen {
+  border-color: var(--color-success, #5ef0b0);
+  background: rgba(94, 240, 176, 0.12);
+}
+
+.relic-card__title {
+  font-size: 14px;
+  color: #fff;
+}
+
+.relic-card__kind {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.relic-card__votes {
+  font-size: 11px;
+  color: var(--finale-calm);
+}

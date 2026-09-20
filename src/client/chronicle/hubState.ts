@@ -24,7 +24,8 @@ const Participant = z.object({ id: z.string(), displayName: z.string() });
 export const LastRunSchema = z.object({
   worldId: z.string(),
   worldTitle: z.string(),
-  outcome: z.enum(['anchored', 'collapsed', 'aborted']),
+  // `stranded`: the Anchor held and the crew did not make it back out (BOSS_FINALE.md §7.5).
+  outcome: z.enum(['anchored', 'collapsed', 'aborted', 'stranded']),
   classId: ClassIdSchema,
   endedAt: z.number(),
   durationMs: z.number().nonnegative(),
@@ -192,7 +193,10 @@ function bump(counts: Record<string, number>, key: string): void {
  * nothing changed so callers can skip persistence.
  */
 export function reduceHubState(state: HubState, events: readonly GameEvent[], ctx: HubIngestContext): HubState {
-  const seen = new Set(state.seenEventIds);
+  const legacyWorldIds = new Set([state.current?.worldId, state.lastRun?.worldId].filter((id): id is string => id !== undefined));
+  const seen = new Set(state.seenEventIds.flatMap((id) => id.startsWith('[')
+    ? [id]
+    : [...legacyWorldIds].map((worldId) => JSON.stringify([worldId, id]))));
   let next: HubState = state;
   let changed = false;
   const local = ctx.localPlayerId;
@@ -200,8 +204,11 @@ export function reduceHubState(state: HubState, events: readonly GameEvent[], ct
     ({ id, displayName: ctx.players.find((p) => p.id === id)?.displayName ?? id });
 
   for (const event of events) {
-    if (seen.has(event.id)) continue;
-    seen.add(event.id);
+    const origin = 'worldId' in event ? event.worldId : undefined;
+    const worldId = origin === undefined ? next.current?.worldId ?? ctx.world?.worldId ?? null : origin;
+    const eventKey = JSON.stringify([worldId, event.id]);
+    if (seen.has(eventKey)) continue;
+    seen.add(eventKey);
 
     if (event.type === 'world_prepared') {
       next = { ...next, current: startRun(event.worldId, event.worldTitle, event.source, ctx) };
@@ -218,6 +225,7 @@ export function reduceHubState(state: HubState, events: readonly GameEvent[], ct
         continue;
       }
     }
+    if (worldId !== run.worldId) continue;
     run = { ...run, abilityUseCounts: { ...run.abilityUseCounts }, sourceEventIds: [...run.sourceEventIds] };
     const stamped = ctx.classByPlayerId[local];
     if (stamped) run.classId = stamped;
@@ -277,6 +285,15 @@ export function reduceHubState(state: HubState, events: readonly GameEvent[], ct
             recoveredAt: ctx.now, sourceEventIds: [event.id], playerId: event.playerId,
           };
         }
+        break;
+      case 'relic_carried':
+        // The crew chose one thing to carry out of the collapse; that, not the last thing read,
+        // is what the shelf gets (BOSS_FINALE.md §8).
+        run.lastRelic = {
+          id: `carried-${run.worldId}-${event.key}`.slice(0, 64), title: event.title, source: 'carried out of the collapse',
+          text: event.detail, recoveredAt: ctx.now, sourceEventIds: [event.id],
+          playerId: event.playerIds.includes(local) ? local : event.playerIds[0] ?? local,
+        };
         break;
       case 'anchor_planted':
         if (event.playerIds.includes(local)) run.anchors += 1;
@@ -353,6 +370,7 @@ function finishRun(
   };
 
   let relics = state.relics;
+  // `stranded` keeps the anchor and the run summary but never a relic: the crew lost the souvenir.
   if (event.outcome === 'anchored' && run.lastRelic) {
     const { playerId, ...rest } = run.lastRelic;
     const relic: HubRelic = { ...rest, worldId: run.worldId, worldTitle: run.worldTitle, worldSource: run.worldSource, recoveredBy: [nameOf(playerId)] };

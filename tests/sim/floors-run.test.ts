@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GameSnapshotSchema } from '../../src/shared/contracts';
+import { FLOOR_ENTRANCE_ROOM_ID } from '../../src/shared/floors';
 import { createSimulation } from '../../src/sim';
 import { FloorsBot, floorsWorld, makeProvider } from './floorsBot';
 
@@ -54,9 +55,27 @@ describe('floors: a whole run', () => {
     expect(bot.snapshot().anchor!.ritual!.stage).toBe('core');
     bot.walkTo(bot.snapshot().anchor!, { reach: 30 });
     bot.tick(() => ({ interact: true }));
-    for (let i = 0; i < 200 && sim.getPhase() === 'expedition'; i++) bot.tick();
-    expect(sim.getPhase()).toBe('debrief');
+    for (let i = 0; i < 200 && bot.snapshot().anchor!.ritual!.stage === 'discharging'; i++) bot.tick();
     expect(bot.events.filter((event) => event.type === 'anchor_planted')).toHaveLength(1);
+
+    // The Anchor holds and the world starts coming down: the run now ends with the walk back to
+    // the biome entrance and one thing carried out (docs/design/BOSS_FINALE.md §7, §8).
+    expect(bot.snapshot().anchor!.ritual!.stage).toBe('collapse');
+    const collapse = bot.snapshot().collapse!;
+    expect(collapse.totalMs).toBeGreaterThanOrEqual(60_000);
+    expect(collapse.remainingMs).toBeGreaterThan(0);
+    expect(sim.getPhase()).toBe('expedition');
+    bot.travel(FLOOR_ENTRANCE_ROOM_ID);
+    bot.tick(); // the timer stops on the first tick inside the portal room
+    expect(bot.snapshot().collapse!.stage).toBe('extraction');
+    const offer = bot.snapshot().collapse!.offer;
+    expect(offer.length).toBeGreaterThan(0);
+    // A generous timer: a crew that knows the route arrives with most of it left.
+    expect(bot.snapshot().collapse!.remainingMs / collapse.totalMs).toBeGreaterThan(0.35);
+    bot.walkTo(offer[0]!, { reach: 16 });
+    for (let i = 0; i < 1400 && sim.getPhase() === 'expedition'; i++) bot.tick();
+    expect(sim.getPhase()).toBe('debrief');
+    expect(bot.events.filter((event) => event.type === 'relic_carried')).toHaveLength(1);
     expect(bot.events.at(-1)).toMatchObject({ type: 'run_ended', outcome: 'anchored' });
     expect(bot.events.filter((event) => event.type === 'biome_entered').map((event) => event.type === 'biome_entered' && event.tier)).toEqual([0, 1, 2, 3, 4]);
     expect(GameSnapshotSchema.parse(bot.snapshot()).floor).toMatchObject({ tier: 4 });
