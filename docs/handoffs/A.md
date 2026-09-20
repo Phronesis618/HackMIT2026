@@ -4,7 +4,7 @@
 
 Local commits on Jeffrey's machine, merged with `origin/main` through `c1abe97` (floors,
 writing pipeline, hub, tiles, boss finale, co-op verify, UI audit); `npm run check` green at
-**838 tests / 71 files** (merged through `8843860`, M1 world laws). Pushing was deferred to a human (the agent's pushes need approval).
+**838 tests / 71 files** (merged through `8843860`, M1 world laws). Pushing was deferred to a human (the agent's pushes need approval): the work sits on the local branch `integrate` on Jeffrey's laptop; `git push origin integrate:main` after a final `git merge origin/main` + `npm run check`.
 
 - **Implemented — offline composer (`src/server/composer/`, "Jeffrey's area" per the overnight
   plan):** `RELAY_AI_PROVIDER=composer` builds a validated `WorldRecipe` from the crew's ideas in
