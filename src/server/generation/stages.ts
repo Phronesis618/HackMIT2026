@@ -898,17 +898,32 @@ function openerFailures(parts: Lintable): LintFailure[] {
   return (parts.biomes ?? []).flatMap((brief, biomeIndex) => {
     const lines = parts.biomeRoomLines?.find((entry) => entry.biomeId === brief.id)?.lines ?? [];
     const seen = new Map<string, number>();
+    const firstWords = new Map<string, number>();
     return lines.flatMap((line, lineIndex) => {
-      const words = line.text.replace(/^[^A-Za-z0-9]+/, '').split(/\s+/);
-      const first = (words[0] ?? '').replace(/[^A-Za-z0-9']/g, '');
+      const words = line.text.replace(/^[^A-Za-z0-9]+/, '').split(/\s+/).map((word) => word.replace(/[^A-Za-z0-9']/g, ''));
+      // The article is not the opening; the thing after it is.
+      const first = (/^(?:a|an|the)$/i.test(words[0] ?? '') ? words[1] : words[0]) ?? '';
       const opener = COUNT_OPENER.test(first) ? 'a count' : first.toLowerCase();
       const count = (seen.get(opener) ?? 0) + 1;
       seen.set(opener, count);
-      if (count < 3) return [];
-      return [{
-        path: `biomes[${biomeIndex}].rooms[${lineIndex}].description`, kind: 'roomLine' as const, text: line.text, maxChars: max,
-        notes: [`Rule opener-repeat: ${count} lines on this floor open the same way (${opener === 'a count' ? 'on a count' : `on "${first}"`}). Open this one somewhere else: on the fixture the room was built around, on what is on the floor, on a name from the bible, or mid-task.`],
-      }];
+      const literal = (words[0] ?? '').toLowerCase();
+      const repeats = (firstWords.get(literal) ?? 0) + 1;
+      firstWords.set(literal, repeats);
+      const path = `biomes[${biomeIndex}].rooms[${lineIndex}].description`;
+      if (count >= 3) {
+        return [{
+          path, kind: 'roomLine' as const, text: line.text, maxChars: max,
+          notes: [`Rule opener-repeat: ${count} lines on this floor open on the same thing (${opener === 'a count' ? 'a count' : `"${first}"`}). Open this one somewhere else: on the machine the room was built around, on the state of the floor, on a person from the bible, or on the work that was going on when it stopped.`],
+        }];
+      }
+      // Four of seven lines beginning with the same word is a rhythm even when the subjects differ.
+      if (repeats >= 4) {
+        return [{
+          path, kind: 'roomLine' as const, text: line.text, maxChars: max,
+          notes: [`Rule opener-repeat: ${repeats} lines on this floor begin with the word "${words[0]}". Start this one on its own noun instead.`],
+        }];
+      }
+      return [];
     });
   });
 }

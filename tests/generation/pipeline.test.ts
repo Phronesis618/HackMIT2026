@@ -539,7 +539,13 @@ describe('lenient parsing and transport helpers', () => {
     const parts = { biomes: [brief.brief], biomeRoomLines: [{ biomeId: brief.brief.id, lines: brief.lines }] };
     const failure = lintWorld(parts, bible).failures.find((entry) => entry.notes[0]!.startsWith('Rule opener-repeat'));
     expect(failure?.path).toBe('biomes[0].rooms[2].description');
-    expect(failure?.notes[0]).toContain('open the same way (on a count)');
+    expect(failure?.notes[0]).toContain('open on the same thing (a count)');
+    // the article is not the opening: three lines starting "The" on three different nouns pass
+    const articles = ['The hatch is open, two beds behind it.', 'The ward clock reads 22:10 above bed 4.', 'The linen cart blocks the aisle, 31 sheets on it.'];
+    const spread = parseBrief({ ...briefRaw('Bay D'), roomLines: {
+      entrance: articles[0], combat: articles[1], elite: articles[2], treasure: lines[0], lore: lines[1], rest: lines[2], exit: lines[3],
+    } }, 1)!;
+    expect(lintWorld({ biomes: [spread.brief], biomeRoomLines: [{ biomeId: spread.brief.id, lines: spread.lines }] }, bible).rules).not.toContain('opener-repeat');
     expect(lintWorld({ biomes: [brief.brief], biomeRoomLines: [{ biomeId: brief.brief.id, lines: parseBrief(briefRaw('Bay C'), 0)!.lines }] }, bible).rules).not.toContain('opener-repeat');
   });
 

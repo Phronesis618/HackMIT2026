@@ -38,3 +38,52 @@ as a person doing it.
 
 Dark Souls and Slay the Spire were in the study but their wikis refuse automated fetches
 (HTTP 402), which `docs/WRITING.md` section 9 already records.
+
+## Result, first read (run `v1-before`)
+
+| | Ours (10) | Shipped games (10) |
+| --- | --- | --- |
+| Called AI | **1** | 5 |
+| Called HUMAN | 9 | 5 |
+
+**Detection rate against our text: 1 of 10.** The detector was worse than a coin on the real
+text, calling half of the DCSS and Magic lines machine-written, so the honest reading of this
+table is not "we passed": it is that this detector sorts on register rather than on origin,
+and liked the flat industrial voice of both our text and the two real log-shaped lines it saw.
+The number that matters is the single correct catch and its reason.
+
+### The one correct reason, and what it cost us
+
+> 19. AI — Ungrammatical compression ("left on Week 31 Monday") suggests template variables
+> stitched together rather than natural phrasing.
+
+It was right. The sample was a law description: *"The Cold Store's backup lighting failed
+after the holiday staff left on Week 31 Monday."* The bible stores a world's dates in a seeded
+calendar style, and writers were reusing the stored form inside running sentences, where a
+person would say "on the Monday the holiday staff left". As a heading on a form the stored
+form is correct, which is why nothing had caught it.
+
+Fixed at two layers: `stitched-date` in `src/server/generation/stages.ts` rejects the pattern
+after a preposition, where it can only be inside a sentence; `prompts/runtime/common.md` rule 3
+now separates the heading date from the spoken date.
+
+The detector's five recurring "patterns" all describe lines from the shipped games, not ours:
+the "despite being X" bestiary frame, the quotable epigram, the triad ending in abstract
+virtues, Latinate false authority. That is a useful negative result: the tells the catalogues
+warn about are the ones our linter already hard-fails, and the remaining risk is elsewhere.
+
+## What the same run found by ordinary reading, which the detector did not
+
+Reading the four worlds side by side before the blind read found three faults worth more than
+the detector's score, all of them the prompt's own words coming back as the world's:
+
+1. **The example sentence in `laws.md` was copied almost verbatim in three of four worlds**
+   ("Fewer of them per room, and each one takes much more killing"). An example of a law
+   description written for a specific registry law will be copied whenever that law is picked.
+   The prompt now describes what the sentence must do and says to use the world's own nouns.
+2. **`brief-rules.md` listed "what is underfoot" as one of the seven room-line openings**, and
+   two worlds opened a room line on the literal word "Underfoot". The list is now categories.
+3. **Three of four bosses shouted the pattern registry's own counter line** ("DASH THROUGH THE
+   GAP", "STEP OFF THE MARK"), which is correct advice in identical words across every world.
+   `stock-callout` now rejects it. The rule failed all three authored fixture worlds on its
+   first run, which is the evidence for it.
