@@ -19,6 +19,7 @@ import { drawHostile, drawOperative } from './characters';
 import { hexInt, lookPalette, VOID_COLOR } from './color';
 import { DEFAULT_LIGHTING, LIGHTING, drawDarkness, drawLightShafts, drawStormPulse, fixedLights, isLit, type LightSource, type LightingSpec } from './lighting';
 import { drawAnchorRitual } from './anchorRitual';
+import { drawBossFx } from './bossFx';
 import { collectTerrainTiles, drawTerrain, terrainCaption, type TerrainTile } from './terrain';
 import { drawHeadquartersStations, type HeadquartersStationView } from './headquarters';
 import { drawMotif, drawProp, drawSanctuary, drawVignette } from './drawing';
@@ -445,6 +446,7 @@ export class RoomScene extends Phaser.Scene {
       if (this.lightRadius !== null) view.container.setVisible(isLit(enemy, this.lightSources));
       if (enemy.telegraph && this.telegraphs) this.drawTelegraph(this.telegraphs, enemy);
     }
+    if (this.telegraphs) drawBossFx(this.telegraphs, snapshot, this.room, this.art.palette, this.time.now); // B1: Custodian + collapse
     for (const [id, view] of this.enemies) {
       if (!seenEnemies.has(id)) {
         view.container.destroy(true);

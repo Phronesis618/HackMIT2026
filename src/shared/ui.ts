@@ -11,6 +11,7 @@ import type {
 } from './registry';
 import type {
   AnchorState,
+  GameSnapshot,
   Attunement,
   Contribution,
   CreationReceipt,
@@ -75,6 +76,8 @@ export interface UiHud {
   abilityRCooldownMs?: number;
   /** Training range only: which target is awake and how it attacks (for the practice notes). */
   training?: { awakeEnemyIds: string[] } | null;
+  /** B1: the collapse after the Anchor holds — the clock, and the pedestals at the end of it. */
+  collapse?: GameSnapshot['collapse'];
 }
 
 /** One biome offered on the choice screen (agent F3). Every field is plain, checkable fact. */

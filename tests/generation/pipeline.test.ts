@@ -17,7 +17,7 @@ import { createLiveGenerationService } from '../../src/server/generation/liveSer
 import type { GenerationMetrics } from '../../src/server/generation/pipeline';
 import { buildSystemPrompt, namePool, worldSeeds } from '../../src/server/generation/prompt';
 import { GenerationFailure, assembleAnthropicStream, type RecipeProvider, type StageCall } from '../../src/server/generation/provider';
-import { coerceJson, fitText, lintWorld, parseBrief, parseFullRecipe, parseWithFit, planBiomeSlots, planRelicSlots } from '../../src/server/generation/stages';
+import { coerceJson, fitOverlong, fitText, lintWorld, parseBrief, parseFullRecipe, parseLooseJson, parseWithFit, planBiomeSlots, planRelicSlots } from '../../src/server/generation/stages';
 
 const fixtures = loadWorldFixtures(path.resolve(__dirname, '../../fixtures/worlds'));
 const legacyRecipe = fixtures.find((fixture) => fixture.fixtureId === 'vantage-spire')!.recipe;
@@ -404,6 +404,24 @@ describe('lenient parsing and transport helpers', () => {
     const coerced = coerceJson({ ...foundationRaw, bible: JSON.stringify(bible), tagline: 'Locked on **14 March**.' }) as { bible: unknown; tagline: string };
     expect(coerced.bible).toEqual(bible);
     expect(coerced.tagline).toBe('Locked on 14 March.');
+  });
+
+  it('reads fenced and doubly encoded JSON strings, and gives up cleanly on a truncated one', () => {
+    expect(parseLooseJson('```json\n{"a":[1]}\n```')).toEqual({ a: [1] });
+    expect(parseLooseJson(JSON.stringify(JSON.stringify({ a: 1 })))).toEqual({ a: 1 });
+    expect(parseLooseJson('Here it is: {"a":1} as asked')).toEqual({ a: 1 });
+    expect(parseLooseJson('{"a": tru')).toBeUndefined();
+    expect(parseLooseJson('Bay C')).toBeUndefined();
+    // a bible that cannot be recovered stays a string and fails as an ordinary repairable schema error
+    expect((coerceJson({ bible: '{"premise": "cut off' }) as { bible: unknown }).bible).toBe('{"premise": "cut off');
+  });
+
+  it('cuts a line whose only fault is length even when no polish call ran (budget cut it off)', () => {
+    const parts = { biomes: [{ ...parseBrief(briefRaw('Bay C'), 0)!.brief, tagline: 'Twelve beds along one wall of Bay C. Med trolley 4 blocks the door; 118 final notices lie under it, one per bed.' }] };
+    expect(lintWorld(parts, bible).rules).toContain('too-long');
+    expect(fitOverlong(parts, bible)).toBe(1);
+    expect(parts.biomes[0]!.tagline).toBe('Twelve beds along one wall of Bay C.');
+    expect(lintWorld(parts, bible).rules).not.toContain('too-long');
   });
 
   it('deals every relic slot an author, an event and a length, and every biome slot its own setting', () => {

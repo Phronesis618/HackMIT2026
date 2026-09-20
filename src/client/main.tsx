@@ -21,10 +21,20 @@ import { PhaserWorldRenderer } from './render/PhaserWorldRenderer';
 import { applyTokens } from './styles/applyTokens';
 import './styles/app.css';
 import './styles/floors.css';
+import './styles/finale.css';
 import { LocalSession } from './transport/LocalSession';
 import { RemoteSession } from './transport/RemoteSession';
 import { fixtureWorldProvider, serverWorldProvider } from './transport/worldProviders';
 import { App } from './ui/App';
+
+/** Per-tab storage for the co-op resume credential (a reload must come back as the same operative). */
+function tabStorage(): Storage | undefined {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return undefined;
+  }
+}
 
 const ClientConfigSchema = z.object({ liveGenerationAvailable: z.boolean() });
 
@@ -49,7 +59,7 @@ async function boot(): Promise<void> {
   const identityPersistence = createIdentityPersistence(params.get('as'), window);
   const identity = identityPersistence.load();
   const session: GameSession = coOp
-    ? new RemoteSession({ identity })
+    ? new RemoteSession({ identity, resumeStorage: tabStorage(), resumeScope: identityPersistence.scope })
     : new LocalSession({ identity, worldProvider: flags.fixtureWorld ? fixtureWorldProvider : serverWorldProvider });
   const renderer = new PhaserWorldRenderer();
   const chronicle = createBrowserChronicle(window.localStorage);

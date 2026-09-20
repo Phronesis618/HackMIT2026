@@ -17,10 +17,11 @@ result has actually been observed.
 - [x] HQ contribution → labelled receipt → physical portal → arrival keepsake.
 - [x] Move, aim, damage/defeat an enemy, take damage, dash and use Q.
 - [x] Earn an unlock and use E (cooldown observed; E damage not separately measured).
-- [ ] Traverse all three rooms; Guardian → hold F → completed debrief.
+- [x] Traverse all three rooms; Guardian → hold F → completed debrief (observed with two co-op players, anchored debrief on both screens; solo not re-run).
 - [x] Co-op collapse debrief and host-led shared return to HQ.
-- [ ] Co-op revive/retry through browser controls.
+- [x] Co-op revive through browser controls (guest downed, host holds F 2 s, 40 HP on both screens). Retry after collapse = host-led return, above.
 - [x] Two browser clients agree on crew, contribution, world, entry, movement and HQ return.
+- [x] Co-op, scripted with real input (`scripts/coop-e2e.mjs`, full table in `docs/QA_COOP.md`): 4/4 lobby + fifth refused, classes, host-only prepare, combat/reward/unlock agreement, exit moves the crew, three rooms → Guardian phases 1–3 → three-relay Anchor ritual with two players, tab reload resumes the same operative, host succession, old host rejoins, floors co-op (`RELAY_FLOORS=1`), production bundle over the LAN IP on a non-default port.
 - [x] Return to HQ and retain four real memories after reload.
 - [ ] Audible sound and mute persistence (implemented; not checked during short smoke).
 

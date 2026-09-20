@@ -24,12 +24,15 @@ const Participant = z.object({ id: z.string(), displayName: z.string() });
 export const LastRunSchema = z.object({
   worldId: z.string(),
   worldTitle: z.string(),
-  outcome: z.enum(['anchored', 'collapsed', 'aborted']),
+  // `stranded`: the Anchor held and the crew did not make it back out (BOSS_FINALE.md §7.5).
+  outcome: z.enum(['anchored', 'collapsed', 'aborted', 'stranded']),
   classId: ClassIdSchema,
   endedAt: z.number(),
   durationMs: z.number().nonnegative(),
   roomsEntered: z.number().int().nonnegative(),
   deepestRoomIndex: z.number().int(),
+  deepestTier: z.number().int().default(-1),
+  biomesCleared: z.number().int().nonnegative().default(0),
   roomsCleared: z.number().int().nonnegative(),
   enemiesDefeated: z.number().int().nonnegative(),
   damageDealt: z.number().nonnegative(),
@@ -52,6 +55,8 @@ export const ClassRecordSchema = z.object({
   collapses: z.number().int().nonnegative(),
   aborts: z.number().int().nonnegative(),
   deepestRoomIndex: z.number().int(),
+  deepestTier: z.number().int().default(-1),
+  biomesCleared: z.number().int().nonnegative().default(0),
   roomsCleared: z.number().int().nonnegative(),
   enemiesDefeated: z.number().int().nonnegative(),
   damageDealt: z.number().nonnegative(),
@@ -99,6 +104,9 @@ const RunAccumulatorSchema = z.object({
   lastTimeMs: z.number().nullable(),
   roomsEntered: z.number().int().nonnegative(),
   deepestRoomIndex: z.number().int(),
+  deepestTier: z.number().int().default(-1),
+  biomesCleared: z.number().int().nonnegative().default(0),
+  currentRoomKind: z.string().nullable().default(null),
   roomsCleared: z.number().int().nonnegative(),
   enemiesDefeated: z.number().int().nonnegative(),
   damageDealt: z.number().nonnegative(),
@@ -135,7 +143,7 @@ export type HubState = z.infer<typeof HubStateSchema>;
 
 export function emptyClassRecord(): ClassRecord {
   return {
-    runs: 0, anchors: 0, collapses: 0, aborts: 0, deepestRoomIndex: -1, roomsCleared: 0, enemiesDefeated: 0,
+    runs: 0, anchors: 0, collapses: 0, aborts: 0, deepestRoomIndex: -1, deepestTier: -1, biomesCleared: 0, roomsCleared: 0, enemiesDefeated: 0,
     damageDealt: 0, damageTaken: 0, timesDowned: 0, revivesGiven: 0, revivesReceived: 0, loreRead: 0,
     abilityUseCounts: {}, nemesisCounts: {}, longestRunMs: 0,
   };
@@ -165,7 +173,7 @@ export interface HubIngestContext {
 function startRun(worldId: string, worldTitle: string, worldSource: GenerationSource, ctx: HubIngestContext): RunAccumulator {
   return {
     worldId, worldTitle, worldSource, classId: ctx.classByPlayerId[ctx.localPlayerId] ?? null, startedAt: ctx.now,
-    startTimeMs: null, lastTimeMs: null, roomsEntered: 0, deepestRoomIndex: -1, roomsCleared: 0, enemiesDefeated: 0,
+    startTimeMs: null, lastTimeMs: null, roomsEntered: 0, deepestRoomIndex: -1, deepestTier: -1, biomesCleared: 0, currentRoomKind: null, roomsCleared: 0, enemiesDefeated: 0,
     damageDealt: 0, damageTaken: 0, downs: 0, lastDamageSourceEnemyId: null, lastDownedByEnemyId: null,
     revivesGiven: 0, revivesReceived: 0, loreRead: 0, abilityUnlocked: null, abilityUseCounts: {}, anchors: 0,
     lastRelic: null, sourceEventIds: [],
@@ -185,7 +193,10 @@ function bump(counts: Record<string, number>, key: string): void {
  * nothing changed so callers can skip persistence.
  */
 export function reduceHubState(state: HubState, events: readonly GameEvent[], ctx: HubIngestContext): HubState {
-  const seen = new Set(state.seenEventIds);
+  const legacyWorldIds = new Set([state.current?.worldId, state.lastRun?.worldId].filter((id): id is string => id !== undefined));
+  const seen = new Set(state.seenEventIds.flatMap((id) => id.startsWith('[')
+    ? [id]
+    : [...legacyWorldIds].map((worldId) => JSON.stringify([worldId, id]))));
   let next: HubState = state;
   let changed = false;
   const local = ctx.localPlayerId;
@@ -193,8 +204,11 @@ export function reduceHubState(state: HubState, events: readonly GameEvent[], ct
     ({ id, displayName: ctx.players.find((p) => p.id === id)?.displayName ?? id });
 
   for (const event of events) {
-    if (seen.has(event.id)) continue;
-    seen.add(event.id);
+    const origin = 'worldId' in event ? event.worldId : undefined;
+    const worldId = origin === undefined ? next.current?.worldId ?? ctx.world?.worldId ?? null : origin;
+    const eventKey = JSON.stringify([worldId, event.id]);
+    if (seen.has(eventKey)) continue;
+    seen.add(eventKey);
 
     if (event.type === 'world_prepared') {
       next = { ...next, current: startRun(event.worldId, event.worldTitle, event.source, ctx) };
@@ -211,6 +225,7 @@ export function reduceHubState(state: HubState, events: readonly GameEvent[], ct
         continue;
       }
     }
+    if (worldId !== run.worldId) continue;
     run = { ...run, abilityUseCounts: { ...run.abilityUseCounts }, sourceEventIds: [...run.sourceEventIds] };
     const stamped = ctx.classByPlayerId[local];
     if (stamped) run.classId = stamped;
@@ -219,13 +234,20 @@ export function reduceHubState(state: HubState, events: readonly GameEvent[], ct
 
     switch (event.type) {
       case 'room_entered':
+        run.currentRoomKind = event.kind ?? null;
         if (event.playerIds.includes(local)) {
           run.roomsEntered += 1;
           run.deepestRoomIndex = Math.max(run.deepestRoomIndex, event.roomIndex);
         }
         break;
+      case 'biome_entered':
+        if (event.playerIds.includes(local)) run.deepestTier = Math.max(run.deepestTier, event.tier);
+        break;
       case 'room_cleared':
-        if (event.playerIds.includes(local)) run.roomsCleared += 1;
+        if (event.playerIds.includes(local)) {
+          run.roomsCleared += 1;
+          if (run.currentRoomKind === 'exit') run.biomesCleared += 1;
+        }
         break;
       case 'enemy_damaged':
         if (event.byPlayerId === local) run.damageDealt += event.amount;
@@ -263,6 +285,15 @@ export function reduceHubState(state: HubState, events: readonly GameEvent[], ct
             recoveredAt: ctx.now, sourceEventIds: [event.id], playerId: event.playerId,
           };
         }
+        break;
+      case 'relic_carried':
+        // The crew chose one thing to carry out of the collapse; that, not the last thing read,
+        // is what the shelf gets (BOSS_FINALE.md §8).
+        run.lastRelic = {
+          id: `carried-${run.worldId}-${event.key}`.slice(0, 64), title: event.title, source: 'carried out of the collapse',
+          text: event.detail, recoveredAt: ctx.now, sourceEventIds: [event.id],
+          playerId: event.playerIds.includes(local) ? local : event.playerIds[0] ?? local,
+        };
         break;
       case 'anchor_planted':
         if (event.playerIds.includes(local)) run.anchors += 1;
@@ -304,6 +335,7 @@ function finishRun(
   const lastRun: LastRun = {
     worldId: run.worldId, worldTitle: run.worldTitle, outcome: event.outcome, classId, endedAt: ctx.now, durationMs,
     roomsEntered: run.roomsEntered, deepestRoomIndex: run.deepestRoomIndex, roomsCleared: run.roomsCleared,
+    deepestTier: run.deepestTier, biomesCleared: run.biomesCleared,
     enemiesDefeated: run.enemiesDefeated, damageDealt: run.damageDealt, damageTaken: run.damageTaken, downs: run.downs,
     lastDownedByEnemyId: isEnemyId(run.lastDownedByEnemyId) ? run.lastDownedByEnemyId : null,
     revivesGiven: run.revivesGiven, revivesReceived: run.revivesReceived, loreRead: run.loreRead,
@@ -322,6 +354,8 @@ function finishRun(
     collapses: prev.collapses + (event.outcome === 'collapsed' ? 1 : 0),
     aborts: prev.aborts + (event.outcome === 'aborted' ? 1 : 0),
     deepestRoomIndex: Math.max(prev.deepestRoomIndex, run.deepestRoomIndex),
+    deepestTier: Math.max(prev.deepestTier, run.deepestTier),
+    biomesCleared: prev.biomesCleared + run.biomesCleared,
     roomsCleared: prev.roomsCleared + run.roomsCleared,
     enemiesDefeated: prev.enemiesDefeated + run.enemiesDefeated,
     damageDealt: prev.damageDealt + run.damageDealt,
@@ -336,6 +370,7 @@ function finishRun(
   };
 
   let relics = state.relics;
+  // `stranded` keeps the anchor and the run summary but never a relic: the crew lost the souvenir.
   if (event.outcome === 'anchored' && run.lastRelic) {
     const { playerId, ...rest } = run.lastRelic;
     const relic: HubRelic = { ...rest, worldId: run.worldId, worldTitle: run.worldTitle, worldSource: run.worldSource, recoveredBy: [nameOf(playerId)] };

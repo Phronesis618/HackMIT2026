@@ -5,6 +5,8 @@
 import { describe, expect, it } from 'vitest';
 import type { GameEvent } from '../../src/shared/contracts';
 import { createBrowserChronicle, type KeyValueStorage } from '../../src/client/chronicle';
+import { LocalSession } from '../../src/client/transport/LocalSession';
+import { fixtureWorldProvider } from '../../src/client/transport/worldProviders';
 import {
   HUB_MAX_STORED_RELICS, HUB_STORAGE_KEY, createHubState, createHubStateBus, HubStateSchema, loadHubState, reduceHubState, saveHubState,
   shelfRelics, type HubIngestContext,
@@ -77,6 +79,8 @@ describe('reduceHubState', () => {
     expect(run.downs).toBe(2);
     expect(run.lastDownedByEnemyId).toBe('warden');
     expect(run.deepestRoomIndex).toBe(2);
+    expect(run.deepestTier).toBe(-1);
+    expect(run.biomesCleared).toBe(0);
     expect(run.roomsEntered).toBe(3);
     expect(run.roomsCleared).toBe(1);
     expect(run.enemiesDefeated).toBe(1);
@@ -103,6 +107,21 @@ describe('reduceHubState', () => {
     expect(state.records.bastion.runs).toBe(0);
     expect(state.records.beacon.runs).toBe(0);
     expect(state.records.weaver.runs).toBe(0);
+  });
+
+  it('tracks floors depth and gatekeeper clears in the last run and class record', () => {
+    const events: GameEvent[] = [
+      ev('world_prepared', { worldId: WORLD, worldTitle: 'Vantage Spire', source: 'fixture', playerIds: [LOCAL] }),
+      ev('biome_entered', { worldId: WORLD, biomeId: 'b1', biomeName: 'Glass Warren', tier: 0, chosenByPlayerId: null, playerIds: [LOCAL] }),
+      ev('room_entered', { worldId: WORLD, roomIndex: 0, roomId: 'b1:r00', roomName: 'Entry', playerIds: [LOCAL], biomeId: 'b1', floorRoomId: 'r00', kind: 'entrance' }),
+      ev('biome_entered', { worldId: WORLD, biomeId: 'b2', biomeName: 'Copper Wall', tier: 1, chosenByPlayerId: LOCAL, playerIds: [LOCAL] }),
+      ev('room_entered', { worldId: WORLD, roomIndex: 1, roomId: 'b2:r00', roomName: 'Gate', playerIds: [LOCAL], biomeId: 'b2', floorRoomId: 'r00', kind: 'exit' }),
+      ev('room_cleared', { worldId: WORLD, roomIndex: 1, roomId: 'b2:r00', playerIds: [LOCAL], reward: 1 }),
+      ev('run_ended', { worldId: WORLD, outcome: 'collapsed', playerIds: [LOCAL] }),
+    ];
+    const state = reduceHubState(createHubState(), events, ctx);
+    expect(state.lastRun).toMatchObject({ deepestTier: 1, biomesCleared: 1 });
+    expect(state.records.shade).toMatchObject({ deepestTier: 1, biomesCleared: 1 });
   });
 
   it('shelves a relic only from an anchored run, one per world, newest-left on the shelf', () => {
@@ -140,6 +159,17 @@ describe('reduceHubState', () => {
     expect(noClass.totals.runs).toBe(0);
     const absent = reduceHubState(createHubState(), collapsedRun(), { ...ctx, localPlayerId: 'someone-else' });
     expect(absent.lastRun).toBeNull();
+  });
+
+  it('ignores explicit training and other-world kills while a run is open', () => {
+    const state = reduceHubState(createHubState(), collapsedRun().slice(0, 2), ctx);
+    const kill: Extract<GameEvent, { type: 'enemy_defeated' }> = {
+      type: 'enemy_defeated', id: 'kill:1', tick: 1, timeMs: 1000, enemyId: 'husk', byPlayerId: LOCAL, worldId: WORLD,
+    };
+    expect(reduceHubState(state, [{ ...kill, worldId: null }, { ...kill, worldId: 'another-world' }], ctx)).toBe(state);
+    const next = reduceHubState(state, [kill], ctx);
+    expect(next.current?.enemiesDefeated).toBe(1);
+    expect(reduceHubState(next, [kill], ctx)).toBe(next);
   });
 });
 
@@ -179,9 +209,113 @@ describe('relay.hub.v1 storage', () => {
     expect(loaded.records.bastion.runs).toBe(0);
     expect(loaded.totals).toEqual({ runs: 2, anchors: 1, worldsVisited: 2, relics: 1 });
   });
+
+  it('loads old stored runs and records with floor fields omitted using defaults', () => {
+    const storage = memoryStorage();
+    const current = reduceHubState(createHubState(), collapsedRun(), ctx);
+    const old = JSON.parse(JSON.stringify(current)) as Record<string, unknown>;
+    const oldLastRun = old.lastRun as Record<string, unknown>;
+    delete oldLastRun.deepestTier;
+    delete oldLastRun.biomesCleared;
+    const oldRecords = old.records as Record<string, Record<string, unknown>>;
+    for (const record of Object.values(oldRecords)) {
+      delete record.deepestTier;
+      delete record.biomesCleared;
+    }
+    const oldCurrent = old.current as Record<string, unknown> | null;
+    if (oldCurrent) {
+      delete oldCurrent.deepestTier;
+      delete oldCurrent.biomesCleared;
+      delete oldCurrent.currentRoomKind;
+    }
+    storage.data.set(HUB_STORAGE_KEY, JSON.stringify(old));
+    const loaded = loadHubState(storage);
+    expect(loaded.lastRun?.deepestTier).toBe(-1);
+    expect(loaded.lastRun?.biomesCleared).toBe(0);
+    expect(loaded.records.shade.deepestTier).toBe(-1);
+    expect(loaded.records.shade.biomesCleared).toBe(0);
+  });
+
+  it('preserves legacy run counts and replay protection without blocking a new world', () => {
+    const storage = memoryStorage();
+    const events = collapsedRun();
+    const state = reduceHubState(createHubState(), events, ctx);
+    saveHubState(storage, { ...state, seenEventIds: events.map((event) => event.id) });
+    const loaded = loadHubState(storage);
+    expect(reduceHubState(loaded, events, ctx)).toBe(loaded);
+    const nextEvents = anchoredRun('legacy-next').map((event, index) => ({ ...event, id: events[index]!.id }));
+    const next = reduceHubState(loaded, nextEvents, ctx);
+    expect(next.totals.runs).toBe(2);
+    expect(next.records.shade.collapses).toBe(1);
+    expect(next.records.shade.anchors).toBe(1);
+    expect(next.lastRun?.worldId).toBe('legacy-next');
+    saveHubState(storage, next);
+    const reloaded = loadHubState(storage);
+    expect(reduceHubState(reloaded, nextEvents, ctx)).toBe(reloaded);
+  });
+
+  it('continues a legacy in-flight run without recounting its saved prefix', () => {
+    const storage = memoryStorage();
+    const events = collapsedRun();
+    const prefix = events.slice(0, 6);
+    const state = reduceHubState(createHubState(), prefix, ctx);
+    saveHubState(storage, { ...state, seenEventIds: prefix.map((event) => event.id) });
+    const loaded = loadHubState(storage);
+    expect(reduceHubState(loaded, prefix, ctx)).toBe(loaded);
+    const finished = reduceHubState(loaded, events, ctx);
+    expect(finished.lastRun).toMatchObject({ roomsEntered: 3, enemiesDefeated: 1, damageDealt: 12 });
+    expect(finished.totals.runs).toBe(1);
+  });
 });
 
 describe('createBrowserChronicle hub integration', () => {
+  it.each([false, true])('records successive fixture expeditions with reused event IDs (reload: %s)', async (reload) => {
+    const storage = memoryStorage();
+    const identity = { id: LOCAL, displayName: 'Jon', classId: 'shade' as const };
+    let chronicle = createBrowserChronicle(storage, () => ctx.now, createHubStateBus());
+    let events: GameEvent[] = [];
+    const makeSession = (): LocalSession => {
+      const session = new LocalSession({ identity, worldProvider: fixtureWorldProvider });
+      session.onEvents((batch) => {
+        events.push(...batch);
+        const world = session.getWorld();
+        chronicle.ingest(batch, {
+          players: [identity], localPlayerId: LOCAL, classByPlayerId: { [LOCAL]: identity.classId },
+          world: world ? {
+            worldId: world.worldId, title: world.recipe.title, provenanceSource: world.provenance.source, receipt: world.receipt,
+          } : null,
+        });
+      });
+      return session;
+    };
+    let session = makeSession();
+    try {
+      for (const run of [1, 2]) {
+        if (run === 2 && reload) {
+          session.dispose();
+          chronicle = createBrowserChronicle(storage, () => ctx.now, createHubStateBus());
+          session = makeSession();
+        }
+        events = [];
+        const world = await session.requestWorld();
+        session.enterPortal();
+        session.returnToHeadquarters();
+        const state = chronicle.getHubState();
+        expect(state.totals).toMatchObject({ runs: run, worldsVisited: run });
+        expect(state.lastRun).toMatchObject({ worldId: world.worldId, roomsEntered: 1, outcome: 'aborted' });
+        expect(state.current).toBeNull();
+        expect(chronicle.getMemories()).toHaveLength(run * 3);
+        const loaded = loadHubState(storage);
+        expect(loaded).toEqual(state);
+        expect(reduceHubState(loaded, events, {
+          ...ctx, world: { worldId: world.worldId, title: world.recipe.title, provenanceSource: world.provenance.source },
+        })).toBe(loaded);
+      }
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('reduces hub state from ingested events, persists at run boundaries, and clears with the memories', () => {
     const storage = memoryStorage();
     const bus = createHubStateBus();

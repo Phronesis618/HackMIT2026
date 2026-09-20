@@ -10,6 +10,7 @@
  *  - first room_entered (#0)  -> one `arrival_keepsake` per world (no run completion needed)
  *  - anchor_planted           -> `anchor`
  *  - first enemy_defeated     -> one `milestone` per world after arrival
+ *  - floors biome/room milestones -> `milestone` records, capped per run
  *  - run_ended                -> `run_summary`
  *  - every event id is processed at most once (network retries / replays are safe)
  * Never invents participants: names come from the event's playerIds + known players.
@@ -26,6 +27,7 @@ export interface ChronicleWorldContext {
   title: string;
   provenanceSource: GenerationSource;
   receipt: CreationReceipt | null;
+  biomes?: ReadonlyArray<{ id: string; name: string }>;
 }
 
 export interface ChronicleContext {
@@ -36,9 +38,19 @@ export interface ChronicleContext {
   world: ChronicleWorldContext | null;
 }
 
+export interface FloorsRunTrack {
+  biomes: Array<{ biomeId: string; biomeName: string; tier: number; roomsEntered: number }>;
+  pendingChoice: { fromBiomeId: string; options: string[] } | null;
+  currentRoomKind: string | null;
+  currentRoomName: string | null;
+  firsts: string[];
+  extras: number;
+}
+
 export interface ChronicleState {
   seenEventIds: string[];
   memories: MemoryRecord[];
+  floors?: Record<string, FloorsRunTrack>;
 }
 
 export interface ChronicleResult {
@@ -56,6 +68,17 @@ export function reduceChronicle(state: ChronicleState, events: GameEvent[], ctx:
   const seen = new Set(state.seenEventIds);
   const memories = [...state.memories];
   const created: MemoryRecord[] = [];
+  let floors = state.floors
+    ? Object.fromEntries(Object.entries(state.floors).map(([id, track]) => [
+      id,
+      {
+        ...track,
+        biomes: track.biomes.map((biome) => ({ ...biome })),
+        pendingChoice: track.pendingChoice ? { ...track.pendingChoice, options: [...track.pendingChoice.options] } : null,
+        firsts: [...track.firsts],
+      },
+    ])) as Record<string, FloorsRunTrack>
+    : undefined;
   const legacyWorldId = legacyOrigin(events, state, ctx);
 
   const hasMemory = (kind: MemoryRecord['kind'], worldId: string) =>
@@ -73,7 +96,27 @@ export function reduceChronicle(state: ChronicleState, events: GameEvent[], ctx:
     const world = ctx.world?.worldId === worldId ? ctx.world : previous ? {
       worldId: previous.worldId, title: previous.worldTitle, provenanceSource: previous.provenanceSource, receipt: null,
     } : null;
-    const memory = memoryFromEvent(event, { ...ctx, world }, hasMemory);
+    if (!floors && worldId && (
+      event.type === 'biome_choice_offered'
+      || event.type === 'biome_entered'
+      || (event.type === 'room_entered' && event.kind)
+    )) floors = {};
+    const floorsMemory = floorsMemoryFromEvent(event, { ...ctx, world }, floors);
+    let memory = floorsMemory ?? memoryFromEvent(event, { ...ctx, world }, hasMemory);
+    const track = worldId === null ? undefined : floors?.[worldId];
+    if (event.type === 'run_ended' && track) {
+      if (memory?.kind === 'run_summary') {
+        const deepest = track.biomes.reduce<FloorsRunTrack['biomes'][number] | undefined>(
+          (best, biome) => !best || biome.tier > best.tier ? biome : best,
+          undefined,
+        );
+        if (deepest) {
+          const rooms = deepest.roomsEntered;
+          memory.summary += ` Deepest point: ${deepest.biomeName}, tier ${deepest.tier + 1} of 5, ${rooms} ${rooms === 1 ? 'room' : 'rooms'} in.`;
+        }
+      }
+      if (floors && worldId !== null) delete floors[worldId];
+    }
     if (!memory) continue;
     memory.title = clip(memory.title, 80);
     memory.summary = clip(memory.summary, 400);
@@ -95,9 +138,129 @@ export function reduceChronicle(state: ChronicleState, events: GameEvent[], ctx:
     state: {
       seenEventIds: seenList.length > SEEN_LIMIT ? seenList.slice(seenList.length - SEEN_LIMIT) : seenList,
       memories,
+      ...(floors && Object.keys(floors).length > 0 ? { floors } : {}),
     },
     created,
   };
+}
+
+const FLOORS_MEMORIES_PER_RUN = 14;
+
+function floorsMemoryFromEvent(
+  event: GameEvent,
+  ctx: ChronicleContext,
+  floors: Record<string, FloorsRunTrack> | undefined,
+): MemoryRecord | null {
+  const worldId = 'worldId' in event ? event.worldId : undefined;
+  if (!worldId || !ctx.world) return null;
+  const existing = floors?.[worldId];
+  if (!existing && event.type !== 'biome_choice_offered' && event.type !== 'biome_entered' && !(event.type === 'room_entered' && event.kind)) return null;
+  const getTrack = (): FloorsRunTrack => floors![worldId] ?? (floors![worldId] = {
+    biomes: [],
+    pendingChoice: null,
+    currentRoomKind: null,
+    currentRoomName: null,
+    firsts: [],
+    extras: 0,
+  });
+  const track = getTrack();
+  const participantsFor = (ids: string[]) => resolveParticipants(ids, ctx.players);
+  const worldTitle = ctx.world.title;
+  const provenanceSource = ctx.world.provenanceSource;
+  const addMemory = (memory: MemoryRecord): MemoryRecord | null => {
+    if (track.extras >= FLOORS_MEMORIES_PER_RUN) return null;
+    track.extras += 1;
+    return memory;
+  };
+
+  switch (event.type) {
+    case 'biome_choice_offered':
+      track.pendingChoice = { fromBiomeId: event.fromBiomeId, options: [...event.options] };
+      return null;
+    case 'biome_entered': {
+      track.biomes.push({ biomeId: event.biomeId, biomeName: event.biomeName, tier: event.tier, roomsEntered: 0 });
+      track.currentRoomKind = null;
+      track.currentRoomName = null;
+      const participants = participantsFor(event.playerIds);
+      let summary = `${joinNames(participants)} entered ${event.biomeName}, tier ${event.tier + 1} of 5.`;
+      const choice = track.pendingChoice;
+      if (choice && choice.options.includes(event.biomeId)) {
+        const otherId = choice.options.find((id) => id !== event.biomeId);
+        const other = otherId ? (ctx.world.biomes?.find((biome) => biome.id === otherId)?.name ?? otherId) : null;
+        if (choice.options.length === 1) summary += ' It was the only route on.';
+        else if (event.chosenByPlayerId !== null) {
+          const chooser = joinNames(participantsFor([event.chosenByPlayerId]));
+          summary += ` ${chooser} chose it over ${other}.`;
+        } else if (other) summary += ` The crew took it over ${other}.`;
+      } else if (event.tier === 0) {
+        summary += ' The run started here.';
+      }
+      track.pendingChoice = null;
+      return addMemory({
+        id: memoryId('milestone', event),
+        kind: 'milestone',
+        worldId,
+        worldTitle: clip(worldTitle, 40),
+        roomIndex: null,
+        createdAt: ctx.now,
+        participants,
+        title: `Entered ${event.biomeName}`,
+        summary,
+        sourceEventIds: [event.id],
+        provenanceSource,
+      });
+    }
+    case 'room_entered': {
+      if (!event.kind) return null;
+      track.currentRoomKind = event.kind;
+      track.currentRoomName = event.roomName;
+      const currentBiome = track.biomes[track.biomes.length - 1];
+      if (currentBiome) currentBiome.roomsEntered += 1;
+      if (!['elite', 'treasure', 'rest'].includes(event.kind) || track.firsts.includes(event.kind)) return null;
+      track.firsts.push(event.kind);
+      const participants = participantsFor(event.playerIds);
+      const biomeName = currentBiome?.biomeName ?? 'the current biome';
+      const first = event.kind === 'elite'
+        ? { title: `First elite room — ${worldTitle}`, summary: `${joinNames(participants)} entered the first elite room of the run: ${event.roomName}, in ${biomeName}.` }
+        : event.kind === 'treasure'
+          ? { title: `First cache — ${worldTitle}`, summary: `${joinNames(participants)} reached the first cache of the run: ${event.roomName}, in ${biomeName}.` }
+          : { title: `First rest site — ${worldTitle}`, summary: `${joinNames(participants)} reached the first rest site of the run: ${event.roomName}, in ${biomeName}.` };
+      return addMemory({
+        id: memoryId('milestone', event),
+        kind: 'milestone',
+        worldId,
+        worldTitle: clip(worldTitle, 40),
+        roomIndex: event.roomIndex,
+        createdAt: ctx.now,
+        participants,
+        title: first.title,
+        summary: first.summary,
+        sourceEventIds: [event.id],
+        provenanceSource,
+      });
+    }
+    case 'room_cleared': {
+      if (track.currentRoomKind !== 'exit') return null;
+      const currentBiome = track.biomes[track.biomes.length - 1];
+      if (!currentBiome) return null;
+      const participants = participantsFor(event.playerIds);
+      return addMemory({
+        id: memoryId('milestone', event),
+        kind: 'milestone',
+        worldId,
+        worldTitle: clip(worldTitle, 40),
+        roomIndex: event.roomIndex,
+        createdAt: ctx.now,
+        participants,
+        title: `Gatekeeper down — ${currentBiome.biomeName}`,
+        summary: `${joinNames(participants)} cleared the gatekeeper room of ${currentBiome.biomeName}, tier ${currentBiome.tier + 1} of 5.`,
+        sourceEventIds: [event.id],
+        provenanceSource,
+      });
+    }
+    default:
+      return null;
+  }
 }
 
 function legacyOrigin(events: GameEvent[], state: ChronicleState, ctx: ChronicleContext): string | null {
@@ -205,7 +368,11 @@ function memoryFromEvent(
           ? 'returned with the world anchored'
           : event.outcome === 'collapsed'
             ? 'watched the world collapse'
-            : 'aborted the expedition';
+            : event.outcome === 'stranded'
+              // The Anchor held; they did not make it back to the portal. No relic, and the run
+              // still counts: the world is saved.
+              ? 'anchored the world and did not get out'
+              : 'aborted the expedition';
       return {
         id: memoryId('run_summary', event),
         kind: 'run_summary',
@@ -234,6 +401,26 @@ function memoryFromEvent(
         participants,
         title: clip(event.title, 80),
         summary: clip(`${event.source} — ${event.text} (${event.kind === 'relic' ? 'read' : 'recovered'} by ${joinNames(participants)})`, 400),
+        sourceEventIds: [event.id],
+        provenanceSource: world.provenanceSource,
+      };
+    }
+    case 'relic_carried': {
+      // The one thing the crew chose to carry out of the collapse. Derived from a real choice at a
+      // real pedestal, so the hub may talk about it (BOSS_FINALE.md §8).
+      const world = ctx.world;
+      if (!world) return null;
+      const participants = resolveParticipants(event.playerIds, ctx.players);
+      return {
+        id: memoryId('lore', event),
+        kind: 'lore',
+        worldId: world.worldId,
+        worldTitle: clip(world.title, 40),
+        roomIndex: null,
+        createdAt: ctx.now,
+        participants,
+        title: clip(`Carried out — ${event.title}`, 80),
+        summary: clip(`${joinNames(participants)} carried ${event.title} out of ${world.title} as it came down. ${event.detail}`, 400),
         sourceEventIds: [event.id],
         provenanceSource: world.provenanceSource,
       };
