@@ -47,6 +47,7 @@ export function App({ store, actions, onStageReady }: AppProps) {
           </span>
         </div>
         <div className="topbar__status">
+          <GameMenu model={model} actions={actions} />
           <a className="btn btn--ghost" href={model.connection.mode === 'remote' ? '/' : '?mode=coop'}>
             {model.connection.mode === 'remote' ? 'Play solo' : 'Join co-op'}
           </a>
@@ -63,7 +64,8 @@ export function App({ store, actions, onStageReady }: AppProps) {
 
       <main className={`layout ${inRun ? 'layout--run' : ''}`}>
         <section className="stage-wrap">
-          <div className="stage" ref={stageRef} tabIndex={0} aria-label="RELAY game canvas" />
+          <div className="stage" ref={stageRef} tabIndex={0} data-game-stage aria-label="RELAY game canvas" aria-describedby="stage-controls" />
+          <span id="stage-controls" hidden>Focus the game to move with WASD or arrows. Tab opens the menu. Shift+Tab leaves the game. Escape closes the menu.</span>
           <div className="stage-caption" aria-hidden="true">
             <span>{inRun || model.phase === 'debrief' ? model.room?.name : 'RELAY / SANCTUARY'}</span>
           </div>
@@ -82,7 +84,6 @@ export function App({ store, actions, onStageReady }: AppProps) {
       </main>
 
       <MemoryWall memories={model.memories} actions={actions} />
-      <GameMenu model={model} actions={actions} />
 
       {model.notice && (
         <div className={`notice notice--${model.notice.kind}`} role="status">
