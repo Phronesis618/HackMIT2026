@@ -1,5 +1,19 @@
 # Handoff — Agent C (Devin)
 
+## Render hosting setup — 2026-09-20
+
+- Branch: `devin/1789889059-render-deploy`; implementation commit `4c70ab3`; PR #17.
+- **Implemented:** a free, single-instance Render Blueprint using the existing Dockerfile,
+  deployment button, and launch/Claude configuration instructions. Auto-deploys are off.
+- **Verified:** official Render JSON Schema validation; `npm run check` (288 tests / 30
+  files, typecheck/build); Docker build and healthy container on port 10000. Real local HTTP
+  served the game/assets, health/config, and a validated three-room fixture without a key.
+  Two WebSocket clients joined one crew as host and guest.
+- **Mocked:** external providers in the existing automated suite.
+- **Unverified:** Render provisioning, public HTTPS/WebSockets, browser interaction, and
+  live AI in this session. Deployment needs the user's Render account; Claude needs its key
+  in the service environment. No credentials were available or saved.
+
 ## Claude provider integration — 2026-09-20
 
 - Branch: `devin/1789878276-claude-provider`.

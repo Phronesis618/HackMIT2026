@@ -2,6 +2,18 @@
 
 Agent C records only work and verification performed in this session.
 
+## Render hosting setup — 2026-09-20
+
+On `devin/1789889059-render-deploy` (`4c70ab3`, PR #17), Devin added a Render Blueprint and
+deployment instructions after consulting Render's official Blueprint, deploy-button, free
+instance, and WebSocket documentation. The Blueprint passed Render's published JSON Schema.
+`npm run check` passed: 288 tests / 30 files, typecheck and build. The existing Dockerfile
+built successfully; its production container became healthy on port 10000. Shell-driven
+checks verified HTML/assets, health/config, validated three-room fixture generation with
+Claude selected but no key, and two WebSocket clients sharing a host/guest crew.
+Actual Render provisioning, public networking, browser play, and live AI were not tested.
+Hosting account access and AI credentials were unavailable; none were saved.
+
 ## Gameplay expansion — 2026-09-20
 
 On `devin/1789887155-terrain-boss-sanctuary`, Devin integrated tactical terrain, the phased
