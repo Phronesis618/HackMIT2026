@@ -33,3 +33,28 @@ description: Run RELAY locally and verify honest fixture exploration, rendering,
 
 ## Devin Secrets Needed
 - None for offline fixture coverage.
+- `OPENAI_API_KEY` and an available `OPENAI_MODEL` are required for real live provider verification.
+
+## Server-selected authored themes
+- Use `/`, not `?world=fixture`, for themes selected by the actual server. If there is no
+  UI seed control, use Prepare another world until the desired theme appears. Each actual
+  preparation produces a receipt memory.
+- Read the selected fixture's spawn, exits, Anchor coordinates and blocking props before
+  traversing it. Release vertical movement promptly after the HQ portal transition to keep
+  the new-room spawn aligned with the horizontal corridor and one-tile east exit.
+- If alignment is lost, return to HQ and use Enter portal to restore the spawn position.
+  Disclose retries; do not report a blocked corridor without confirming it.
+- Compare geometry, props and encounters across themes. Stop at Anchor reachability when
+  completion is absent; never manufacture victory events.
+
+## No-key mode and fresh-session receipts
+- `RELAY_GENERATION_MODE=live OPENAI_API_KEY='' npm run dev` exercises live-requested/no-key
+  mode without a paid call. Expect OFFLINE FIXTURE, zero model calls, unused ideas and a
+  missing-key note.
+- Submitting markup-shaped text through the textarea can verify literal display, but does
+  not establish the safety of model-generated output.
+- Reload `/` to start a fresh session while retaining device-local memories. New receipts
+  should contain only current-session ideas; old receipt/arrival cards remain historical.
+- Memory walls can scroll horizontally; inspect offscreen arrival thumbnails after reload.
+- When the UI requests three rooms and HTTP returns a full world, streaming-prefix and
+  one-/two-room behavior must be marked untested in the browser.
