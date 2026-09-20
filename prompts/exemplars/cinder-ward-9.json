@@ -1,0 +1,416 @@
+{
+  "world": "Cinder Ward 9",
+  "licence": "Written for RELAY by agent W1 in imitation of the structures described in docs/WRITING.md section 6. Original text; no passages copied.",
+  "bible": {
+    "title": "Cinder Ward 9",
+    "premise": "A 120-bed quarantine ward on the ninth spoke of the Ring, run by Kestrel Health under contract.",
+    "collapse": "On 2 March administrator Anton Reyes set the billing system to hold any patient with an unpaid balance. On 14 March at 22:10 it locked every ward door with 118 patients and 9 staff inside. The Payment Office was outside the doors.",
+    "people": [
+      {
+        "name": "Ife Adeyemi",
+        "job": "night nurse",
+        "want": "a relief nurse so she can sleep"
+      },
+      {
+        "name": "Tobias Wren",
+        "job": "billing clerk",
+        "want": "every account closed by quarter end"
+      },
+      {
+        "name": "Dolores Pike",
+        "job": "janitor and union steward",
+        "want": "grievance 31 answered"
+      },
+      {
+        "name": "Anton Reyes",
+        "job": "ward administrator",
+        "want": "bad debt under 2%"
+      }
+    ],
+    "places": [
+      "Bay C",
+      "Pharmacy Hatch",
+      "Laundry Chute 2",
+      "Payment Office",
+      "Spoke 9 Airlock"
+    ],
+    "objects": [
+      "door override key",
+      "med trolley 4",
+      "floor polisher",
+      "Form G-31",
+      "monitor rig"
+    ],
+    "events": [
+      {
+        "id": "E1",
+        "date": "2 March",
+        "fact": "Reyes set the discharge hold: no exit with a balance over 0."
+      },
+      {
+        "id": "E2",
+        "date": "9 March",
+        "fact": "Pike filed grievance 31: Laundry Chute 2 jammed, dirty linen piling up in Bay C."
+      },
+      {
+        "id": "E3",
+        "date": "14 March, 22:10",
+        "fact": "All ward doors locked. 118 patients and 9 staff inside. The door override key was in Reyes's desk."
+      },
+      {
+        "id": "E4",
+        "date": "16 March",
+        "fact": "Adeyemi worked a third night without relief. The Pharmacy Hatch dispensed only against paid accounts."
+      },
+      {
+        "id": "E5",
+        "date": "19 March",
+        "fact": "Wren slid 118 final notices under the ward door, one per bed."
+      },
+      {
+        "id": "E6",
+        "date": "23 March",
+        "fact": "Pike got 6 patients out through Laundry Chute 2 before it jammed again."
+      },
+      {
+        "id": "E7",
+        "date": "2 April",
+        "fact": "The ward system began fitting unpaid patients with monitor rigs, billed at 14.00 an hour."
+      }
+    ],
+    "authors": [
+      {
+        "name": "Ife Adeyemi",
+        "document": "handover notes",
+        "register": "Bed numbers, times, doses. Clipped, tired, practical. Addresses the next nurse.",
+        "never": "complains about management by name"
+      },
+      {
+        "name": "Tobias Wren",
+        "document": "billing letters",
+        "register": "Formal letter, exact amounts to two decimals, polite apologies, no sense of the absurd.",
+        "never": "uses a contraction"
+      },
+      {
+        "name": "Dolores Pike",
+        "document": "union grievance forms",
+        "register": "Numbered points, blunt nouns, remedy sought. Treats everything as a workplace issue.",
+        "never": "asks nicely"
+      }
+    ],
+    "enemies": {
+      "husk": "patients fitted with monitor rigs",
+      "sentinel": "ward door units",
+      "spewer": "the Pharmacy Hatch dispenser",
+      "guardian": "Administrator Reyes in the override chair"
+    }
+  },
+  "exemplars": [
+    {
+      "id": "c9-relic-1",
+      "kind": "relic",
+      "author": "Ife Adeyemi",
+      "bibleRefs": [
+        "E4",
+        "Bay C",
+        "Pharmacy Hatch"
+      ],
+      "title": "Handover, night 3",
+      "source": "clipboard hung on med trolley 4",
+      "text": "Night 3, no relief. Bay C: 31 beds, 31 obs done, late. Bed 12 needs his 02:00 dose and the Pharmacy Hatch wants his balance cleared first. It is 340. I have 12 on me. Whoever reads this, I'm asleep in the linen, wake me at 06:00.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-relic-2",
+      "kind": "relic",
+      "author": "Tobias Wren",
+      "bibleRefs": [
+        "E5",
+        "E3"
+      ],
+      "title": "Final notice, bed 47",
+      "source": "slid under the ward door, unopened",
+      "text": "Dear Patient (Bed 47), our records show a balance of 2,118.40. As the ward doors are presently locked, we are unable to accept payment in person. Payment remains due. We apologise for any inconvenience and have added a late fee of 35.00. Yours, T. Wren, Accounts.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-relic-3",
+      "kind": "relic",
+      "author": "Dolores Pike",
+      "bibleRefs": [
+        "E2",
+        "Laundry Chute 2",
+        "Bay C",
+        "Form G-31"
+      ],
+      "title": "Grievance 31",
+      "source": "carbon copy taped inside the janitor's cupboard",
+      "text": "Form G-31. Filed by D. Pike, steward. 1: Laundry Chute 2 is jammed at the second bend. 2: Dirty linen in Bay C is now higher than the beds. 3: I have reported this four times. 4: Management's reply to date: none. Remedy sought: a man with a pole.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-relic-4",
+      "kind": "relic",
+      "author": "Dolores Pike",
+      "bibleRefs": [
+        "E6",
+        "Laundry Chute 2"
+      ],
+      "title": "Note to self, 23 March",
+      "source": "pencil on the back of a linen docket",
+      "text": "Six out through Chute 2 tonight, smallest first. Then Mr Abara from bed 30 went in and it jammed again. He is fine. He is also still in there. Grievance 32 to follow.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-relic-5",
+      "kind": "relic",
+      "author": "Ife Adeyemi",
+      "bibleRefs": [
+        "E3",
+        "door override key",
+        "Anton Reyes"
+      ],
+      "title": "Handover, 14 March",
+      "source": "first line of a fresh handover sheet",
+      "text": "14 March, 22:10. Doors locked mid-round with me on the wrong side of my coat, my dinner and the door override key, which is in Reyes's desk.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-relic-6",
+      "kind": "relic",
+      "author": "Tobias Wren",
+      "bibleRefs": [
+        "E7",
+        "monitor rig",
+        "Anton Reyes"
+      ],
+      "title": "Notice of new charges",
+      "source": "printed notice, pinned beside the Pharmacy Hatch",
+      "text": "From 2 April, patients with a balance over 0 will be fitted with a monitor rig for their safety. Monitoring is billed at 14.00 an hour. Rigs cannot be removed while a balance is outstanding. Mr Reyes has asked me to add that this is not a punishment. I have added it.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-remains-1",
+      "kind": "remains",
+      "author": "Tobias Wren",
+      "bibleRefs": [
+        "E7",
+        "E5",
+        "husk"
+      ],
+      "title": "Monitor rig, bed 47",
+      "source": "wristband still fastened to the rig's arm",
+      "enemyId": "husk",
+      "text": "Wristband: bed 47, admitted 11 March for a cough. Balance at last notice 2,118.40, plus 14.00 an hour since 2 April. The rig's meter is still running. Wren would want it noted that the late fee has been waived.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-remains-2",
+      "kind": "remains",
+      "author": "Dolores Pike",
+      "bibleRefs": [
+        "E6",
+        "Bay C",
+        "floor polisher",
+        "sentinel"
+      ],
+      "title": "Door unit, Bay C",
+      "source": "asset plate, screws sheared",
+      "enemyId": "sentinel",
+      "text": "Bay C door unit, Kestrel Health asset 0093. It asked every patient for proof of payment and had no slot to put it in. Pike wedged it open with the floor polisher on 23 March. It billed her for the polisher.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-remains-3",
+      "kind": "remains",
+      "author": "Ife Adeyemi",
+      "bibleRefs": [
+        "E4",
+        "Pharmacy Hatch",
+        "spewer"
+      ],
+      "title": "Dispenser tray",
+      "source": "a bent steel tray, vials still in the rack",
+      "enemyId": "spewer",
+      "text": "The Pharmacy Hatch dispenser, tray bent. Adeyemi's handover notes call it 'the vending machine' from night 2 onward. It held 400 doses on 14 March and released 9.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-remains-4",
+      "kind": "remains",
+      "author": "Tobias Wren",
+      "bibleRefs": [
+        "E1",
+        "E3",
+        "door override key",
+        "guardian"
+      ],
+      "title": "Reyes's lanyard",
+      "source": "lanyard and key, under the override chair",
+      "enemyId": "guardian",
+      "text": "Administrator's lanyard, A. Reyes. The door override key is on it, where it was the whole time. Bad debt on the ward stood at 0% on 2 April. Nobody had been discharged.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-room-1",
+      "kind": "roomLine",
+      "bibleRefs": [
+        "Bay C",
+        "med trolley 4"
+      ],
+      "text": "Linen piled to bed height on the left. Two rigged patients stand by med trolley 4.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-room-2",
+      "kind": "roomLine",
+      "bibleRefs": [
+        "floor polisher",
+        "sentinel"
+      ],
+      "text": "Door unit blocks the far exit and fires on sight. The floor polisher is cover, barely.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-room-3",
+      "kind": "roomLine",
+      "bibleRefs": [
+        "Pharmacy Hatch",
+        "spewer"
+      ],
+      "text": "Pharmacy Hatch straight ahead, tray rattling. It throws vials in a 3 metre arc.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-boon-1",
+      "kind": "boonDescription",
+      "author": "Dolores Pike",
+      "bibleRefs": [
+        "E6",
+        "Laundry Chute 2"
+      ],
+      "name": "Pike's Pole",
+      "effectId": "melee_ward",
+      "text": "Dolores Pike cleared Laundry Chute 2 with it on 23 March. It has kept trouble at arm's length since.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-boon-2",
+      "kind": "boonDescription",
+      "author": "Ife Adeyemi",
+      "bibleRefs": [
+        "E4"
+      ],
+      "name": "Night Three",
+      "effectId": "clear_surge",
+      "text": "Ife Adeyemi did 31 obs a night with no relief. She did them at a jog.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-boon-3",
+      "kind": "boonDescription",
+      "author": "Tobias Wren",
+      "bibleRefs": [
+        "E5"
+      ],
+      "name": "Late Fee Waived",
+      "effectId": "relic_mend",
+      "text": "Tobias Wren waived one late fee in 11 years, for bed 47. The form is attached.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-item-1",
+      "kind": "itemBlurb",
+      "author": "Ife Adeyemi",
+      "bibleRefs": [
+        "E4"
+      ],
+      "name": "Bed 12's Dose",
+      "text": "Restores 40 Integrity. Paid for in the end by Adeyemi, who was 328 short and signed for the rest.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-item-2",
+      "kind": "itemBlurb",
+      "author": "Dolores Pike",
+      "bibleRefs": [
+        "floor polisher"
+      ],
+      "name": "Floor Polisher Pad",
+      "text": "Dash leaves a slick patch for 3 s; enemies crossing it slide. Pike's, and she wants it back.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-item-3",
+      "kind": "itemBlurb",
+      "author": "Tobias Wren",
+      "bibleRefs": [
+        "E5"
+      ],
+      "name": "Final Notice",
+      "text": "Marks one enemy for 5 s. It owes 2,118.40 and now everyone knows.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-biome-1",
+      "kind": "biomeTagline",
+      "bibleRefs": [
+        "Bay C"
+      ],
+      "name": "Bay C",
+      "text": "31 beds, linen to the ceiling on one side, rigged patients on rounds.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-biome-2",
+      "kind": "biomeTagline",
+      "bibleRefs": [
+        "Pharmacy Hatch"
+      ],
+      "name": "Pharmacy Hatch",
+      "text": "One counter, one dispenser, 400 doses behind glass. It throws them.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-biome-3",
+      "kind": "biomeTagline",
+      "bibleRefs": [
+        "Payment Office",
+        "Tobias Wren",
+        "Anton Reyes"
+      ],
+      "name": "Payment Office",
+      "text": "Wren's desk, 118 unpaid files, and the only door Reyes can lock from inside.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-boss-1",
+      "kind": "bossCallout",
+      "bibleRefs": [
+        "E3",
+        "Bay C"
+      ],
+      "text": "DOORS LOCKING. STAND IN BAY C OR BE SHUT OUT.",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-boss-2",
+      "kind": "bossCallout",
+      "bibleRefs": [
+        "door override key",
+        "monitor rig"
+      ],
+      "text": "REYES TURNS THE OVERRIDE KEY: RIGS WAKE",
+      "world": "Cinder Ward 9"
+    },
+    {
+      "id": "c9-boss-3",
+      "kind": "bossCallout",
+      "bibleRefs": [
+        "E5"
+      ],
+      "text": "LATE FEES: FLOOR CHARGES IN 3",
+      "world": "Cinder Ward 9"
+    }
+  ]
+}
