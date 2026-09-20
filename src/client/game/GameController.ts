@@ -8,13 +8,13 @@
  *   input (per frame)  -> session.setIntent
  *   UiActions          -> session methods (UI never touches the session directly)
  */
-import type { GameEvent, GameSnapshot, PlayerState, PreparedWorld } from '../../shared/contracts';
+import type { GameEvent, GameSnapshot, PlayerState, PreparedWorld, RoomSpec } from '../../shared/contracts';
 import { CLASS_INFO, CLASS_IDS, type ClassId } from '../../shared/registry';
 import type { WorldRenderer } from '../../shared/render';
 import type { GameSession } from '../../shared/session';
 import type { UiActions, UiModel } from '../../shared/ui';
 import { nearbyHeadquartersStation } from '../../shared/headquarters';
-import { headquartersArt, headquartersRoom, trainingArt, trainingRoom } from '../../sim';
+import { createRoomProvider, headquartersArt, headquartersRoom, trainingArt, trainingRoom, type RoomProvider } from '../../sim';
 import type { AudioPort } from '../audio';
 import { cueForEvent } from '../audio';
 import type { BrowserChronicle } from '../chronicle';
@@ -58,6 +58,9 @@ export class GameController {
   private stageMounted = false;
   private disposers: Array<() => void> = [];
   private thumbnailTimers = new Set<ReturnType<typeof setTimeout>>();
+  /** Floors worlds: rooms are compiled here from `world.floors`, the snapshot only names them. */
+  private floorRooms: { worldId: string; provider: RoomProvider } | null = null;
+  private shownFloorRoomId: string | null = null;
 
   constructor(private readonly deps: GameControllerDeps) {
     this.actions = this.createActions();
@@ -104,6 +107,17 @@ export class GameController {
       chronicle.subscribe((memories) => store.set({ memories })),
     );
     if (session.onError) this.disposers.push(session.onError((message) => this.notice('error', message)));
+    // Floors stopgap until the biome-choice panel (agent F3) lands: 1 / 2 pick an offered biome.
+    const pickBiome = (event: KeyboardEvent): void => {
+      if (event.target instanceof HTMLElement && /^(INPUT|TEXTAREA)$/.test(event.target.tagName)) return;
+      const choice = this.latestSnapshot?.floor?.biomeChoice;
+      const biomeId = choice?.options[event.code === 'Digit1' ? 0 : event.code === 'Digit2' ? 1 : -1];
+      if (biomeId !== undefined) session.chooseBiome?.(biomeId);
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', pickBiome);
+      this.disposers.push(() => window.removeEventListener('keydown', pickBiome));
+    }
 
     this.loop();
     await session.start();
@@ -219,10 +233,26 @@ export class GameController {
       return;
     }
     const world = session.getWorld();
-    const room = snapshot.roomIndex === null ? null : world?.rooms[snapshot.roomIndex];
-    if (world && room && snapshot.phase !== 'headquarters' && (store.get().room?.index !== room.index || store.get().phase === 'headquarters' || store.get().phase === 'training')) {
+    const room = snapshot.floor && world ? this.floorRoom(world, snapshot.floor)
+      : snapshot.roomIndex === null ? null : world?.rooms[snapshot.roomIndex];
+    const roomChanged = snapshot.floor ? this.shownFloorRoomId !== room?.id : store.get().room?.index !== room?.index;
+    if (world && room && snapshot.phase !== 'headquarters' && (roomChanged || store.get().phase === 'headquarters' || store.get().phase === 'training')) {
+      this.shownFloorRoomId = snapshot.floor ? room.id : null;
       renderer.showRoom(room, world.art, world.receipt.lines, { title: world.recipe.title, tagline: world.recipe.tagline });
       store.set({ room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal }, phase: snapshot.phase, hud: me ? hudFrom(me, snapshot) : store.get().hud });
+    }
+  }
+
+  /** Same deterministic provider the sim uses, so a room address is all the snapshot has to carry. */
+  private floorRoom(world: PreparedWorld, floor: NonNullable<GameSnapshot['floor']>): RoomSpec | null {
+    if (this.floorRooms?.worldId !== world.worldId) {
+      const provider = createRoomProvider(world);
+      this.floorRooms = provider ? { worldId: world.worldId, provider } : null;
+    }
+    try {
+      return this.floorRooms?.provider.getRoom({ biomeId: floor.biomeId, roomId: floor.roomId }) ?? null;
+    } catch {
+      return null; // an address outside this world: keep showing the last room
     }
   }
 
@@ -233,6 +263,10 @@ export class GameController {
       const cue = cueForEvent(e);
       if (cue) audio.play(cue);
       if (e.type === 'contribution_submitted') store.set({ contributions: session.getContributions() });
+      if (e.type === 'biome_choice_offered') {
+        const names = e.options.map((id, i) => `[${i + 1}] ${session.getWorld()?.floors?.briefs.find((brief) => brief.id === id)?.name ?? id}`);
+        this.notice('info', `The way on is open. ${session.getIsHost?.() === false ? 'The host chooses' : 'Choose'}: ${names.join('  ·  ')}`);
+      }
     }
 
     const world = session.getWorld();

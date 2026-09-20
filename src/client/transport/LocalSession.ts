@@ -77,6 +77,7 @@ export class LocalSession implements GameSession {
     };
     this.sim = createSimulation();
     this.sim.addPlayer(this.identity);
+    this.sim.setHostPlayerId(this.localPlayerId); // solo: the only operative decides biome choices
   }
 
   // ---- lifecycle -------------------------------------------------------------
@@ -144,6 +145,8 @@ export class LocalSession implements GameSession {
     const extra: GameEvent[] = [];
     for (const event of events) {
       if (event.type !== 'exit_reached') continue;
+      // Floors doors: the sim already moved the crew through the graph on this tick.
+      if (event.toRoomId !== undefined) continue;
       if (this.sim.getPhase() === 'training') {
         // The range's only exit leads home.
         extra.push(...this.sim.returnToHeadquarters());
@@ -201,6 +204,11 @@ export class LocalSession implements GameSession {
     this.snapshot = this.sim.getSnapshot();
     if (events.length) this.emitEvents(events);
     for (const listener of this.snapshotListeners) listener(this.snapshot);
+  }
+
+  chooseBiome(biomeId: string): void {
+    if (this.disposed) return;
+    this.sim.chooseBiome(this.localPlayerId, biomeId); // resolves on the next tick
   }
 
   enterTraining(): boolean {
