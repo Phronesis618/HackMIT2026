@@ -283,7 +283,10 @@ class Player {
       this.page.on('console', (msg) => { if (msg.type() === 'error') this.errors.push(`console: ${msg.text().slice(0, 200)}`); });
     }
     this.held.clear();
-    await this.page.goto(`${this.base}/?mode=coop&as=${this.name}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    // `window.relay` — the read-only handle this script reads state from — is DEV-only unless
+    // `?debug` is present, so a production bundle (`npm start`) needs the flag. Against the Vite
+    // dev server it changes nothing.
+    await this.page.goto(`${this.base}/?mode=coop&as=${this.name}&debug=1`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     this.canvasMounted = await this.page.waitForSelector('.stage canvas', { state: 'attached', timeout: 60000 }).then(() => true).catch(() => false);
     if (!this.canvasMounted) console.log(`[coop] WARNING ${this.name}: no canvas after 60 s; errors=${JSON.stringify(this.errors.slice(0, 4))}`);
     return this;
@@ -370,8 +373,17 @@ function headquartersRoom() {
     if ((x === 11 || x === 19) && y > 13 && y !== 15 && y !== 16) return '#';
     return '.';
   }).join(''));
-  const stations = [[4, 3], [8, 3], [4, 7], [8, 7], [24, 4], [24, 16], [5, 16]];
-  const props = [...stations.map(([x, y]) => ({ propId: 'terminal', x, y })), { propId: 'pillar', x: 13, y: 3 }, { propId: 'pillar', x: 17, y: 3 }, { propId: 'monolith_shard', x: 27, y: 6 }];
+  // Keep these in step with src/shared/headquarters.ts and src/sim/headquarters.ts — every
+  // station that is not in HEADQUARTERS_PROPLESS_STATIONS (portal, relics, quartermaster) puts a
+  // blocking `terminal` on its tile, and the relic shelf's five brackets are 1x2 `monolith_shard`.
+  // tests/presentation/coop-harness-hub.test.ts fails if this list drifts from the real room.
+  const stations = [[4, 3], [8, 3], [4, 7], [8, 7], [24, 4], [24, 8], [24, 16], [5, 16]];
+  const relicBrackets = [[12, 1], [13, 1], [14, 1], [16, 1], [17, 1]];
+  const props = [
+    ...stations.map(([x, y]) => ({ propId: 'terminal', x, y })),
+    ...relicBrackets.map(([x, y]) => ({ propId: 'monolith_shard', x, y })),
+    { propId: 'pillar', x: 13, y: 3 }, { propId: 'pillar', x: 17, y: 3 }, { propId: 'monolith_shard', x: 27, y: 6 },
+  ];
   return { width, height, tiles, props, exits: [{ x: 15, y: 18 }] };
 }
 const HQ_SHRINES = { bastion: [4, 3], shade: [8, 3], beacon: [4, 7], weaver: [8, 7] };

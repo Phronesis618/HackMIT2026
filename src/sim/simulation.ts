@@ -48,7 +48,7 @@ import {
   type BossContext, type CustodianRuntime,
 } from './boss';
 import { TRAINING_REGEN_PER_TICK, TRAINING_RESPAWN_MS, TRAINING_WAKE_RANGE, trainingRoom } from './training';
-import { DOOR_SIDES, FLOOR_ENTRANCE_ROOM_ID } from '../shared/floors';
+import { BIOME_TIER_COUNT, DOOR_SIDES, FLOOR_ENTRANCE_ROOM_ID } from '../shared/floors';
 import { NEUTRAL_LAWS, applyEncounterLaws, lawsSpareEncounter, resolveLaws, worldLawsView, type ResolvedLaws } from './laws';
 import {
   NO_EFFECTS, anchorRateMul, clearBonusResources, clearHasteMs, dashCooldownMul, dashInvulnerableBonusMs, dropTrailPoint, effectsFor,
@@ -206,6 +206,15 @@ export interface Simulation {
   setHostPlayerId(playerId: string | null): void;
   /** Floors: vote while the biome choice is open; the host's vote moves the crew on the next step. */
   chooseBiome(playerId: string, biomeId: string): void;
+  /**
+   * DEV/QA ONLY. Skips a floors run forward to the first biome of `tier`, following the route's
+   * own edges as if the host had taken the first option at every gate, and drops the crew on that
+   * biome's entrance tile so the rest is played normally. Exists so the tier-4 ending can be
+   * reached in a browser without a 45-minute route; the client only calls it behind
+   * `import.meta.env.DEV` (`?tier=N`). No-op outside a floors expedition or when `tier` is not
+   * deeper than the crew already is.
+   */
+  devJumpToTier(tier: number, at?: 'entrance' | 'exit'): GameEvent[];
   unlockAbility(playerId: string): GameEvent[];
   /**
    * Buys one skill-tree node for one operative with their own resources (S1). Authoritative:
@@ -2051,6 +2060,26 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       if (!choice || phase !== 'expedition' || choice.chosenBiomeId || !players.has(playerId) || !choice.options.includes(biomeId)) return;
       choice.votes[playerId] = biomeId;
       if (playerId === (hostPlayerId ?? playerIds()[0])) choice.chosenBiomeId = biomeId;
+    },
+    devJumpToTier(tier, at = 'entrance') {
+      const run = floorsRun;
+      if (!run || !world || phase !== 'expedition' || !Number.isInteger(tier) || tier <= run.tier) return [];
+      const events: GameEvent[] = [];
+      for (let guard = 0; run.tier < tier && guard < BIOME_TIER_COUNT; guard++) {
+        const next = run.provider.nextBiomeChoices(run.biomeId)[0];
+        if (next === undefined) break;
+        rooms.clear(); // no way back to the biome we leave, exactly as a real gate does
+        advanceBiome(run, next);
+        events.push(emit({ type: 'biome_entered', worldId: world.worldId, biomeId: next,
+          biomeName: run.provider.brief(next).name, tier: run.tier, chosenByPlayerId: null, playerIds: playerIds() }));
+      }
+      if (!events.length) return events;
+      // `at: 'exit'` lands on the biome's exit room (tier 4 = the Anchor room), so the ending
+      // itself can be played. The walk home is planned from the biome's floor plan, not from
+      // the rooms the crew visited, so the collapse still has a real route out.
+      const ref = at === 'exit' ? run.provider.exitRef(run.biomeId) : run.provider.biomeEntranceRef(run.biomeId);
+      enterFloorRoom(run.provider.getRoom(ref), undefined, events);
+      return events;
     },
     applyIntent(intent) {
       const p = players.get(intent.playerId);
