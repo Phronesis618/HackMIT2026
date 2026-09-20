@@ -49,6 +49,8 @@ export interface GenerationServiceOptions {
    * that ends up in provenance ("LIVE · <model>").
    */
   recipeProvider?: { provider: RecipeProvider; model: string };
+  /** Instant provider used instead of a static fixture when the primary provider fails. */
+  fallbackProvider?: RecipeProvider;
 }
 
 export function createGenerationService(options: GenerationServiceOptions): GenerationService {
@@ -79,6 +81,7 @@ export function createGenerationService(options: GenerationServiceOptions): Gene
         onUsage: options.onUsage ?? ((usage) => log(`Provider tokens: input=${usage.inputTokens}, output=${usage.outputTokens}, total=${usage.totalTokens}`)),
       }),
       model, fixtures, log,
+      ...(options.fallbackProvider ? { fallbackProvider: options.fallbackProvider } : {}),
     })
     : {
       ...fixtureService,

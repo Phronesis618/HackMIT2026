@@ -82,9 +82,15 @@ export type GenerationRequestInput = z.input<typeof GenerationRequestSchema>;
  * Where the world came from. This is shown to players; it must never lie.
  *  fixture               — authored offline content (no model call was made)
  *  live                  — produced by a model call during this request
+ *  procedural            — composed at request time by trusted deterministic code from the
+ *                          players' actual ideas (keyword themes, seeded variation); no model
+ *                          call. Attributions are real: an idea is marked used only when it
+ *                          selected a feature that was placed.
  *  live_fallback_fixture — a live attempt was made and FAILED; fixture served instead
  */
-export const GenerationSourceSchema = z.enum(['fixture', 'live', 'live_fallback_fixture']);
+export const GenerationSourceSchema = z.enum(['fixture', 'live', 'procedural', 'live_fallback_fixture']);
+/** Sources whose contribution mappings describe features that were really placed. */
+export const ATTRIBUTING_SOURCES: ReadonlySet<string> = new Set(['live', 'procedural']);
 export type GenerationSource = z.infer<typeof GenerationSourceSchema>;
 
 export const GenerationProvenanceSchema = z.object({

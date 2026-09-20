@@ -6,6 +6,7 @@
  * Owner: Agent A. Multiplayer (RemoteSession + host authority) lands in feat/core.
  */
 import {
+  ATTRIBUTING_SOURCES,
   IDLE_GENERATION_STATUS,
   GenerationRequestSchema,
   GenerationStatusSchema,
@@ -260,7 +261,7 @@ export class LocalSession implements GameSession {
             this.world = world;
             this.sim.setWorld(world);
             this.setGeneration({
-              phase: world.provenance.source === 'live' ? 'ready' : 'fallback',
+              phase: ATTRIBUTING_SOURCES.has(world.provenance.source) ? 'ready' : 'fallback',
               message: `${world.provenance.label}: ${world.rooms.length}/${world.plannedRoomCount} rooms ready.`,
               requestId, startedAt, elapsedMs: Date.now() - startedAt,
             });

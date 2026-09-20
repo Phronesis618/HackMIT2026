@@ -40,7 +40,7 @@ export function MemoryWall({ memories, actions }: { memories: MemoryRecord[]; ac
             <div className="card__body">
               <div className="card__meta">
                 <span className="badge badge--kind">{KIND_LABEL[m.kind]}</span>
-                <span className={`badge badge--${m.provenanceSource === 'live' ? 'live' : m.provenanceSource === 'fixture' ? 'fixture' : 'fallback'}`}>
+                <span className={`badge badge--${m.provenanceSource === 'live' ? 'live' : m.provenanceSource === 'procedural' ? 'procedural' : m.provenanceSource === 'fixture' ? 'fixture' : 'fallback'}`}>
                   {m.provenanceSource.replace(/_/g, ' ')}
                 </span>
                 <time dateTime={new Date(m.createdAt).toISOString()} title={new Date(m.createdAt).toLocaleString()}>{new Date(m.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</time>

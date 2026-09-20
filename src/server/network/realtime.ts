@@ -5,6 +5,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import {
   IDLE_GENERATION_STATUS,
   GenerationStatusSchema,
+  ATTRIBUTING_SOURCES,
   PreparedWorldSchema,
   type Contribution,
   type GameEvent,
@@ -210,7 +211,7 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
         sim.setWorld(next);
         broadcast({ type: 'world', world: next, requestId });
         setGeneration({
-          phase: next.provenance.source === 'live' ? 'ready' : 'fallback',
+          phase: ATTRIBUTING_SOURCES.has(next.provenance.source) ? 'ready' : 'fallback',
           message: `${next.provenance.label}: ${next.rooms.length}/${next.plannedRoomCount} rooms committed.`.slice(0, 200),
           requestId, startedAt, elapsedMs: Date.now() - startedAt,
         });

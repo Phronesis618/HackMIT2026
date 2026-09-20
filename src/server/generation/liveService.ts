@@ -17,6 +17,12 @@ export function createLiveGenerationService(options: {
   model: string;
   fixtures: WorldFixture[];
   log: (message: string) => void;
+  /**
+   * Optional instant provider (the offline composer) used instead of a static fixture when
+   * the primary provider fails, so players still get a world shaped by their ideas. Its
+   * output is labelled with the fallback provider's own source (`procedural`), never `live`.
+   */
+  fallbackProvider?: RecipeProvider;
 }) {
   async function* prepareWorldStream(
     rawRequest: GenerationRequest,
@@ -29,7 +35,9 @@ export function createLiveGenerationService(options: {
     const seed = request.seed ?? hashString(request.requestId);
     const status = (phase: GenerationStatus['phase'], message: string): void =>
       onStatus?.({ phase, message, requestId: request.requestId, startedAt, elapsedMs: Math.max(0, Date.now() - startedAt) });
-    status('queued', 'Preparing live world generation…');
+    const primarySource = options.provider.source ?? 'live';
+    const primaryBadge = options.provider.badge ?? 'LIVE';
+    status('queued', primarySource === 'procedural' ? 'Composing a world from your ideas…' : 'Preparing live world generation…');
     const notes: string[] = [];
     let attempts = 0;
     const fallback = (): PreparedWorld => {
@@ -43,9 +51,12 @@ export function createLiveGenerationService(options: {
     };
     let repair: string | undefined;
     let result: Awaited<ReturnType<RecipeProvider['generate']>> | undefined;
+    let source = primarySource;
+    let badge = primaryBadge;
+    let model = options.model;
     while (attempts < 2) {
       attempts++;
-      status('generating', repair ? 'Repairing the generated recipe…' : 'Generating a world from your ideas…');
+      status('generating', repair ? 'Repairing the generated recipe…' : primarySource === 'procedural' ? 'Composing a world from your ideas…' : 'Generating a world from your ideas…');
       try {
         result = await options.provider.generate(request, repair, signal);
         signal?.throwIfAborted();
@@ -57,6 +68,22 @@ export function createLiveGenerationService(options: {
         if (!failure.repairable || attempts === 2) break;
         repair = failure.message;
         status('validating', 'Recipe rejected; requesting one bounded repair…');
+      }
+    }
+    if (!result && options.fallbackProvider && options.fallbackProvider !== options.provider) {
+      try {
+        status('generating', 'Live generation failed; composing a world from your ideas instead…');
+        result = await options.fallbackProvider.generate(request, undefined, signal);
+        signal?.throwIfAborted();
+        source = options.fallbackProvider.source ?? 'procedural';
+        badge = options.fallbackProvider.badge ?? 'COMPOSED';
+        model = 'relay-composer';
+        notes.push('Live generation failed; the offline composer built this world from the same ideas (no model call).');
+        options.log(`Composer fallback after ${attempts} live request(s): ${notes.join(' ')}`);
+      } catch (error) {
+        signal?.throwIfAborted();
+        notes.push(error instanceof GenerationFailure ? error.message : 'Composer fallback failed.');
+        result = undefined;
       }
     }
     if (!result) {
@@ -85,24 +112,24 @@ export function createLiveGenerationService(options: {
           roomIndex: room.index,
         })));
         const world = PreparedWorldSchema.parse({
-          worldId: `world-live-${hashString(`${request.sessionId}:${request.requestId}`).toString(36)}`,
+          worldId: `world-${source === 'live' ? 'live' : 'composed'}-${hashString(`${request.sessionId}:${request.requestId}`).toString(36)}`,
           createdAt: generatedAt,
           recipe: { ...recipe, contributionMappings: mappings },
           rooms: compiled.rooms,
           art: compiled.art,
           plannedRoomCount: request.plannedRoomCount,
           provenance: {
-            source: 'live',
-            label: `LIVE · ${options.model}`.slice(0, 80),
-            model: options.model.slice(0, 80),
+            source,
+            label: `${badge} · ${model}`.slice(0, 80),
+            model: model.slice(0, 80),
             generatedAt,
             durationMs: Math.max(0, Date.now() - startedAt),
             attempts,
             notes: [...notes, ...compiled.notes].slice(0, 10),
           },
-          receipt: buildReceipt({ worldTitle: recipe.title, source: 'live', contributions: request.contributions, mappings }),
+          receipt: buildReceipt({ worldTitle: recipe.title, source, contributions: request.contributions, mappings }),
         });
-        status('ready', `Live world ready: ${committedRoomCount}/${request.plannedRoomCount} rooms committed.`);
+        status('ready', `${source === 'live' ? 'Live' : 'Composed'} world ready: ${committedRoomCount}/${request.plannedRoomCount} rooms committed.`);
         yield world;
       }
     } catch {

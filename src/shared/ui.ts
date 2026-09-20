@@ -8,6 +8,7 @@
 import type {
   ClassId,
   ImplementationStatus,
+  MotifId,
 } from './registry';
 import type {
   AnchorState,
@@ -18,6 +19,7 @@ import type {
   GenerationStatus,
   LoreFragment,
   MemoryRecord,
+  Palette,
   PlayerActionState,
 } from './contracts';
 import type { ConnectionStatus, SessionMode } from './session';
@@ -44,6 +46,11 @@ export interface UiWorldSummary {
   lore: LoreFragment[];
   /** World-grown skill nodes (see src/shared/skills.ts). */
   attunements: Attunement[];
+  /** Visual identity for reveal/loading UI (from the compiled ArtRecipe). */
+  palette?: Palette;
+  motifIds?: MotifId[];
+  /** Names of the rooms committed so far. */
+  roomNames?: string[];
 }
 
 export interface UiRoomSummary {

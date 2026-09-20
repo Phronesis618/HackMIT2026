@@ -4,6 +4,7 @@ import type { UiStore } from '../game/uiStore';
 import { HeadquartersPanel } from './HeadquartersPanel';
 import { Hud } from './Hud';
 import { MemoryWall } from './MemoryWall';
+import { GenerationOverlay } from './GenerationOverlay';
 import { ProvenanceBadge } from './ProvenanceBadge';
 import { useUiModel } from './useUiModel';
 import { WorldPanel } from './WorldPanel';
@@ -67,6 +68,7 @@ export function App({ store, actions, onStageReady }: AppProps) {
             <span>{inRun || model.phase === 'debrief' ? model.room?.name : 'RELAY / SANCTUARY'}</span>
           </div>
           {inRun && <Hud model={model} actions={actions} />}
+          {!inRun && <GenerationOverlay model={model} actions={actions} />}
           {model.phase !== 'debrief' && <AbilityBar model={model} actions={actions} />}
         </section>
         {!inRun && (

@@ -7,6 +7,7 @@
  */
 import { z } from 'zod';
 import {
+  ATTRIBUTING_SOURCES,
   formatIssues,
   GenerationRequestSchema,
   GenerationStatusSchema,
@@ -57,7 +58,7 @@ export function parseWorldPrefix(raw: unknown, rawRequest: GenerationRequestInpu
   if (mappings.some((mapping) => !request.contributions.some((c) => c.id === mapping.contributionId)
     || !attributions.some((attribution) => matches(mapping, attribution)))
     || attributions.some((attribution) => !mappings.some((mapping) => matches(mapping, attribution)))
-    || (world.provenance.source !== 'live' && (mappings.length > 0 || attributions.length > 0))) {
+    || (!ATTRIBUTING_SOURCES.has(world.provenance.source) && (mappings.length > 0 || attributions.length > 0))) {
     throw new Error('World attribution does not match committed features.');
   }
   if (world.receipt.lines.length !== request.contributions.length

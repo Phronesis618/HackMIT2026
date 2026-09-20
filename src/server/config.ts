@@ -14,11 +14,15 @@ import { fileURLToPath } from 'node:url';
 export type GenerationMode = 'fixture' | 'live';
 /**
  * anthropic / openai — direct API providers (need a key).
+ * composer          — no key: the offline composer builds a distinct, honestly-labelled
+ *                     `procedural` world from the players' ideas in milliseconds
+ *                     (src/server/composer). Also the fallback for every other provider.
  * operator          — DEMO ONLY: no key. Each request is written to an inbox directory and a
  *                     coding agent watching that directory (e.g. Cursor) writes the WorldRecipe
  *                     reply. See src/server/operator/provider.ts and docs/DEMO.md.
  */
-export type AIProvider = 'anthropic' | 'openai' | 'operator';
+export type AIProvider = 'anthropic' | 'openai' | 'composer' | 'operator';
+const KEYLESS_PROVIDERS: ReadonlySet<string> = new Set(['composer', 'operator']);
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 export const DEFAULT_OPERATOR_TIMEOUT_MS = 180_000;
 
@@ -80,8 +84,8 @@ export function loadServerConfig(options: LoadConfigOptions = {}): ServerConfig 
   const apiKey = (env.OPENAI_API_KEY ?? '').trim();
   const anthropicApiKey = (env.ANTHROPIC_API_KEY ?? '').trim();
   const provider = (env.RELAY_AI_PROVIDER ?? '').trim() || (anthropicApiKey ? 'anthropic' : 'openai');
-  if (provider !== 'anthropic' && provider !== 'openai' && provider !== 'operator') {
-    throw new Error('RELAY_AI_PROVIDER must be anthropic, openai or operator.');
+  if (provider !== 'anthropic' && provider !== 'openai' && provider !== 'composer' && provider !== 'operator') {
+    throw new Error('RELAY_AI_PROVIDER must be anthropic, openai, composer or operator.');
   }
   const requestedMode: GenerationMode = env.RELAY_GENERATION_MODE === 'live' ? 'live' : 'fixture';
   const operatorTimeoutMs = Number((env.RELAY_OPERATOR_TIMEOUT_MS ?? '').trim());
@@ -113,7 +117,7 @@ export function describeForClient(config: ServerConfig): { generationMode: Gener
   const apiKey = provider === 'anthropic' ? anthropicApiKey : openaiApiKey;
   return {
     generationMode: config.generation.mode,
-    liveGenerationAvailable: config.generation.mode === 'live' && (provider === 'operator' || Boolean(apiKey?.trim())),
+    liveGenerationAvailable: config.generation.mode === 'live' && (KEYLESS_PROVIDERS.has(provider) || Boolean(apiKey?.trim())),
   };
 }
 

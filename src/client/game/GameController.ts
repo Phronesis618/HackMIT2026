@@ -104,6 +104,16 @@ export class GameController {
 
     this.loop();
     await session.start();
+    // Mirror connection state eagerly (and on a timer) so a tab whose animation frames are
+    // throttled or paused never shows "offline" for a session that is actually running.
+    const syncConnection = (): void => {
+      const connection = { mode: session.mode, status: session.getConnectionStatus(), isHost: session.getIsHost?.() ?? session.mode === 'local' };
+      const previous = store.get().connection;
+      if (previous.status !== connection.status || previous.isHost !== connection.isHost) store.set({ connection });
+    };
+    syncConnection();
+    const connectionTimer = setInterval(syncConnection, 500);
+    this.disposers.push(() => clearInterval(connectionTimer));
 
     if (flags.fixtureWorld && flags.autoEnter) {
       // Preview path for Agent C: skip the HQ flow, land straight in a room.
@@ -264,6 +274,9 @@ export class GameController {
         plannedRoomCount: world.plannedRoomCount,
         lore: world.recipe.lore,
         attunements: world.recipe.attunements,
+        palette: world.art.palette,
+        motifIds: world.art.motifIds,
+        roomNames: world.rooms.map((room) => room.name),
       },
       notice: null,
     });

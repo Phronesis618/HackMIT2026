@@ -1,3 +1,4 @@
+import { ATTRIBUTING_SOURCES } from '../../shared/contracts';
 import { ENEMY_INFO } from '../../shared/registry';
 import type { UiWorldSummary } from '../../shared/ui';
 import { ProvenanceBadge } from './ProvenanceBadge';
@@ -47,7 +48,7 @@ export function WorldPanel({ world, discoveredLore = [] }: { world: UiWorldSumma
       </div>
       <p className="tagline">{world.tagline}</p>
       <Codex world={world} discovered={discoveredLore} />
-      {world.provenance.source !== 'live' && (
+      {!ATTRIBUTING_SOURCES.has(world.provenance.source) && (
         <p className="receipt__disclosure">
           {world.provenance.source === 'fixture' ? 'Offline fixture.' : 'Live generation failed; using an offline fixture.'}
           {' '}Your ideas are recorded, but did not shape this world.
@@ -65,9 +66,9 @@ export function WorldPanel({ world, discoveredLore = [] }: { world: UiWorldSumma
         {r.lines.length > 0 && (
           <ul className="list">
             {r.lines.map((line) => (
-              <li key={line.contributionId} className={`list__item ${world.provenance.source === 'live' && line.used ? 'list__item--used' : 'list__item--unused'}`}>
+              <li key={line.contributionId} className={`list__item ${ATTRIBUTING_SOURCES.has(world.provenance.source) && line.used ? 'list__item--used' : 'list__item--unused'}`}>
                 <span className="list__who">{line.playerName}</span> “{line.text}”
-                <div className="list__meta">{world.provenance.source === 'live' && line.used ? `→ ${line.featureDescription ?? 'Attributed by the generation receipt'}` : 'recorded · not used in this world'}</div>
+                <div className="list__meta">{ATTRIBUTING_SOURCES.has(world.provenance.source) && line.used ? `→ ${line.featureDescription ?? 'Attributed by the generation receipt'}` : 'recorded · not used in this world'}</div>
               </li>
             ))}
           </ul>

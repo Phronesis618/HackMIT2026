@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { z } from 'zod';
-import { WorldRecipeSchema, type GenerationRequest, type WorldRecipe } from '../../shared/contracts';
+import { WorldRecipeSchema, type GenerationRequest, type GenerationSource, type WorldRecipe } from '../../shared/contracts';
 import { ATTUNEMENT_EFFECT_IDS, ATTUNEMENT_EFFECT_INFO, ENEMY_IDS, MOTIF_IDS, PROP_IDS } from '../../shared/registry';
 
 const responseSchema = z.object({
@@ -46,6 +46,12 @@ export class GenerationFailure extends Error {
 
 export interface RecipeProvider {
   generate(request: GenerationRequest, repair?: string, signal?: AbortSignal): Promise<{ recipe: WorldRecipe; usage?: ProviderUsage }>;
+  /**
+   * Provenance this provider's output must carry. API models are `live` (default); the
+   * offline composer is `procedural`. `badge` is the label prefix ("LIVE", "COMPOSED").
+   */
+  readonly source?: GenerationSource;
+  readonly badge?: string;
 }
 
 interface ProviderOptions {

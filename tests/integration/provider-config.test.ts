@@ -45,7 +45,7 @@ describe('AI provider configuration', () => {
 
   it('rejects a misspelled provider instead of silently using a different paid service', () => {
     expect(() => loadServerConfig({ env: { ...env, RELAY_AI_PROVIDER: 'antrhopic' }, argv: [] }))
-      .toThrow('RELAY_AI_PROVIDER must be anthropic, openai or operator.');
+      .toThrow('RELAY_AI_PROVIDER must be anthropic, openai, composer or operator.');
   });
 
   it.each(['anthropic', 'openai'])('routes HTTP generation to %s with both keys configured', async (provider) => {
