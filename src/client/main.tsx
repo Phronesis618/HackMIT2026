@@ -58,7 +58,7 @@ async function boot(): Promise<void> {
   const identityPersistence = createIdentityPersistence(params.get('as'), window);
   const identity = identityPersistence.load();
   const session: GameSession = coOp
-    ? new RemoteSession({ identity, resumeStorage: tabStorage() })
+    ? new RemoteSession({ identity, resumeStorage: tabStorage(), resumeScope: identityPersistence.scope })
     : new LocalSession({ identity, worldProvider: flags.fixtureWorld ? fixtureWorldProvider : serverWorldProvider });
   const renderer = new PhaserWorldRenderer();
   const chronicle = createBrowserChronicle(window.localStorage);
