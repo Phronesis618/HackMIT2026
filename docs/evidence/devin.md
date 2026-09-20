@@ -15,8 +15,11 @@ fixture content and opened the requested room. The console had no runtime errors
 At 800 CSSpx the preview status strip overflowed to 884px against a 792px client width;
 HQ fit. The header now permits wrapping and keeps each label intact. Against main
 `71f1dc2`, `npm run check` passed **754 tests / 62 files**, typecheck, build and whitespace.
-Focused browser verification of the CSS fix is next. External physical LAN/live-provider
-and floor-mode verification are not claimed.
+Focused browser verification on `bb6380b` passed: both preview routes, HQ and menus fit at
+800 CSSpx (`scrollWidth=clientWidth=792`); desktop HQ/preview fit at 1280 CSSpx. Full
+provenance/status labels remain visible. The console contained no errors or warnings.
+Normal zoom and keyboard repeat were restored. Solo/co-op were not replayed on this
+CSS-only follow-up; physical LAN/live-provider and floor-mode verification are not claimed.
 
 ## Anchored victory and co-op reload correction — 2026-09-20
 

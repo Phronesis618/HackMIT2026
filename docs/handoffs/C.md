@@ -11,8 +11,11 @@
   physical portal, synchronized combat and room progression. Device identity remained
   separate from named identities. The 24-idea cap and both labelled preview paths passed.
   Final observed console sweep had no runtime errors.
-- **Browser defect:** at 800 CSSpx, preview header width was 884px against a 792px content
-  viewport. This CSS correction still needs a focused responsive retest.
+- **Browser verified (`bb6380b`):** both preview routes now fit at 800 CSSpx:
+  `scrollWidth=clientWidth=792`, down from the previous 884px overflow. Preview provenance,
+  connection status and controls remain visible. HQ, Controls and Memories stay readable;
+  desktop HQ/preview fit at 1280 CSSpx. Final console sweep had no errors or warnings.
+  Keyboard repeat and normal zoom were restored. This focused run did not repeat solo/co-op.
 - **Mocked:** fixture generation; no browser state/events were injected.
 - **Unverified:** physical multi-device LAN, live generation, browser floor mode, four-active-
   seat/grace-expiry browser checks and fine one-shot/release timings under VM slowdown.
