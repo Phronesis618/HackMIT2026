@@ -30,6 +30,7 @@ import { LocalSession } from './transport/LocalSession';
 import { RemoteSession } from './transport/RemoteSession';
 import { fixtureWorldProvider, serverWorldProvider } from './transport/worldProviders';
 import { App } from './ui/App';
+import { initMotionPreference } from './render/feel';
 
 /** Per-tab storage for the co-op resume credential (a reload must come back as the same operative). */
 function tabStorage(): Storage | undefined {
@@ -78,6 +79,9 @@ async function boot(): Promise<void> {
   const session: GameSession = coOp
     ? new RemoteSession({ identity, resumeStorage: tabStorage(), resumeScope: identityPersistence.scope })
     : new LocalSession({ identity, worldProvider: flags.fixtureWorld ? fixtureWorldProvider : serverWorldProvider });
+  // Motion settings before anything renders: the stylesheets already honoured
+  // `prefers-reduced-motion` and the canvas did not. `feel.ts` is where it is honoured now.
+  initMotionPreference(window);
   const renderer = new PhaserWorldRenderer();
   const chronicle = createBrowserChronicle(window.localStorage);
   const audio = createBrowserAudio();

@@ -30,6 +30,7 @@ import { drawRoomKindDynamic, drawRoomKindStatic, featurePrompt, roomKindState, 
 import { drawDoorFrames, drawDoorStates, selectDoorViews, stepSeal, type DoorView } from './doors';
 import { drawFloorDressing, drawOverhead, drawWallDressing, FLOOR_PATTERN, MOTE_STYLE, stencilColors, type MoteStyle } from './dressing';
 import * as fx from './fx';
+import * as feel from './feel';
 
 interface EntityView {
   container: Phaser.GameObjects.Container;
@@ -39,6 +40,22 @@ interface EntityView {
   hpBar: Phaser.GameObjects.Graphics;
   lastState: string;
   isLocal: boolean;
+  /** Radius, kept so the reaction layer can draw a flash the size of the thing it is flashing. */
+  radius: number;
+  /** White-flash / hit-stop / flinch overlay. One Graphics, cleared when nothing is happening. */
+  flash: Phaser.GameObjects.Graphics;
+  /** Ms since the last hit landed on this entity, or null when no reaction is running. */
+  hitMs: number | null;
+  /** Where it stood when it was struck (hit-stop holds it here), and the direction of the blow. */
+  hitX: number;
+  hitY: number;
+  hitDx: number;
+  hitDy: number;
+  /** Share of its maximum health that blow took, in [0, 1]. Drives flinch size and impact size. */
+  hitShare: number;
+  /** Latest position the snapshot put it at, so `update` can re-apply the reaction every frame. */
+  baseX: number;
+  baseY: number;
 }
 
 type FxGraphics = Phaser.GameObjects.Graphics & { fxT: number };
@@ -758,12 +775,19 @@ export class RoomScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setAlpha(kind === 'player' ? 0.95 : 0.6);
-    container.add([shadow, facing, body, hpBar, label]);
-    return { container, body, facing, label, hpBar, lastState: '', isLocal };
+    // The reaction layer's own object, drawn above the body so a flash reads over the artwork.
+    const flash = this.add.graphics();
+    container.add([shadow, facing, body, flash, hpBar, label]);
+    return {
+      container, body, facing, label, hpBar, flash, lastState: '', isLocal, radius,
+      hitMs: null, hitX: 0, hitY: 0, hitDx: 0, hitDy: 0, hitShare: 0, baseX: 0, baseY: 0,
+    };
   }
 
   private updatePlayerView(view: EntityView, player: PlayerState): void {
-    view.container.setPosition(player.x, player.y);
+    view.baseX = player.x;
+    view.baseY = player.y;
+    this.applyReaction(view);
     view.container.setDepth(DEPTH.entities + player.y / 10000);
     view.container.setAlpha(player.state === 'down' ? 0.6 : (player.shroudMs ?? 0) > 0 ? 0.55 : 1);
     drawOperative(view.body, player, view.isLocal, this.time.now);
@@ -791,7 +815,10 @@ export class RoomScene extends Phaser.Scene {
 
   private updateEnemyView(view: EntityView, enemy: EnemyState): void {
     const radius = ENEMY_INFO[enemy.enemyId].radius;
-    view.container.setPosition(enemy.x, enemy.y);
+    // The snapshot says where it IS; `applyReaction` says where it is DRAWN (hit-stop + flinch).
+    view.baseX = enemy.x;
+    view.baseY = enemy.y;
+    this.applyReaction(view);
     view.container.setDepth(DEPTH.entities + enemy.y / 10000);
     drawHostile(view.body, enemy, this.time.now);
     view.body.setRotation(enemy.facing);
@@ -811,6 +838,71 @@ export class RoomScene extends Phaser.Scene {
     view.facing.setRotation(enemy.facing);
     if (enemy.hp < enemy.maxHp && enemy.state !== 'dead') this.drawHpBar(view.hpBar, enemy.hp, enemy.maxHp, radius, fx.enemyAccent(enemy.enemyId));
     else view.hpBar.clear();
+  }
+
+  /**
+   * Start a reaction on a struck entity: hold it where it was hit for a few frames, flash it
+   * white, and shove it a little along the blow. All three are render-only (see `feel.ts`), so
+   * the simulation and every other client are untouched by any of it.
+   */
+  private strike(view: EntityView, fromX: number, fromY: number, share: number): void {
+    const dx = view.baseX - fromX;
+    const dy = view.baseY - fromY;
+    const len = Math.hypot(dx, dy);
+    view.hitMs = 0;
+    view.hitX = view.baseX;
+    view.hitY = view.baseY;
+    view.hitDx = len > 0.001 ? dx / len : 0;
+    view.hitDy = len > 0.001 ? dy / len : 0;
+    view.hitShare = share;
+  }
+
+  /** Place an entity for this frame: snapshot position, adjusted by whatever reaction is running. */
+  private applyReaction(view: EntityView): void {
+    const elapsed = view.hitMs;
+    if (elapsed === null) {
+      view.container.setPosition(view.baseX, view.baseY);
+      return;
+    }
+    const motion = feel.motionScale();
+    const hold = feel.hitStopHold(elapsed);
+    const flinch = feel.flinchDistance(elapsed, view.hitShare, motion);
+    // Hit-stop pulls the drawn position back toward where the blow landed; the flinch pushes it
+    // along the blow. Both fade out, so the entity is back on its snapshot position within 150 ms.
+    const x = view.baseX + (view.hitX - view.baseX) * hold + view.hitDx * flinch;
+    const y = view.baseY + (view.hitY - view.baseY) * hold + view.hitDy * flinch;
+    view.container.setPosition(x, y);
+  }
+
+  /** Advance every running reaction by `delta` ms and redraw its flash. Called once a frame. */
+  private stepReactions(delta: number): void {
+    const motion = feel.motionScale();
+    const over = Math.max(feel.FEEL.hitFlashMs, feel.FEEL.flinchMs);
+    for (const view of this.enemies.values()) {
+      if (view.hitMs === null) continue;
+      view.hitMs += delta;
+      const alpha = feel.hitFlashAlpha(view.hitMs, motion);
+      view.flash.clear();
+      if (alpha > 0) view.flash.fillStyle(0xffffff, alpha).fillCircle(0, 0, view.radius + 1);
+      if (view.hitMs >= over) view.hitMs = null;
+      this.applyReaction(view);
+    }
+  }
+
+  /**
+   * Every camera shake in the game goes through here, so a new effect cannot forget the player's
+   * motion setting by being written in the wrong style. Reduced motion means no shake at all.
+   */
+  private nudge(durationMs: number, intensity: number): void {
+    const scaled = intensity * feel.motionScale();
+    if (scaled <= 0) return;
+    this.cameras.main.shake(durationMs, scaled);
+  }
+
+  /** The same gate for full-screen flashes, which are the other thing reduced motion is about. */
+  private wash(durationMs: number, r: number, g: number, b: number): void {
+    if (feel.motionScale() <= 0) return;
+    this.cameras.main.flash(durationMs, r, g, b, false);
   }
 
   private drawHpBar(g: Phaser.GameObjects.Graphics, hp: number, maxHp: number, radius: number, color: number): void {
@@ -985,21 +1077,33 @@ export class RoomScene extends Phaser.Scene {
         case 'enemy_damaged': {
           const target = this.enemyPositions.get(event.enemyId);
           if (target) {
-            this.animate(target.x, target.y, 320, (g, t) => fx.drawImpact(g, t, this.classColor(event.byPlayerId ?? ''), seed, 1));
+            // How big the blow was, as a share of what it was aimed at. Every hit used to draw at
+            // exactly the same size whether it was a scratch or a quarter of the Custodian.
+            const struck = this.latestSnapshot?.enemies.find((candidate) => candidate.id === event.enemyId);
+            const share = feel.damageShare(event.amount, struck?.maxHp ?? 0);
+            this.animate(target.x, target.y, 320, (g, t) =>
+              fx.drawImpact(g, t, this.classColor(event.byPlayerId ?? ''), seed, feel.impactStrength(share)));
             this.floatText(target.x + (seed % 5) * 3 - 6, target.y - 24, `${event.amount}`, tokens.canvas.telegraph, event.amount >= 30 ? 16 : 13);
+            const view = this.enemies.get(event.enemyId);
+            const from = event.byPlayerId ? this.players.get(event.byPlayerId)?.container : undefined;
+            if (view) this.strike(view, from?.x ?? target.x, from?.y ?? target.y + 1, share);
+            // The camera never used to notice the crew landing a hit, only taking one.
+            if (event.byPlayerId === this.localPlayerId) {
+              this.nudge(feel.FEEL.contactShakeMs, feel.contactShakeIntensity(share, 1));
+            }
           }
           break;
         }
         case 'player_damaged': {
           const target = this.players.get(event.playerId)?.container;
           if (target) this.animate(target.x, target.y, 320, (g, t) => fx.drawImpact(g, t, hexToInt(tokens.color.danger), seed, 1.2));
-          if (event.playerId === this.localPlayerId) this.cameras.main.shake(110, 0.004);
+          if (event.playerId === this.localPlayerId) this.nudge(110, 0.004);
           break;
         }
         case 'terrain_detonated': {
           const color = hexInt(this.art.palette.hazard);
           this.animate(event.x, event.y, 420, (g, t) => drawCanisterBlast(g, t, event.radius, color));
-          if (event.hitPlayerIds.includes(this.localPlayerId)) this.cameras.main.shake(140, 0.006);
+          if (event.hitPlayerIds.includes(this.localPlayerId)) this.nudge(140, 0.006);
           break;
         }
         case 'enemy_defeated': {
@@ -1071,12 +1175,12 @@ export class RoomScene extends Phaser.Scene {
           const anchor = this.latestSnapshot?.anchor;
           if (anchor && event.worldId === this.latestSnapshot?.worldId && event.roomIndex === this.latestSnapshot.roomIndex) {
             this.animate(anchor.x, anchor.y, 1100, (g, t) => fx.drawShockwave(g, t, 200, hexToInt(this.art!.palette.accent), seed, true));
-            this.cameras.main.flash(400, 124, 245, 255, false);
+            this.wash(400, 124, 245, 255);
           }
           break;
         }
         case 'room_entered': {
-          if (event.roomId === this.room?.id) this.cameras.main.flash(200, 124, 245, 255, false);
+          if (event.roomId === this.room?.id) this.wash(200, 124, 245, 255);
           break;
         }
         default:
@@ -1094,12 +1198,12 @@ export class RoomScene extends Phaser.Scene {
         break;
       case 'bastion.e.shockwave':
         this.animate(event.x, event.y, 650, (g, t) => fx.drawShockwave(g, t, 135, color, seed, true));
-        this.cameras.main.shake(140, 0.005);
+        this.nudge(140, 0.005);
         break;
       case 'bastion.r.aegis_slam':
         this.animate(event.x, event.y, 1000, (g, t) => fx.drawShockwave(g, t, 175, color, seed, true));
-        this.cameras.main.shake(320, 0.012);
-        this.cameras.main.flash(180, 124, 245, 255, false);
+        this.nudge(320, 0.012);
+        this.wash(180, 124, 245, 255);
         this.floatText(event.x, event.y - 40, 'AEGIS SLAM', CLASS_THEME.bastion.primary, 18);
         break;
       case 'shade.q.blink_strike':
@@ -1110,7 +1214,7 @@ export class RoomScene extends Phaser.Scene {
         break;
       case 'shade.r.blade_storm':
         this.animate(event.x, event.y, 900, (g, t) => fx.drawBladeStorm(g, t, 120, color));
-        this.cameras.main.shake(200, 0.006);
+        this.nudge(200, 0.006);
         this.floatText(event.x, event.y - 40, 'BLADE STORM', CLASS_THEME.shade.primary, 18);
         break;
       case 'beacon.q.flare': {
@@ -1124,8 +1228,8 @@ export class RoomScene extends Phaser.Scene {
         break;
       case 'beacon.r.solar_lance':
         this.animate(event.x, event.y, 800, (g, t) => fx.drawBeam(g, t, event.facing, 420, color, 52));
-        this.cameras.main.shake(200, 0.006);
-        this.cameras.main.flash(160, 255, 207, 138, false);
+        this.nudge(200, 0.006);
+        this.wash(160, 255, 207, 138);
         this.floatText(event.x, event.y - 40, 'SOLAR LANCE', CLASS_THEME.beacon.primary, 18);
         break;
       case 'weaver.q.tether': {
@@ -1141,7 +1245,7 @@ export class RoomScene extends Phaser.Scene {
         const cx = event.x + Math.cos(event.facing) * 200;
         const cy = event.y + Math.sin(event.facing) * 200;
         this.animate(cx, cy, 1200, (g, t) => fx.drawSingularity(g, t, 200, color, seed));
-        this.cameras.main.shake(260, 0.007);
+        this.nudge(260, 0.007);
         this.floatText(event.x, event.y - 40, 'COLLAPSE', CLASS_THEME.weaver.primary, 18);
         break;
       }
@@ -1153,6 +1257,7 @@ export class RoomScene extends Phaser.Scene {
   // ---- per-frame ---------------------------------------------------------------
 
   update(_time: number, delta: number): void {
+    this.stepReactions(delta);
     if (!this.room || !this.art || !this.portalGlow) return;
     this.portalPulse += delta / 1000;
     const t = this.portalPulse;

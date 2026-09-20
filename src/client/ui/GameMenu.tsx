@@ -14,6 +14,7 @@ import { ProvenanceBadge } from './ProvenanceBadge';
 import { Codex } from './WorldPanel';
 import { MemoryWall, OPEN_MENU_EVENT } from './MemoryWall';
 import { FieldNotesPage } from './FieldNotes';
+import { isReducedMotion, onMotionPreferenceChange, setReducedMotion } from '../render/feel';
 
 export const MENU_PAGES = ['codex', 'bestiary', 'operative', 'skills', 'controls', 'fieldnotes', 'memories'] as const;
 export type MenuPage = (typeof MENU_PAGES)[number];
@@ -262,6 +263,35 @@ const CONTROLS: { group: string; rows: { keys: string[]; action: string }[] }[] 
 ];
 
 /** Every binding in one place, so the HUD only has to say "Tab · menu". */
+/**
+ * The one accessibility switch the canvas needs. The stylesheets already honour
+ * `prefers-reduced-motion`; this is the same answer applied to screen shake and camera flashes,
+ * and an override for a player whose browser preference does not match what they want tonight.
+ * Nothing that carries information is turned off by it.
+ */
+function MotionSetting() {
+  const [reduced, setReduced] = useState(isReducedMotion);
+  useEffect(() => onMotionPreferenceChange(setReduced), []);
+  return (
+    <section className="controls__group">
+      <h3 className="eyebrow">Motion</h3>
+      <label className="controls__toggle">
+        <input
+          type="checkbox"
+          checked={reduced}
+          onChange={(e) => { setReducedMotion(e.currentTarget.checked); setReduced(e.currentTarget.checked); }}
+        />
+        <span>Reduce motion</span>
+      </label>
+      <p className="muted">
+        {reduced
+          ? 'Screen shake and camera flashes are off. Damage numbers, hit flashes and telegraphs stay.'
+          : 'Turns off screen shake and camera flashes. Your browser setting decides this until you change it here.'}
+      </p>
+    </section>
+  );
+}
+
 export function ControlsPage() {
   return (
     <>
@@ -281,6 +311,7 @@ export function ControlsPage() {
             </dl>
           </section>
         ))}
+        <MotionSetting />
       </div>
     </>
   );
