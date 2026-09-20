@@ -52,10 +52,24 @@ describe('combat HUD', () => {
     const html = renderToStaticMarkup(createElement(Hud, { model: ui, actions }));
     expect(html).toContain('Operative down');
     expect(html).toContain('aria-valuenow="0"');
-    expect(html).not.toContain('ability--ready');
-    expect(html).not.toContain('WASD / arrows');
+    expect(html).not.toContain('WASD');
     expect(html).not.toContain('Integrity critical');
-    expect(html).toContain('Return to headquarters');
+    expect(html).not.toContain('Hostiles');
+  });
+
+  it('stays empty apart from the accessible meter when nothing needs the player\'s attention', () => {
+    const ui = model();
+    const html = renderToStaticMarkup(createElement(Hud, { model: ui, actions }));
+    expect(html).not.toContain('combat-status');
+    expect(html).toContain('aria-valuenow="100"');
+  });
+
+  it('prompts for the Anchor only once the room is clear', () => {
+    const ui = model();
+    ui.hud = { ...ui.hud!, anchor: { x: 0, y: 0, state: 'dormant', progress: 0 } };
+    expect(renderToStaticMarkup(createElement(Hud, { model: ui, actions }))).not.toContain('Anchor');
+    ui.hud = { ...ui.hud, enemiesRemaining: 0 };
+    expect(renderToStaticMarkup(createElement(Hud, { model: ui, actions }))).toContain('Hold F at the Anchor');
   });
 
   it('warns only at low integrity and clamps the accessible health meter', () => {
@@ -63,7 +77,6 @@ describe('combat HUD', () => {
     ui.hud = { ...ui.hud!, hp: 25, attackReady: false };
     const low = renderToStaticMarkup(createElement(Hud, { model: ui, actions }));
     expect(low).toContain('Integrity critical');
-    expect(low).toContain('recovering');
     ui.hud.hp = 125;
     const full = renderToStaticMarkup(createElement(Hud, { model: ui, actions }));
     expect(full).not.toContain('Integrity critical');

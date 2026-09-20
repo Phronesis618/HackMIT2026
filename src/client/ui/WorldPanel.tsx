@@ -8,7 +8,7 @@ import { ProvenanceBadge } from './ProvenanceBadge';
  * kind for the first time. Undiscovered entries stay ??? so the sidebar never tells what
  * the rooms are meant to show.
  */
-function Codex({ world, discovered }: { world: UiWorldSummary; discovered: number[] }) {
+export function Codex({ world, discovered }: { world: UiWorldSummary; discovered: number[] }) {
   if (world.lore.length === 0) return null;
   const found = new Set(discovered);
   const relics = world.lore.map((f, i) => ({ f, i })).filter(({ f }) => f.kind === 'relic');

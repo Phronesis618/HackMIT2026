@@ -9,6 +9,7 @@ import { useUiModel } from './useUiModel';
 import { WorldPanel } from './WorldPanel';
 import { DebriefPanel } from './DebriefPanel';
 import { AbilityBar } from './AbilityBar';
+import { GameMenu } from './GameMenu';
 
 export interface AppProps {
   store: UiStore;
@@ -19,6 +20,7 @@ export interface AppProps {
 
 export function App({ store, actions, onStageReady }: AppProps) {
   const model = useUiModel(store);
+  const inRun = model.phase === 'expedition' || model.phase === 'training';
   const stageRef = useCallback(
     (el: HTMLDivElement | null) => {
       if (el) onStageReady(el);
@@ -49,23 +51,26 @@ export function App({ store, actions, onStageReady }: AppProps) {
         </div>
       </header>
 
-      <main className="layout">
+      <main className={`layout ${inRun ? 'layout--run' : ''}`}>
         <section className="stage-wrap">
           <div className="stage" ref={stageRef} tabIndex={0} aria-label="RELAY game canvas" />
           <div className="stage-caption" aria-hidden="true">
-            <span>{model.phase === 'expedition' || model.phase === 'debrief' || model.phase === 'training' ? model.room?.name : 'RELAY / SANCTUARY'}</span>
+            <span>{inRun || model.phase === 'debrief' ? model.room?.name : 'RELAY / SANCTUARY'}</span>
           </div>
+          {inRun && <Hud model={model} actions={actions} />}
           {model.phase !== 'debrief' && <AbilityBar model={model} actions={actions} />}
         </section>
-        <aside className="side">
-          {(model.phase === 'headquarters' || model.phase === 'preparing') && <HeadquartersPanel model={model} actions={actions} />}
-          {(model.phase === 'expedition' || model.phase === 'training') && <Hud model={model} actions={actions} />}
-          {model.phase === 'debrief' && <DebriefPanel model={model} actions={actions} />}
-          {model.world && <WorldPanel world={model.world} discoveredLore={model.discoveredLore} />}
-        </aside>
+        {!inRun && (
+          <aside className="side">
+            {(model.phase === 'headquarters' || model.phase === 'preparing') && <HeadquartersPanel model={model} actions={actions} />}
+            {model.phase === 'debrief' && <DebriefPanel model={model} actions={actions} />}
+            {model.world && <WorldPanel world={model.world} discoveredLore={model.discoveredLore} />}
+          </aside>
+        )}
       </main>
 
       <MemoryWall memories={model.memories} actions={actions} />
+      <GameMenu model={model} actions={actions} />
 
       {model.notice && (
         <div className={`notice notice--${model.notice.kind}`} role="status">
