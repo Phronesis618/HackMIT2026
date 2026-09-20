@@ -52,7 +52,8 @@ describe('Tab menu', () => {
 
   it('codex page keeps undiscovered lore hidden and reveals found fragments in full', () => {
     const hidden = render(createElement(CodexPage, { model: model() }));
-    expect(hidden).toContain('???');
+    expect(hidden).toContain('Not found yet');
+    expect(hidden).not.toContain('???');
     expect(hidden).not.toContain(fixture.recipe.lore[0]!.text);
     const found = render(createElement(CodexPage, { model: model([0]) }));
     expect(found).toContain(fixture.recipe.lore[0]!.title);
