@@ -329,6 +329,33 @@ export function scoredPhraseHits(rawText: string): Array<{ phrase: string; count
   return out;
 }
 
+/**
+ * The same reflex as SCORED_PHRASES, wearing a name.
+ *
+ * `SCORED_PHRASES` catches "in a different hand" and its kin, which is how the model says two
+ * people wrote on one thing when it does not know their names. When it does know a name it
+ * writes "Broz's handwriting" instead — four times in one live world, as a relic source, the
+ * author's register and two room lines (docs/design/BLIND_READ.md, 20 Sept). The fixed list
+ * cannot hold that, because the name is different in every world.
+ *
+ * So the phrase is built from the text: `<Name>'s <hand-noun>`, counted per name AND noun
+ * across one world. Two different people's hands in one world are two facts; one person's
+ * handwriting four times is one trick. A single use is always fine — `crystal-tide` says
+ * "Quintero's hand" and "Aalto's hand" once each and stays clean.
+ */
+const HAND_NOUNS = ['handwriting', 'hand', 'pen', 'printing', 'scrawl', 'lettering', 'block capitals'];
+const NAMED_HAND = new RegExp(String.raw`\b(\p{Lu}[\p{L}'’-]+)(?:'s|’s)\s+(${HAND_NOUNS.join('|')})\b`, 'gu');
+
+/** Every `<Name>'s <hand-noun>` in one text, keyed by the pair, with its count. */
+export function namedHandHits(rawText: string): Array<{ phrase: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const match of normalise(rawText ?? '').matchAll(NAMED_HAND)) {
+    const key = `${match[1]!.toLowerCase()}'s ${match[2]!.toLowerCase()}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts].map(([phrase, count]) => ({ phrase, count }));
+}
+
 const bibleCache = new WeakMap<object, RegExp | null>();
 const STOP_NAME_PARTS = new Set(['the', 'and', 'for', 'von', 'van', 'del', 'old', 'new', 'of']);
 
@@ -664,7 +691,7 @@ export function lintWorldText(fields: readonly WorldTextField[], options: WorldT
   const out: WorldTextIssue[] = [];
   const hitsByPhrase = new Map<string, Array<{ field: WorldTextField; count: number }>>();
   for (const field of fields) {
-    for (const { phrase, count } of scoredPhraseHits(field.text)) {
+    for (const { phrase, count } of [...scoredPhraseHits(field.text), ...namedHandHits(field.text)]) {
       const list = hitsByPhrase.get(phrase) ?? [];
       list.push({ field, count });
       hitsByPhrase.set(phrase, list);
