@@ -9,7 +9,7 @@ import {
   PLAYER_MAX_HP, PLAYER_RADIUS, REVIVE_DURATION_MS, REVIVE_HP, REVIVE_RANGE,
   ROOM_CLEAR_REWARD, TICK_MS, TILE_SIZE, tileToWorld, worldToTile,
 } from '../shared/conventions';
-import { CLASS_ABILITIES, ENEMY_INFO, ULT_CHARGE_MAX, ULT_CHARGE_PER_DAMAGE, ULT_CHARGE_PER_KILL, type ClassId } from '../shared/registry';
+import { CLASS_ABILITIES, ENEMY_INFO, ULT_CHARGE_MAX, ULT_CHARGE_PER_DAMAGE, ULT_CHARGE_PER_KILL, type ClassId, type EnemyId } from '../shared/registry';
 import { buildSolidGrid, circleHitsSolid, moveCircle, type SolidGrid } from './collision';
 import {
   CHANNEL_PATTERN, CLASS_COMBAT, ENEMY_COMBAT, ENEMY_PROJECTILE_PATTERN,
@@ -21,6 +21,15 @@ import { headquartersRoom } from './headquarters';
 import { terrainSpeedMultiplier, type TerrainState } from '../shared/terrain';
 import { createTerrainState, strikeBreakableWalls } from './terrain';
 import { ANCHOR_DISCHARGE_MS, ANCHOR_PULSE_SPEED, ANCHOR_PULSE_WARNING_MS, guardianPhase, RELAY_ACTIVATION_RANGE } from '../shared/finale';
+import {
+  custodianMaxHp, gatekeeperMaxHp, gatekeeperTier, PHASE_CHANGE_RECOVERY_MS, resolveCustodian,
+  type ResolvedCustodian,
+} from '../shared/custodian';
+import {
+  beginCustodianPattern, bossFieldSnapshot, createCustodianRuntime, custodianBusy, custodianEngagement,
+  custodianIncomingDamage, custodianPhase, onCustodianPhase, resolveCustodianPattern, stepCustodian,
+  type BossContext, type CustodianRuntime,
+} from './boss';
 import { TRAINING_REGEN_PER_TICK, TRAINING_RESPAWN_MS, TRAINING_WAKE_RANGE, trainingRoom } from './training';
 import { FLOOR_ENTRANCE_ROOM_ID } from '../shared/floors';
 import { createRoomProvider, type RoomProvider } from './floorProvider';
@@ -63,6 +72,12 @@ interface EnemyRuntime {
   channelTimerMs: number;
   /** Floors gatekeepers are Custodians held to their first phase. */
   maxBossPhase?: 1 | 2 | 3;
+  /** Custodians and gatekeepers: the pattern registry runtime (src/sim/boss.ts). */
+  custodian?: CustodianRuntime;
+  /** Adds summoned by a boss pattern, so phase 3 can gate on the phase-2 wave. */
+  waveTag?: string;
+  /** Mirror-shade decoys: they telegraph, they deal nothing, they hold one point. */
+  decoy?: boolean;
 }
 
 /** Floors: the crew arrives through a door, on its `entry` tile, facing `inward`. */
@@ -155,6 +170,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   let projectileCounter = 0;
   /** Fragment indices found this run; relics stay readable but remains drop only once per kind. */
   let discoveredLore = new Set<number>();
+  /** The world's Custodian identity and its three patterns; resolved once per world. */
+  let custodianCache: { worldId: string; resolved: ResolvedCustodian } | null = null;
 
   function emit(data: GameEventInput): GameEvent {
     return { ...data, id: `${tick}:${eventCounter++}`, tick, timeMs: tick * TICK_MS };
@@ -234,6 +251,114 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     });
   }
 
+  /**
+   * The world's Custodian: the model's, when the recipe carries one, otherwise three patterns
+   * derived from the world seed. Resolved once per world so every gatekeeper previews the same
+   * fight the crew will meet in the last room.
+   */
+  function worldCustodian(): ResolvedCustodian {
+    if (custodianCache?.worldId === (world?.worldId ?? '')) return custodianCache.resolved;
+    const recipe = world?.recipe;
+    const pool = [...new Set((recipe?.rooms ?? []).flatMap((blueprint) => blueprint.enemyIds))].filter((id) => id !== 'guardian');
+    const resolved = resolveCustodian({
+      spec: recipe?.custodian ?? undefined,
+      seed: world?.worldId ?? 'relay',
+      motifIds: recipe?.motifIds ?? [],
+      enemyPool: pool,
+    });
+    custodianCache = { worldId: world?.worldId ?? '', resolved };
+    return resolved;
+  }
+
+  /** Non-boss enemy kinds this room's biome may spawn; what `summon_choir` and the wave draw from. */
+  function biomeEnemyPool(): EnemyId[] {
+    const brief = floorsRun ? floorsRun.provider.brief(floorsRun.biomeId) : null;
+    const pool = brief ? brief.enemyPool : (world?.recipe.rooms ?? []).flatMap((blueprint) => blueprint.enemyIds);
+    const roomPool = room.encounters.map((encounter) => encounter.enemyId);
+    return [...new Set([...pool, ...roomPool])].filter((id) => id !== 'guardian');
+  }
+
+  function spawnAdd(enemyId: EnemyId, near: Point, tag: string, hpScale = 1): string | null {
+    if (progress.enemies.length > 40) return null;
+    const info = ENEMY_INFO[enemyId];
+    const spawn = nearestOpenPosition(grid, { x: near.x + (progress.enemies.length % 3 - 1) * info.radius * 3, y: near.y }, info.radius);
+    const decoy = hpScale === 0;
+    const maxHp = decoy ? 1 : Math.max(1, Math.round(info.maxHp * hpScale * (floorsRun ? tierMultiplier(floorsRun.tier) : 1)));
+    const id = `${tag}-${progress.enemies.length}`.slice(0, 60);
+    progress.enemies.push({
+      state: {
+        id, enemyId, ...spawn, facing: Math.PI, hp: maxHp, maxHp, state: 'idle',
+        telegraph: null, slowMs: 0, stunMs: 0, markMs: 0,
+        ...(enemyId === 'guardian' ? { bossPhase: 1 as const, recoveryMs: 0 } : {}),
+      },
+      cooldownMs: 700, hitMs: 0, attackCount: 0, spawn, respawnMs: 0,
+      channelMsRemaining: 0, channelAngle: 0, channelTimerMs: 0,
+      waveTag: tag, ...(decoy ? { decoy: true, maxBossPhase: 1 as const } : {}),
+    });
+    return id;
+  }
+
+  /** Everything the Custodian may do to the world, handed to `src/sim/boss.ts` once per tick. */
+  function bossContext(events: GameEvent[]): BossContext {
+    return {
+      room,
+      players: () => orderedPlayers().filter((p) => p.state.hp > 0)
+        .map((p) => ({ id: p.state.id, x: p.state.x, y: p.state.y, hp: p.state.hp, hidden: (p.state.shroudMs ?? 0) > 0 })),
+      damagePlayer: (playerId, sourceEnemyId, damage, ranged) => {
+        const p = players.get(playerId);
+        // Boss numbers are absolute: the tier curve scales the biome's enemies, never the Custodian.
+        return p ? damagePlayer(p, sourceEnemyId, damage, ranged, events, false) : false;
+      },
+      pushPlayer: (playerId, dx, dy) => {
+        const p = players.get(playerId);
+        if (!p || p.state.hp <= 0) return;
+        const moved = moveCircle(grid, p.state.x, p.state.y, PLAYER_RADIUS, dx, dy);
+        p.state.x = moved.x;
+        p.state.y = moved.y;
+      },
+      slowPlayer: (playerId, ms) => {
+        const p = players.get(playerId);
+        if (p) p.state.slowMs = Math.max(p.state.slowMs ?? 0, ms);
+      },
+      pushEnemy: (enemyId, dx, dy) => {
+        const e = progress.enemies.find((candidate) => candidate.state.id === enemyId);
+        if (!e || e.state.hp <= 0) return;
+        const moved = moveCircle(grid, e.state.x, e.state.y, ENEMY_INFO[e.state.enemyId].radius, dx, dy);
+        e.state.x = moved.x;
+        e.state.y = moved.y;
+      },
+      teleportEnemy: (enemyId, x, y) => {
+        const e = progress.enemies.find((candidate) => candidate.state.id === enemyId);
+        if (!e || e.state.hp <= 0) return;
+        const at = nearestOpenPosition(grid, { x, y }, ENEMY_INFO[e.state.enemyId].radius);
+        e.state.x = at.x;
+        e.state.y = at.y;
+      },
+      sees: (a, b) => clearPath(grid, a, b),
+      fireBolts: (ownerEnemyId, x, y, facing, kind, bolts, damage) =>
+        firePattern(ownerEnemyId, x, y, facing, kind, bolts, damage),
+      spawnAdd,
+      otherEnemies: () => progress.enemies.filter((e) => e.state.hp > 0).map((e) => ({ id: e.state.id, x: e.state.x, y: e.state.y })),
+      aliveWithTag: (tag) => progress.enemies.some((e) => e.waveTag === tag && e.state.hp > 0),
+      enemyPool: biomeEnemyPool,
+      emit: (event) => { events.push(emit(event)); },
+      relays: () => progress.anchor?.ritual?.relays.map((relay) => ({ x: relay.x, y: relay.y })) ?? null,
+      setRelayState: (index, state) => {
+        const relay = progress.anchor?.ritual?.relays[index];
+        if (!relay) return;
+        relay.latchedMs = state.latchedMs;
+        relay.inert = state.inert;
+      },
+    };
+  }
+
+  /** The boss's floor, for the renderer and the HUD: marked tiles now, corrupted tiles for good. */
+  function bossFieldFor(): { bossField?: NonNullable<GameSnapshot['bossField']> } {
+    const boss = progress.enemies.find((e) => e.custodian && e.state.hp > 0);
+    const field = boss?.custodian ? bossFieldSnapshot(boss.custodian) : null;
+    return field ? { bossField: field } : {};
+  }
+
   function spawnEnemies(): EnemyRuntime[] {
     const enemies: EnemyRuntime[] = [];
     const encounters = [...room.encounters];
@@ -248,7 +373,16 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       const gatekeeper = floorsRun !== null && planned.role === 'gatekeeper';
       const encounter = gatekeeper ? { ...planned, enemyId: 'guardian' as const, count: 1 } : planned;
       const info = ENEMY_INFO[encounter.enemyId];
-      const maxHp = Math.round(info.maxHp * hpScale * (gatekeeper ? FLOOR_TUNING.gatekeeperHpShare : 1));
+      // The Custodian is the Anchor's keeper: the pattern registry, the crew-sized health and the
+      // phase structure belong to the boss that stands over a relay ring, plus the gatekeepers that
+      // preview it. A guardian in a room with no relays stays the plain room-3 encounter it was.
+      const boss = encounter.enemyId === 'guardian' && (gatekeeper || room.anchorRelays !== undefined);
+      const tier = gatekeeper ? floorsRun?.tier ?? 0 : 4;
+      // Their health is absolute (BOSS_FINALE §3.1, §5): it scales with the crew, not with the tier,
+      // so the last fight lasts a readable minute wherever the crew arrives from.
+      const maxHp = boss
+        ? (gatekeeper ? gatekeeperMaxHp(tier, players.size) : custodianMaxHp(players.size))
+        : Math.round(info.maxHp * hpScale);
       let reachable: Set<number> | undefined;
       for (let i = 0; i < encounter.count; i++) {
         const base = tileToWorld(encounter.x, encounter.y);
@@ -271,6 +405,16 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
           cooldownMs: 500, hitMs: 0, attackCount: 0, spawn, respawnMs: 0,
           channelMsRemaining: 0, channelAngle: 0, channelTimerMs: 0,
           ...(gatekeeper ? { maxBossPhase: 1 as const } : {}),
+          ...(boss ? { custodian: createCustodianRuntime({
+            custodian: worldCustodian(),
+            // A gatekeeper previews ONE of the final boss's three patterns, so by the time the
+            // crew reaches the last room they have been shown the fight three times.
+            ...(gatekeeper ? {
+              moveIndices: [...gatekeeperTier(tier).moveIndices],
+              telegraphScale: gatekeeperTier(tier).telegraphScale,
+              maxPhase: 1 as const,
+            } : {}),
+          }) } : {}),
         });
       }
     }
@@ -403,7 +547,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   function damageEnemy(e: EnemyRuntime, p: PlayerRuntime, damage: number, events: GameEvent[]): void {
     const s = e.state;
     if (s.hp <= 0) return;
-    const amount = Math.min(s.hp, Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1)));
+    const marked = Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1));
+    // The Custodian caps single hits at 12% of its health, applies its phase-3 shield and any
+    // vulnerability window it has opened (BOSS_FINALE §3.2, §4.2).
+    const amount = Math.min(s.hp, e.custodian ? custodianIncomingDamage(e.custodian, s, marked) : marked);
     s.hp -= amount;
     e.hitMs = 130;
     s.state = s.hp === 0 ? 'dead' : s.telegraph ? 'attacking' : 'hit';
@@ -471,10 +618,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     progress.loreNodes = progress.loreNodes.filter((n) => !(n.state.kind === 'remains' && n.state.state === 'collected'));
   }
 
-  function damagePlayer(p: PlayerRuntime, sourceEnemyId: string, damage: number, ranged: boolean, events: GameEvent[]): boolean {
+  function damagePlayer(p: PlayerRuntime, sourceEnemyId: string, damage: number, ranged: boolean, events: GameEvent[], scaled = true): boolean {
     const s = p.state;
     if (s.hp <= 0 || s.invulnerableMs > 0 || (ranged && s.shieldMs > 0)) return false;
-    if (enemyDamageScale !== 1 && sourceEnemyId !== 'anchor-pulse') damage = Math.round(damage * enemyDamageScale);
+    if (scaled && enemyDamageScale !== 1 && sourceEnemyId !== 'anchor-pulse') damage = Math.round(damage * enemyDamageScale);
     let amount = Math.min(s.hp, s.shieldMs > 0 ? Math.ceil(damage * 0.2) : damage);
     // Training range: hits land (so the telegraphs teach), but nobody goes down.
     if (phase === 'training') amount = Math.min(amount, Math.max(0, s.hp - 1));
@@ -779,6 +926,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const s = p.state;
     for (const key of ['dashCooldownMs', 'attackCooldownMs', 'invulnerableMs', 'abilityQCooldownMs', 'abilityECooldownMs', 'abilityRCooldownMs', 'shieldMs', 'shroudMs', 'rallyMs'] as const) s[key] = decay(s[key]);
     p.hitRemainingMs = decay(p.hitRemainingMs);
+    s.slowMs = decay(s.slowMs ?? 0);
     p.damagedThisTick = false;
     const intent = p.intent;
     p.intent = null;
@@ -817,7 +965,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       s.vy = p.dashDirection.y * DASH_SPEED;
     } else {
       const speed = CLASS_COMBAT[s.classId].speed * (p.attackRemainingMs > 0 ? 0.35 : 1) *
-        (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1) *
+        (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1) * ((s.slowMs ?? 0) > 0 ? 0.6 : 1) *
         terrainSpeedMultiplier(room, s.x, s.y, progress.terrain.brokenWalls);
       s.vx = length > 0 ? moveX / length * speed : 0;
       s.vy = length > 0 ? moveY / length * speed : 0;
@@ -836,6 +984,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
 
   function attackKindFor(s: EnemyState, e: EnemyRuntime): { kind: EnemyTelegraph['kind']; range: number; arc: number } {
     const spec = ENEMY_COMBAT[s.enemyId];
+    // A Custodian with a pattern registry uses it; the legacy moveset stays for anything without one.
+    if (e.custodian) return custodianEngagement(e.custodian);
     if (s.enemyId === 'guardian') {
       if ((s.bossPhase ?? 1) >= 2) {
         const pattern = (s.bossPhase === 3 ? ['charge', 'ring', 'beam', 'burst', 'ring'] : ['beam', 'charge', 'ring', 'burst']) as Array<EnemyTelegraph['kind']>;
@@ -864,6 +1014,22 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const spec = ENEMY_COMBAT[s.enemyId];
     const hits: string[] = [];
     events.push(emit({ type: 'enemy_attacked', enemyId: s.id, x: telegraph.x, y: telegraph.y, facing: telegraph.facing, hitPlayerIds: hits }));
+    // Mirror-shade decoys go through the whole motion and deal nothing; the rim light is the tell.
+    if (e.decoy) {
+      s.telegraph = null;
+      e.cooldownMs = spec.cooldown;
+      e.attackCount++;
+      return;
+    }
+    if (e.custodian) {
+      const resolution = resolveCustodianPattern(e.custodian, s, telegraph, bossContext(events));
+      s.telegraph = null;
+      s.recoveryMs = resolution.recoveryMs;
+      s.patternId = e.custodian.patternId;
+      e.cooldownMs = resolution.cooldownMs;
+      e.attackCount++;
+      return;
+    }
     if (telegraph.kind === 'melee' || telegraph.kind === 'beam' || telegraph.kind === 'burst' || telegraph.kind === 'charge') {
       for (const p of orderedPlayers()) {
         if (!inArc(telegraph, p.state, telegraph.facing, telegraph.range, telegraph.arcRad, PLAYER_RADIUS) ||
@@ -933,16 +1099,25 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (s.hp <= 0) return;
     const spec = ENEMY_COMBAT[s.enemyId];
     if (s.enemyId === 'guardian') {
-      const nextPhase = Math.min(e.maxBossPhase ?? 3, guardianPhase(s.hp, s.maxHp)) as 1 | 2 | 3;
+      const ctx = e.custodian ? bossContext(events) : null;
+      const nextPhase = e.custodian && ctx
+        ? custodianPhase(e.custodian, s, ctx)
+        : Math.min(e.maxBossPhase ?? 3, guardianPhase(s.hp, s.maxHp)) as 1 | 2 | 3;
       if (nextPhase !== s.bossPhase) {
         s.bossPhase = nextPhase;
         s.telegraph = null;
-        s.recoveryMs = 1400;
+        // The transition IS the rest beat: invulnerable, no projectiles, a new title card.
+        s.recoveryMs = e.custodian ? PHASE_CHANGE_RECOVERY_MS : 1400;
         e.cooldownMs = 1500;
         e.attackCount = 0;
         projectiles = projectiles.filter((projectile) => projectile.ownerEnemyId !== s.id);
+        if (e.custodian && ctx) onCustodianPhase(e.custodian, s, ctx, nextPhase);
       }
       s.recoveryMs = decay(s.recoveryMs ?? 0);
+      if (e.custodian && ctx) {
+        stepCustodian(e.custodian, s, ctx);
+        s.patternId = e.custodian.patternId;
+      }
     }
     s.slowMs = decay(s.slowMs ?? 0);
     s.stunMs = decay(s.stunMs ?? 0);
@@ -956,6 +1131,11 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     }
     if ((s.recoveryMs ?? 0) > 0) {
       s.state = 'idle';
+      return;
+    }
+    // A live sweep, vent purge or pylon channel holds the Custodian in place until it ends.
+    if (e.custodian && custodianBusy(e.custodian)) {
+      s.state = 'attacking';
       return;
     }
     if (e.channelMsRemaining > 0) {
@@ -982,8 +1162,11 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     s.facing = Math.atan2(target.state.y - s.y, target.state.x - s.x);
     const { kind, range, arc } = attackKindFor(s, e);
     if (e.cooldownMs === 0 && distance(s, target.state) <= range && clearPath(grid, s, target.state)) {
-      s.telegraph = { kind, x: s.x, y: s.y, facing: s.facing, range, arcRad: arc,
-        remainingMs: s.bossPhase === 3 ? 900 : spec.windup };
+      // The Custodian's wind-up comes from the pattern registry (phase scale, ×1.4 on first use)
+      // and, for shatter_step, so does the after-image's position.
+      const start = e.custodian ? beginCustodianPattern(e.custodian, s, bossContext(events)) : null;
+      s.telegraph = { kind, x: start?.x ?? s.x, y: start?.y ?? s.y, facing: s.facing, range, arcRad: arc,
+        remainingMs: start?.remainingMs ?? (s.bossPhase === 3 ? 900 : spec.windup) };
       s.state = 'attacking';
       events.push(emit({ type: 'enemy_telegraphed', enemyId: s.id, telegraph: { ...s.telegraph } }));
       return;
@@ -1294,6 +1477,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
           ...(progress.anchor.ritual ? { ritual: { ...progress.anchor.ritual,
             relays: progress.anchor.ritual.relays.map((relay) => ({ ...relay })) } } : {}) } : null,
         roomCleared: phase !== 'headquarters' && progress.cleared,
+        ...bossFieldFor(),
         terrain: { brokenWalls: [...progress.terrain.brokenWalls], wallDamage: { ...progress.terrain.wallDamage } },
         ...(floorsRun && phase !== 'headquarters' ? { floor: floorRunState(floorsRun, doorsLocked()) } : {}),
       };

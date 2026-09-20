@@ -27,6 +27,7 @@ import {
   TILE_CHARS,
   WALKABLE_TILES,
 } from './registry';
+import { CustodianPatternIdSchema, CustodianSchema } from './custodian';
 import {
   BiomeBriefListSchema,
   EncounterRoleSchema,
@@ -522,6 +523,12 @@ export const WorldRecipeSchema = z.object({
 export const FloorsWorldRecipeSchema = WorldRecipeSchema.extend({
   /** Exactly 8 bounded biome briefs: opener, three pairs of choices, finale. Model-facing. */
   biomes: BiomeBriefListSchema.optional(),
+  /**
+   * EXTENSION POINT (agent B1): the world's own Custodian — a title, three phase titles and
+   * three named moves drawn from the closed pattern registry in `src/shared/custodian.ts`.
+   * Absent (the usual case today) means the three patterns are derived from the world seed.
+   */
+  custodian: CustodianSchema.nullable().optional(),
 });
 export type WorldRecipe = z.infer<typeof FloorsWorldRecipeSchema>;
 
@@ -674,6 +681,8 @@ export const PlayerStateSchema = z.object({
   shieldMs: z.number().nonnegative().optional(),
   shroudMs: z.number().nonnegative().optional(),
   rallyMs: z.number().nonnegative().optional(),
+  /** Hauled or mired: movement runs at 60% while this is above zero. */
+  slowMs: z.number().nonnegative().optional(),
   reviveProgress: z.number().min(0).max(1).optional(),
   /** Ultimate charge 0..100; R fires at 100 and resets to 0. */
   ultCharge: z.number().min(0).max(100).optional(),
@@ -722,6 +731,10 @@ export const EnemyStateSchema = z.object({
   markMs: z.number().nonnegative().optional(),
   bossPhase: z.number().int().min(1).max(3).optional(),
   recoveryMs: z.number().nonnegative().optional(),
+  /** Custodian only: the attack pattern currently queued or in flight (drives the named-move banner). */
+  patternId: CustodianPatternIdSchema.optional(),
+  /** Custodian phase 3 only: damage reduction from the relay shield, 0..1. */
+  shieldDr: z.number().min(0).max(1).optional(),
 });
 export type EnemyState = z.infer<typeof EnemyStateSchema>;
 
@@ -747,7 +760,15 @@ export const AnchorStateSchema = z.object({
   progress: z.number().min(0).max(1),
   ritual: z.object({
     stage: z.enum(['locked', 'relays', 'core', 'discharging', 'complete']),
-    relays: z.array(z.object({ x: z.number(), y: z.number(), activated: z.boolean() })).length(3),
+    relays: z.array(z.object({
+      x: z.number(),
+      y: z.number(),
+      activated: z.boolean(),
+      /** Phase-3 shield: how long this relay keeps counting after the operative steps off. */
+      latchedMs: z.number().nonnegative().optional(),
+      /** Phase-3 shield: the Custodian has darkened this relay; it cannot be held. */
+      inert: z.boolean().optional(),
+    })).length(3),
     activeRelay: z.number().int().min(0).max(3),
     pulseRadius: z.number().nonnegative(),
     pulseWarningMs: z.number().nonnegative(),
@@ -779,6 +800,17 @@ export const GameSnapshotSchema = z.object({
     brokenWalls: z.array(z.string().regex(/^\d+,\d+$/)).max(2048),
     wallDamage: z.record(z.string().regex(/^\d+,\d+$/), z.number().nonnegative()),
   }).optional(),
+  /**
+   * The Custodian's floor: tiles one of its arena patterns has marked right now, plus the tiles
+   * its phase-2 corruption turned hostile for the rest of the fight. Absent outside a boss fight.
+   */
+  bossField: z.object({
+    patternId: CustodianPatternIdSchema.nullable(),
+    tiles: z.array(z.string().regex(/^\d+,\d+$/)).max(512),
+    live: z.boolean(),
+    remainingMs: z.number().nonnegative(),
+    corrupted: z.array(z.string().regex(/^\d+,\d+$/)).max(512),
+  }).nullable().optional(),
   /**
    * Floors runs only (absent in HQ, training and legacy worlds): where the crew is in the
    * biome graph, the fog-of-war map, door locks and the pending biome choice. In a floors
@@ -869,6 +901,13 @@ export const GameEventSchema = z.discriminatedUnion('type', [
     tier: z.number().int().min(0).max(4), chosenByPlayerId: IdString.nullable(), playerIds: z.array(IdString),
   }),
   z.object({ ...eventBase, type: z.literal('anchor_planted'), worldId: IdString, roomIndex: z.number().int().min(0), playerIds: z.array(IdString) }),
+  // --- Custodian and finale (docs/design/BOSS_FINALE.md §8.3) ---
+  z.object({ ...eventBase, type: z.literal('boss_phase_changed'), enemyId: IdString, phase: z.number().int().min(1).max(3), title: z.string().max(80) }),
+  z.object({
+    ...eventBase, type: z.literal('boss_pattern_started'), enemyId: IdString, patternId: CustodianPatternIdSchema,
+    name: z.string().max(32), tell: z.string().max(60), firstUse: z.boolean(),
+  }),
+  z.object({ ...eventBase, type: z.literal('terrain_corrupted'), roomId: IdString, enemyId: IdString, tilesChanged: z.number().int().nonnegative() }),
   z.object({
     ...eventBase,
     type: z.literal('run_ended'),
