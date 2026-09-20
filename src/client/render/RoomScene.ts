@@ -1,22 +1,15 @@
-/**
- * RoomScene — draws a RoomSpec + ArtRecipe and the entities in each GameSnapshot.
- * Owner: Agent C (src/client/render). The foundation version is deliberately simple
- * vector art in the shared palette; keep the public methods, evolve the visuals.
- *
- * It never decides gameplay: positions, states and events all come from the snapshot.
- */
 import Phaser from 'phaser';
 import type { ArtRecipe, EnemyState, GameEvent, GameSnapshot, PlayerState, RoomSpec } from '../../shared/contracts';
 import { ATTACK_ARC_RAD, ATTACK_RANGE, DEPTH, PLAYER_RADIUS, SHIELD_ARC_RAD, TETHER_ARC_RAD, TETHER_RANGE, TILE_SIZE, tileToWorld } from '../../shared/conventions';
 import { ABILITY_INFO, ENEMY_INFO } from '../../shared/registry';
 import { hexToInt, tokens } from '../../shared/tokens';
-import { drawProp, drawSkyline, drawVignette } from './drawing';
+import { drawMotif, drawProp, drawSanctuary, drawSkyline, drawVignette } from './drawing';
+import { drawHostile, drawOperative } from './characters';
 
 interface EntityView {
   container: Phaser.GameObjects.Container;
   body: Phaser.GameObjects.Graphics;
   facing: Phaser.GameObjects.Graphics;
-  shield: Phaser.GameObjects.Graphics;
   label: Phaser.GameObjects.Text;
   hpBar: Phaser.GameObjects.Graphics;
   lastState: string;
@@ -29,14 +22,17 @@ export class RoomScene extends Phaser.Scene {
   private room: RoomSpec | null = null;
   private art: ArtRecipe | null = null;
   private isHeadquarters = false;
-  private roomLayer: Phaser.GameObjects.Container | null = null;
+  private roomLayer: Phaser.GameObjects.Layer | null = null;
   private portalGlow: Phaser.GameObjects.Graphics | null = null;
   private portalPulse = 0;
   private players = new Map<string, EntityView>();
   private enemies = new Map<string, EntityView>();
   private anchorView: Phaser.GameObjects.Graphics | null = null;
+  private anchorLabel: Phaser.GameObjects.Text | null = null;
   private latestSnapshot: GameSnapshot | null = null;
   private localPlayerId = '';
+  private enemyPositions = new Map<string, { x: number; y: number }>();
+  private seenEffects = new Set<string>();
   private readonly onReady: () => void;
 
   /** `onReady` fires from create(); Phaser injects `events`/`sys` only after boot, so a callback is used. */
@@ -56,13 +52,18 @@ export class RoomScene extends Phaser.Scene {
     this.room = room;
     this.art = art;
     this.isHeadquarters = opts.headquarters;
+    this.tweens.killAll();
+    this.seenEffects.clear();
+    this.enemyPositions.clear();
+    this.latestSnapshot = null;
     this.clearEntities();
     this.roomLayer?.destroy(true);
     this.portalGlow = null;
     this.anchorView?.destroy();
     this.anchorView = null;
+    this.anchorLabel = null;
 
-    const layer = this.add.container(0, 0);
+    const layer = this.add.layer();
     this.roomLayer = layer;
     const roomW = room.width * TILE_SIZE;
     const roomH = room.height * TILE_SIZE;
@@ -101,7 +102,7 @@ export class RoomScene extends Phaser.Scene {
           }
           continue;
         }
-        floor.fillStyle((row + col) % 2 === 0 ? floorInt : floorAltInt, 1).fillRect(x, y, TILE_SIZE, TILE_SIZE);
+        floor.fillStyle((row * 3 + col) % 7 === 0 ? floorAltInt : floorInt, 1).fillRect(x, y, TILE_SIZE, TILE_SIZE);
         if (ch === '~') {
           decals.fillStyle(hazardInt, 0.22).fillRect(x, y, TILE_SIZE, TILE_SIZE);
           decals.lineStyle(1, hazardInt, 0.5);
@@ -113,6 +114,13 @@ export class RoomScene extends Phaser.Scene {
         }
         if (ch === 'A') {
           decals.lineStyle(2, accentInt, 0.9).strokeCircle(x + TILE_SIZE / 2, y + TILE_SIZE / 2, 12);
+          layer.add(this.add.text(x + TILE_SIZE / 2, y + TILE_SIZE + 6, 'ANCHOR SITE', {
+            fontFamily: tokens.font.mono, fontSize: '9px', color: p.accent,
+          }).setOrigin(0.5, 0).setDepth(DEPTH.floorDecal));
+        }
+        if (!opts.headquarters && ch === '.' && row % 3 === 1 && col % 4 === 1) {
+          const motif = art.motifIds[(Math.floor(row / 3) + Math.floor(col / 4)) % art.motifIds.length];
+          if (motif) drawMotif(decals, motif, x + TILE_SIZE / 2, y + TILE_SIZE / 2, p);
         }
       }
     }
@@ -121,6 +129,15 @@ export class RoomScene extends Phaser.Scene {
     for (let col = 0; col <= room.width; col++) decals.lineBetween(col * TILE_SIZE, 0, col * TILE_SIZE, roomH);
     for (let row = 0; row <= room.height; row++) decals.lineBetween(0, row * TILE_SIZE, roomW, row * TILE_SIZE);
     layer.add([floor, decals, walls]);
+    if (opts.headquarters) {
+      const sanctuary = this.add.graphics().setDepth(DEPTH.floorDecal + 2);
+      const exit = room.exits[0];
+      drawSanctuary(sanctuary, roomW, roomH, p, exit ? tileToWorld(exit.x, exit.y) : undefined);
+      layer.add(sanctuary);
+      layer.add(this.add.text(roomW - 160, 17, 'CHRONICLE ARCHIVE', {
+        fontFamily: tokens.font.mono, fontSize: '10px', color: tokens.color.warmLamp,
+      }).setOrigin(0.5).setDepth(DEPTH.overlay));
+    }
 
     const props = this.add.graphics().setDepth(DEPTH.propsBehind + 1);
     for (const prop of room.props) {
@@ -130,7 +147,7 @@ export class RoomScene extends Phaser.Scene {
     layer.add(props);
 
     // Portal / exits glow (animated in update()).
-    this.portalGlow = this.add.graphics().setDepth(DEPTH.floorDecal + 1);
+    this.portalGlow = this.add.graphics().setDepth(DEPTH.floorDecal + 3);
     layer.add(this.portalGlow);
 
     const fog = this.add.graphics().setDepth(DEPTH.fog);
@@ -151,7 +168,7 @@ export class RoomScene extends Phaser.Scene {
 
     // Camera: frame the whole room.
     const cam = this.cameras.main;
-    const zoom = Phaser.Math.Clamp(Math.min(cam.width / (roomW + 96), cam.height / (roomH + 96)), 0.7, 1.6);
+    const zoom = Math.min(1.6, cam.width / (roomW + 96), cam.height / (roomH + 96));
     cam.setZoom(zoom);
     cam.centerOn(roomW / 2, roomH / 2 - 8);
     cam.fadeIn(280, 0, 0, 0);
@@ -160,9 +177,9 @@ export class RoomScene extends Phaser.Scene {
   // ---- entities ---------------------------------------------------------------
 
   renderSnapshot(snapshot: GameSnapshot, localPlayerId: string): void {
+    if (!this.art || snapshot.roomId !== this.room?.id) return;
     this.latestSnapshot = snapshot;
     this.localPlayerId = localPlayerId;
-    if (!this.art) return;
 
     const seenPlayers = new Set<string>();
     for (const player of snapshot.players) {
@@ -183,6 +200,7 @@ export class RoomScene extends Phaser.Scene {
 
     const seenEnemies = new Set<string>();
     for (const enemy of snapshot.enemies) {
+      this.enemyPositions.set(enemy.id, { x: enemy.x, y: enemy.y });
       seenEnemies.add(enemy.id);
       let view = this.enemies.get(enemy.id);
       if (!view) {
@@ -200,150 +218,80 @@ export class RoomScene extends Phaser.Scene {
 
     if (snapshot.anchor && !this.anchorView) {
       this.anchorView = this.add.graphics().setDepth(DEPTH.entities);
+      this.anchorLabel = this.add.text(0, 0, '', {
+        fontFamily: tokens.font.mono, fontSize: '12px', color: this.art.palette.text,
+      }).setOrigin(0.5).setDepth(DEPTH.overlay);
+      this.roomLayer?.add([this.anchorView, this.anchorLabel]);
     }
     if (snapshot.anchor && this.anchorView) {
       const a = snapshot.anchor;
       const accent = hexToInt(this.art.palette.accent);
-      const g = this.anchorView;
-      g.clear();
-      const pulse = a.state === 'planted' ? 1 : 0.5 + 0.5 * Math.sin(this.time.now / 300);
-      g.fillStyle(accent, 0.1 + 0.1 * pulse).fillCircle(a.x, a.y, 26 + pulse * 4);
-      g.lineStyle(2, accent, 0.5).strokeCircle(a.x, a.y, 22);
-      if (a.progress > 0) {
-        g.lineStyle(4, hexToInt(tokens.canvas.telegraph), 0.95);
-        g.beginPath();
-        g.arc(a.x, a.y, 22, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * a.progress, false);
-        g.strokePath();
+      this.anchorView.clear();
+      this.anchorView.fillStyle(accent, 0.15).fillCircle(a.x, a.y, 20 + Math.sin(this.time.now / 300) * 3);
+      this.anchorView.fillStyle(accent, a.state === 'planted' ? 1 : 0.6).fillCircle(a.x, a.y, 6);
+      this.anchorView.lineStyle(2, accent, 0.8).strokeTriangle(a.x, a.y - 17, a.x - 10, a.y + 7, a.x + 10, a.y + 7);
+      this.anchorView.lineStyle(3, accent, 0.2).strokeCircle(a.x, a.y, 28);
+      const progress = a.state === 'planted' ? 1 : a.state === 'planting' ? a.progress : 0;
+      if (progress > 0) {
+        this.anchorView.lineStyle(3, accent, 1).beginPath()
+          .arc(a.x, a.y, 28, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2, false).strokePath();
       }
-      g.fillStyle(accent, a.state === 'planted' ? 1 : 0.6).fillCircle(a.x, a.y, a.state === 'planted' ? 9 : 6);
-      if (a.state === 'planted') {
-        g.lineStyle(1.5, accent, 0.35);
-        for (let i = 0; i < 4; i++) g.strokeCircle(a.x, a.y, 34 + i * 18 + ((this.time.now / 12) % 18));
-      }
+      this.anchorLabel?.setPosition(a.x, a.y - 42).setVisible(true).setText(
+        a.state === 'planted' ? 'ANCHOR PLANTED' : a.state === 'planting' ? `PLANTING · ${Math.floor(a.progress * 100)}%` : 'ANCHOR DORMANT',
+      );
+    } else if (!snapshot.anchor) {
+      this.anchorView?.clear();
+      this.anchorLabel?.setVisible(false);
     }
   }
 
   private createEntityView(name: string, isLocal: boolean, radius: number, kind: 'player' | 'enemy'): EntityView {
     const container = this.add.container(0, 0).setDepth(DEPTH.entities);
+    this.roomLayer?.add(container);
     const shadow = this.add.graphics();
     shadow.fillStyle(0x000000, 0.35).fillEllipse(0, radius * 0.9, radius * 2.2, radius * 0.9);
     const body = this.add.graphics();
     const facing = this.add.graphics();
-    const shield = this.add.graphics();
     const hpBar = this.add.graphics();
     const label = this.add
       .text(0, -radius - 14, name, {
         fontFamily: tokens.font.body,
-        fontSize: '11px',
+        fontSize: '12px',
         color: kind === 'player' ? tokens.color.mist100 : tokens.color.mist300,
       })
       .setOrigin(0.5)
       .setAlpha(kind === 'player' ? 0.95 : 0.7);
-    container.add([shadow, facing, body, shield, hpBar, label]);
-    const view: EntityView = { container, body, facing, shield, label, hpBar, lastState: '', isLocal };
-    if (kind === 'player') this.drawPlayerBody(view, radius, 'idle');
-    else this.drawEnemyBody(view, radius, 'idle');
+    container.add([shadow, body, facing, hpBar, label]);
+    const view: EntityView = { container, body, facing, label, hpBar, lastState: '', isLocal };
     return view;
-  }
-
-  private drawPlayerBody(view: EntityView, radius: number, state: PlayerState['state']): void {
-    const accent = hexToInt(view.isLocal ? tokens.canvas.localPlayerAccent : tokens.canvas.remotePlayerAccent);
-    const outline = hexToInt(tokens.canvas.playerOutline);
-    const g = view.body;
-    g.clear();
-    if (state === 'down') {
-      g.fillStyle(hexToInt(tokens.color.ink600), 0.8).fillEllipse(0, 4, radius * 2.4, radius * 1.1);
-      g.lineStyle(2, hexToInt(tokens.color.danger), 0.9).strokeEllipse(0, 4, radius * 2.4, radius * 1.1);
-      g.fillStyle(accent, 0.6).fillCircle(0, 2, radius * 0.3);
-      return;
-    }
-    if (state === 'dashing') g.fillStyle(accent, 0.25).fillCircle(0, 0, radius + 10);
-    g.fillStyle(hexToInt(tokens.color.ink600), 1).fillCircle(0, 0, radius);
-    g.lineStyle(2, state === 'hit' ? hexToInt(tokens.color.danger) : outline, 1).strokeCircle(0, 0, radius);
-    g.fillStyle(accent, 1).fillCircle(0, 0, radius * 0.45);
-    if (state === 'attacking') {
-      const f = view.facing;
-      f.clear();
-      f.fillStyle(hexToInt(tokens.canvas.telegraph), 0.35);
-      f.slice(0, 0, ATTACK_RANGE, -ATTACK_ARC_RAD / 2, ATTACK_ARC_RAD / 2, false);
-      f.fillPath();
-    }
-  }
-
-  private drawEnemyBody(view: EntityView, radius: number, state: EnemyState['state']): void {
-    const danger = hexToInt(tokens.canvas.enemyAccent);
-    const g = view.body;
-    g.clear();
-    if (state === 'dead') {
-      g.fillStyle(hexToInt(tokens.color.ink700), 0.5).fillEllipse(0, 3, radius * 2, radius * 0.9);
-      g.lineStyle(1, danger, 0.35).strokeEllipse(0, 3, radius * 2, radius * 0.9);
-      return;
-    }
-    g.fillStyle(hexToInt(tokens.color.ink700), 1).fillCircle(0, 0, radius);
-    g.lineStyle(2, state === 'stunned' ? hexToInt(tokens.canvas.telegraph) : danger, state === 'hit' ? 1 : 0.8).strokeCircle(0, 0, radius);
-    g.fillStyle(danger, state === 'hit' ? 1 : 0.9);
-    g.fillTriangle(-radius * 0.4, radius * 0.3, 0, -radius * 0.5, radius * 0.4, radius * 0.3);
-    if (state === 'stunned') {
-      g.lineStyle(1.5, hexToInt(tokens.canvas.telegraph), 0.9);
-      for (let i = 0; i < 3; i++) {
-        const a = (i / 3) * Math.PI * 2;
-        g.fillStyle(hexToInt(tokens.canvas.telegraph), 0.9).fillCircle(Math.cos(a) * (radius + 6), -radius - 6 + Math.sin(a) * 3, 2);
-      }
-    }
-  }
-
-  /** Windup telegraph: a filling danger ring so the strike is readable before it lands. */
-  private drawEnemyTelegraph(view: EntityView, enemy: EnemyState, radius: number): void {
-    const f = view.facing;
-    f.clear();
-    if (enemy.state !== 'attacking' || enemy.windupMs <= 0) return;
-    const t = Math.min(1, enemy.stateMs / enemy.windupMs);
-    const danger = hexToInt(tokens.canvas.enemyAccent);
-    const reach = radius + PLAYER_RADIUS + ENEMY_INFO[enemy.enemyId].attackRange;
-    f.fillStyle(danger, 0.12 + t * 0.2);
-    f.slice(0, 0, reach, -0.6, 0.6, false);
-    f.fillPath();
-    f.lineStyle(2, danger, 0.5 + t * 0.5);
-    f.beginPath();
-    f.arc(0, 0, reach, -0.6, -0.6 + 1.2 * t, false);
-    f.strokePath();
-  }
-
-  private drawShield(view: EntityView, player: PlayerState): void {
-    const s = view.shield;
-    s.clear();
-    if (player.shieldMs <= 0) return;
-    const accent = hexToInt(view.isLocal ? tokens.canvas.localPlayerAccent : tokens.canvas.remotePlayerAccent);
-    const pulse = 0.75 + 0.25 * Math.sin(this.time.now / 90);
-    s.lineStyle(4, accent, 0.9 * pulse);
-    s.beginPath();
-    s.arc(0, 0, PLAYER_RADIUS + 12, -SHIELD_ARC_RAD / 2, SHIELD_ARC_RAD / 2, false);
-    s.strokePath();
-    s.fillStyle(accent, 0.12);
-    s.slice(0, 0, PLAYER_RADIUS + 12, -SHIELD_ARC_RAD / 2, SHIELD_ARC_RAD / 2, false);
-    s.fillPath();
-    s.setRotation(player.shieldFacing);
   }
 
   private updatePlayerView(view: EntityView, player: PlayerState): void {
     view.container.setPosition(player.x, player.y);
     view.container.setDepth(DEPTH.entities + player.y / 10000);
-    view.container.setAlpha(player.invulnerableMs > 0 ? 0.7 : 1);
-    if (view.lastState !== player.state) {
-      view.lastState = player.state;
-      this.drawPlayerBody(view, PLAYER_RADIUS, player.state);
+    view.container.setAlpha(player.state === 'down' ? 0.45 : player.invulnerableMs > 0 ? 0.7 : 1);
+    const appearance = `${player.classId}:${player.state}`;
+    if (view.lastState !== appearance) {
+      view.lastState = appearance;
+      drawOperative(view.body, player, view.isLocal);
     }
-    // facing wedge (redrawn only when not attacking; attack telegraph reuses the layer)
-    if (player.state !== 'attacking') {
-      const f = view.facing;
-      f.clear();
-      if (player.state !== 'down') {
-        f.fillStyle(hexToInt(view.isLocal ? tokens.canvas.localPlayerAccent : tokens.canvas.remotePlayerAccent), 0.9);
-        f.fillTriangle(PLAYER_RADIUS + 2, 0, PLAYER_RADIUS - 4, -5, PLAYER_RADIUS - 4, 5);
-      }
+    const moving = player.state === 'moving';
+    view.body.setRotation(player.facing);
+    view.body.setPosition(0, Math.sin(this.time.now / (moving ? 65 : 400)) * (moving ? 1.8 : 0.6));
+    view.body.setScale(player.state === 'dashing' ? 1.2 : 1, player.state === 'dashing' ? 0.8 : 1);
+    view.facing.clear();
+    if (player.shieldMs > 0) {
+      // Bastion Bulwark: a bright frontal arc, rotated to the facing it was raised at.
+      const accent = hexToInt(view.isLocal ? tokens.canvas.localPlayerAccent : tokens.canvas.remotePlayerAccent);
+      const pulse = 0.75 + 0.25 * Math.sin(this.time.now / 90);
+      view.facing.lineStyle(10, accent, 0.14).beginPath().arc(0, 0, PLAYER_RADIUS + 7, -SHIELD_ARC_RAD / 2, SHIELD_ARC_RAD / 2).strokePath();
+      view.facing.lineStyle(4, accent, 0.9 * pulse).beginPath().arc(0, 0, PLAYER_RADIUS + 12, -SHIELD_ARC_RAD / 2, SHIELD_ARC_RAD / 2).strokePath();
+      view.facing.setRotation(player.shieldFacing);
+    } else {
+      view.facing.lineStyle(1, hexToInt(tokens.canvas.localPlayerAccent), view.isLocal ? 0.6 : 0);
+      view.facing.beginPath().arc(0, 0, PLAYER_RADIUS + 12, -0.3, 0.3).strokePath();
+      view.facing.setRotation(player.facing);
     }
-    view.facing.setRotation(player.facing);
-    this.drawShield(view, player);
     if (view.label.text !== player.displayName) view.label.setText(player.displayName);
     if (player.state === 'down') this.drawHpBar(view.hpBar, player.reviveProgress * player.maxHp, player.maxHp, PLAYER_RADIUS, hexToInt(tokens.canvas.telegraph));
     else this.drawHpBar(view.hpBar, player.hp, player.maxHp, PLAYER_RADIUS, hexToInt(tokens.color.success));
@@ -353,14 +301,30 @@ export class RoomScene extends Phaser.Scene {
     const radius = ENEMY_INFO[enemy.enemyId].radius;
     view.container.setPosition(enemy.x, enemy.y);
     view.container.setDepth(DEPTH.entities + enemy.y / 10000);
-    view.container.setAlpha(enemy.state === 'dead' ? 0.6 : 1);
-    if (view.lastState !== enemy.state) {
-      view.lastState = enemy.state;
-      this.drawEnemyBody(view, radius, enemy.state);
+    const appearance = `${enemy.enemyId}:${enemy.state}`;
+    if (view.lastState !== appearance) {
+      view.lastState = appearance;
+      drawHostile(view.body, enemy);
     }
-    this.drawEnemyTelegraph(view, enemy, radius);
-    view.facing.setRotation(enemy.facing);
-    if (enemy.hp < enemy.maxHp && enemy.state !== 'dead') this.drawHpBar(view.hpBar, enemy.hp, enemy.maxHp, radius, hexToInt(tokens.canvas.enemyAccent));
+    view.body.setRotation(enemy.facing);
+    view.container.setAlpha(enemy.state === 'dead' ? 0.2 : 1);
+    view.facing.clear();
+    if (enemy.state === 'attacking') {
+      // Windup telegraph: sector fills and the arc sweeps as stateMs approaches windupMs.
+      const t = enemy.windupMs > 0 ? Math.min(1, enemy.stateMs / enemy.windupMs) : 0;
+      const reach = radius + PLAYER_RADIUS + ENEMY_INFO[enemy.enemyId].attackRange;
+      const danger = hexToInt(tokens.canvas.enemyAccent);
+      // Danger zone: a thick translucent band across the reach, brightening as the strike nears.
+      view.facing.lineStyle(reach - radius, danger, 0.08 + t * 0.2);
+      view.facing.beginPath().arc(0, 0, (radius + reach) / 2, -0.6, 0.6).strokePath();
+      view.facing.lineStyle(2, hexToInt(tokens.canvas.telegraph), 0.8);
+      view.facing.beginPath().arc(0, 0, radius + 16, -0.6, -0.6 + 1.2 * t).strokePath();
+    } else if (enemy.state === 'stunned') {
+      view.facing.fillStyle(hexToInt(tokens.canvas.telegraph), 0.9);
+      for (let i = 0; i < 3; i++) view.facing.fillCircle(-8 + i * 8, -radius - 6, 2);
+    }
+    view.facing.setRotation(enemy.state === 'stunned' ? 0 : enemy.facing);
+    if (enemy.hp < enemy.maxHp) this.drawHpBar(view.hpBar, enemy.hp, enemy.maxHp, radius, hexToInt(tokens.canvas.enemyAccent));
     else view.hpBar.clear();
   }
 
@@ -382,109 +346,143 @@ export class RoomScene extends Phaser.Scene {
 
   // ---- events (fire-and-forget effects) -----------------------------------------
 
+  private effect(x: number, y: number): Phaser.GameObjects.Graphics {
+    const g = this.add.graphics().setPosition(x, y).setDepth(DEPTH.effects);
+    this.roomLayer?.add(g);
+    return g;
+  }
+
+  /** Short-lived floating label (BLOCKED, ROOM CLEAR, ability names). */
+  private floatText(x: number, y: number, text: string, color: string, size = 12): void {
+    const t = this.add
+      .text(x, y, text, { fontFamily: tokens.font.display, fontSize: `${size}px`, color, fontStyle: 'bold' })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.overlay);
+    this.roomLayer?.add(t);
+    this.tweens.add({ targets: t, y: y - 22, alpha: 0, duration: tokens.motion.slowMs + 200, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
+  }
+
+  private burst(x: number, y: number, color: number, radius: number): void {
+    const g = this.effect(x, y);
+    g.lineStyle(2, color, 1).strokeCircle(0, 0, radius / 2);
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4;
+      g.lineBetween(Math.cos(a) * radius, Math.sin(a) * radius, Math.cos(a) * (radius + 8), Math.sin(a) * (radius + 8));
+    }
+    this.tweens.add({ targets: g, alpha: 0, scale: 1.8, duration: tokens.motion.baseMs * 1.5, onComplete: () => g.destroy() });
+  }
+
   playEvents(events: GameEvent[]): void {
     if (!this.art) return;
     for (const event of events) {
+      if (this.seenEffects.has(event.id)) continue;
+      this.seenEffects.add(event.id);
+      if (this.seenEffects.size > 4000) this.seenEffects.delete(this.seenEffects.values().next().value!);
       switch (event.type) {
         case 'player_dashed': {
-          const g = this.add.graphics().setDepth(DEPTH.effects);
+          const g = this.effect(event.x, event.y);
           const accent = hexToInt(event.playerId === this.localPlayerId ? tokens.canvas.localPlayerAccent : tokens.canvas.remotePlayerAccent);
           g.lineStyle(3, accent, 0.9).lineBetween(
-            event.x,
-            event.y,
-            event.x - Math.cos(event.facing) * 40,
-            event.y - Math.sin(event.facing) * 40,
+            0, 0,
+            -Math.cos(event.facing) * 40,
+            -Math.sin(event.facing) * 40,
           );
-          g.fillStyle(accent, 0.3).fillCircle(event.x, event.y, PLAYER_RADIUS + 6);
+          g.fillStyle(accent, 0.3).fillCircle(0, 0, PLAYER_RADIUS + 6);
           this.tweens.add({ targets: g, alpha: 0, duration: tokens.motion.baseMs, onComplete: () => g.destroy() });
           break;
         }
         case 'player_attacked': {
-          const g = this.add.graphics().setDepth(DEPTH.effects);
+          const g = this.effect(event.x, event.y);
           g.lineStyle(3, hexToInt(tokens.canvas.telegraph), 0.9);
           g.beginPath();
-          g.arc(event.x, event.y, ATTACK_RANGE, event.facing - ATTACK_ARC_RAD / 2, event.facing + ATTACK_ARC_RAD / 2, false);
+          g.arc(0, 0, ATTACK_RANGE, event.facing - ATTACK_ARC_RAD / 2, event.facing + ATTACK_ARC_RAD / 2, false);
           g.strokePath();
           this.tweens.add({ targets: g, alpha: 0, scale: 1.1, duration: tokens.motion.fastMs * 1.5, onComplete: () => g.destroy() });
           break;
         }
-        case 'enemy_damaged': {
-          this.cameras.main.shake(60, 0.0015);
-          const target = this.enemies.get(event.enemyId);
-          if (target) this.flashText(target.container.x, target.container.y - 24, `-${event.amount}`, tokens.canvas.telegraph);
-          break;
-        }
+        case 'enemy_damaged':
         case 'player_damaged': {
-          this.cameras.main.shake(120, 0.004);
-          this.cameras.main.flash(120, 255, 92, 122, false);
-          break;
-        }
-        case 'attack_blocked': {
-          const p = this.players.get(event.playerId);
-          if (p) this.flashText(p.container.x, p.container.y - 26, 'BLOCKED', tokens.canvas.localPlayerAccent);
+          const target = event.type === 'enemy_damaged'
+            ? this.enemyPositions.get(event.enemyId)
+            : this.players.get(event.playerId)?.container;
+          if (target) {
+            const g = this.effect(target.x, target.y);
+            g.fillStyle(0xffffff, 0.8).fillCircle(0, 0, 15);
+            this.tweens.add({ targets: g, alpha: 0, duration: tokens.motion.fastMs, onComplete: () => g.destroy() });
+          }
+          if (event.type === 'player_damaged' && event.playerId === this.localPlayerId) this.cameras.main.shake(80, 0.002);
           break;
         }
         case 'enemy_defeated': {
-          const target = this.enemies.get(event.enemyId);
-          if (!target) break;
-          const g = this.add.graphics().setDepth(DEPTH.effects);
-          const danger = hexToInt(tokens.canvas.enemyAccent);
-          g.lineStyle(3, danger, 0.9).strokeCircle(target.container.x, target.container.y, 10);
-          g.fillStyle(danger, 0.35).fillCircle(target.container.x, target.container.y, 8);
-          this.tweens.add({ targets: g, alpha: 0, scaleX: 3, scaleY: 3, duration: tokens.motion.slowMs, onComplete: () => g.destroy() });
-          break;
-        }
-        case 'ability_used': {
-          const p = this.players.get(event.playerId);
-          if (event.abilityId === 'bastion.e.shockwave') {
-            const g = this.add.graphics().setDepth(DEPTH.effects);
-            const accent = hexToInt(tokens.canvas.localPlayerAccent);
-            g.lineStyle(2, accent, 0.9);
-            for (const id of event.targetEnemyIds) {
-              const t = this.enemies.get(id);
-              if (t) g.lineBetween(event.x, event.y, t.container.x, t.container.y);
-            }
-            g.fillStyle(accent, 0.25);
-            g.slice(event.x, event.y, TETHER_RANGE, event.facing - TETHER_ARC_RAD / 2, event.facing + TETHER_ARC_RAD / 2, false);
-            g.fillPath();
-            this.tweens.add({ targets: g, alpha: 0, duration: tokens.motion.slowMs, onComplete: () => g.destroy() });
-          } else if (p) {
-            this.flashText(p.container.x, p.container.y - 26, ABILITY_INFO[event.abilityId].name.toUpperCase(), tokens.canvas.localPlayerAccent);
-          }
+          const target = this.enemyPositions.get(event.enemyId);
+          if (target) this.burst(target.x, target.y, hexToInt(tokens.canvas.enemyAccent), 16);
           break;
         }
         case 'player_downed': {
-          this.cameras.main.shake(300, 0.008);
-          const p = this.players.get(event.playerId);
-          if (p) this.flashText(p.container.x, p.container.y - 30, 'DOWN', tokens.color.danger);
+          const target = this.players.get(event.playerId)?.container;
+          if (target) this.burst(target.x, target.y, hexToInt(tokens.color.danger), PLAYER_RADIUS + 8);
+          break;
+        }
+        case 'player_revived': {
+          const target = this.players.get(event.playerId)?.container;
+          if (target) this.burst(target.x, target.y, hexToInt(tokens.color.success), PLAYER_RADIUS + 8);
+          break;
+        }
+        case 'attack_blocked': {
+          const target = this.players.get(event.playerId)?.container;
+          if (target) {
+            const g = this.effect(target.x, target.y);
+            g.lineStyle(3, hexToInt(tokens.canvas.localPlayerAccent), 1).strokeCircle(0, 0, PLAYER_RADIUS + 12);
+            this.tweens.add({ targets: g, alpha: 0, scale: 1.4, duration: tokens.motion.baseMs, onComplete: () => g.destroy() });
+            this.floatText(target.x, target.y - 28, 'BLOCKED', tokens.canvas.localPlayerAccent);
+          }
+          break;
+        }
+        case 'ability_used': {
+          const accent = hexToInt(event.playerId === this.localPlayerId ? tokens.canvas.localPlayerAccent : tokens.canvas.remotePlayerAccent);
+          if (event.abilityId === 'bastion.e.shockwave') {
+            const g = this.effect(event.x, event.y);
+            g.lineStyle(1.5, accent, 0.5);
+            g.beginPath().arc(0, 0, TETHER_RANGE, event.facing - TETHER_ARC_RAD / 2, event.facing + TETHER_ARC_RAD / 2).strokePath();
+            for (const a of [event.facing - TETHER_ARC_RAD / 2, event.facing + TETHER_ARC_RAD / 2]) {
+              g.lineBetween(0, 0, Math.cos(a) * TETHER_RANGE, Math.sin(a) * TETHER_RANGE);
+            }
+            g.lineStyle(2, accent, 0.95);
+            for (const id of event.targetEnemyIds) {
+              const t = this.enemyPositions.get(id);
+              if (t) g.lineBetween(0, 0, t.x - event.x, t.y - event.y);
+            }
+            this.tweens.add({ targets: g, alpha: 0, duration: tokens.motion.slowMs, onComplete: () => g.destroy() });
+            this.cameras.main.shake(90, 0.003);
+          } else {
+            this.floatText(event.x, event.y - 28, ABILITY_INFO[event.abilityId].name.toUpperCase(), tokens.canvas.localPlayerAccent);
+          }
           break;
         }
         case 'room_cleared': {
-          if (this.room) this.flashText((this.room.width * TILE_SIZE) / 2, (this.room.height * TILE_SIZE) / 2, 'ROOM CLEAR', tokens.color.success, 20);
+          if (this.room && event.roomIndex === this.room.index) {
+            const cx = (this.room.width * TILE_SIZE) / 2;
+            const cy = (this.room.height * TILE_SIZE) / 2;
+            this.burst(cx, cy, hexToInt(tokens.color.success), 40);
+            this.floatText(cx, cy - 10, 'ROOM CLEAR', tokens.color.success, 22);
+          }
           break;
         }
         case 'anchor_planted': {
-          this.cameras.main.flash(500, 124, 245, 255, false);
-          if (this.room) this.flashText((this.room.width * TILE_SIZE) / 2, (this.room.height * TILE_SIZE) / 2, 'ANCHOR PLANTED', tokens.canvas.localPlayerAccent, 20);
+          const anchor = this.latestSnapshot?.anchor;
+          if (anchor && event.worldId === this.latestSnapshot?.worldId && event.roomIndex === this.latestSnapshot.roomIndex) {
+            this.burst(anchor.x, anchor.y, hexToInt(this.art.palette.accent), 28);
+          }
           break;
         }
         case 'room_entered': {
-          this.cameras.main.flash(200, 124, 245, 255, false);
+          if (event.roomId === this.room?.id) this.cameras.main.flash(200, 124, 245, 255, false);
           break;
         }
         default:
           break;
       }
     }
-  }
-
-  /** Short-lived floating label (damage numbers, BLOCKED, ROOM CLEAR). */
-  private flashText(x: number, y: number, text: string, color: string, size = 12): void {
-    const t = this.add
-      .text(x, y, text, { fontFamily: tokens.font.display, fontSize: `${size}px`, color, fontStyle: 'bold' })
-      .setOrigin(0.5)
-      .setDepth(DEPTH.overlay);
-    this.tweens.add({ targets: t, y: y - 22, alpha: 0, duration: tokens.motion.slowMs + 200, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
   }
 
   // ---- per-frame ---------------------------------------------------------------
@@ -512,6 +510,12 @@ export class RoomScene extends Phaser.Scene {
         }
       } else {
         g.fillStyle(accent, 0.1 + 0.15 * pulse).fillRect(exit.x * TILE_SIZE, exit.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        const angle = { east: 0, south: Math.PI / 2, west: Math.PI, north: -Math.PI / 2 }[exit.direction];
+        const dx = Math.cos(angle);
+        const dy = Math.sin(angle);
+        g.lineStyle(2, accent, 0.95);
+        g.lineBetween(c.x - dx * 8 - dy * 7, c.y - dy * 8 + dx * 7, c.x + dx * 7, c.y + dy * 7);
+        g.lineBetween(c.x - dx * 8 + dy * 7, c.y - dy * 8 - dx * 7, c.x + dx * 7, c.y + dy * 7);
       }
     }
   }

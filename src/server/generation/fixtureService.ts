@@ -16,6 +16,7 @@ import {
 } from '../../shared/contracts';
 import { hashString } from '../../shared/ids';
 import { buildReceipt } from './receipt';
+import { compileWorldRecipe } from './compiler';
 
 export function loadWorldFixtures(dir: string): WorldFixture[] {
   if (!fs.existsSync(dir)) return [];
@@ -51,14 +52,20 @@ export function prepareFromFixture(p: FixturePreparation): PreparedWorld {
   const now = Date.now();
   const worldId = `world-${p.fixture.fixtureId}-${hashString(p.request.requestId).toString(36)}`;
   const label = p.source === 'fixture' ? 'OFFLINE FIXTURE' : 'FALLBACK FIXTURE (live attempt failed)';
+  const rooms = p.request.plannedRoomCount === p.fixture.plannedRoomCount
+    ? p.fixture.rooms
+    : compileWorldRecipe(p.fixture.recipe, {
+      plannedRoomCount: p.request.plannedRoomCount,
+      seed: p.request.seed ?? hashString(p.request.requestId),
+    }).rooms;
 
   const world: PreparedWorld = {
     worldId,
     createdAt: now,
     recipe: p.fixture.recipe,
     art: p.fixture.art,
-    rooms: p.fixture.rooms,
-    plannedRoomCount: p.fixture.plannedRoomCount,
+    rooms,
+    plannedRoomCount: p.request.plannedRoomCount,
     provenance: {
       source: p.source,
       label,

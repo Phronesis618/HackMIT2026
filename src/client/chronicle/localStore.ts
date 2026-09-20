@@ -18,14 +18,14 @@ export function loadMemories(storage: KeyValueStorage, key = MEMORIES_STORAGE_KE
     const raw = storage.getItem(key);
     if (!raw) return [];
     const parsed = MemoryRecordListSchema.safeParse(JSON.parse(raw));
-    if (parsed.success) return parsed.data;
+    if (parsed.success) return parsed.data.slice(-MAX_STORED);
     // Salvage valid entries individually rather than dropping everything.
     const list = JSON.parse(raw) as unknown;
     if (!Array.isArray(list)) return [];
     return list.flatMap((item) => {
       const one = MemoryRecordListSchema.element.safeParse(item);
       return one.success ? [one.data] : [];
-    });
+    }).slice(-MAX_STORED);
   } catch {
     return [];
   }
@@ -47,5 +47,9 @@ export function saveMemories(storage: KeyValueStorage, memories: MemoryRecord[],
 }
 
 export function clearMemories(storage: KeyValueStorage, key = MEMORIES_STORAGE_KEY): void {
-  storage.removeItem(key);
+  try {
+    storage.removeItem(key);
+  } catch {
+    // Storage can be disabled; the in-memory wall still clears.
+  }
 }

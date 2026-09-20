@@ -1,0 +1,306 @@
+{
+  "fixtureId": "crystal-tide",
+  "fixtureNote": "Authored offline theme compiled with a fixed seed. Not generated from player contributions.",
+  "recipe": {
+    "title": "Crystal Tide",
+    "tagline": "A prism observatory suspended above a frozen electric sea.",
+    "themeSummary": "Broken crystal chambers and arched galleries guard an observatory core. Violet crystal shelves flank hazardous luminous shallows.",
+    "motifIds": [
+      "crystals",
+      "arches",
+      "monoliths"
+    ],
+    "palette": {
+      "background": "#100b1c",
+      "floor": "#211831",
+      "floorAlt": "#2b2140",
+      "wall": "#342349",
+      "wallEdge": "#9573cd",
+      "accent": "#d0a0ff",
+      "accentSoft": "#9573cd",
+      "glow": "#bfa5ff",
+      "hazard": "#ff658f",
+      "text": "#eee2ff"
+    },
+    "rooms": [
+      {
+        "name": "Prism Landing",
+        "description": "Crystal shelves interrupt the violet shallows.",
+        "motifIds": [
+          "crystals",
+          "arches"
+        ],
+        "propIds": [
+          "crystal_cluster",
+          "crystal_cluster",
+          "monolith_shard"
+        ],
+        "enemyIds": [
+          "sentinel"
+        ],
+        "hazards": true
+      },
+      {
+        "name": "Refraction Gallery",
+        "description": "Arched buttresses hold a cracked observatory aloft.",
+        "motifIds": [
+          "arches",
+          "crystals"
+        ],
+        "propIds": [
+          "pillar",
+          "crystal_cluster",
+          "monolith_shard",
+          "crystal_cluster"
+        ],
+        "enemyIds": [
+          "sentinel",
+          "lurker"
+        ],
+        "hazards": true
+      },
+      {
+        "name": "Prism Heart",
+        "description": "The Guardian stands watch over the final crystal lens.",
+        "motifIds": [
+          "monoliths",
+          "crystals"
+        ],
+        "propIds": [
+          "anchor_pedestal",
+          "crystal_cluster",
+          "monolith_shard"
+        ],
+        "enemyIds": [
+          "guardian",
+          "sentinel"
+        ],
+        "hazards": true
+      }
+    ],
+    "contributionMappings": []
+  },
+  "art": {
+    "paletteFamily": "ink-neon",
+    "palette": {
+      "background": "#100b1c",
+      "floor": "#211831",
+      "floorAlt": "#2b2140",
+      "wall": "#342349",
+      "wallEdge": "#9573cd",
+      "accent": "#d0a0ff",
+      "accentSoft": "#9573cd",
+      "glow": "#bfa5ff",
+      "hazard": "#ff658f",
+      "text": "#eee2ff"
+    },
+    "motifIds": [
+      "crystals",
+      "arches",
+      "monoliths"
+    ],
+    "skyline": "crystals",
+    "fog": 0.38,
+    "glowIntensity": 0.57
+  },
+  "rooms": [
+    {
+      "id": "generated-room-g18j8z-0",
+      "index": 0,
+      "name": "Prism Landing",
+      "description": "Crystal shelves interrupt the violet shallows.",
+      "width": 23,
+      "height": 12,
+      "tiles": [
+        "#######################",
+        "#.....................#",
+        "#...##................#",
+        "#...#.................#",
+        "#....~~~~.............#",
+        "#.....................#",
+        "#P....................X",
+        "#.....................#",
+        "#.................#...#",
+        "#................##...#",
+        "#.....................#",
+        "#######################"
+      ],
+      "props": [
+        {
+          "id": "room-0-prop-0",
+          "propId": "crystal_cluster",
+          "x": 5,
+          "y": 1
+        },
+        {
+          "id": "room-0-prop-1",
+          "propId": "crystal_cluster",
+          "x": 3,
+          "y": 10
+        },
+        {
+          "id": "room-0-prop-2",
+          "propId": "monolith_shard",
+          "x": 5,
+          "y": 9
+        }
+      ],
+      "encounters": [
+        {
+          "id": "room-0-encounter-0",
+          "enemyId": "sentinel",
+          "x": 5,
+          "y": 8,
+          "count": 1
+        }
+      ],
+      "exits": [
+        {
+          "x": 22,
+          "y": 6,
+          "toRoomIndex": 1,
+          "direction": "east"
+        }
+      ],
+      "isFinal": false,
+      "attributions": []
+    },
+    {
+      "id": "generated-room-4iyffj-1",
+      "index": 1,
+      "name": "Refraction Gallery",
+      "description": "Arched buttresses hold a cracked observatory aloft.",
+      "width": 27,
+      "height": 13,
+      "tiles": [
+        "###########################",
+        "#.........................#",
+        "#...##...............##...#",
+        "#.........................#",
+        "#....~~~~.................#",
+        "#.........................#",
+        "#P........................X",
+        "#.........................#",
+        "#.........................#",
+        "#.........................#",
+        "#...##...............##...#",
+        "#.........................#",
+        "###########################"
+      ],
+      "props": [
+        {
+          "id": "room-1-prop-0",
+          "propId": "pillar",
+          "x": 6,
+          "y": 11
+        },
+        {
+          "id": "room-1-prop-1",
+          "propId": "crystal_cluster",
+          "x": 17,
+          "y": 4
+        },
+        {
+          "id": "room-1-prop-2",
+          "propId": "monolith_shard",
+          "x": 17,
+          "y": 2
+        },
+        {
+          "id": "room-1-prop-3",
+          "propId": "crystal_cluster",
+          "x": 6,
+          "y": 10
+        }
+      ],
+      "encounters": [
+        {
+          "id": "room-1-encounter-0",
+          "enemyId": "sentinel",
+          "x": 14,
+          "y": 10,
+          "count": 1
+        },
+        {
+          "id": "room-1-encounter-1",
+          "enemyId": "lurker",
+          "x": 17,
+          "y": 1,
+          "count": 1
+        }
+      ],
+      "exits": [
+        {
+          "x": 26,
+          "y": 6,
+          "toRoomIndex": 2,
+          "direction": "east"
+        }
+      ],
+      "isFinal": false,
+      "attributions": []
+    },
+    {
+      "id": "generated-room-ttv436-2",
+      "index": 2,
+      "name": "Prism Heart",
+      "description": "The Guardian stands watch over the final crystal lens.",
+      "width": 22,
+      "height": 12,
+      "tiles": [
+        "######################",
+        "#....................#",
+        "#..##............##..#",
+        "#....................#",
+        "#....................#",
+        "#....................#",
+        "#P.................A.#",
+        "#....................#",
+        "#.............~~~~...#",
+        "#..##............##..#",
+        "#....................#",
+        "######################"
+      ],
+      "props": [
+        {
+          "id": "room-2-prop-0",
+          "propId": "anchor_pedestal",
+          "x": 19,
+          "y": 6
+        },
+        {
+          "id": "room-2-prop-1",
+          "propId": "crystal_cluster",
+          "x": 8,
+          "y": 3
+        },
+        {
+          "id": "room-2-prop-2",
+          "propId": "monolith_shard",
+          "x": 16,
+          "y": 9
+        }
+      ],
+      "encounters": [
+        {
+          "id": "room-2-encounter-0",
+          "enemyId": "guardian",
+          "x": 16,
+          "y": 4,
+          "count": 1
+        },
+        {
+          "id": "room-2-encounter-1",
+          "enemyId": "sentinel",
+          "x": 8,
+          "y": 2,
+          "count": 1
+        }
+      ],
+      "exits": [],
+      "isFinal": true,
+      "attributions": []
+    }
+  ],
+  "plannedRoomCount": 3
+}

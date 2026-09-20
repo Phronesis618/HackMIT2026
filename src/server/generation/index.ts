@@ -6,13 +6,12 @@
  * OpenAI call -> WorldRecipe -> compiler -> RoomSpec/ArtRecipe) without touching the
  * server assembly. B must NOT start a second HTTP server.
  *
- * Foundation behaviour: always the validated offline fixture, labelled as such.
- * If live mode is requested, the service still returns a fixture and says why in
- * provenance.notes — it never pretends a model call happened.
  */
 import type { GenerationRequest, GenerationStatus, PreparedWorld } from '../../shared/contracts';
 import type { GenerationMode } from '../config';
 import { createFixtureGenerationService, loadWorldFixtures } from './fixtureService';
+import { createLiveGenerationService } from './liveService';
+import { createOpenAIProvider, type ProviderUsage } from './provider';
 
 export interface GenerationServiceInfo {
   /** Mode requested by configuration. */
@@ -20,13 +19,13 @@ export interface GenerationServiceInfo {
   /** Mode that will actually be used for the next request. */
   effectiveMode: GenerationMode;
   liveConfigured: boolean;
-  /** false until Agent B lands the live provider. */
   liveImplemented: boolean;
   fixtureIds: string[];
 }
 
 export interface GenerationService {
   prepareWorld(request: GenerationRequest, onStatus?: (status: GenerationStatus) => void): Promise<PreparedWorld>;
+  prepareWorldStream(request: GenerationRequest, onStatus?: (status: GenerationStatus) => void): AsyncGenerator<PreparedWorld>;
   info(): GenerationServiceInfo;
 }
 
@@ -36,6 +35,9 @@ export interface GenerationServiceOptions {
   openaiModel: string;
   fixturesDir: string;
   log?: (message: string) => void;
+  fetch?: typeof fetch;
+  timeoutMs?: number;
+  onUsage?: (usage: ProviderUsage) => void;
 }
 
 export function createGenerationService(options: GenerationServiceOptions): GenerationService {
@@ -45,25 +47,38 @@ export function createGenerationService(options: GenerationServiceOptions): Gene
     throw new Error(`No valid world fixtures found in ${options.fixturesDir}`);
   }
 
-  const liveConfigured = options.mode === 'live' && options.openaiApiKey !== null;
+  const apiKey = options.openaiApiKey?.trim();
+  const liveConfigured = options.mode === 'live' && Boolean(apiKey);
   const notes: string[] = [];
-  if (options.mode === 'live' && !options.openaiApiKey) {
+  if (options.mode === 'live' && !apiKey) {
     notes.push('Live generation requested but OPENAI_API_KEY is not set; serving offline fixture.');
-  } else if (options.mode === 'live') {
-    notes.push('Live provider not implemented yet (Agent B, feat/generation); serving offline fixture.');
   }
   for (const n of notes) log(n);
-  log(`fixture mode; ${fixtures.length} fixture(s): ${fixtures.map((f) => f.fixtureId).join(', ')}`);
+  log(`${liveConfigured ? 'live' : 'fixture'} mode; ${fixtures.length} fallback fixture(s) available.`);
 
   const fixtureService = createFixtureGenerationService({ fixtures, extraNotes: notes });
+  const service = liveConfigured && apiKey
+    ? createLiveGenerationService({
+      provider: createOpenAIProvider({
+        apiKey, model: options.openaiModel, fetch: options.fetch, timeoutMs: options.timeoutMs,
+        onUsage: options.onUsage ?? ((usage) => log(`Provider tokens: input=${usage.inputTokens}, output=${usage.outputTokens}, total=${usage.totalTokens}`)),
+      }),
+      model: options.openaiModel, fixtures, log,
+    })
+    : {
+      ...fixtureService,
+      async *prepareWorldStream(request: GenerationRequest, onStatus?: (status: GenerationStatus) => void) {
+        yield await fixtureService.prepareWorld(request, onStatus);
+      },
+    };
 
   return {
-    prepareWorld: fixtureService.prepareWorld,
+    ...service,
     info: () => ({
       requestedMode: options.mode,
-      effectiveMode: 'fixture',
+      effectiveMode: liveConfigured ? 'live' : 'fixture',
       liveConfigured,
-      liveImplemented: false,
+      liveImplemented: true,
       fixtureIds: fixtures.map((f) => f.fixtureId),
     }),
   };
@@ -71,3 +86,4 @@ export function createGenerationService(options: GenerationServiceOptions): Gene
 
 export { createFixtureGenerationService, loadWorldFixtures } from './fixtureService';
 export { buildReceipt } from './receipt';
+export { compileWorldRecipe, type CompiledWorldRecipe, type CompileWorldRecipeOptions } from './compiler';

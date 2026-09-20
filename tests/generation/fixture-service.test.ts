@@ -37,7 +37,7 @@ describe('fixture generation service', () => {
     expect(world.provenance.attempts).toBe(0);
     expect(world.rooms.length).toBe(world.plannedRoomCount);
     expect(statuses.map((s) => s.phase)).toEqual(['queued', 'validating', 'ready']);
-    expect(service.info()).toMatchObject({ requestedMode: 'fixture', effectiveMode: 'fixture', liveImplemented: false, liveConfigured: false });
+    expect(service.info()).toMatchObject({ requestedMode: 'fixture', effectiveMode: 'fixture', liveImplemented: true, liveConfigured: false });
   });
 
   it('records contributions in the receipt without claiming they were used', async () => {
@@ -70,12 +70,15 @@ describe('fixture generation service', () => {
     expect(service.info().liveConfigured).toBe(false);
   });
 
-  it('live mode with a key is honest that the live provider is not implemented yet', async () => {
-    const service = createGenerationService({ mode: 'live', openaiApiKey: 'test-key-not-real', openaiModel: 'gpt-test', fixturesDir, log: () => {} });
+  it('live mode with a key attempts the provider and labels a failing response as fallback', async () => {
+    const service = createGenerationService({
+      mode: 'live', openaiApiKey: 'test-key-not-real', openaiModel: 'gpt-test', fixturesDir, log: () => {},
+      fetch: async () => new Response(null, { status: 503 }),
+    });
     const world = await service.prepareWorld(request);
-    expect(world.provenance.source).toBe('fixture');
-    expect(world.provenance.notes.join(' ')).toMatch(/not implemented/);
-    expect(service.info()).toMatchObject({ liveConfigured: true, liveImplemented: false, effectiveMode: 'fixture' });
+    expect(world.provenance.source).toBe('live_fallback_fixture');
+    expect(world.provenance.notes.join(' ')).toMatch(/HTTP 503/);
+    expect(service.info()).toMatchObject({ liveConfigured: true, liveImplemented: true, effectiveMode: 'live' });
   });
 
   it('prepareFromFixture supports the live-fallback provenance path', () => {

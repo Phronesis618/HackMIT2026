@@ -5,9 +5,10 @@ import { HeadquartersPanel } from './HeadquartersPanel';
 import { Hud } from './Hud';
 import { MemoryWall } from './MemoryWall';
 import { ProvenanceBadge } from './ProvenanceBadge';
-import { UnlockPanel } from './UnlockPanel';
 import { useUiModel } from './useUiModel';
 import { WorldPanel } from './WorldPanel';
+import { DebriefPanel } from './DebriefPanel';
+import { UnlockPanel } from './UnlockPanel';
 
 export interface AppProps {
   store: UiStore;
@@ -45,10 +46,15 @@ export function App({ store, actions, onStageReady }: AppProps) {
       <main className="layout">
         <section className="stage-wrap">
           <div className="stage" ref={stageRef} tabIndex={0} aria-label="RELAY game canvas" />
+          <div className="stage-caption" aria-hidden="true">
+            <span>{model.phase === 'expedition' || model.phase === 'debrief' ? model.room?.name : 'RELAY / SANCTUARY'}</span>
+            <span>WASD move · Shift dash · J attack</span>
+          </div>
         </section>
         <aside className="side">
           {(model.phase === 'headquarters' || model.phase === 'preparing') && <HeadquartersPanel model={model} actions={actions} />}
           {model.phase === 'expedition' && <Hud model={model} actions={actions} />}
+          {model.phase === 'debrief' && <DebriefPanel model={model} actions={actions} />}
           {(model.phase === 'headquarters' || model.phase === 'preparing') && <UnlockPanel model={model} actions={actions} />}
           {model.world && <WorldPanel world={model.world} />}
         </aside>

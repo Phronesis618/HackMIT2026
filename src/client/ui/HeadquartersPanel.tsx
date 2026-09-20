@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CLASS_IDS, CLASS_INFO } from '../../shared/registry';
+import { ABILITY_STATUS, CLASS_IDS, CLASS_INFO } from '../../shared/registry';
 import type { UiActions, UiModel } from '../../shared/ui';
 
 /**
@@ -12,17 +12,23 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
   const busy = model.phase === 'preparing';
   const gen = model.generation;
   const worldReady = model.world !== null;
+  const full = model.contributions.length >= 24;
+  const selectedClass = CLASS_INFO[model.localPlayer.classId];
 
   const submit = (): void => {
-    if (!draft.trim()) return;
-    actions.submitContribution(draft);
+    if (!draft.trim() || busy || full) return;
+    actions.submitContribution(draft.trim());
     setDraft('');
   };
 
   return (
-    <div className="panel">
+    <div className="panel panel--hq">
+      <p className="eyebrow">The sanctuary between worlds</p>
       <h2 className="panel__title">Headquarters</h2>
+      <p className="muted">Bring an idea. Step through together. Keep what happened.</p>
 
+      <details className="operative">
+        <summary>{model.localPlayer.displayName} · {selectedClass.name}</summary>
       <label className="field">
         <span className="field__label">Operative</span>
         <input
@@ -31,7 +37,7 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
           maxLength={24}
           onChange={(e) => setName(e.target.value)}
           onBlur={() => name.trim() && actions.setDisplayName(name)}
-          onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
+          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
         />
       </label>
 
@@ -45,37 +51,46 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
               className={`chip ${model.localPlayer.classId === id ? 'chip--active' : ''}`}
               onClick={() => actions.selectClass(id)}
               title={CLASS_INFO[id].role}
+              aria-pressed={model.localPlayer.classId === id}
             >
               {CLASS_INFO[id].name}
               <small className={`status status--${model.classStatus[id]}`}>{model.classStatus[id]}</small>
             </button>
           ))}
         </div>
+        <p className="hint">{selectedClass.role} {model.classStatus[model.localPlayer.classId] !== 'implemented' && 'Class abilities are still in development; selecting a class previews its appearance.'}</p>
       </div>
+      </details>
 
-      <label className="field">
-        <span className="field__label">Your idea for this world</span>
+      <div className="field">
+        <label className="field__label" htmlFor="contribution">Your idea for this world</label>
         <textarea
+          id="contribution"
           className="input input--area"
           rows={2}
           maxLength={200}
           placeholder="e.g. a flooded archive where the books still whisper"
           value={draft}
+          disabled={busy || full}
+          aria-describedby="contribution-help"
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               submit();
             }
           }}
         />
-        <button type="button" className="btn" onClick={submit} disabled={!draft.trim()}>
-          Contribute
-        </button>
-      </label>
+        <div className="panel__row">
+          <span id="contribution-help" className="hint">{full ? 'All 24 contribution slots are filled.' : `${draft.length}/200 · Enter to contribute`}</span>
+          <button type="button" className="btn" onClick={submit} disabled={!draft.trim() || busy || full}>
+            Contribute
+          </button>
+        </div>
+      </div>
 
       {model.contributions.length > 0 && (
-        <ul className="list">
+        <ul className="list contributions" aria-label="Contributed ideas">
           {model.contributions.map((c) => (
             <li key={c.id} className="list__item">
               <span className="list__who">{c.playerName}</span> {c.text}
@@ -93,10 +108,13 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
         </button>
       </div>
 
-      <p className={`status-line status-line--${gen.phase}`}>
-        <strong>{gen.phase.toUpperCase()}</strong> {gen.message}
-        {gen.phase !== 'idle' && gen.elapsedMs > 0 ? ` (${(gen.elapsedMs / 1000).toFixed(1)}s)` : ''}
-      </p>
+      <div className={`generation status-line--${gen.phase}`} aria-busy={busy}>
+        <div className="panel__row">
+          <span className="eyebrow">{busy && <span className="activity" aria-hidden="true" />}{gen.phase}</span>
+          {gen.phase !== 'idle' && <span className="generation__time">{(gen.elapsedMs / 1000).toFixed(1)}s</span>}
+        </div>
+        <p className="muted" role="status">{gen.message}</p>
+      </div>
       {!model.liveGenerationAvailable && (
         <p className="hint">
           Live generation is off on this server (no credentials or fixture mode). Worlds come from a validated offline fixture and are
@@ -105,7 +123,7 @@ export function HeadquartersPanel({ model, actions }: { model: UiModel; actions:
       )}
       <p className="hint">
         Move with WASD / arrows. Walk onto the glowing portal at the bottom of the room to enter once a world is ready. Shift/Space to dash,
-        J or click to attack (no damage yet).
+        J or click to attack{ABILITY_STATUS.attack === 'partial' ? ' (damage is not implemented yet)' : ''}.
       </p>
     </div>
   );

@@ -5,15 +5,16 @@
  * LocalSession and the future multiplayer host). Persistence and thumbnails live in
  * src/client/chronicle (browser adapters), never here.
  *
- * Rules (foundation):
+ * Rules:
  *  - world_prepared           -> one `creation_receipt` per world (honest about source)
  *  - first room_entered (#0)  -> one `arrival_keepsake` per world (no run completion needed)
  *  - anchor_planted           -> `anchor`
+ *  - first enemy_defeated     -> one `milestone` per world after arrival
  *  - run_ended                -> `run_summary`
  *  - every event id is processed at most once (network retries / replays are safe)
  * Never invents participants: names come from the event's playerIds + known players.
  */
-import type { CreationReceipt, GameEvent, GenerationSource, MemoryRecord } from '../shared/contracts';
+import { MemoryRecordSchema, type CreationReceipt, type GameEvent, type GenerationSource, type MemoryRecord } from '../shared/contracts';
 
 export interface ChronicleParticipant {
   id: string;
@@ -60,14 +61,31 @@ export function reduceChronicle(state: ChronicleState, events: GameEvent[], ctx:
     memories.some((m) => m.kind === kind && m.worldId === worldId);
 
   for (const event of events) {
-    if (seen.has(event.id)) continue;
-    seen.add(event.id);
+    const worldId = 'worldId' in event ? event.worldId : ctx.world?.worldId;
+    const eventKey = JSON.stringify([worldId, event.id]);
+    if (seen.has(eventKey)) continue;
+    seen.add(eventKey);
+    if (memories.some((m) => m.worldId === worldId && m.sourceEventIds.includes(event.id))) continue;
 
-    const memory = memoryFromEvent(event, ctx, hasMemory);
-    if (memory) {
-      memories.push(memory);
-      created.push(memory);
+    const previous = memories.find((m) => m.worldId === worldId);
+    const world = ctx.world?.worldId === worldId ? ctx.world : previous ? {
+      worldId: previous.worldId, title: previous.worldTitle, provenanceSource: previous.provenanceSource, receipt: null,
+    } : null;
+    const memory = memoryFromEvent(event, { ...ctx, world }, hasMemory);
+    if (!memory) continue;
+    memory.title = clip(memory.title, 80);
+    memory.summary = clip(memory.summary, 400);
+    memory.worldTitle = clip(memory.worldTitle, 40);
+    const baseId = memory.id;
+    let suffix = 1;
+    while (memories.some((m) => m.id === memory.id)) {
+      const ending = `-${suffix++}`;
+      memory.id = `${baseId.slice(0, 64 - ending.length)}${ending}`;
     }
+    const parsed = MemoryRecordSchema.safeParse(memory);
+    if (!parsed.success) continue;
+    memories.push(parsed.data);
+    created.push(parsed.data);
   }
 
   const seenList = [...seen];
@@ -105,6 +123,7 @@ function memoryFromEvent(
       };
     }
     case 'room_entered': {
+      if (!ctx.world) return null;
       if (event.roomIndex !== 0) return null;
       if (hasMemory('arrival_keepsake', event.worldId)) return null;
       const participants = resolveParticipants(event.playerIds, ctx.players);
@@ -129,6 +148,7 @@ function memoryFromEvent(
       };
     }
     case 'anchor_planted': {
+      if (!ctx.world || hasMemory('anchor', event.worldId)) return null;
       const participants = resolveParticipants(event.playerIds, ctx.players);
       const worldTitle = ctx.world?.worldId === event.worldId ? ctx.world.title : 'an unknown world';
       return {
@@ -146,6 +166,7 @@ function memoryFromEvent(
       };
     }
     case 'run_ended': {
+      if (!ctx.world) return null;
       const participants = resolveParticipants(event.playerIds, ctx.players);
       const worldTitle = ctx.world?.worldId === event.worldId ? ctx.world.title : 'an unknown world';
       const outcome =
@@ -166,6 +187,24 @@ function memoryFromEvent(
         summary: `${joinNames(participants)} ${outcome}.`,
         sourceEventIds: [event.id],
         provenanceSource: ctx.world?.provenanceSource ?? 'fixture',
+      };
+    }
+    case 'enemy_defeated': {
+      const world = ctx.world;
+      if (!world || !hasMemory('arrival_keepsake', world.worldId) || hasMemory('milestone', world.worldId)) return null;
+      const participants = resolveParticipants([event.byPlayerId], ctx.players);
+      return {
+        id: memoryId('milestone', event),
+        kind: 'milestone',
+        worldId: world.worldId,
+        worldTitle: clip(world.title, 40),
+        roomIndex: null,
+        createdAt: ctx.now,
+        participants,
+        title: `First victory — ${world.title}`,
+        summary: `${joinNames(participants)} defeated the first hostile recorded in ${world.title}.`,
+        sourceEventIds: [event.id],
+        provenanceSource: world.provenanceSource,
       };
     }
     default:
@@ -190,8 +229,7 @@ function receiptSummary(source: GenerationSource, receipt: CreationReceipt | nul
 
 function resolveParticipants(playerIds: string[], known: ChronicleParticipant[]): ChronicleParticipant[] {
   const byId = new Map(known.map((p) => [p.id, p]));
-  const resolved = playerIds.map((id) => byId.get(id) ?? { id, displayName: 'Unknown operative' });
-  return resolved.length > 0 ? resolved : [{ id: 'unknown', displayName: 'Unknown operative' }];
+  return [...new Set(playerIds)].map((id) => byId.get(id) ?? { id, displayName: 'Unknown operative' });
 }
 
 function joinNames(participants: ChronicleParticipant[]): string {
