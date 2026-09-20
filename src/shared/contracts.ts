@@ -564,7 +564,7 @@ export const FloorsWorldRecipeSchema = WorldRecipeSchema.extend({
   bible: WorldBibleSchema.optional(),
   /** Same fragments plus optional `authorIndex` / `eventIndex` into the bible. */
   lore: z.array(LoreFragmentSchema.extend(LoreRefsShape)).max(12),
-  /** One room line per room kind per biome (proposed slot; consumers may ignore it). */
+  /** One room line per room kind per biome. Read by src/shared/floorgen/runtime.ts: it becomes that room's description, with the engine's derived line as the fallback. */
   biomeRoomLines: BiomeRoomLinesListSchema.optional(),
   /** 2–3 world laws from the closed registry in laws.ts. NOT yet implemented by the sim. */
   laws: WorldLawListSchema.optional(),

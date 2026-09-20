@@ -99,6 +99,8 @@ Guarantees, all tested on 1 920 rooms per run: rectangular rows within RoomSpec 
 
 `BuiltRoom.feature`: `none | treasure | lore | rest | biome_exit | anchor`. `focus` is where that thing goes.
 
+**Room descriptions.** `recipe.biomeRoomLines` (one line per room kind per biome, written by the model) is read by `createFloorRuntime`: a line for this (biome, kind) becomes the room's description. The engine's derived line is the fallback, so a world without them is byte-identical to before. A `rest` room keeps the once-per-run sentence either way.
+
 ## 6 · Encounter director
 
 Budget points = `round((5 + 3·tier) · (0.8 + 0.5·depth/maxDepth) · kindFactor)`, kindFactor 1 combat / 0.6 elite / 0.5 exit. Costs: swarmling 1, husk 2, lurker 2, spewer 3, channeler 4, sentinel 4, warden 5. Purchases are weighted `1/√cost`.

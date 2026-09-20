@@ -44,8 +44,14 @@ export interface FloorNeighbour {
 }
 
 export interface FloorRuntimeContext {
-  /** The world's recipe. Only `lore` is read: lore rooms get one of its `relic` fragments on their focus tile. */
-  recipe?: Pick<WorldRecipe, 'lore'>;
+  /**
+   * The world's recipe. Two fields are read:
+   *  - `lore`: lore rooms get one of its `relic` fragments on their focus tile;
+   *  - `biomeRoomLines`: the model's own line for a (biome, room kind) becomes that room's
+   *    description. The engine's derived line is the fallback, so a world without them is
+   *    unchanged (C4).
+   */
+  recipe?: Pick<WorldRecipe, 'lore' | 'biomeRoomLines'>;
 }
 
 export interface FloorRuntime {
@@ -77,6 +83,8 @@ export interface FloorRuntime {
 /** Kinds whose rooms get terrain. Quiet rooms stay clean so their focus reads at a glance. */
 const TERRAIN_KINDS: ReadonlySet<RoomKind> = new Set<RoomKind>(['combat', 'elite', 'exit']);
 const SIZE_NOUN = { small: 'cell', medium: 'hall', large: 'great hall' } as const;
+/** A rest site is once per run (docs/design/FLOORS.md §12); every rest room says so. */
+const REST_ONCE = 'Stopping here mends the crew once, and not again.';
 const key = (x: number, y: number) => `${x},${y}`;
 
 export function createFloorRuntime(rawFloors: WorldFloors, context: FloorRuntimeContext = {}): FloorRuntime {
@@ -86,6 +94,13 @@ export function createFloorRuntime(rawFloors: WorldFloors, context: FloorRuntime
   const plans = new Map<string, FloorPlan>();
   const rooms = new Map<string, RoomSpec>();
   const relicFragments = (context.recipe?.lore ?? []).flatMap((fragment, index) => (fragment.kind === 'relic' ? [index] : []));
+  /** `biomeId -> kind -> the model's line`. First line wins if a biome repeats a kind. */
+  const authoredLines = new Map<string, Map<string, string>>();
+  for (const entry of context.recipe?.biomeRoomLines ?? []) {
+    const byKind = authoredLines.get(entry.biomeId) ?? new Map<string, string>();
+    for (const line of entry.lines) if (!byKind.has(line.kind)) byKind.set(line.kind, line.text);
+    authoredLines.set(entry.biomeId, byKind);
+  }
 
   const node = (biomeId: string) => {
     const found = nodes.get(biomeId);
@@ -120,7 +135,8 @@ export function createFloorRuntime(rawFloors: WorldFloors, context: FloorRuntime
       const tiles = TERRAIN_KINDS.has(built.kind) ? applyBiomeTerrain(built, terrain, floors.seed) : built.tiles;
       const loreRooms = floorPlan.rooms.filter((candidate) => candidate.kind === 'lore').map((candidate) => candidate.id);
       room = RoomSpecSchema.parse({
-        ...toRoomSpec(built, tiles, planned, floorPlan, biome, relicFor(ref, loreRooms)),
+        ...toRoomSpec(built, tiles, planned, floorPlan, biome, relicFor(ref, loreRooms),
+          authoredLines.get(ref.biomeId)?.get(built.kind)),
         // The biome's terrain tuning, carried to the sim (docs/design/TILES.md §4.2).
         ...(terrain.intensity !== undefined ? { terrainIntensity: terrain.intensity } : {}),
       });
@@ -194,7 +210,10 @@ export function createFloorRuntime(rawFloors: WorldFloors, context: FloorRuntime
 // BuiltRoom -> RoomSpec
 // ---------------------------------------------------------------------------
 
-function toRoomSpec(built: BuiltRoom, tiles: string[], planned: FloorRoom, plan: FloorPlan, brief: BiomeBrief, relicFragment: number | undefined): RoomSpec {
+function toRoomSpec(
+  built: BuiltRoom, tiles: string[], planned: FloorRoom, plan: FloorPlan, brief: BiomeBrief,
+  relicFragment: number | undefined, authoredLine?: string,
+): RoomSpec {
   const { biomeId, roomId } = built.address;
   const isFinal = built.feature === 'anchor';
   const room: RoomSpec = {
@@ -202,7 +221,7 @@ function toRoomSpec(built: BuiltRoom, tiles: string[], planned: FloorRoom, plan:
     id: `${biomeId.slice(0, 60)}:${roomId}`,
     index: floorRoomIndex(roomId) ?? plan.rooms.indexOf(planned),
     name: roomName(built, brief, plan).slice(0, 80),
-    description: roomDescription(built, brief).slice(0, 300),
+    description: roomDescription(built, brief, authoredLine).slice(0, 300),
     width: built.width,
     height: built.height,
     tiles,
@@ -248,7 +267,15 @@ function roomName(built: BuiltRoom, brief: BiomeBrief, plan: FloorPlan): string 
   }
 }
 
-function roomDescription(built: BuiltRoom, brief: BiomeBrief): string {
+/**
+ * The world's own line for this (biome, kind) when the model wrote one, the engine's derived line
+ * otherwise (C4). A rest room keeps the sentence that states the mechanic either way: it works
+ * once per run, and no world's prose gets to imply otherwise (A4).
+ */
+function roomDescription(built: BuiltRoom, brief: BiomeBrief, authoredLine?: string): string {
+  if (authoredLine !== undefined) {
+    return built.kind === 'rest' ? `${authoredLine} ${REST_ONCE}` : authoredLine;
+  }
   const doors = `${built.doors.length} door${built.doors.length === 1 ? '' : 's'}`;
   const shape = `A ${SIZE_NOUN[built.sizeClass]} with ${doors}`;
   const hostiles = [...new Set(built.encounters.map((encounter) => ENEMY_INFO[encounter.enemyId].name))];
@@ -256,7 +283,7 @@ function roomDescription(built: BuiltRoom, brief: BiomeBrief): string {
     case 'entrance': return `${shape}. The way into ${brief.name}. Nothing moves here.`;
     case 'treasure': return `${shape}. A sealed store stands in the middle.`;
     case 'lore': return `${shape}. Someone left a record here.`;
-    case 'rest': return `${shape}. A cold camp. Stopping here mends the crew once, and not again.`;
+    case 'rest': return `${shape}. A cold camp. ${REST_ONCE}`;
     case 'shop': return `${shape}. Shelves, mostly empty.`;
     case 'exit': return built.feature === 'anchor'
       ? `${shape}. The Anchor site, and the custodian that guards it.`
