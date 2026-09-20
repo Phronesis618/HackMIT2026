@@ -10,11 +10,30 @@
   Docker build and network-isolated HTTP checks passed for fixture and composer generation:
   flags, static HTML, eight biomes / 160 validated rooms each, laws, honest provenance,
   legacy request overrides, and Docker environment opt-outs.
+- **Base integration:** merged main `6d00c88`, retaining both adjacent handoff/evidence
+  entries. Integrated `npm run check` passed **1111 tests / 93 files**, typecheck and build.
 - **Deferred:** the separate demo balance candidate (`48dd181`) fails eight existing
   assertions and was not integrated. No tests or gameplay constants changed.
-- **Unverified:** browser play, live AI generation, and public rollout. Existing service env
+- **Browser verified (`bc894e3`):** ordinary HQ fixture generation, physical portal entry
+  into biome 1/5 room 1/10, minimap and full map. Connected-room travel and combat were
+  not tested before the integration interruption; fixture laws do not prove derived laws.
+- **Unverified:** live AI generation and public gameplay. Existing service env
   overrides can suppress image defaults; confirm `/api/config` after deploy and reload tabs.
   A cold-start config timeout remains a known co-op flag-adoption gap.
+
+## Remove contributed ideas — 2026-09-20
+
+- Branch: `devin/1789915612-remove-world-ideas`, based on `972bb06`.
+- **Implemented:** Remove beside your own HQ ideas, in solo and co-op. Removal frees a
+  contribution slot and affects the next generation; existing worlds and receipts stay intact.
+  The server validates ownership and rejects changes during generation or outside HQ.
+- **Integration:** small additive `removeContribution` session/UI methods and
+  `remove_contribution` client message, with implementations on both transports.
+- **Verified:** `npm run check` passed **1109 tests / 92 files**, typecheck and build;
+  whitespace passed. Eight new cases cover capacity, empty ideas, retained receipts,
+  subsequent generation, stream locking, UI ownership, co-op synchronization and server guards.
+- **Mocked:** fixture generation only; no paid provider calls in tests.
+- **Unverified:** browser interaction and deployment at this commit.
 
 ## Startup with blocked session storage — 2026-09-20
 

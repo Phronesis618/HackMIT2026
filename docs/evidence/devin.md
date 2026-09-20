@@ -18,6 +18,26 @@ Docker environment overrides `RELAY_FLOORS=0 RELAY_LAWS=0` disabled both flags.
 
 No browser play, public deployment, or live model output is claimed by these checks.
 
+Separate browser coverage on `bc894e3` verified ordinary HQ fixture generation, honest
+receipt provenance, physical portal entry into biome 1/5 room 1/10, minimap and full map.
+The run stopped for base integration; connected-room travel, combat, biome choices,
+derived-law generation, co-op timeout recovery and public gameplay remain untested.
+At 14:57 UTC, the public `/api/config` returned both flags true; this does not prove
+deployment of this PR or successful hosted gameplay.
+
+Merged base `6d00c88` by preserving both adjacent documentation entries; no runtime
+conflict resolution was needed. Integrated `npm run check` passed **1111 tests / 93 files**,
+typecheck and production build. Browser evidence above predates that integration.
+
+## Remove contributed ideas — 2026-09-20
+
+Implemented per-idea removal through the existing HQ/controller/session path, including
+server-authorized co-op updates. Prepared receipts remain historical records; the next
+request receives the remaining ideas. Eight additional regression cases passed, including
+real local WebSocket connections, unauthorized removal, generation/phase guards, the
+24-idea limit and removing the final idea. `npm run check`: **1109 tests / 92 files**,
+typecheck and production build passed. Browser verification remains pending at this commit.
+
 ## Startup storage failure — 2026-09-20
 
 The overnight monitor reproduced a thrown `SecurityError` from `shouldShowStart` on

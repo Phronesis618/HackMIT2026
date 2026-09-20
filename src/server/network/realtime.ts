@@ -461,6 +461,20 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
         publishEvents([metaEvent({ type: 'contribution_submitted', contributionId: contribution.id, playerId: member.identity.id })]);
         break;
       }
+      case 'remove_contribution': {
+        if (sim.getPhase() !== 'headquarters' || generating) {
+          error(client, 'Remove ideas at headquarters when no generation is in progress.', 'remove_contribution');
+          return;
+        }
+        const contribution = contributions.find((item) => item.id === message.contributionId);
+        if (!contribution || contribution.playerId !== member.identity.id) {
+          error(client, 'You can only remove your own ideas.', 'remove_contribution');
+          return;
+        }
+        contributions = contributions.filter((item) => item.id !== message.contributionId);
+        broadcast({ type: 'contributions', contributions });
+        break;
+      }
       case 'request_world':
         void prepareWorld(client, message.requestId ?? randomId('request'));
         break;
