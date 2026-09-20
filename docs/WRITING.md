@@ -296,7 +296,7 @@ DO · kind=enemyBlurb
 
 ### 5.10 Boss name and phase callouts
 
-Purpose: the name is a person or machine from the bible with their title. Callouts are telegraphs: they name the bible object that is about to hurt the crew and use a plain verb, in capitals, target 40. FTL and Into the Breach event text is the model: state what is happening and what it threatens, then stop.
+Purpose: the name is a person or machine from the bible with their title. Callouts are telegraphs: they name the bible object that is about to hurt the crew and use a plain verb, in capitals, target 52, limit 60. FTL and Into the Breach event text is the model: state what is happening and what it threatens, then stop.
 
 DON'T · kind=bossCallout · rule=personified-abstraction
 > THE ABYSS HUNGERS

@@ -1,0 +1,412 @@
+{
+  "world": "Tollgate Meridian",
+  "licence": "Written for RELAY by agent W1 in imitation of the structures described in docs/WRITING.md section 6. Original text; no passages copied.",
+  "bible": {
+    "title": "Tollgate Meridian",
+    "premise": "A customs post on the Meridian line where the salt trains crossed from the Flats into Carrow.",
+    "collapse": "On 3 August Chief Inspector Radu Varga shut Gate 2 on a telegraphed order from Carrow while the 06:10 salt train was half through. 14 wagons and 61 passengers stayed on the Flats side. No order to reopen came, and Varga would not act without one.",
+    "people": [
+      {
+        "name": "Radu Varga",
+        "job": "chief inspector of customs",
+        "want": "a written order for everything he does"
+      },
+      {
+        "name": "Nika Sorrell",
+        "job": "smuggler trading as a tea seller",
+        "want": "her brother Jori's papers stamped"
+      },
+      {
+        "name": "Benedek Asztalos",
+        "job": "signal-box operator",
+        "want": "the 06:10 to run on time once more before he retires"
+      }
+    ],
+    "places": [
+      "Gate 2",
+      "Signal Box",
+      "Seizure Shed",
+      "Platform 1",
+      "the Flats",
+      "Carrow"
+    ],
+    "objects": [
+      "Carrow stamp",
+      "lever 7",
+      "wagon 9",
+      "receipt book",
+      "Varga's kettle"
+    ],
+    "events": [
+      {
+        "id": "E1",
+        "date": "12 July",
+        "fact": "Varga seized 40 kilos of tea and one kettle from Sorrell on receipt 0771."
+      },
+      {
+        "id": "E2",
+        "date": "3 August, 06:14",
+        "fact": "Gate 2 came down across the 06:10 between wagons 8 and 9."
+      },
+      {
+        "id": "E3",
+        "date": "3 August",
+        "fact": "Asztalos set lever 7 to danger and logged the 06:10 as delayed."
+      },
+      {
+        "id": "E4",
+        "date": "9 August",
+        "fact": "Water on the Flats side ran out. Varga issued 1 litre per handwritten receipt."
+      },
+      {
+        "id": "E5",
+        "date": "20 August",
+        "fact": "Sorrell began moving passengers through the Seizure Shed, 2 a night, 22 in all."
+      },
+      {
+        "id": "E6",
+        "date": "1 September",
+        "fact": "Asztalos logged the 06:10 as delayed for the 30th day."
+      },
+      {
+        "id": "E7",
+        "date": "14 September",
+        "fact": "Varga stamped every wagon, passenger and member of staff HELD PENDING ORDERS."
+      }
+    ],
+    "authors": [
+      {
+        "name": "Radu Varga",
+        "document": "seizure receipts",
+        "register": "Receipt number, date, item, weight, regulation cited. Records other people's reactions as facts. Signs everything.",
+        "never": "admits doubt"
+      },
+      {
+        "name": "Nika Sorrell",
+        "document": "letters to her brother Jori",
+        "register": "Warm, quick, practical. Prices and quantities. Jokes at the inspector's expense. Signs N.",
+        "never": "sounds frightened"
+      },
+      {
+        "name": "Benedek Asztalos",
+        "document": "pencil notes on the working timetable",
+        "register": "Times to the minute, lever numbers, wagon counts. Grumbles about punctuality. 41 years in the box.",
+        "never": "mentions people by first name"
+      }
+    ],
+    "enemies": {
+      "husk": "held passengers from the 06:10",
+      "sentinel": "Gate 2 guards",
+      "lurker": "Sorrell's shed runners",
+      "guardian": "Chief Inspector Varga"
+    }
+  },
+  "exemplars": [
+    {
+      "id": "tm-relic-1",
+      "kind": "relic",
+      "author": "Radu Varga",
+      "bibleRefs": [
+        "E1",
+        "Seizure Shed"
+      ],
+      "title": "Seizure receipt 0771",
+      "source": "top copy in the receipt book, Seizure Shed",
+      "text": "Receipt 0771, 12 July. Seized from N. Sorrell, tea seller: tea, 40 kilos, undeclared, Reg. 14(b). Also one kettle, held as evidence of intent to brew. Owner informed of her right to appeal in Carrow. Owner laughed. R. Varga, Chief Inspector.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-relic-2",
+      "kind": "relic",
+      "author": "Nika Sorrell",
+      "bibleRefs": [
+        "E5",
+        "E2",
+        "Seizure Shed"
+      ],
+      "title": "Letter to Jori, unsent",
+      "source": "folded inside a tea tin, Platform 1",
+      "text": "Jori, I am fine, stop asking the drivers. The gate is shut with half the 06:10 on the wrong side and the inspector won't open it without a letter from Carrow. So I take two a night through his Seizure Shed, past my own tea. I charge them nothing. Don't tell anyone, it's bad for prices. N.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-relic-3",
+      "kind": "relic",
+      "author": "Benedek Asztalos",
+      "bibleRefs": [
+        "E6",
+        "lever 7",
+        "the Flats"
+      ],
+      "title": "Working timetable, 1 Sept",
+      "source": "pencil in the margin, Signal Box",
+      "text": "06:10 salt train: DELAYED. Day 30. Lever 7 at danger. For the record it left the Flats on time. It is my end that is late, by 8 wagons.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-relic-4",
+      "kind": "relic",
+      "author": "Benedek Asztalos",
+      "bibleRefs": [
+        "E2",
+        "E3",
+        "Gate 2",
+        "lever 7"
+      ],
+      "title": "Working timetable, 3 Aug",
+      "source": "pencil beside the 06:10 entry",
+      "text": "3 Aug. 06:14, Gate 2 came down between wagons 8 and 9 and I set lever 7 to danger. Forty-one years in this box and the first train I ever stopped was already stopped.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-relic-5",
+      "kind": "relic",
+      "author": "Radu Varga",
+      "bibleRefs": [
+        "E7",
+        "Carrow stamp"
+      ],
+      "title": "Inventory of held items",
+      "source": "last used page of the receipt book",
+      "text": "Inventory, 14 Sept. Stamped HELD PENDING ORDERS: wagons 9 to 22, 61 passengers less 22 unaccounted, 3 guards, 1 signal operator, 1 kettle. Stamped last: R. Varga. The Carrow stamp is low on ink. I have requested more in writing.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-relic-6",
+      "kind": "relic",
+      "author": "Nika Sorrell",
+      "bibleRefs": [
+        "E4"
+      ],
+      "title": "Letter to Jori, 10 Aug",
+      "source": "tucked in the lining of a tea chest",
+      "text": "Jori, water on the Flats side ran out on the 9th. Varga is handing it out against receipts, one litre a receipt, and he writes every receipt himself. Slowly. I have sold him a pen.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-remains-1",
+      "kind": "remains",
+      "author": "Radu Varga",
+      "bibleRefs": [
+        "E7",
+        "E4",
+        "husk"
+      ],
+      "title": "Held passenger's ticket",
+      "source": "a card ticket, stamped across the face",
+      "enemyId": "husk",
+      "text": "Ticket for wagon 14, the 06:10, Flats to Carrow, single. Punched once on 3 August. Across the face, in purple: HELD PENDING ORDERS. The stamp is Varga's and so is the handwriting on the water receipt folded behind it.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-remains-2",
+      "kind": "remains",
+      "author": "Radu Varga",
+      "bibleRefs": [
+        "E2",
+        "Gate 2",
+        "sentinel"
+      ],
+      "title": "Guard's whistle",
+      "source": "brass whistle on a broken chain",
+      "enemyId": "sentinel",
+      "text": "Gate 2 guard, brass whistle, cap badge 3. Varga posted three guards on 3 August with orders to admit nobody without an order. They asked him who could sign one. He said Carrow.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-remains-3",
+      "kind": "remains",
+      "author": "Nika Sorrell",
+      "bibleRefs": [
+        "E5",
+        "E1",
+        "Seizure Shed",
+        "lurker"
+      ],
+      "title": "Runner's lantern",
+      "source": "a tin lantern, three panes blacked",
+      "enemyId": "lurker",
+      "text": "A shuttered lantern with the glass painted black on three sides. Sorrell's runners used them in the Seizure Shed, two passengers a night. This one has 0771 scratched on the base, which is her tea.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-remains-4",
+      "kind": "remains",
+      "author": "Radu Varga",
+      "bibleRefs": [
+        "E7",
+        "Carrow stamp",
+        "Gate 2",
+        "guardian"
+      ],
+      "title": "The Carrow stamp",
+      "source": "a brass hand stamp, pad dry",
+      "enemyId": "guardian",
+      "text": "Brass, 2 kilos, handle worn to the shape of Varga's hand. The pad is dry. His last entry in the receipt book is an order to himself to reopen Gate 2, unsigned, since he had no authority to sign it.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-room-1",
+      "kind": "roomLine",
+      "bibleRefs": [
+        "wagon 9",
+        "Gate 2"
+      ],
+      "text": "Wagon 9 lies across the track under Gate 2. Guards fire from behind its wheels.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-room-2",
+      "kind": "roomLine",
+      "bibleRefs": [
+        "Seizure Shed",
+        "lurker"
+      ],
+      "text": "Seizure Shed: tea chests stacked 3 high make two lanes. Runners wait in the left one.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-room-3",
+      "kind": "roomLine",
+      "bibleRefs": [
+        "Platform 1",
+        "husk"
+      ],
+      "text": "Platform 1. Held passengers queue at a shut window. The signal lamp overhead is live and sparking.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-boon-1",
+      "kind": "boonDescription",
+      "author": "Benedek Asztalos",
+      "bibleRefs": [
+        "E6",
+        "lever 7"
+      ],
+      "name": "Lever 7",
+      "effectId": "hazard_ward",
+      "text": "Benedek Asztalos held it at danger for 30 days. He oiled it every morning anyway.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-boon-2",
+      "kind": "boonDescription",
+      "author": "Nika Sorrell",
+      "bibleRefs": [
+        "E1"
+      ],
+      "name": "Receipt 0771",
+      "effectId": "remains_charge",
+      "text": "Varga wrote it for 40 kilos of Sorrell's tea. She kept the copy and quotes it at him.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-boon-3",
+      "kind": "boonDescription",
+      "author": "Nika Sorrell",
+      "bibleRefs": [
+        "E5",
+        "Seizure Shed"
+      ],
+      "name": "Two a Night",
+      "effectId": "dash_echo",
+      "text": "Nika Sorrell walked 22 passengers through the Seizure Shed with the lamps out. Nobody tripped.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-item-1",
+      "kind": "itemBlurb",
+      "author": "Nika Sorrell",
+      "bibleRefs": [
+        "E1",
+        "Varga's kettle"
+      ],
+      "name": "Sorrell's Tea, 100 g",
+      "text": "Restores 25 Integrity over 5 s. Technically evidence. Brew it in anything but Varga's kettle.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-item-2",
+      "kind": "itemBlurb",
+      "author": "Radu Varga",
+      "bibleRefs": [
+        "E2"
+      ],
+      "name": "Inspector's Whistle",
+      "text": "Stuns enemies within 120 for 1 s. Three blasts meant 'gate closing'. Varga only needed it once.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-item-3",
+      "kind": "itemBlurb",
+      "author": "Radu Varga",
+      "bibleRefs": [
+        "E4"
+      ],
+      "name": "Water Receipt",
+      "text": "Trade at any hatch for 1 litre: +15 Integrity. Handwritten, numbered, and countersigned by the man who wrote it.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-biome-1",
+      "kind": "biomeTagline",
+      "bibleRefs": [
+        "Gate 2",
+        "E2"
+      ],
+      "name": "Gate 2",
+      "text": "A steel gate shut across a train. Wagon 8 is in Carrow, wagon 9 is not.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-biome-2",
+      "kind": "biomeTagline",
+      "bibleRefs": [
+        "Seizure Shed",
+        "E1"
+      ],
+      "name": "Seizure Shed",
+      "text": "Forty kilos of tea, 300 confiscated umbrellas, one unlit path through.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-biome-3",
+      "kind": "biomeTagline",
+      "bibleRefs": [
+        "Signal Box",
+        "lever 7"
+      ],
+      "name": "Signal Box",
+      "text": "Twelve levers, one kettle. Asztalos kept lever 7 at danger and the floor swept.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-boss-1",
+      "kind": "bossCallout",
+      "bibleRefs": [
+        "Gate 2"
+      ],
+      "text": "GATE 2 DROPPING. CLEAR THE TRACK.",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-boss-2",
+      "kind": "bossCallout",
+      "bibleRefs": [
+        "Carrow stamp",
+        "E7"
+      ],
+      "text": "VARGA STAMPS THE FLOOR: MOVE OFF THE PURPLE",
+      "world": "Tollgate Meridian"
+    },
+    {
+      "id": "tm-boss-3",
+      "kind": "bossCallout",
+      "bibleRefs": [
+        "sentinel"
+      ],
+      "text": "WHISTLE, 3 BLASTS: GUARDS INCOMING",
+      "world": "Tollgate Meridian"
+    }
+  ]
+}

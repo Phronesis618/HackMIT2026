@@ -158,7 +158,7 @@ export const KIND_SPECS: Record<ProseKind, KindSpec> = {
   enemyName: K(40, 24, false, false, false, false),
   enemyBlurb: K(160, 120, true, false, true, false),
   bossName: K(40, 32, false, false, false, false),
-  bossCallout: K(60, 40, true, false, true, true),
+  bossCallout: K(60, 52, true, false, true, true),
   skillNode: K(160, 110, false, false, false, true),
   uiLabel: K(120, 60, false, false, false, true),
   receiptLine: K(200, 140, true, false, false, false),
