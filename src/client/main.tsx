@@ -14,14 +14,9 @@ import { z } from 'zod';
 import type { GameSession } from '../shared/session';
 import { createBrowserAudio } from './audio';
 import { createBrowserChronicle } from './chronicle';
-<<<<<<< HEAD
-import { GameController, IDENTITY_STORAGE_KEY, parsePreviewFlags } from './game/GameController';
-import { connectFloorsUi, createUiStore } from './game/uiStore';
-=======
 import { GameController, parsePreviewFlags } from './game/GameController';
 import { createIdentityPersistence } from './game/identity';
-import { createUiStore } from './game/uiStore';
->>>>>>> origin/main
+import { connectFloorsUi, createUiStore } from './game/uiStore';
 import { PhaserWorldRenderer } from './render/PhaserWorldRenderer';
 import { applyTokens } from './styles/applyTokens';
 import './styles/app.css';
@@ -65,15 +60,11 @@ async function boot(): Promise<void> {
   if (availability === null) store.set({ notice: { kind: 'info', text: coOp
     ? 'No co-op server is reachable. Start the RELAY server or switch to Solo for offline play.'
     : 'No generation server is reachable. Solo play uses a clearly labelled offline fixture.' } });
-<<<<<<< HEAD
-  const controller = new GameController({ session, renderer, chronicle, audio, store, flags, liveGenerationAvailable });
-  connectFloorsUi(session, store, controller.actions); // floors UI bridge (agent F3): UiModel.floor + actions.chooseBiome
-=======
   const controller = new GameController({
     session, renderer, chronicle, audio, store, flags, liveGenerationAvailable,
     persistIdentity: identityPersistence.save,
   });
->>>>>>> origin/main
+  connectFloorsUi(session, store, controller.actions); // floors UI bridge (agent F3): UiModel.floor + actions.chooseBiome
   window.addEventListener('pagehide', (event) => {
     if (!event.persisted) controller.dispose();
   });

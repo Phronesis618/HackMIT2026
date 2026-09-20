@@ -32,7 +32,9 @@ export function FloorsHud({ model, actions }: { model: UiModel; actions: UiActio
   const toggle = (): void => setPinned((value) => !value);
   const mini = (
     <div
-      className="fmini-button" role="button" tabIndex={-1} aria-label="Toggle the full floor map" aria-pressed={pinned}
+      className="fmini-button" aria-label="Toggle the full floor map" title="Click to pin the full map, or hold M"
+      // keep keyboard focus on the game stage: movement keys only work while the stage owns input
+      onMouseDown={(event) => event.preventDefault()}
       onClick={toggle}
     >
       <Minimap floor={floor} size={slot ? 180 : 196} />
@@ -44,7 +46,11 @@ export function FloorsHud({ model, actions }: { model: UiModel; actions: UiActio
       {slot ? createPortal(mini, slot) : <div className="floors-hud">{mini}</div>}
       {(held || pinned) && !floor.choice && <FullMap floor={floor} onClose={() => setPinned(false)} />}
       {floor.choice && (
-        <BiomeChoice choice={floor.choice} fromBiomeName={floor.biomeName} localPlayerId={model.localPlayer.id} onChoose={(biomeId) => actions.chooseBiome?.(biomeId)} />
+        <BiomeChoice choice={floor.choice} fromBiomeName={floor.biomeName} localPlayerId={model.localPlayer.id} onChoose={(biomeId) => {
+            actions.chooseBiome?.(biomeId);
+            // the clicked door had focus and is about to unmount: hand the keyboard back to the game
+            document.querySelector<HTMLElement>('[data-game-stage]')?.focus();
+          }} />
       )}
     </>
   );
