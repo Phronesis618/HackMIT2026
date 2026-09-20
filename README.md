@@ -32,6 +32,7 @@ draw. No generated HTML, JS, SVG, URLs or expressions ever reach a player.
 ```bash
 git clone https://github.com/Phronesis618/HackMIT2026.git relay && cd relay
 npm ci                # Node >= 20.19 (developed on 26.7; .nvmrc says 26)
+cp .env.example .env  # the five-biome dungeon + world laws; omit it for three-room worlds
 npm run dev           # API/WS server on :8787 + Vite client on :5173
 ```
 
@@ -97,7 +98,7 @@ itself wrote**, bought with what its rooms paid out.
 
 ![The Bastion skill tree, attuned to Vantage Spire, with the world's own branch](docs/media/skill-tree.png)
 
-**9 — Or go deep.** With floors on, a world is five biomes of 10/15/20/25/30 rooms: doors seal
+**9 — Go deep.** With the shipped defaults a world is five biomes of 10/15/20/25/30 rooms: doors seal
 until a room is clear, a fog-of-war minimap fills in, and hold **M** opens the floor map —
 elite packs, caches, rest sites, relics, the exit gate.
 
@@ -305,7 +306,10 @@ to a watching coding agent through a folder — see [`docs/DEMO.md`](docs/DEMO.m
 
 ### Flags
 
-Both default to **off**; the server decides for the whole crew and reports on `/api/config`.
+The **server decides for the whole crew** and reports its answer on `/api/config`; every client
+adopts that, so a crew cannot play one game while their screens draw another. Both flags are off
+in the bare source default and **on** everywhere we ship them: `.env.example`, the Dockerfile and
+`render.yaml`. Set them to anything else (or delete them) for the three-room shape.
 
 | Flag | Server env | Per-browser fallback | What it turns on |
 | --- | --- | --- | --- |
