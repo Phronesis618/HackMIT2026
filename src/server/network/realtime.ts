@@ -395,6 +395,12 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
         publishEvents(events);
         break;
       }
+      case 'learn_skill': {
+        const events = sim.learnSkill(member.identity.id, message.skillId);
+        publishSnapshot();
+        publishEvents(events);
+        break;
+      }
     }
   }
 

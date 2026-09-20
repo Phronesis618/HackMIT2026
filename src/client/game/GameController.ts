@@ -212,12 +212,13 @@ export class GameController {
       }
       const players = snapshot.players.map((p) => ({
         id: p.id, displayName: p.displayName, classId: p.classId, isLocal: p.id === session.localPlayerId,
-        hp: Math.round(p.hp), maxHp: p.maxHp, state: p.state,
+        hp: Math.round(p.hp), maxHp: p.maxHp, state: p.state, skills: p.skills,
       }));
       const prevPlayers = store.get().players;
       if (prevPlayers.length !== players.length || prevPlayers.some((p, i) => {
         const next = players[i]!;
-        return p.id !== next.id || p.displayName !== next.displayName || p.classId !== next.classId || p.hp !== next.hp || p.maxHp !== next.maxHp || p.state !== next.state;
+        return p.id !== next.id || p.displayName !== next.displayName || p.classId !== next.classId || p.hp !== next.hp || p.maxHp !== next.maxHp || p.state !== next.state
+          || (p.skills?.length ?? 0) !== (next.skills?.length ?? 0);
       })) {
         store.set({ players });
       }
@@ -467,6 +468,7 @@ export class GameController {
         store.set({ audioMuted: audio.isMuted() });
       },
       unlockAbility: () => session.unlockAbility?.(),
+      learnSkill: (skillId: string) => session.learnSkill?.(skillId),
       enterTraining: () => {
         const ok = session.enterTraining?.() ?? false;
         if (!ok) this.notice('info', 'The training range is available in solo play from headquarters.');

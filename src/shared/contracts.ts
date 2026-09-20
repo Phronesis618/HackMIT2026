@@ -689,6 +689,8 @@ export const PlayerStateSchema = z.object({
   ultCharge: z.number().min(0).max(100).optional(),
   /** Short lockout after firing R (prevents double-fire on held keys). */
   abilityRCooldownMs: z.number().nonnegative().optional(),
+  /** Skill-tree node ids this operative has learned (src/shared/skills.ts); session-scoped. */
+  skills: z.array(z.string().max(64)).max(64).default([]),
 });
 export type PlayerState = z.infer<typeof PlayerStateSchema>;
 
@@ -855,6 +857,10 @@ export const GameEventSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     ...eventBase, type: z.literal('ability_unlocked'), playerId: IdString, abilityId: AbilityIdSchema,
+    cost: z.number().int().nonnegative(), remainingResources: z.number().int().nonnegative(),
+  }),
+  z.object({
+    ...eventBase, type: z.literal('skill_learned'), playerId: IdString, skillId: z.string().max(64), skillName: ShortText,
     cost: z.number().int().nonnegative(), remainingResources: z.number().int().nonnegative(),
   }),
   z.object({

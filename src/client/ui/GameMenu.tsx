@@ -76,7 +76,7 @@ export function GameMenu({ model, actions }: { model: UiModel; actions: UiAction
           {page === 'codex' && <CodexPage model={model} />}
           {page === 'bestiary' && <BestiaryPage model={model} />}
           {page === 'operative' && <OperativePage model={model} actions={actions} />}
-          {page === 'skills' && <SkillsPage model={model} />}
+          {page === 'skills' && <SkillsPage model={model} actions={actions} />}
           {page === 'controls' && <ControlsPage />}
           {page === 'memories' && <MemoryWall memories={model.memories} actions={actions} context={model} />}
         </section>
@@ -293,7 +293,7 @@ const TIER_H = 118;
  * drawn in SVG behind circular nodes; selecting a node opens its detail beside the tree.
  * Nothing is purchasable yet — the data is the design, the effects are a later pass.
  */
-export function SkillsPage({ model }: { model: UiModel }) {
+export function SkillsPage({ model, actions }: { model: UiModel; actions?: UiActions }) {
   const world = model.world ? { title: model.world.title, attunements: model.world.attunements } : null;
   const tree = buildSkillTree(model.localPlayer.classId, world);
   const [selectedId, setSelectedId] = useState<string>('core.root');
@@ -313,6 +313,10 @@ export function SkillsPage({ model }: { model: UiModel }) {
   const selected = byId.get(selectedId) ?? tree.nodes[0]!;
   const theme = CLASS_THEME[model.localPlayer.classId];
   const resources = model.hud?.resources ?? 0;
+  const owned = new Set(model.players.find((p) => p.isLocal)?.skills ?? []);
+  const canLearn = (n: SkillNode): boolean => n.status === 'implemented' && n.cost > 0 && !owned.has(n.id)
+    && n.requires.every((r) => r === 'core.root' || owned.has(r)) && resources >= n.cost
+    && (model.phase === 'headquarters' || model.phase === 'debrief' || model.phase === 'training') && !!actions?.learnSkill;
 
   return (
     <div className="skills" style={{ ['--class-color' as string]: theme.primary }}>
@@ -323,7 +327,7 @@ export function SkillsPage({ model }: { model: UiModel }) {
         </div>
         <span className="badge">{resources} resources</span>
       </div>
-      <p className="skills__note">Design preview — effects are not wired to the simulation yet. Attunements are written by the world you are in.</p>
+      <p className="skills__note">Bright nodes are live: learn them between runs with resources earned from hostiles and cleared rooms. Dimmed nodes are design previews, not wired to the simulation yet. Attunements are written by the world you are in.</p>
       <div className="skills__body">
         <div className="skilltree__scroll" ref={scrollRef}>
           <div className="skilltree" style={{ width, height }}>
@@ -350,7 +354,7 @@ export function SkillsPage({ model }: { model: UiModel }) {
                 <button
                   key={n.id}
                   type="button"
-                  className={`skillnode skillnode--${n.kind} skillnode--${n.status} ${capstone ? 'skillnode--capstone' : ''} ${selected.id === n.id ? 'skillnode--selected' : ''}`}
+                  className={`skillnode skillnode--${n.kind} skillnode--${n.status} ${owned.has(n.id) ? 'skillnode--owned' : ''} ${capstone ? 'skillnode--capstone' : ''} ${selected.id === n.id ? 'skillnode--selected' : ''}`}
                   style={{ left: x, top: y }}
                   onClick={() => setSelectedId(n.id)}
                   aria-pressed={selected.id === n.id}
@@ -371,8 +375,19 @@ export function SkillsPage({ model }: { model: UiModel }) {
             <dt>Cost</dt><dd>{selected.cost === 0 ? 'Innate' : `${selected.cost} resources`}</dd>
             <dt>Tier</dt><dd>{selected.tier === 0 ? 'Root' : selected.tier}</dd>
             <dt>Requires</dt><dd>{selected.requires.length ? selected.requires.map((r) => byId.get(r)?.name ?? r).join(', ') : '—'}</dd>
-            <dt>State</dt><dd>{selected.status === 'planned' ? 'Locked · not yet active' : 'Active'}</dd>
+            <dt>State</dt><dd>{owned.has(selected.id) || selected.cost === 0 ? 'Learned' : selected.status === 'planned' ? 'Design preview · not yet wired' : 'Available'}</dd>
           </dl>
+          {selected.cost > 0 && selected.status === 'implemented' && !owned.has(selected.id) && (
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={!canLearn(selected)}
+              onClick={() => actions?.learnSkill?.(selected.id)}
+              title={model.phase === 'expedition' ? 'Skills are learned between runs, in the sanctuary' : undefined}
+            >
+              Learn · {selected.cost} resources
+            </button>
+          )}
           {selected.effectId && <p className="hint">Engine effect: <code>{selected.effectId}</code></p>}
         </aside>
       </div>

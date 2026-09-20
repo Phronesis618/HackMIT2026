@@ -38,6 +38,8 @@ export interface UiPlayer {
   hp?: number;
   maxHp?: number;
   state?: PlayerActionState;
+  /** Learned skill-tree node ids. */
+  skills?: string[];
 }
 
 export interface UiWorldSummary {
@@ -174,6 +176,7 @@ export interface UiActions {
   dismissNotice(): void;
   toggleAudio?(): void;
   unlockAbility?(): void;
+  learnSkill?(skillId: string): void;
   /** Solo only: enter the HQ training range (respawning targets, every ability unlocked). */
   enterTraining?(): void;
   activateHeadquartersStation?(): void;

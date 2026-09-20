@@ -1,7 +1,8 @@
 /**
- * Skill tree — content and shape. Effects are NOT wired to the simulation yet (every node
- * is `status: 'planned'`); the tree is real design data a future pass hooks up, and the
- * menu renders it as a vertical tree (root at the bottom, tiers climbing upward).
+ * Skill tree — content and shape. Nodes in IMPLEMENTED_SKILLS are wired to the simulation
+ * (learnSkill spends resources; effects apply to attacks, dashes and room clears); the rest
+ * are `status: 'planned'` design data. The menu renders it as a vertical tree (root at the
+ * bottom, tiers climbing upward).
  *
  * Three sources feed one tree:
  *  - core:       shared operative spine (tiers 0–1, centre lane)
@@ -43,7 +44,9 @@ export interface SkillWorldContext {
   attunements: Array<{ effectId: AttunementEffectId; name: string; description: string }>;
 }
 
-const planned = (node: Omit<SkillNode, 'status' | 'kind'>, kind: SkillKind): SkillNode => ({ ...node, kind, status: 'planned' });
+/** Nodes the simulation actually applies today (src/sim/simulation.ts learnSkill/basicAttack/dash/room clear). */
+export const IMPLEMENTED_SKILLS: ReadonlySet<string> = new Set(['core.plating', 'core.wind', 'core.salvage', 'bastion.sweep', 'shade.edge', 'beacon.reach', 'weaver.loom']);
+const planned = (node: Omit<SkillNode, 'status' | 'kind'>, kind: SkillKind): SkillNode => ({ ...node, kind, status: IMPLEMENTED_SKILLS.has(node.id) ? 'implemented' : 'planned' });
 
 const CORE: SkillNode[] = [
   { id: 'core.root', name: 'Relay Bond', description: 'The operative’s link to the relay. Everything grows from here.', tier: 0, lane: 0, requires: [], cost: 0 },

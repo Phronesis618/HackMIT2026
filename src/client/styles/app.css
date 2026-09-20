@@ -2709,3 +2709,31 @@ body { font-size: var(--fs-body); }
   padding: 3px 7px;
   background: rgba(9, 13, 22, 0.8);
 }
+
+/* ---- Agent A: live (learnable) and learned skill nodes ---- */
+.skillnode--implemented .skillnode__ring {
+  border-style: solid;
+  border-color: var(--class-color, #7cf5ff);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--class-color, #7cf5ff) 45%, transparent);
+  opacity: 1;
+}
+.skillnode--implemented .skillnode__label {
+  color: #fff;
+}
+.skillnode--owned .skillnode__ring {
+  background: color-mix(in srgb, var(--class-color, #7cf5ff) 32%, transparent);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--class-color, #7cf5ff) 65%, transparent);
+}
+.skillnode--owned .skillnode__ring::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 700 12px var(--font-mono);
+  color: #fff;
+}
+.skilltree__detail .btn--primary {
+  margin-top: 10px;
+  width: 100%;
+}

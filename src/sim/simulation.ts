@@ -12,6 +12,7 @@ import {
 } from '../shared/conventions';
 import { CLASS_ABILITIES, ENEMY_INFO, ULT_CHARGE_MAX, ULT_CHARGE_PER_DAMAGE, ULT_CHARGE_PER_KILL, type ClassId, type WorldRuleId } from '../shared/registry';
 import { buildSolidGrid, circleHitsSolid, moveCircle, type SolidGrid } from './collision';
+import { buildSkillTree } from '../shared/skills';
 import {
   CHANNEL_PATTERN, CLASS_COMBAT, ENEMY_COMBAT, ENEMY_PROJECTILE_PATTERN,
   GUARDIAN_RING_DAMAGE, GUARDIAN_RING_PATTERN, GUARDIAN_VOLLEY_DAMAGE, GUARDIAN_VOLLEY_PATTERN,
@@ -123,6 +124,13 @@ export interface Simulation {
   /** Floors: vote while the biome choice is open; the host's vote moves the crew on the next step. */
   chooseBiome(playerId: string, biomeId: string): void;
   unlockAbility(playerId: string): GameEvent[];
+  /**
+   * Spend resources on a skill-tree node (src/shared/skills.ts). Only nodes whose status is
+   * `implemented` can be learned; requirements must be owned. Allowed outside combat phases.
+   */
+  learnSkill(playerId: string, skillId: string): GameEvent[];
+  /** Credit resources directly (tests, future shop/debug tools). Never emits events. */
+  grantResources(playerId: string, amount: number): void;
   /** Buttons are pressed this tick; interact is held this tick. */
   applyIntent(intent: PlayerIntent): void;
   step(): GameEvent[];
@@ -141,6 +149,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   let world: PreparedWorld | null = null;
   /** World rules only apply on expeditions; HQ and the training range are neutral ground. */
   const hasRule = (rule: WorldRuleId): boolean => phase === 'expedition' && (world?.recipe.rules ?? []).includes(rule);
+  /** Learned skill-tree node (see learnSkill). */
+  const hasSkill = (p: PlayerRuntime, id: string): boolean => p.state.skills.includes(id);
   let room = hq;
   let grid: SolidGrid = buildSolidGrid(room);
   let phase: GamePhase = 'headquarters';
@@ -400,7 +410,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         // New operatives start with exactly one unlock's worth of resources so the E ability
         // can be unlocked at HQ before the first expedition.
         resources: ABILITY_UNLOCK_COST, abilityEUnlocked: false, abilityQCooldownMs: 0, abilityECooldownMs: 0,
-        shieldMs: 0, shroudMs: 0, rallyMs: 0, reviveProgress: 0, ultCharge: 0, abilityRCooldownMs: 0,
+        shieldMs: 0, shroudMs: 0, rallyMs: 0, reviveProgress: 0, ultCharge: 0, abilityRCooldownMs: 0, skills: [],
       },
       intent: null, unlockedClasses: new Set(), dashRemainingMs: 0,
       dashDirection: { x: 1, y: 0 }, attackRemainingMs: 0, hitRemainingMs: 0,
@@ -611,9 +621,19 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
 
   function basicAttack(p: PlayerRuntime, events: GameEvent[]): void {
     const s = p.state;
-    const spec = CLASS_COMBAT[s.classId];
+    const base = CLASS_COMBAT[s.classId];
+    // Learned skills adjust the weapon: Wider Sweep (arc +30%, up to three targets), Keen Edge
+    // (+4 damage, cadence +10%), Far Lantern (range 240 -> 300), Tight Loom (slow 1.5 s).
+    const spec = {
+      ...base,
+      arc: base.arc * (hasSkill(p, 'bastion.sweep') ? 1.3 : 1),
+      damage: base.damage + (hasSkill(p, 'shade.edge') ? 4 : 0),
+      cooldown: base.cooldown * (hasSkill(p, 'shade.edge') ? 0.9 : 1),
+      range: hasSkill(p, 'beacon.reach') ? 300 : base.range,
+    };
     let targets = arcTargets(s, s.facing, spec.range, spec.arc);
     if (s.classId === 'beacon' || s.classId === 'shade') targets = targets.slice(0, 1);
+    else if (s.classId === 'bastion' && hasSkill(p, 'bastion.sweep')) targets = targets.slice(0, 3);
     const bonus = s.shroudMs > 0 ? 18 : 0;
     s.shroudMs = 0;
     p.attackRemainingMs = ATTACK_DURATION_MS;
@@ -622,7 +642,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       range: spec.range, arcRad: spec.arc, hitEnemyIds: targets.map((e) => e.state.id) }));
     for (const e of targets) {
       damageEnemy(e, p, spec.damage + bonus, events);
-      if (s.classId === 'weaver') e.state.slowMs = Math.max(e.state.slowMs ?? 0, 1000);
+      if (s.classId === 'weaver') e.state.slowMs = Math.max(e.state.slowMs ?? 0, hasSkill(p, 'weaver.loom') ? 1500 : 1000);
     }
     const terrainStrike = strikeBreakableWalls(room, grid, progress.terrain, {
       x: s.x, y: s.y, facing: s.facing, range: spec.range, arc: spec.arc, damage: spec.damage + bonus,
@@ -819,8 +839,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       p.dashDirection = length > 0 ? { x: moveX / length, y: moveY / length } : { x: Math.cos(s.facing), y: Math.sin(s.facing) };
       p.dashRemainingMs = DASH_DURATION_MS;
       p.attackRemainingMs = 0;
-      s.dashCooldownMs = DASH_COOLDOWN_MS;
-      s.invulnerableMs = Math.max(s.invulnerableMs, DASH_INVULNERABLE_MS);
+      const wind = hasSkill(p, 'core.wind');
+      s.dashCooldownMs = Math.round(DASH_COOLDOWN_MS * (wind ? 0.75 : 1));
+      s.invulnerableMs = Math.max(s.invulnerableMs, DASH_INVULNERABLE_MS + (wind ? 50 : 0));
       // The event's facing is the direction of travel (renderers draw the trail behind it),
       // not the aim direction — you can dash sideways while looking at an enemy.
       events.push(emit({ type: 'player_dashed', playerId: s.id, x: s.x, y: s.y, facing: Math.atan2(p.dashDirection.y, p.dashDirection.x) }));
@@ -1106,7 +1127,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (!progress.cleared && living.length > 0 && livingEnemies().length === 0) {
       progress.cleared = true;
       const reward = (floorsRun ? clearReward(room) : ROOM_CLEAR_REWARD) + (hasRule('scavenger') ? 2 : 0);
-      for (const p of players.values()) p.state.resources += reward;
+      for (const p of players.values()) p.state.resources += reward + (hasSkill(p, 'core.salvage') ? 1 : 0);
       events.push(emit({ type: 'room_cleared', worldId: world.worldId, roomIndex: room.index, roomId: room.id, playerIds: playerIds(), reward }));
       if (floorsRun && room.roomId !== undefined) {
         markCleared(floorsRun, room.roomId);
@@ -1303,6 +1324,27 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       p.unlockedClasses.add(p.state.classId);
       return [emit({ type: 'ability_unlocked', playerId, abilityId: CLASS_ABILITIES[p.state.classId].e,
         cost: ABILITY_UNLOCK_COST, remainingResources: p.state.resources })];
+    },
+    grantResources(playerId, amount) {
+      const p = players.get(playerId);
+      if (p && Number.isFinite(amount) && amount > 0) p.state.resources += Math.floor(amount);
+    },
+    learnSkill(playerId, skillId) {
+      const p = players.get(playerId);
+      if (!p || phase === 'expedition' || p.state.hp <= 0 || p.state.skills.includes(skillId)) return [];
+      const tree = buildSkillTree(p.state.classId, world ? { title: world.recipe.title, attunements: world.recipe.attunements } : null);
+      const node = tree.nodes.find((n) => n.id === skillId);
+      if (!node || node.status !== 'implemented' || node.cost <= 0) return [];
+      if (node.requires.some((req) => req !== 'core.root' && !p.state.skills.includes(req))) return [];
+      if (p.state.resources < node.cost) return [];
+      p.state.resources -= node.cost;
+      p.state.skills = [...p.state.skills, skillId];
+      // Immediate effects; the rest are read where they apply (attack, dash, room clear).
+      if (skillId === 'core.plating') {
+        p.state.maxHp += 20;
+        p.state.hp = Math.min(p.state.maxHp, p.state.hp + 20);
+      }
+      return [emit({ type: 'skill_learned', playerId, skillId, skillName: node.name, cost: node.cost, remainingResources: p.state.resources })];
     },
     setHostPlayerId(playerId) {
       hostPlayerId = playerId;
