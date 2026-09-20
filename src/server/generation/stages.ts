@@ -138,6 +138,8 @@ export function fitText(text: string, max: number): string {
   const head = trimmed.slice(0, max + 1);
   const sentence = Math.max(head.lastIndexOf('. '), head.lastIndexOf('! '), head.lastIndexOf('? '));
   if (sentence >= max * 0.5) return head.slice(0, sentence + 1);
+  const clause = Math.max(head.lastIndexOf(', '), head.lastIndexOf('; '), head.lastIndexOf(': '), head.lastIndexOf(' · '), head.lastIndexOf(' ('));
+  if (clause >= max * 0.6) return head.slice(0, clause).replace(/[\s,;:·-]+$/, '');
   const word = head.lastIndexOf(' ');
   return (word > 0 ? head.slice(0, word) : trimmed.slice(0, max)).replace(/[\s,;:·-]+$/, '');
 }
@@ -177,19 +179,65 @@ export function parseWithFit<T extends z.ZodType>(schema: T, raw: unknown): Retu
   return schema.safeParse(value) as ReturnType<T['safeParse']>;
 }
 
+/**
+ * Tool input sometimes arrives with a nested object or list serialised as a JSON string
+ * (seen live: `bible` as a string). Parse such values back, one level deep, and clone the rest.
+ */
+export function coerceJson(raw: unknown): unknown {
+  if (typeof raw === 'string' && /^\s*[[{]/.test(raw)) {
+    try {
+      return coerceJson(JSON.parse(raw) as unknown);
+    } catch {
+      return raw;
+    }
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw;
+  return Object.fromEntries(Object.entries(raw as Record<string, unknown>).map(([key, value]) => {
+    if (typeof value === 'string' && /^\s*[[{]/.test(value)) {
+      try {
+        return [key, JSON.parse(value) as unknown];
+      } catch {
+        return [key, value];
+      }
+    }
+    return [key, value];
+  }));
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export interface ParsedBrief { brief: BiomeBrief; lines: BiomeRoomLines['lines'] }
 
 const slug = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'biome';
 
-/** Validates one model brief against the real BiomeBriefSchema; the id is assigned by trusted code. */
+/** Why the last `parseBrief` call per index failed; read by the pipeline for an honest provenance note. */
+export const briefRejections = new Map<number, string>();
+
+/**
+ * Validates one model brief against the real BiomeBriefSchema; the id is assigned by trusted
+ * code. Pools are tidied first (duplicates, director-only ids) so a slip there costs an entry,
+ * not the whole brief.
+ */
 export function parseBrief(raw: unknown, index: number): ParsedBrief | undefined {
-  const model = parseWithFit(ModelBriefSchema, raw);
-  if (!model.success) return undefined;
+  briefRejections.delete(index);
+  const value = coerceJson(raw);
+  if (isRecord(value)) {
+    for (const key of ['motifIds', 'enemyPool', 'propPool'] as const) {
+      if (Array.isArray(value[key])) value[key] = [...new Set(value[key] as unknown[])];
+    }
+    if (Array.isArray(value.propPool)) value.propPool = (value.propPool as unknown[]).filter((id) => id !== 'anchor_pedestal');
+  }
+  const model = parseWithFit(ModelBriefSchema, value);
+  if (!model.success) {
+    briefRejections.set(index, issuesText(model.error));
+    return undefined;
+  }
   const { roomLines, terrain, ...rest } = model.data;
   const brief = BiomeBriefSchema.safeParse({ ...rest, ...(terrain ? { terrain } : {}), id: `b${index}-${slug(rest.name)}` });
-  if (!brief.success) return undefined;
+  if (!brief.success) {
+    briefRejections.set(index, issuesText(brief.error));
+    return undefined;
+  }
   const lines = BIOME_LINE_KINDS.flatMap((kind) => {
     const text = roomLines[kind as keyof typeof roomLines];
     return text ? [{ kind, text }] : [];
@@ -217,7 +265,8 @@ export interface LawsPart {
 }
 
 /** `legacy` = a complete pre-bible recipe (old model output): accepted as-is, no second call. */
-export function parseFoundation(raw: unknown): { legacy: z.infer<typeof WorldRecipeSchema> } | { foundation: Foundation } {
+export function parseFoundation(input: unknown): { legacy: z.infer<typeof WorldRecipeSchema> } | { foundation: Foundation } {
+  const raw = coerceJson(input);
   if (!isRecord(raw)) throw new StageParseError('Recipe failed schema validation at (root): expected an object.');
   if (raw.bible == null) {
     const legacy = WorldRecipeSchema.safeParse(raw);
@@ -232,7 +281,8 @@ export function parseFoundation(raw: unknown): { legacy: z.infer<typeof WorldRec
 }
 
 /** Rooms are load-bearing: a failure here is a failed world. */
-export function parseRooms(raw: unknown): RoomsPart {
+export function parseRooms(input: unknown): RoomsPart {
+  const raw = coerceJson(input);
   if (!isRecord(raw)) throw new StageParseError('Recipe failed schema validation at (root): expected an object.');
   const core = parseWithFit(z.object({
     themeSummary: WorldRecipeSchema.shape.themeSummary, motifIds: roomsShape.motifIds, palette: roomsShape.palette,
@@ -243,7 +293,8 @@ export function parseRooms(raw: unknown): RoomsPart {
 }
 
 /** Look, laws, terrain skins and the Custodian are flavour: they degrade item by item and never fail a world. */
-export function parseLaws(raw: unknown, bible: WorldBible): LawsPart {
+export function parseLaws(input: unknown, bible: WorldBible): LawsPart {
+  const raw = coerceJson(input);
   const record = isRecord(raw) ? raw : {};
   const notes: string[] = [];
   const look = WorldLookSchema.safeParse(record.look);
@@ -260,7 +311,8 @@ export function parseLaws(raw: unknown, bible: WorldBible): LawsPart {
   };
 }
 
-export function parseLore(raw: unknown, bible: WorldBible, expected: { kind: 'relic' | 'remains'; count: number }): { lore: WorldRecipe['lore']; dropped: number } {
+export function parseLore(input: unknown, bible: WorldBible, expected: { kind: 'relic' | 'remains'; count: number }): { lore: WorldRecipe['lore']; dropped: number } {
+  const raw = coerceJson(input);
   const items = isRecord(raw) && Array.isArray(raw.lore) ? raw.lore : undefined;
   if (!items) throw new StageParseError('Recipe failed schema validation at lore: expected an array.');
   const lore: WorldRecipe['lore'] = [];
@@ -274,7 +326,8 @@ export function parseLore(raw: unknown, bible: WorldBible, expected: { kind: 're
   return { lore, dropped: items.length - lore.length };
 }
 
-export function parseAttunements(raw: unknown): WorldRecipe['attunements'] {
+export function parseAttunements(input: unknown): WorldRecipe['attunements'] {
+  const raw = coerceJson(input);
   const items = isRecord(raw) && Array.isArray(raw.attunements) ? raw.attunements : [];
   const seen = new Set<string>();
   return items.map((item) => parseWithFit(AttunementSchema, item)).flatMap((r) => (r.success ? [r.data] : []))
@@ -291,7 +344,8 @@ export function parseCustodian(raw: unknown, nonBossEnemyKinds: number): { custo
   return { custodian: result.custodian, notes: result.substituted ? [`Replaced ${result.substituted} Custodian move(s) that broke the move-set rules with defaults.`] : [] };
 }
 
-export function parseBiomes(raw: unknown, firstIndex: number, count: number): Array<ParsedBrief | undefined> {
+export function parseBiomes(input: unknown, firstIndex: number, count: number): Array<ParsedBrief | undefined> {
+  const raw = coerceJson(input);
   const items = isRecord(raw) && Array.isArray(raw.biomes) ? raw.biomes : [];
   return Array.from({ length: count }, (_, offset) => parseBrief(items[offset], firstIndex + offset));
 }
@@ -605,6 +659,20 @@ export function applyFixes(parts: Lintable, bible: WorldBible | undefined, failu
     applied++;
   }
   return applied;
+}
+
+/** Last resort after polish: a line whose only remaining fault is length is cut at a sentence or word end. */
+export function fitOverlong(parts: Lintable, bible: WorldBible | undefined): number {
+  let cut = 0;
+  for (const failure of lintWorld(parts, bible).failures) {
+    if (!failure.notes.some((note) => note.startsWith('Rule too-long'))) continue;
+    const field = access(parts, failure.path);
+    const limit = Math.min(failure.maxChars, KIND_SPECS[failure.kind].max);
+    if (!field || failure.text.length <= limit) continue;
+    field.set(fitText(failure.text, limit));
+    cut++;
+  }
+  return cut;
 }
 
 export function displayTexts(recipe: Lintable & Partial<Pick<WorldRecipe, 'contributionMappings'>>): string[] {

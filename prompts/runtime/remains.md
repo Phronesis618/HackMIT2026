@@ -19,5 +19,5 @@ and appends its numbers) and answers this world's dangers.
 - Each attunement belongs to a different person from `attunementOwners`, and to an object
   no remains fragment above already used.
 - name (max 40, aim 28): "<Owner>'s <object>" or the object's working name, from the bible.
-- description (max 160, aim 120): the owner fact only. A named bible person, what they did
+- description (hard max 160, aim 110): the owner fact only, in one or two short sentences. A named bible person, what they did
   with this object, one count or wear mark. No effect numbers, no "you", no advice, no proverb.

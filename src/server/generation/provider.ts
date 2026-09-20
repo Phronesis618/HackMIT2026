@@ -2,7 +2,7 @@ import https from 'node:https';
 import { z } from 'zod';
 import type { GenerationRequest, WorldRecipe } from '../../shared/contracts';
 import { hashString } from '../../shared/ids';
-import { buildSystemPrompt, namePool } from './prompt';
+import { buildSystemPrompt, namePool, worldSeeds } from './prompt';
 import { FullRecipeToolSchema, StageParseError, displayTexts, isUnsafeText, jsonSchema, parseFullRecipe } from './stages';
 
 const responseSchema = z.object({
@@ -209,6 +209,7 @@ function createRecipeProvider(options: ProviderOptions, provider: 'openai' | 'an
           floors: request.floors === true,
           contributions: request.contributions.map(({ id, text }) => ({ id, text })),
           namePool: namePool(seed),
+          ...worldSeeds(seed),
           ...(repair ? { repair } : {}),
         },
         schema: jsonSchema(FullRecipeToolSchema),

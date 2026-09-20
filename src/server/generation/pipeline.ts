@@ -25,11 +25,11 @@
 import type { GenerationRequest, GenerationStatus, WorldRecipe } from '../../shared/contracts';
 import { deriveBiomeBriefs } from '../../shared/floorgen';
 import { BIOME_BRIEF_COUNT } from '../../shared/floors';
-import { buildSystemPrompt, namePool, type PromptStage } from './prompt';
+import { buildSystemPrompt, namePool, worldSeeds, type PromptStage } from './prompt';
 import { GenerationFailure, assertDisplayText, type ProviderUsage, type RecipeProvider } from './provider';
 import {
   BiomesToolSchema, FoundationToolSchema, PolishToolSchema, RelicsToolSchema, LawsToolSchema, RemainsToolSchema, RoomsToolSchema, StageParseError,
-  applyFixes, assembleRecipe, displayTexts, isUnsafeText, jsonSchema, lintWorld, parseAttunements, parseBiomes,
+  applyFixes, assembleRecipe, briefRejections, displayTexts, fitOverlong, isUnsafeText, jsonSchema, lintWorld, parseAttunements, parseBiomes,
   fitHeader, headerOverflow, parseFoundation, parseLaws, parseLore, parseRooms, planBiomeSlots, planRelicSlots, planRemainsSlots,
   type Foundation, type LawsPart, type ParsedBrief, type RoomsPart, type WorldLint,
 } from './stages';
@@ -174,6 +174,7 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
       if (parsed.success) applyFixes(parts, bible, failures, parsed.data.fixes);
       failures = [...(label === 'header' ? headerOverflow(parts as Foundation['header']) : []), ...lintWorld(parts, bible).failures].slice(0, 12);
     }
+    fitOverlong(parts, bible);
   }
 
   try {
@@ -184,7 +185,7 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
     let repair: string | undefined;
     for (let attempt = 1; attempt <= 2 && !parsedFoundation; attempt++) {
       try {
-        const raw = await call('foundation', 'foundation', { contributions, namePool: namePool(seed), ...(repair ? { repair } : {}) }, FoundationToolSchema, 2_500);
+        const raw = await call('foundation', 'foundation', { contributions, namePool: namePool(seed), ...worldSeeds(seed), ...(repair ? { repair } : {}) }, FoundationToolSchema, 2_500);
         signal?.throwIfAborted();
         const candidate = parseFoundation(raw);
         assertDisplayText('legacy' in candidate ? candidate.legacy : { ...candidate.foundation.header, bible: candidate.foundation.bible });
@@ -310,6 +311,10 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
       ...[biomeSlots.slice(0, 2), biomeSlots.slice(2, 4), biomeSlots.slice(4, 6), biomeSlots.slice(6)].filter((slots) => slots.length > 0).map((slots, part): [string, () => Promise<void>] => [`biome briefs ${slots[0]!.index + 1}-${slots.at(-1)!.index + 1}`, async () => {
         const raw = await call('biomes', `biomes:${part + 1}`, { bible, world, slots: slots.map(({ position, setting, focusEvent, namesTaken }) => ({ position, setting, focusEvent, namesTaken })) }, BiomesToolSchema, 3_000);
         const parsed = parseBiomes(raw, slots[0]!.index, slots.length);
+        parsed.forEach((entry, offset) => {
+          const reason = briefRejections.get(slots[0]!.index + offset);
+          if (!entry && reason) notes.push(clipNote(`Biome brief ${slots[0]!.index + offset + 1} was rejected: ${reason}`));
+        });
         const valid = parsed.filter((entry): entry is ParsedBrief => entry !== undefined && !displayTexts({ biomes: [entry.brief], biomeRoomLines: [{ biomeId: entry.brief.id, lines: entry.lines }] }).some(isUnsafeText));
         if (closed) return;
         parsed.forEach((entry, offset) => { state.briefs[slots[0]!.index + offset] = entry && valid.includes(entry) ? entry : undefined; });

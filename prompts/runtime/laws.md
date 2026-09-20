@@ -14,23 +14,24 @@ consequence of what went wrong here (a flooded station drags; a ward on backup p
 Respect lawConflicts, at most one combat law and one vision law, and keep the summed
 difficulty between -1 and 3. intensity 0 to 1 (0.5 is normal).
 name (max 36): what the inhabitants called it, from a bible person, place or object.
-description (max 160, aim 120): one bible fact that explains why this place works this way,
-then what the crew should expect, plainly. The player reads this before entering.
+description (hard max 160, aim 110): one bible fact that explains why this place works this
+way, then what the crew should expect, plainly. Two short sentences. The player reads this
+before entering.
 
 ## terrainSkins
 One entry for each of the four terrain features in the registry: the world's own name for
 that tile mechanic (trusted code keeps the ones the rooms use). name (max 28): a bible object or material, lower case:
-"ledger stacks", "tide-gauge vents". caption (max 60): the name in capitals, a separator,
-then what it does to movement in plain words, keeping the registry's meaning:
+e.g. the stacks or vents of this world. caption (hard max 60, aim 45): the name in capitals,
+a separator, then what it does in five or six plain words that keep the registry's meaning:
 "LEDGER STACKS · break with attacks, rubble slows".
 
 
 ## custodian
 The final boss. title (max 40): the bible person responsible or the machine they left
-running, with their title: "Director Sele, Pump 6 Frame". phaseTitles: exactly three short
+running, with their title: a name, a comma, the machine or room they hold. phaseTitles: exactly three short
 labels (max 40 each) for the fight's three phases, each a bible fact in two to five words.
-moves: exactly three different patternIds from custodianPatterns: at least one [close], at
-least one [ranged], at most one [arena]; pick summon_choir only if the bible casts two or
-more non-guardian enemy kinds. For each, name (max 32) is the bible object doing the damage, and
-tell (max 80, capitals, aim 52) is a callout: the bible object about to hurt the crew, a
-plain verb, and where to stand. "PUMP 6 SPINS UP. GET BEHIND THE CASING."
+moves: exactly three patternIds from custodianPatterns, in this order: one marked [close],
+one marked [ranged], then one marked [control] or [arena]. Pick summon_choir only if the
+bible casts two or more non-guardian enemy kinds. For each, name (max 32) is the bible object
+doing the damage, and tell (hard max 60, aim 50, capitals) is a callout: the bible object
+about to hurt the crew, a plain verb, and where to stand.

@@ -8,7 +8,9 @@ event, in that author's register, on that author's document. Each slot fixes the
 authorIndex and the eventIndex: copy them. Together the slots cover the whole chain of
 events in three voices. An author who was not there when the event happened reports how it
 reached them: a form that crossed their desk, a noise through the floor, a count that came
-out wrong the next morning.
+out wrong the next morning. If the event is something this author would never write about
+(see their `never`), they write what they themselves did that day, and the event shows only
+as a trace in it: a name missing from the list, a delivery that did not come.
 - The author reports the event plainly as they saw it, with their own count. The author
   knows only their slice and never explains the collapse; the player holds other fragments.
 - Use the event's date, names and numbers exactly as the bible gives them.
@@ -21,6 +23,6 @@ out wrong the next morning.
 - No two fragments open the same way. If one opens on the date, the next opens on an
   object, a name, a quantity or mid-sentence in the task. A log keeper need not restate the
   date, heading and status in every entry: a found page often starts halfway down.
-- title (max 40): labels the object: "Stores ledger, Day 11".
-- source (max 60): what it physically is and where it lies: "clipped to the door of Stores Cage B".
+- title (max 40): labels the object: the document and its date or number.
+- source (max 60, aim 45): what it physically is and where it lies, e.g. clipped to a named door.
 - text (max 520): the fragment itself. Must contain a bible proper noun and a number or date.

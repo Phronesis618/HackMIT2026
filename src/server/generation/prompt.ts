@@ -114,3 +114,14 @@ export function namePool(seed: number, count = 10): string[] {
   }
   return out;
 }
+
+/** Seeded nudges against sameness between worlds: what kind of mistake ended the place, and what its people wrote in. */
+export function worldSeeds(seed: number): { collapseKind: string; documentKinds: string[] } {
+  const pool = JSON.parse(file('names.json')) as { collapseKinds: string[]; documentKinds: string[] };
+  const documentKinds: string[] = [];
+  for (let i = 0; documentKinds.length < 4 && i < 16; i++) {
+    const kind = pool.documentKinds[hashString(`${seed}:document:${i}`) % pool.documentKinds.length]!;
+    if (!documentKinds.includes(kind)) documentKinds.push(kind);
+  }
+  return { collapseKind: pool.collapseKinds[hashString(`${seed}:collapse`) % pool.collapseKinds.length]!, documentKinds };
+}
