@@ -326,6 +326,33 @@ describe('authoritative realtime room', () => {
     await host.next('snapshot', (message) => message.snapshot.phase === 'expedition');
   });
 
+  /**
+   * The demo-safety rule for the ready gate: a seat that is connected but never walks to the gate
+   * (AFK, a menu, a wedged client) must not keep the crew at headquarters. After the hold the host
+   * departs anyway, and the missing operative comes along.
+   */
+  it('lets the host depart after the hold when a connected seat never walks to the gate', async () => {
+    const server = await serve({ generation: fixtureService, gateForceStartMs: 400 });
+    const host = await new Peer(server.url).open();
+    await host.hello('host');
+    const guest = await new Peer(server.url).open();
+    await guest.hello('guest');
+    host.send({ type: 'request_world', requestId: 'afk-world' });
+    await host.next('world');
+    await guest.next('world');
+
+    // The guest never moves. While the hold runs the gate is shut and says so.
+    host.send({ type: 'enter_portal' });
+    expect(await host.next('error')).toMatchObject({ action: 'enter_portal', message: expect.stringContaining('0 / 2') });
+    expect((await host.next('snapshot')).snapshot.phase).toBe('headquarters');
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    host.send({ type: 'enter_portal' });
+    const entry = await guest.next('snapshot', (message) => message.snapshot.phase === 'expedition');
+    // The crew travels together: the seat that never stood at the gate is in the room too.
+    expect(entry.snapshot.players.map((player) => player.id).sort()).toEqual(['guest', 'host']);
+  });
+
   it('restores authoritative late-join and reconnect state, replays missed events, and elects a new host', async () => {
     const server = await serve({ generation: fixtureService });
     const host = await new Peer(server.url).open();

@@ -1,4 +1,5 @@
-import { crewReadiness, type CrewReadiness } from '../../shared/headquarters';
+import { useEffect, useState } from 'react';
+import { crewReadiness, GATE_FORCE_START_UI_MS, type CrewReadiness } from '../../shared/headquarters';
 import { CLASS_THEME } from '../../shared/registry';
 import type { UiPlayer } from '../../shared/ui';
 
@@ -13,6 +14,24 @@ export function gateFromPlayers(players: readonly UiPlayer[]): CrewReadiness {
 /** `1 / 2 READY`, or `READY` for a crew of one. */
 export function gateReadout(gate: CrewReadiness): string {
   return gate.solo ? 'READY' : `${gate.ready} / ${gate.total} READY`;
+}
+
+/**
+ * One seat can never strand the crew: after `GATE_FORCE_START_UI_MS` of a closed gate the host's
+ * button opens anyway. The server allows the override a little earlier (`GATE_FORCE_START_MS`),
+ * so the press is never refused. Returns true while that override is on offer.
+ */
+export function useGateOverride(blocked: boolean): boolean {
+  const [offered, setOffered] = useState(false);
+  useEffect(() => {
+    if (!blocked) {
+      setOffered(false);
+      return;
+    }
+    const timer = setTimeout(() => setOffered(true), GATE_FORCE_START_UI_MS);
+    return () => clearTimeout(timer);
+  }, [blocked]);
+  return offered;
 }
 
 /** One chip per seat along the top of the hub stage; the local operative is outlined cyan. */

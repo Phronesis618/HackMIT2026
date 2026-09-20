@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ABILITY_STATUS, CLASS_IDS, CLASS_INFO } from '../../shared/registry';
 import type { UiActions, UiModel } from '../../shared/ui';
-import { gateFromPlayers, gateReadout } from './HeadquartersCrew';
+import { gateFromPlayers, gateReadout, useGateOverride } from './HeadquartersCrew';
 import { departureBus, isDeparting, useDeparture, type DepartureBus } from './HeadquartersDeparture';
 
 /**
@@ -13,7 +13,10 @@ export function HeadquartersPanel({ model, actions, departure = departureBus }: 
   const [name, setName] = useState(model.localPlayer.displayName);
   const departing = isDeparting(useDeparture(departure));
   const gate = gateFromPlayers(model.players);
-  const busy = departing || model.phase === 'preparing' || ['queued', 'generating', 'validating'].includes(model.generation.phase);
+  // A seat that never reaches the gate cannot keep the crew at headquarters: the host departs anyway.
+  const override = useGateOverride(!gate.all && model.world !== null);
+  const gateOpen = gate.all || override;
+  const busy =departing || model.phase === 'preparing' || ['queued', 'generating', 'validating'].includes(model.generation.phase);
   const connected = model.connection.status === 'connected';
   const host = model.connection.isHost !== false;
   const gen = model.generation;
@@ -45,7 +48,7 @@ export function HeadquartersPanel({ model, actions, departure = departureBus }: 
         <div className="generation">
           <p className="eyebrow">Shared crew · {model.players.length}/4</p>
           <p className="muted">{model.players.map((player) => player.displayName).join(' · ')}</p>
-          {!gate.solo && <p className="hq-status" role="status">{gateReadout(gate)}</p>}
+          {!gate.solo && <p className="hq-status" role="status">{gateReadout(gate)}{gateOpen && !gate.all ? ' · the gate opens without them' : ''}</p>}
           <p className="hint">{host ? 'You lead this crew. Prepare a world and open the portal once everyone stands at the gate.' : 'Contribute your idea, then stand at the gate. The host opens the portal once the crew is ready.'}</p>
         </div>
       )}
@@ -129,7 +132,7 @@ export function HeadquartersPanel({ model, actions, departure = departureBus }: 
         <button type="button" className="btn btn--primary" onClick={actions.requestWorld} disabled={busy || !connected || !host}>
           {busy ? 'Preparing…' : worldReady ? 'Prepare another world' : 'Prepare world'}
         </button>
-        <button type="button" className="btn" onClick={() => departure.begin(actions.enterPortal)} disabled={busy || !worldReady || !connected || !host || !gate.all}>
+        <button type="button" className="btn" onClick={() => departure.begin(actions.enterPortal)} disabled={busy || !worldReady || !connected || !host || !gateOpen}>
           {departing ? 'Departing…' : 'Enter portal'}
         </button>
       </div>

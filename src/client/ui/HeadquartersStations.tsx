@@ -5,7 +5,7 @@ import { ABILITY_DETAILS, CLASS_ABILITIES, CLASS_IDS, CLASS_INFO, CLASS_THEME, E
 import type { UiActions, UiModel } from '../../shared/ui';
 import { renderCue, type HubCueContext } from '../chronicle/hubCues';
 import { HUB_SHELF_BRACKETS, hubStateBus, shelfRelics, type ClassRecord, type HubState, type HubStateBus } from '../chronicle/hubState';
-import { CrewStrip, gateFromPlayers, gateReadout } from './HeadquartersCrew';
+import { CrewStrip, gateFromPlayers, gateReadout, useGateOverride } from './HeadquartersCrew';
 import { departureBus, HeadquartersDeparture, isDeparting, useDeparture, type DepartureBus } from './HeadquartersDeparture';
 import '../styles/headquarters.css';
 
@@ -54,6 +54,9 @@ export function HeadquartersStationPanel({ model, actions, hub = hubStateBus, de
   const hubState = useHubState(hub);
   const departing = isDeparting(useDeparture(departure));
   const gate = gateFromPlayers(model.players);
+  // A seat that never reaches the gate cannot keep the crew at headquarters: the host departs anyway.
+  const override = useGateOverride(!gate.all && model.world !== null);
+  const gateOpen = gate.all || override;
   const [recordsTab, setRecordsTab] = useState<ClassId | null>(null);
   if (!station) return null;
   const classId = station.classId;
@@ -135,8 +138,8 @@ export function HeadquartersStationPanel({ model, actions, hub = hubStateBus, de
         <>
           <p className="hq-status">{model.world?.title ?? 'No world prepared'}</p>
           <p className="hint">{departing ? 'The gate is opening. F or Esc leaves now.' : model.world ? 'Walk into the gate or enter here when the crew is ready.' : 'Contribute an idea in the console below and prepare a world first.'}</p>
-          {!gate.solo && <p className="hq-status" role="status">{gateReadout(gate)}{gate.all ? '' : ' · everyone stands at the gate before it opens'}</p>}
-          <button type="button" className="btn btn--primary" onClick={() => departure.begin(actions.enterPortal)} disabled={!ready || !model.world || !host || !gate.all}>{departing ? 'Departing…' : 'Enter portal'}</button>
+          {!gate.solo && <p className="hq-status" role="status">{gateReadout(gate)}{gate.all ? '' : gateOpen ? ' · the gate opens without them' : ' · everyone stands at the gate before it opens'}</p>}
+          <button type="button" className="btn btn--primary" onClick={() => departure.begin(actions.enterPortal)} disabled={!ready || !model.world || !host || !gateOpen}>{departing ? 'Departing…' : 'Enter portal'}</button>
           {!host && <p className="hint">The crew leader opens the gate for everyone.</p>}
         </>
       )}

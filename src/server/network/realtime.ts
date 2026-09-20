@@ -17,7 +17,7 @@ import {
   type PreparedWorld,
 } from '../../shared/contracts';
 import { TICK_MS, worldToTile } from '../../shared/conventions';
-import { crewReadiness, isAtDepartureGate, type CrewReadiness } from '../../shared/headquarters';
+import { crewReadiness, GATE_FORCE_START_MS, isAtDepartureGate, type CrewReadiness } from '../../shared/headquarters';
 import { randomId } from '../../shared/ids';
 import { PROTOCOL_VERSION, decodeClientMessage, encodeMessage, type ClientMessage, type Lobby, type ServerMessage } from '../../shared/protocol';
 import { createSimulation, type Simulation } from '../../sim';
@@ -30,6 +30,8 @@ export interface RealtimeHandle {
 export interface RealtimeOptions {
   path?: string;
   log?: (message: string) => void;
+  /** How long a closed gate holds the host before they may depart without the missing seats (tests shorten it). */
+  gateForceStartMs?: number;
   generation?: {
     prepareWorld: (request: GenerationRequest, onStatus?: (status: GenerationStatus) => void, signal?: AbortSignal) => Promise<PreparedWorld>;
     prepareWorldStream?: (request: GenerationRequest, onStatus?: (status: GenerationStatus) => void, signal?: AbortSignal) => AsyncGenerator<PreparedWorld>;
@@ -83,6 +85,8 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
   let pendingExit: { roomId: string; target: number } | null = null;
   /** The host stepped onto the gate before the crew was ready; the step counts once they are (§7). */
   let hostHoldingGate = false;
+  /** When the gate first closed on a prepared world; null whenever the crew is ready or there is no world. */
+  let gateBlockedSince: number | null = null;
   let lastTime = performance.now();
   let accumulator = 0;
 
@@ -127,6 +131,19 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
 
   function gateClosedMessage(gate: CrewReadiness): string {
     return `The crew departs together: ${gate.ready} / ${gate.total} at the gate.`;
+  }
+
+  /**
+   * How long the gate has been closed on a ready world. A seat that is connected but never walks
+   * to the gate must not strand the crew, so past GATE_FORCE_START_MS the host may depart anyway.
+   */
+  function trackGateHold(gate: CrewReadiness): void {
+    const blocked = sim.getPhase() === 'headquarters' && Boolean(world) && !gate.all;
+    gateBlockedSince = blocked ? gateBlockedSince ?? Date.now() : null;
+  }
+
+  function gateOverrideReady(): boolean {
+    return gateBlockedSince !== null && Date.now() - gateBlockedSince >= (options.gateForceStartMs ?? GATE_FORCE_START_MS);
   }
 
   /** Readiness is position, not a promise: at the gate you are ready, walk off and you are not. Runs every tick. */
@@ -202,6 +219,7 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
   function enterRoom(index: number): GameEvent[] {
     pendingExit = null;
     hostHoldingGate = false;
+    gateBlockedSince = null;
     clearIntents();
     clearReadiness();
     return sim.enterRoom(index);
@@ -451,7 +469,9 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
           return;
         }
         const gate = gateReadiness();
-        if (!gate.all) {
+        // The host's word opens the gate once the crew is at it, or once the wait has run long
+        // enough that a seat standing somewhere else cannot keep the crew at headquarters.
+        if (!gate.all && !gateOverrideReady()) {
           error(client, gateClosedMessage(gate), 'enter_portal');
           return;
         }
@@ -461,8 +481,10 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
         break;
       }
       case 'ready':
-        // A hint, not a claim: the seat is re-read from its position right away and the crew told at once.
-        if (reconcileReadiness(member) || member.ready !== message.ready) publishSnapshot();
+        // A nudge, never a claim: `message.ready` is ignored, the seat is re-read from its own
+        // position, and the crew is told only when that reading actually changed. A client that
+        // repeats the message cannot make the server broadcast a snapshot per message.
+        if (reconcileReadiness(member)) publishSnapshot();
         break;
       case 'return_to_hq': {
         if (sim.getPhase() === 'headquarters') return;
@@ -566,6 +588,7 @@ export function attachRealtime(server: Server, options: RealtimeOptions = {}): R
       const phase = sim.getPhase();
       const events = sim.step();
       reconcileReadiness();
+      trackGateHold(gateReadiness());
       const extra = [...handleExits(events), ...releaseHeldGate()];
       if (phase !== sim.getPhase() || extra.length
         || events.some((event) => event.type === 'run_ended' || event.type === 'room_entered')) publishSnapshot();

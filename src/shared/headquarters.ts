@@ -156,6 +156,18 @@ export interface CrewReadiness {
   solo: boolean;
 }
 
+/**
+ * The gate never holds a crew hostage. One connected seat that never walks to the gate (AFK, a
+ * menu, a wedged client) would otherwise block the host forever, so after this long the server
+ * lets the host depart without it.
+ */
+export const GATE_FORCE_START_MS = 12_000;
+/**
+ * The host's button offers that override a little later than the server accepts it, so a press is
+ * never refused over a few milliseconds of clock skew.
+ */
+export const GATE_FORCE_START_UI_MS = 15_000;
+
 export function crewReadiness(players: readonly Pick<PlayerState, 'connected' | 'ready'>[]): CrewReadiness {
   const seated = players.filter((player) => player.connected !== false);
   const ready = seated.filter((player) => player.ready === true).length;
