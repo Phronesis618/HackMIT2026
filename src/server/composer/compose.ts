@@ -132,11 +132,19 @@ const CONCRETE_NOUNS = [...CREATURE_SYNONYMS.flatMap((c) => c.words), ...PROP_SY
  * The word of an idea worth echoing in names: a concrete noun we know (creature or prop
  * vocabulary) if present, else the longest content word. Short words are usually glue.
  */
+const SUBORDINATORS = new Set(['where', 'that', 'which', 'with', 'and', 'who', 'whose', 'while', 'because', 'so', 'but', 'when', 'as', 'in', 'on', 'under', 'over', 'run', 'full']);
+
 function salientWord(tokens: string[]): string | null {
-  const candidates = tokens.filter((t) => t.length >= 3 && /^[a-z']+$/.test(t) && !STOPWORDS.has(t));
+  const ok = (t: string): boolean => t.length >= 3 && /^[a-z']+$/.test(t) && !STOPWORDS.has(t);
+  const candidates = tokens.filter(ok);
   if (candidates.length === 0) return null;
-  const concrete = candidates.find((t) => CONCRETE_NOUNS.some((stem) => matches(t, stem)));
-  const best = concrete ?? candidates.reduce((a, b) => (b.length > a.length ? b : a));
+  // The head noun phrase is what comes before the first clause break ("a drowned cathedral | where…").
+  const cut = tokens.findIndex((t) => SUBORDINATORS.has(t));
+  const head = (cut > 0 ? tokens.slice(0, cut) : tokens).filter(ok);
+  const pool = head.length > 0 ? head : candidates;
+  const concrete = pool.find((t) => CONCRETE_NOUNS.some((stem) => matches(t, stem)));
+  // English noun phrases end on their head noun ("volcanic forge", "clockwork factory").
+  const best = concrete ?? pool[pool.length - 1]!;
   return titleCase(best.replace(/'/g, '')).slice(0, 16);
 }
 
@@ -406,8 +414,10 @@ export function composeWorld(request: GenerationRequest): Composition {
   if (title.length > 40) title = `The ${adj} ${noun}`;
   title = clip(title, 40);
   const tagline = clip(fillLower(pick(rand, primary.taglines)), 80);
-  const shapedBy = ideas.length > 0 ? ` Shaped by ${ideas.length} idea${ideas.length === 1 ? '' : 's'}: ${ideas.map((i) => `“${i.text}”`).join('; ')}.` : '';
-  const themeSummary = clip(`${primary.summary} The expedition crosses ${counts.length} region${counts.length === 1 ? '' : 's'}: ${biomeNames.join(', ')}.${shapedBy}`, 400);
+  // The receipt carries the crew's ideas verbatim; the summary stays a short physical description
+  // (the writing guide's 160-character target) with the regions named.
+  const regions = ` ${['One', 'Two', 'Three'][counts.length - 1] ?? counts.length} region${counts.length === 1 ? '' : 's'} in play order: ${biomeNames.join(', ')}.`;
+  const themeSummary = clip(primary.summary.length + regions.length <= 240 ? `${primary.summary}${regions}` : primary.summary, 240);
 
   // Lore: a relic per room in the theme's voice, remains for every enemy kind in play.
   const lore: LoreFragment[] = [];
@@ -468,7 +478,7 @@ export function composeWorld(request: GenerationRequest): Composition {
     return {
       id: `b${index + 1}`,
       name,
-      tagline: clip(fillLower(pick(rand, theme.taglines)), 140),
+      tagline: clip(fillLower(pick(rand, theme.taglines)), 80),
       motifIds: [...new Set(theme.motifs)].slice(0, 3),
       enemyPool: enemyPool.length > 0 ? enemyPool : ['husk'],
       propPool: propPool.length > 0 ? propPool : ['crate'],

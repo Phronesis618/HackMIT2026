@@ -69,7 +69,7 @@ export const THEMES: ThemeDef[] = [
     ],
     remainsFlavor: 'aboard the flotilla',
     attunements: [
-      { effectId: 'clear_surge', name: 'Plunder Share', description: 'Clearing a hold pays the whole crew: extra resources on every room clear.' },
+      { effectId: 'clear_surge', name: 'Plunder Share', description: 'Clearing a hold pays the whole crew: 2 extra resources on every room clear.' },
       { effectId: 'first_strike', name: 'Boarding Action', description: 'The first strike on a fresh hostile hits like a grapple volley.' },
     ],
   },
@@ -99,7 +99,7 @@ export const THEMES: ThemeDef[] = [
     remainsFlavor: 'beneath the tide',
     attunements: [
       { effectId: 'hazard_ward', name: 'Tide-Walker', description: 'The stinging shallows and their bolts bite far less.' },
-      { effectId: 'relic_mend', name: 'Bell-Deep Breath', description: 'Reading a relic mends the body like a held breath released.' },
+      { effectId: 'relic_mend', name: 'Bell-Deep Breath', description: 'Reading a relic mends 20 Integrity, one held breath at a time.' },
     ],
   },
   {
@@ -109,7 +109,7 @@ export const THEMES: ThemeDef[] = [
     palette: { background: '#0b140c', floor: '#1d2e1a', floorAlt: '#24381f', wall: '#2f4a2a', wallEdge: '#9be27a', accent: '#b6ff8a', accentSoft: '#ffcf6b', glow: '#d2ffb0', hazard: '#ff7a5c', text: '#f1ffe8' },
     adjectives: ['Overgrown', 'Verdant', 'Root-Bound', 'Blooming', 'Feral'],
     nouns: ['Archive', 'Canopy', 'Grove', 'Understory', 'Garden'],
-    taglines: ['A place the forest swallowed and kept reading in the dark, {word} and all.', 'Roots hold the walls up now. They hold other things too.', 'Everything here grew back except the people.'],
+    taglines: ['A place the forest swallowed and kept reading in the dark, {word} and all.', 'Roots hold the walls up now, and eleven of the archivists with them.', 'Everything here grew back except the people.'],
     summary: 'Root-choked halls under a living canopy; moss and warm lanterns where the forest reclaimed every corridor and keeps the dead standing in its grip.',
     rooms: {
       entry: { names: ['Root Threshold', '{word} Grove', 'Mossway'], descriptions: ['Roots split the stone underfoot and hold the entry arch together like a fist.', 'The forest\'s first hall, thick with the {word}.'] },
@@ -127,8 +127,8 @@ export const THEMES: ThemeDef[] = [
     ],
     remainsFlavor: 'under the canopy',
     attunements: [
-      { effectId: 'relic_mend', name: 'Sap Salve', description: 'Reading a relic mends you; the forest gives back a little of what it took.' },
-      { effectId: 'remains_charge', name: 'Compost Bloom', description: 'Every remains picked up feeds the ultimate a burst of charge.' },
+      { effectId: 'relic_mend', name: 'Sap Salve', description: 'Reading a relic mends 20 Integrity; sap closes the cut.' },
+      { effectId: 'remains_charge', name: 'Compost Bloom', description: 'Every remains picked up feeds the ultimate 15 points of charge.' },
     ],
   },
   {
@@ -156,8 +156,8 @@ export const THEMES: ThemeDef[] = [
     ],
     remainsFlavor: 'in the ice',
     attunements: [
-      { effectId: 'melee_ward', name: 'Frost Plating', description: 'Rime hardens over your armour; melee and charge hits deal less.' },
-      { effectId: 'dash_echo', name: 'Glissade', description: 'Your dash slides further, leaving a frost trail behind.' },
+      { effectId: 'melee_ward', name: 'Frost Plating', description: 'Rime hardens over the armour plates; melee and charge hits deal 25% less.' },
+      { effectId: 'dash_echo', name: 'Glissade', description: 'The dash slides 40% further and leaves a frost trail on the tiles.' },
     ],
   },
   {
@@ -181,12 +181,12 @@ export const THEMES: ThemeDef[] = [
     relics: [
       { title: 'Excavation note', source: 'pencilled on the back of a survey card', text: 'Third chamber opened at dawn. The {word} inside is untouched. Nobody has robbed this tomb in four thousand years and I think I finally understand why.' },
       { title: 'Offering tag', source: 'a copper tag tied to a sealed jar', text: 'For the long dark: water, oil, a name to answer to. The jar is empty. The name has been scratched out and replaced with mine.' },
-      { title: 'Sun-prayer', source: 'gold leaf pressed into a slab', text: 'Rise and we will rise. The slab faces east. Dawn has not come, and they have risen anyway.' },
+      { title: 'Sun-prayer', source: 'gold leaf pressed into a slab', text: 'Rise and we will rise, cut into a slab that faces east. Four thousand mornings without a dawn, and the twelve in the offering hall have risen anyway.' },
     ],
     remainsFlavor: 'in the sand',
     attunements: [
-      { effectId: 'guardian_bane', name: 'Tomb-Breaker', description: 'Your strikes against the Guardian carry the weight of every opened seal.' },
-      { effectId: 'anchor_grace', name: 'Dawn Vigil', description: 'Planting the Anchor goes faster, as if the sun finally leaned in.' },
+      { effectId: 'guardian_bane', name: 'Tomb-Breaker', description: 'Strikes against the Guardian deal 25% more; nine seals were opened to get here.' },
+      { effectId: 'anchor_grace', name: 'Dawn Vigil', description: 'The Anchor plants 30% faster on the slab that faces east.' },
     ],
   },
   {
@@ -208,7 +208,7 @@ export const THEMES: ThemeDef[] = [
     hazardChance: 0.95,
     hazardName: 'molten channels across the floor',
     relics: [
-      { title: 'Smith\'s mark', source: 'stamped into a cooled ingot', text: 'Forged for the {word}, tempered nine times, never drawn. The last stamp is not a maker\'s mark. It is a handprint, pressed in while the metal was still soft.' },
+      { title: 'Smith\'s mark', source: 'stamped into a cooled ingot', text: 'Forged for the {word}, tempered nine times, never drawn. The last stamp on the ingot is a handprint, five fingers pressed in while the metal was still soft.' },
       { title: 'Furnace log', source: 'chalk on a slag-black slate', text: 'Fed the fire at first bell. Fed it at second. Ran out of coal at third and it kept burning. Went to see what it was eating. Did not write down what I found.' },
       { title: 'Cooling prayer', source: 'scratched around the crucible lip', text: 'Let it cool. Let it cool. Let it cool. The letters get larger and less careful, and then they stop.' },
     ],
@@ -225,10 +225,10 @@ export const THEMES: ThemeDef[] = [
     palette: { background: '#0c0716', floor: '#1a1130', floorAlt: '#22163d', wall: '#2d1f52', wallEdge: '#ff4fd8', accent: '#5ff7ff', accentSoft: '#ff4fd8', glow: '#b8fbff', hazard: '#ffe64a', text: '#f6f0ff' },
     adjectives: ['Neon', 'Flickering', 'Unlicensed', 'Midnight', 'Overclocked'],
     nouns: ['Arcade', 'Concourse', 'Undercity', 'Exchange', 'Grid'],
-    taglines: ['A city that sells everything, tonight offering the {word}.', 'Signs still flicker for shops whose owners never went home.', 'The grid hums. Nobody remembers what it is powering.'],
+    taglines: ['A city that sells everything, tonight offering the {word}.', 'Signs still flicker for shops whose owners never went home.', 'The grid still draws forty megawatts for a market with no customers.'],
     summary: 'Rain-slick concourses under flickering spire signage, power cables strung between stalls, and machines that keep trading long after the market closed.',
     rooms: {
-      entry: { names: ['Night Market Gate', '{word} Street', 'Turnstile Row'], descriptions: ['Dead signage flickers awake as you pass; cables sag between shuttered stalls.', 'The street where the {word} was sold.'] },
+      entry: { names: ['Night Market Gate', '{word} Street', 'Turnstile Row'], descriptions: ['Dead signage flickers awake over the turnstiles; cables sag between forty shuttered stalls.', 'The street where the {word} was sold.'] },
       mid: { names: ['Arcade Concourse', '{word} Exchange', 'Cable Row'], descriptions: ['Lanterns of every colour hang over a concourse of humming terminals.', 'The exchange where the {word} changed hands.'] },
       final: { names: ['Grid Core', 'Vault of the {word}'], descriptions: ['The city\'s power core wraps the Anchor site; the Guardian is what keeps the lights on.'] },
     },
@@ -239,11 +239,11 @@ export const THEMES: ThemeDef[] = [
     relics: [
       { title: 'Closing notice', source: 'a flickering sign above a shuttered stall', text: 'Back in five minutes. Cash only. We have the {word} you asked about. The sign has been saying five minutes for a very long time.' },
       { title: 'Transit card', source: 'a fare card jammed in a turnstile', text: 'Balance: enough for one more ride. Last tap: the station under the core, which was closed before the card was issued.' },
-      { title: 'Graffiti', source: 'sprayed across a service door', text: 'THE GRID REMEMBERS YOUR FACE. Under it, smaller: it remembered mine. Under that, smaller still: run.' },
+      { title: 'Graffiti', source: 'sprayed across a service door', text: 'THE GRID REMEMBERS YOUR FACE, sprayed a metre high across the service door. Under it, smaller: it remembered mine. Under that, in pencil: run to platform 4.' },
     ],
     remainsFlavor: 'under the neon',
     attunements: [
-      { effectId: 'bolt_ward', name: 'Signal Jammer', description: 'Enemy projectiles lose bite in the static you carry.' },
+      { effectId: 'bolt_ward', name: 'Signal Jammer', description: 'Enemy bolts deal 40% less; the static from the array scatters them.' },
       { effectId: 'dash_echo', name: 'Latency Ghost', description: 'Your dash leaves an afterimage the grid cannot track.' },
     ],
   },
@@ -254,7 +254,7 @@ export const THEMES: ThemeDef[] = [
     palette: { background: '#0a0f0d', floor: '#1a221e', floorAlt: '#202a25', wall: '#2c3a33', wallEdge: '#a9c9b2', accent: '#b8f5c8', accentSoft: '#e7c46a', glow: '#d8ffe6', hazard: '#8ee06f', text: '#eef5f0' },
     adjectives: ['Haunted', 'Unquiet', 'Pale', 'Mourning', 'Hollow'],
     nouns: ['Necropolis', 'Vigil', 'Wake', 'Ossuary', 'Chapel'],
-    taglines: ['The dead kept the appointment. The living did not. The {word} waits.', 'Grave-lanterns lit for a funeral nobody finished.', 'Something still says the names every night.'],
+    taglines: ['The dead kept the appointment; the living did not. Eleven lanterns burn.', 'Grave-lanterns lit for a funeral nobody finished.', 'Something still says the names every night.'],
     summary: 'Grave-marker monoliths and mourning lanterns in a mist that will not lift; the buried stood up for a wake that has not ended.',
     rooms: {
       entry: { names: ['Lychgate', '{word} Yard', 'Mourners\' Path'], descriptions: ['Grave-lanterns lead between leaning monoliths; the mist keeps the names to itself.', 'The yard where the {word} was laid to rest, briefly.'] },
@@ -272,8 +272,8 @@ export const THEMES: ThemeDef[] = [
     ],
     remainsFlavor: 'in the grave-mist',
     attunements: [
-      { effectId: 'remains_charge', name: 'Last Rites', description: 'Every remains gathered feeds your ultimate; the dead pay their respects.' },
-      { effectId: 'relic_mend', name: 'Mourner\'s Comfort', description: 'Reading a relic mends you a little; somebody had to remember.' },
+      { effectId: 'remains_charge', name: 'Last Rites', description: 'Every remains gathered feeds the ultimate 15 points of charge; the dead pay in kind.' },
+      { effectId: 'relic_mend', name: 'Mourner\'s Comfort', description: 'Reading a relic mends 20 Integrity; somebody had to remember the names.' },
     ],
   },
   {
@@ -283,7 +283,7 @@ export const THEMES: ThemeDef[] = [
     palette: { background: '#05040f', floor: '#12102a', floorAlt: '#181538', wall: '#241f52', wallEdge: '#8f7bff', accent: '#b39cff', accentSoft: '#ff7ab6', glow: '#e0d6ff', hazard: '#ff5c8a', text: '#f1edff' },
     adjectives: ['Starless', 'Orbital', 'Distant', 'Silent', 'Vantage'],
     nouns: ['Observatory', 'Relay', 'Spire', 'Array', 'Horizon'],
-    taglines: ['A relay tower that forgot which world it was built for, still listening for the {word}.', 'The stars went out one at a time. Someone kept count.', 'Signal received. Nobody left to answer it.'],
+    taglines: ['A relay tower still listening for the {word} from a star that went dark.', 'The stars went out one at a time. Someone kept count.', 'Signal received at the dish at 04:12; the reply desk has been empty since.'],
     summary: 'Needle spires and crystal antennae under a dead sky; a listening post that kept transmitting after the last star it watched went dark.',
     rooms: {
       entry: { names: ['Threshold Concourse', '{word} Platform', 'Uplink Gate'], descriptions: ['A transit platform under a starless dome; the spires above still hum with signal.', 'The platform where the {word} first came through.'] },
@@ -296,7 +296,7 @@ export const THEMES: ThemeDef[] = [
     hazardName: 'decompression seams in the floor',
     relics: [
       { title: 'Transmission log', source: 'a terminal frozen on its last frame', text: 'Star 4471 dark. Star 4472 dark. Star 4473 answered. It has never answered before. It asked for the {word}. Reply pending.' },
-      { title: 'Astronomer\'s note', source: 'taped to an eyepiece', text: 'Do not look at the new star directly. It is not a star. It is looking back, and it has learned how to focus.' },
+      { title: 'Astronomer\'s note', source: 'taped to an eyepiece', text: 'Do not look at the new star through the 40-inch lens. Star 4473 has an iris, and on the third night it learned how to focus.' },
       { title: 'Countdown', source: 'painted along the dish rim', text: 'Ten stars left. Nine. Eight. The numbers continue all the way around the rim and end at a single word: one, underlined many times.' },
     ],
     remainsFlavor: 'under the dead sky',
@@ -315,8 +315,8 @@ export const THEMES: ThemeDef[] = [
     taglines: ['A library where the books still whisper, mostly about the {word}.', 'Every shelf is full. Every reader is gone.', 'The catalogue knows where you are.'],
     summary: 'Vaulted reading halls under amber lanterns, shelf-monoliths of unread volumes, and an index that kept filing long after the last scholar left.',
     rooms: {
-      entry: { names: ['Reading Room', '{word} Wing', 'Card Catalogue'], descriptions: ['Amber lanterns over long tables; open books, open for years, whisper as you pass.', 'The wing devoted to the {word}.'] },
-      mid: { names: ['The Stacks', '{word} Stacks', 'Scriptorium'], descriptions: ['Shelf-monoliths climb into the dark; something reshelves as you walk.', 'The stacks where the {word} was filed and forgotten.'] },
+      entry: { names: ['Reading Room', '{word} Wing', 'Card Catalogue'], descriptions: ['Amber lanterns over long tables; books left open for years still turn their own pages.', 'The wing devoted to the {word}.'] },
+      mid: { names: ['The Stacks', '{word} Stacks', 'Scriptorium'], descriptions: ['Shelf-monoliths climb into the dark; a ladder on rails moves along the stacks with nobody on it.', 'The stacks where the {word} was filed and forgotten.'] },
       final: { names: ['Restricted Index', 'Last Page of the {word}'], descriptions: ['The Anchor site is the reading desk of the head archivist; the Guardian is the index itself.'] },
     },
     props: ['pillar', 'lantern', 'monolith_shard', 'crate', 'pillar', 'lantern'],
@@ -325,13 +325,13 @@ export const THEMES: ThemeDef[] = [
     hazardName: 'ink pools that never dried',
     relics: [
       { title: 'Overdue slip', source: 'tucked inside a book left open', text: 'Title: the {word}. Borrower: illegible. Due: a date the calendar no longer reaches. Fine accrued: everything.' },
-      { title: 'Marginalia', source: 'pencilled in a margin, growing more hurried', text: 'The whispering is the books reading themselves. It is louder in the stacks. It is loudest where the index is. It knows my name because I signed for a book once.' },
+      { title: 'Marginalia', source: 'pencilled in a margin, growing more hurried', text: 'The whispering is the books reading themselves, three shelves at a time. It is louder in the stacks and loudest at the index desk. The index has my name from a borrowing card I signed in year nine.' },
       { title: 'Archivist\'s last entry', source: 'ink on the head desk, unblotted', text: 'Filed the last volume. Turned to leave. The catalogue drawer for my own name was already open, and there was already a card in it.' },
     ],
     remainsFlavor: 'between the shelves',
     attunements: [
-      { effectId: 'relic_mend', name: 'Well-Read', description: 'Reading a relic mends you; knowledge is a kind of rest.' },
-      { effectId: 'clear_surge', name: 'Catalogued', description: 'Each cleared hall is filed and paid: bonus resources on room clear.' },
+      { effectId: 'relic_mend', name: 'Well-Read', description: 'Reading a relic mends 20 Integrity; a chair and a page are a kind of rest.' },
+      { effectId: 'clear_surge', name: 'Catalogued', description: 'Each cleared hall is filed and paid: 2 bonus resources on room clear.' },
     ],
   },
   {
@@ -355,12 +355,12 @@ export const THEMES: ThemeDef[] = [
     relics: [
       { title: 'Miller\'s complaint', source: 'carved into a waterlogged beam', text: 'The wheel turns without water now. Something under the {word} is turning it. I have stopped asking what it grinds.' },
       { title: 'Spore chart', source: 'a botanist\'s slate, half dissolved', text: 'Day one: the glow is beautiful. Day four: the glow is on my hands. Day nine: the glow is under them. I have decided to find it beautiful again.' },
-      { title: 'Warning stake', source: 'a stake driven into the walkway, lettering half eaten', text: 'DO NOT DRINK. DO NOT TOUCH. DO NOT STAND STILL. The bottom of the stake has been chewed through.' },
+      { title: 'Warning stake', source: 'a stake driven into the walkway, lettering half eaten', text: 'DO NOT DRINK. DO NOT TOUCH. DO NOT STAND STILL, burned into a stake driven at the third plank. The bottom of the stake has been chewed through to the iron pin.' },
     ],
     remainsFlavor: 'in the mire',
     attunements: [
-      { effectId: 'hazard_ward', name: 'Waxed Boots', description: 'The dissolving bog and its spat acid barely reach you.' },
-      { effectId: 'remains_charge', name: 'Decomposer', description: 'Each remains you pick up feeds the ultimate; rot is fuel here.' },
+      { effectId: 'hazard_ward', name: 'Waxed Boots', description: 'The bog and its spat acid deal 40% less through the waxed boot leather.' },
+      { effectId: 'remains_charge', name: 'Decomposer', description: 'Each remains picked up feeds the ultimate 15 points of charge; rot is fuel here.' },
     ],
   },
   {
@@ -370,7 +370,7 @@ export const THEMES: ThemeDef[] = [
     palette: { background: '#100c08', floor: '#2a2015', floorAlt: '#33281b', wall: '#4a3a22', wallEdge: '#f0b95a', accent: '#ffcf6e', accentSoft: '#55d6c2', glow: '#ffe6a8', hazard: '#ff7d3a', text: '#fff4e0' },
     adjectives: ['Brass', 'Ticking', 'Wound', 'Unattended', 'Escapement'],
     nouns: ['Works', 'Manufactory', 'Escapement', 'Movement', 'Assembly'],
-    taglines: ['A factory that kept the schedule after the workers stopped, still building the {word}.', 'Every gear turns. Nothing is being made any more.', 'Wound once, a very long time ago.'],
+    taglines: ['A factory that kept its shifts after the workers stopped, building the {word}.', 'Every gear turns and the assembly line delivers nothing to the loading dock.', 'Wound once, a very long time ago.'],
     summary: 'Brass gear-halls and steam-scarred assembly lines under teal warning lamps; the machines finished their work and started on the workers.',
     rooms: {
       entry: { names: ['Intake Floor', '{word} Line', 'Escapement Gate'], descriptions: ['Conveyor pits and idle grapples; a great escapement ticks above the entry.', 'The intake line where the {word} arrived in crates.'] },
@@ -383,7 +383,7 @@ export const THEMES: ThemeDef[] = [
     hazardName: 'steam vents and live gearing',
     relics: [
       { title: 'Shift card', source: 'punched and left in the clock', text: 'In: sixth bell. Out: blank. Every card in the rack is punched in and never out. The clock is still running. So is the shift.' },
-      { title: 'Foreman\'s standing order', source: 'riveted brass plate above the line', text: 'The line does not stop for anyone. Beneath it, scratched: it did not. Then, deeper: it did not.' },
+      { title: 'Foreman\'s standing order', source: 'riveted brass plate above the line', text: 'The line does not stop for anyone, riveted in brass above station 12. Beneath it, scratched with a punch: it did not. Then, deeper, in the same hand: it did not.' },
       { title: 'Blueprint fragment', source: 'oil-stained draughting paper', text: 'Assembly {word}: fit part A to part B. Part A is drawn as a hand. Part B is drawn as a hand. The tolerances are very precise.' },
     ],
     remainsFlavor: 'on the line',
@@ -399,12 +399,12 @@ export const THEMES: ThemeDef[] = [
     palette: { background: '#150c2a', floor: '#2c1d4d', floorAlt: '#36265c', wall: '#472f74', wallEdge: '#b58cff', accent: '#d8a8ff', accentSoft: '#ff6bd6', glow: '#d8a8ff', hazard: '#ff658f', text: '#f4e9ff' },
     adjectives: ['Prismatic', 'Refracted', 'Violet', 'Faceted', 'Shattered'],
     nouns: ['Observatory', 'Geode', 'Lens', 'Gallery', 'Tide'],
-    taglines: ['A prism observatory suspended above a frozen electric sea, focused on the {word}.', 'Every surface shows you something slightly wrong.', 'The light comes in. It does not leave.'],
+    taglines: ['A prism observatory above a frozen electric sea, its lens turned on the {word}.', 'Every surface shows you something slightly wrong.', 'The light comes in. It does not leave.'],
     summary: 'Broken crystal chambers and arched galleries around an observatory core; violet shelves refract a light that arrived from somewhere it should not have.',
     rooms: {
       entry: { names: ['Prism Landing', '{word} Landing', 'Facet Gate'], descriptions: ['Crystal shelves interrupt the violet shallows; every shard shows a different you.', 'The landing where the {word} was first refracted.'] },
       mid: { names: ['Refraction Gallery', '{word} Gallery', 'Lens Cloister'], descriptions: ['Arched buttresses hold a cracked observatory aloft; the light bends to look at you.', 'The gallery where the {word} is kept in focus.'] },
-      final: { names: ['Prism Heart', 'Focus of the {word}'], descriptions: ['The Guardian stands watch over the final crystal lens and the Anchor site beneath it.'] },
+      final: { names: ['Prism Heart', 'Focus of the {word}'], descriptions: ['The Guardian holds the final crystal lens and the Anchor site beneath it.'] },
     },
     props: ['crystal_cluster', 'pillar', 'crystal_cluster', 'monolith_shard', 'lantern', 'terminal'],
     enemies: { entry: ['sentinel', 'swarmling'], mid: ['sentinel', 'lurker'], final: ['guardian', 'channeler'] },
@@ -413,12 +413,12 @@ export const THEMES: ThemeDef[] = [
     relics: [
       { title: 'Tide gauge, cracked', source: 'scratched into the glass of a brass tide gauge', text: 'Hour 1: two fingers over the low mark. Hour 6: the glass is warm. Hour 14: it is not water, whatever they say about the {word}; water does not look back.' },
       { title: 'Observatory roster', source: 'a duty roster pinned under a crystal shelf', text: 'Forty-one names, each with a small lens sigil. Thirty-eight are struck through in the same violet ink the shallows glow with. The three untouched names all share one shift: the night the lens was first turned downward.' },
-      { title: 'Prayer to the Focus', source: 'etched around the rim of a cracked lens-plate', text: 'Turn your face to the lens and be counted. Be seen and be kept. The sea only takes what refuses to be seen, so why is the gallery quiet, and why does my watch-partner answer in the wrong voice.' },
+      { title: 'Prayer to the Focus', source: 'etched around the rim of a cracked lens-plate', text: 'Turn your face to the lens and be counted. Be seen and be kept. The sea only takes what refuses to be seen. My watch-partner Orrin has answered from the third shelf in the wrong voice for six nights.' },
     ],
     remainsFlavor: 'in the refracted light',
     attunements: [
       { effectId: 'bolt_ward', name: 'Prism Skin', description: 'Enemy bolts split against you and arrive weaker.' },
-      { effectId: 'guardian_bane', name: 'Focused Light', description: 'Your strikes on the Guardian are bent to a burning point.' },
+      { effectId: 'guardian_bane', name: 'Focused Light', description: 'Strikes on the Guardian deal 25% more, bent to a burning point through the lens.' },
     ],
   },
   {
@@ -447,7 +447,7 @@ export const THEMES: ThemeDef[] = [
     remainsFlavor: 'in the storm',
     attunements: [
       { effectId: 'bolt_ward', name: 'Lightning Rod', description: 'Enemy bolts are drawn off you into the tethers.' },
-      { effectId: 'dash_echo', name: 'Gale-Step', description: 'Your dash carries further on the wind and leaves a crackling wake.' },
+      { effectId: 'dash_echo', name: 'Gale-Step', description: 'The dash carries 40% further on the wind and leaves a crackling wake along the cables.' },
     ],
   },
   {
@@ -470,13 +470,13 @@ export const THEMES: ThemeDef[] = [
     hazardName: 'consecrated ground that burns the unblessed',
     relics: [
       { title: 'Order of service', source: 'a printed leaflet on a pew', text: 'Processional. Hymn for the {word}. Reading. Hymn. Blessing. Dismissal. Everything after the Blessing has been crossed out. The service has not reached the Blessing yet.' },
-      { title: 'Candle-keeper\'s note', source: 'wax-spotted paper by the candle racks', text: 'Lit a candle for every soul in the parish. Ran out of candles. The candles kept lighting. I have stopped counting the flames because there are more flames than parish.' },
+      { title: 'Candle-keeper\'s note', source: 'wax-spotted paper by the candle racks', text: 'Lit a candle for every soul in the parish, 311 of them. Ran out of candles at 300. The racks kept lighting on their own. I have stopped counting the flames at 340 because there are more flames than parish.' },
       { title: 'Confession', source: 'scratched inside the confessional', text: 'I locked the doors so nobody would leave before the Blessing. Forgive me. They did not leave. Forgive me. They are still here. Forgive me.' },
     ],
     remainsFlavor: 'in the candlelight',
     attunements: [
-      { effectId: 'relic_mend', name: 'Benediction', description: 'Reading a relic mends you; a blessing meant for someone else.' },
-      { effectId: 'anchor_grace', name: 'Consecration', description: 'The Anchor plants faster on hallowed stone.' },
+      { effectId: 'relic_mend', name: 'Benediction', description: 'Reading a relic mends 20 Integrity; the blessing on the card was meant for someone else.' },
+      { effectId: 'anchor_grace', name: 'Consecration', description: 'The Anchor plants 30% faster on the altar stone.' },
     ],
   },
   {
@@ -504,8 +504,8 @@ export const THEMES: ThemeDef[] = [
     ],
     remainsFlavor: 'under the paper lanterns',
     attunements: [
-      { effectId: 'clear_surge', name: 'Prize Booth', description: 'Every cleared pavilion pays out: bonus resources on room clear.' },
-      { effectId: 'dash_echo', name: 'Quickstep', description: 'Your dash carries further and leaves a trail of lantern-light.' },
+      { effectId: 'clear_surge', name: 'Prize Booth', description: 'Every cleared pavilion pays out: 2 bonus resources on room clear.' },
+      { effectId: 'dash_echo', name: 'Quickstep', description: 'The dash carries 40% further and leaves a trail of paper-lantern light.' },
     ],
   },
 ];
@@ -539,24 +539,24 @@ export const HAZARD_WORDS = ['lava', 'fire', 'acid', 'poison', 'toxic', 'water',
 /** Generic remains lore per enemy kind; `{flavor}` is the theme's remainsFlavor, `{word}` a player word. */
 export const REMAINS_TEMPLATES: Record<EnemyId, LoreTemplate[]> = {
   husk: [
-    { title: 'Signed articles', source: 'folded in a husk\'s jacket', text: 'A contract with a thumbprint where the name should be. Whoever signed it kept working {flavor} long after there was anyone to work for.' },
+    { title: 'Signed articles', source: 'folded in a husk\'s jacket', text: 'A contract with a thumbprint where the name should be, dated the ninth. Whoever signed it kept working {flavor} long after the last paymaster left the ledger.' },
     { title: 'Identity tag', source: 'on a chain around a husk\'s neck', text: 'Name worn smooth. Role: {word} detail. The tag is warm, which it should not be, and it is the only warm thing about the body.' },
   ],
   swarmling: [
     { title: 'Salvage-drone casing', source: 'from a swarmling\'s cracked shell', text: 'Cheap drones loosed to strip everything {flavor}. Nobody told them the job was over, so they kept stripping until only the crew was left to take.' },
-    { title: 'Hive scrap', source: 'chitin and wire from a swarmling', text: 'Part insect, part salvage. Something {flavor} taught the small things to work together, and then taught them what to work on.' },
+    { title: 'Hive scrap', source: 'chitin and wire from a swarmling', text: 'Part insect, part salvage, six legs of stripped wire. Something {flavor} taught the small things to work together, and then pointed them at the crew.' },
   ],
   sentinel: [
     { title: 'Deck-watch lantern', source: 'from the fist of a fallen sentinel', text: 'The watch walked {flavor} with lanterns so nothing could move unseen. The watch is still walking. The lanterns still see.' },
-    { title: 'Standing order', source: 'etched into a sentinel\'s chestplate', text: 'HOLD POSITION UNTIL RELIEVED. Nobody came to relieve them. Nobody {flavor} was ever going to.' },
+    { title: 'Standing order', source: 'etched into a sentinel\'s chestplate', text: 'HOLD POSITION UNTIL RELIEVED, stamped on the chestplate above the serial number. The relief roster {flavor} was never filled past the first two names.' },
   ],
   lurker: [
-    { title: 'Stowaway\'s blade', source: 'wedged in a lurker\'s shell', text: 'A shiv ground from a hull rivet. Someone hid {flavor} and waited for their chance. The dark offered a different bargain.' },
+    { title: 'Stowaway\'s blade', source: 'wedged in a lurker\'s shell', text: 'A shiv ground from a hull rivet, twelve centimetres of it. Someone hid {flavor} for nine days waiting for their chance, and the carapace on the body is the bargain they took instead of the door.' },
     { title: 'Hunter\'s tally', source: 'notches on a lurker\'s carapace', text: 'One notch for every catch made {flavor}. There is not much carapace left without notches.' },
   ],
   guardian: [
-    { title: 'The keeper\'s charge', source: 'torn from the guardian\'s shoulders', text: 'A standard stitched with a dying star. The keeper swore this place would never fall while they stood {flavor}, and they never stopped standing.' },
-    { title: 'Warden\'s key', source: 'hanging from the guardian\'s rusted chain', text: 'The key to the last door, worn smooth by one hand over one very long watch. Relief never came {flavor}. The watch went on.' },
+    { title: 'The keeper\'s charge', source: 'torn from the guardian\'s shoulders', text: 'A standard stitched with a dying star, forty stitches to the point. The keeper swore this place would never fall while they stood {flavor}, and they never stopped standing at the pedestal.' },
+    { title: 'Warden\'s key', source: 'hanging from the guardian\'s rusted chain', text: 'The key to the last door, worn smooth by one hand over a watch of eleven years. Relief never came {flavor}, so the hand kept the key.' },
   ],
   spewer: [
     { title: 'Ruptured sac', source: 'what a spewer leaves behind', text: 'Something that was once a container for water or fuel, {flavor}, until it learned to make its own and aim it.' },
@@ -567,9 +567,9 @@ export const REMAINS_TEMPLATES: Record<EnemyId, LoreTemplate[]> = {
     { title: 'Riot plating', source: 'stripped from a warden', text: 'Heavy armour issued for keeping order {flavor}. The order it kept was the last one it was given.' },
   ],
   channeler: [
-    { title: 'Tuning fork', source: 'from a channeler\'s open hand', text: 'Stamped with the pitch of the {word}. The channeler tuned the others to it every night {flavor}, and eventually the place began to sing back on the same note.' },
+    { title: 'Tuning fork', source: 'from a channeler\'s open hand', text: 'Stamped with the pitch of the {word}, 440 cycles. The channeler tuned the other eleven to it every night {flavor}, and by the ninth night the choir bell rang the same 440 with no hand on the rope.' },
     { title: 'Focus stone', source: 'still warm in a channeler\'s grip', text: 'A lens for a mind. Whoever held it {flavor} looked into something for too long, and it started looking out.' },
   ],
 };
 
-export const STOPWORDS = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'in', 'on', 'at', 'to', 'for', 'with', 'where', 'that', 'this', 'is', 'are', 'was', 'were', 'be', 'it', 'its', 'as', 'by', 'from', 'into', 'over', 'under', 'through', 'still', 'very', 'some', 'lots', 'like', 'just', 'really', 'world', 'place', 'there', 'their', 'them', 'they', 'you', 'your', 'our', 'we', 'i', 'my', 'me', 'have', 'has', 'had', 'but', 'not', 'no', 'so', 'if', 'then', 'than', 'more', 'most', 'many', 'much', 'all', 'every', 'each', 'while', 'when', 'what', 'which', 'who', 'how', 'also', 'too', 'can', 'could', 'would', 'should', 'want', 'wants', 'make', 'made', 'full', 'lot', 'big', 'giant', 'huge', 'little', 'small', 'tiny', 'old', 'new', 'weird', 'cool', 'awesome', 'thing', 'things', 'stuff', 'something', 'everything', 'everyone', 'somewhere', 'level', 'room', 'rooms', 'area', 'zone', 'map', 'game']);
+export const STOPWORDS = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'in', 'on', 'at', 'to', 'for', 'with', 'where', 'that', 'this', 'is', 'are', 'was', 'were', 'be', 'it', 'its', 'as', 'by', 'from', 'into', 'over', 'under', 'through', 'still', 'very', 'some', 'lots', 'like', 'just', 'really', 'world', 'place', 'there', 'their', 'them', 'they', 'you', 'your', 'our', 'we', 'i', 'my', 'me', 'have', 'has', 'had', 'but', 'not', 'no', 'so', 'if', 'then', 'than', 'more', 'most', 'many', 'much', 'all', 'every', 'each', 'while', 'when', 'what', 'which', 'who', 'how', 'also', 'too', 'can', 'could', 'would', 'should', 'want', 'wants', 'make', 'made', 'full', 'lot', 'big', 'giant', 'huge', 'little', 'small', 'tiny', 'old', 'new', 'weird', 'cool', 'awesome', 'thing', 'things', 'stuff', 'something', 'everything', 'everyone', 'somewhere', 'level', 'room', 'rooms', 'area', 'zone', 'map', 'game', 'land', 'lands', 'place', 'places']);

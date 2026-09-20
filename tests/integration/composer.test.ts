@@ -12,6 +12,7 @@ import { compileWorldRecipe, createGenerationService } from '../../src/server/ge
 import { GenerationFailure, type RecipeProvider } from '../../src/server/generation/provider';
 import { parseWorldPrefix } from '../../src/client/transport/worldProviders';
 import { BiomeBriefListSchema } from '../../src/shared/floors';
+import { lintRecipeText } from '../../src/shared/prose';
 import { floorsSeedFor, upgradeToFloors } from '../../src/shared/floorgen';
 
 const fixturesDir = path.resolve(__dirname, '../../fixtures/worlds');
@@ -151,6 +152,17 @@ describe('composeWorld', () => {
     expect(floors.floors?.briefs.map((b) => b.name)).toEqual(briefs.map((b) => b.name));
     expect(floors.rooms).toHaveLength(1);
     expect(themes.primary).toBeTruthy();
+  });
+
+  it('writes text the house prose linter accepts (no hard failures) for a spread of ideas', () => {
+    const prompts = ['space pirates', 'a drowned cathedral where the bells still ring', 'neon city night market run by robots', 'haunted graveyard', 'clockwork factory', 'volcanic forge', 'candy land', 'frozen research station', 'overgrown library', 'crystal caves'];
+    for (const prompt of prompts) {
+      const { recipe } = composeWorld(request([prompt], `req-lint-${prompt.replace(/\W+/g, '-')}`));
+      const lint = lintRecipeText(recipe);
+      const hard = lint.fields.filter((f) => f.result.issues.some((i) => i.severity === 'hard')).map((f) => `${f.path}: ${f.result.issues.filter((i) => i.severity === 'hard').map((i) => i.rule).join(',')}`);
+      expect(hard, `${prompt} -> ${hard.join(' | ')}`).toEqual([]);
+      expect(lint.score).toBeLessThan(30);
+    }
   });
 
   it('produces distinct worlds across many different ideas', () => {
