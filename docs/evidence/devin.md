@@ -2,6 +2,37 @@
 
 Agent C records only work and verification performed in this session.
 
+## Dungeon default rollout — 2026-09-20
+
+Three child sessions prepared hosted defaults, evaluated the isolated demo balance preset,
+and reviewed flag/generation rollout paths. The combined change enables floors and derived
+laws in Docker, Render, and the environment example; raw server defaults remain unchanged.
+The balance candidate was excluded after its focused suite produced 50 passes / 8 failures.
+
+Parent validation: `npm run check` passed **1103 tests / 93 files**, typecheck and build;
+`git diff --check` and a production Docker build passed. Network-isolated container HTTP
+checks served static HTML and generated schema-valid fixture and composer worlds without
+credentials. Each default world built all eight biome candidates / 160 rooms and applied
+laws. Provenance stayed fixture/procedural; explicit legacy requests returned three rooms.
+Docker environment overrides `RELAY_FLOORS=0 RELAY_LAWS=0` disabled both flags.
+
+No browser play, public deployment, or live model output is claimed by these checks.
+
+Separate browser coverage on `bc894e3` verified ordinary HQ fixture generation, honest
+receipt provenance, physical portal entry into biome 1/5 room 1/10, minimap and full map.
+The run stopped for base integration; connected-room travel, combat, biome choices,
+derived-law generation, co-op timeout recovery and public gameplay remain untested.
+At 14:57 UTC, the public `/api/config` returned both flags true; this does not prove
+deployment of this PR or successful hosted gameplay.
+
+Merged base `6d00c88` by preserving both adjacent documentation entries; no runtime
+conflict resolution was needed. Integrated `npm run check` passed **1111 tests / 93 files**,
+typecheck and production build. Browser evidence above predates that integration.
+
+Main advanced again to `c70f032`; its integration again required only preserving adjacent
+documentation entries. Final `npm run check` passed **1169 tests / 103 files**, typecheck
+and production build. Browser coverage was not repeated after these base merges.
+
 ## Parallel bug hunt — 2026-09-20
 
 Six isolated specialists plus an integration agent produced PR #48. Fifteen reproduced

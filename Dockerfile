@@ -7,7 +7,7 @@ RUN npm run build && npm prune --omit=dev
 
 FROM node:26.7.0-bookworm-slim
 WORKDIR /app
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=8787
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=8787 RELAY_FLOORS=1 RELAY_LAWS=1
 COPY --from=build --chown=node:node /app/package.json /app/package-lock.json ./
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist

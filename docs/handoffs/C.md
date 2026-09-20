@@ -1,5 +1,27 @@
 # Handoff — Agent C (Devin)
 
+## Dungeon demo defaults — 2026-09-20
+
+- Branch: `devin/1789915925-dungeon-demo-defaults`, based on `1c1ac50`.
+- **Implemented:** floors and derived laws enabled in the Docker image, Render Blueprint,
+  and environment example. Runtime `0` overrides and explicit legacy requests remain supported.
+  The configuration subagent's `3b19840` was integrated as `ee7a246`.
+- **Verified:** `npm run check`: **1103 tests / 93 files**, typecheck and build passed.
+  Docker build and network-isolated HTTP checks passed for fixture and composer generation:
+  flags, static HTML, eight biomes / 160 validated rooms each, laws, honest provenance,
+  legacy request overrides, and Docker environment opt-outs.
+- **Base integration:** merged main `6d00c88`, then `c70f032`, retaining adjacent
+  handoff/evidence entries. Final `npm run check` passed **1169 tests / 103 files**,
+  typecheck and build.
+- **Deferred:** the separate demo balance candidate (`48dd181`) fails eight existing
+  assertions and was not integrated. No tests or gameplay constants changed.
+- **Browser verified (`bc894e3`):** ordinary HQ fixture generation, physical portal entry
+  into biome 1/5 room 1/10, minimap and full map. Connected-room travel and combat were
+  not tested before the integration interruption; fixture laws do not prove derived laws.
+- **Unverified:** live AI generation and public gameplay. Existing service env
+  overrides can suppress image defaults; confirm `/api/config` after deploy and reload tabs.
+  A cold-start config timeout remains a known co-op flag-adoption gap.
+
 ## Parallel bug hunt and browser verification — 2026-09-20
 
 - Branch: `devin/1789914742-game-bugfixes`, code through `acd9b38`, PR #48.

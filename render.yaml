@@ -16,6 +16,10 @@ services:
         value: 0.0.0.0
       - key: PORT
         value: "10000"
+      - key: RELAY_FLOORS
+        value: "1"
+      - key: RELAY_LAWS
+        value: "1"
       - key: RELAY_GENERATION_MODE
         value: live
       - key: RELAY_AI_PROVIDER
