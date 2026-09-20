@@ -3,8 +3,8 @@ import type { GameSnapshot, RoomSpec } from '../../shared/contracts';
 import { DEPTH, TILE_SIZE, tileToWorld } from '../../shared/conventions';
 import {
   DEPARTURE_RETURN_FADE_MS, HEADQUARTERS_ID, HEADQUARTERS_INTERACT_RANGE, HEADQUARTERS_LANTERNS, HEADQUARTERS_RECORD_PLINTHS,
-  HEADQUARTERS_RELIC_BRACKETS, HEADQUARTERS_STATIONS, headquartersLampGlow, headquartersLampTier, nearbyHeadquartersStation,
-  type DepartureStage, type HeadquartersStation,
+  HEADQUARTERS_RELIC_BRACKETS, HEADQUARTERS_STATIONS, crewReadiness, headquartersLampGlow, headquartersLampTier, nearbyHeadquartersStation,
+  type CrewReadiness, type DepartureStage, type HeadquartersStation,
 } from '../../shared/headquarters';
 import { CLASS_THEME, type ClassId } from '../../shared/registry';
 import { hexToInt, tokens } from '../../shared/tokens';
@@ -65,7 +65,9 @@ export function drawHeadquartersStations(
   const lamps = scene.add.graphics().setDepth(DEPTH.floorDecal + 3);
   /** Departure ritual (§8) and the return fade: room dim, portal ring, tethers. Redrawn per frame while active. */
   const ritual = scene.add.graphics().setDepth(DEPTH.propsFront + 5);
-  layer.add([floor, fixtures, highlights, dynamic, lamps, ritual]);
+  /** Gate readiness arcs (§7): one filled arc per operative at the gate, redrawn when the count changes. */
+  const gateArcs = scene.add.graphics().setDepth(DEPTH.floorDecal + 6);
+  layer.add([floor, fixtures, highlights, dynamic, lamps, ritual, gateArcs]);
   const roomW = room.width * TILE_SIZE;
   const roomH = room.height * TILE_SIZE;
   const exit = room.exits[0];
@@ -158,6 +160,8 @@ export function drawHeadquartersStations(
   }
 
   const currentTag = label(0, 0, 'CURRENT', '#fff0c7', 8).setVisible(false);
+  const gateLabel = label(gate.x, gate.y - 92, '', '#7cf5ff', 9).setVisible(false);
+  let gateKey = '';
   const speech = scene.add.text(0, 0, '', {
     fontFamily: tokens.font.mono, fontSize: '10px', color: '#fff0c7', resolution: textResolution,
     backgroundColor: '#101923', padding: { x: 7, y: 5 }, align: 'left', wordWrap: { width: 250 },
@@ -180,6 +184,18 @@ export function drawHeadquartersStations(
       const state = hub.get();
       const t = now();
       const stage = inHeadquarters ? departure.stage(t) : null;
+
+      const readiness = inHeadquarters && snapshot.players.length > 1 ? crewReadiness(snapshot.players) : null;
+      const nextGateKey = readiness ? `${readiness.ready}/${readiness.total}` : '';
+      if (nextGateKey !== gateKey) {
+        gateKey = nextGateKey;
+        gateArcs.clear();
+        gateLabel.setVisible(Boolean(readiness));
+        if (readiness) {
+          gateLabel.setText(readiness.solo ? 'READY' : `${readiness.ready} / ${readiness.total} READY`);
+          drawGateArcs(gateArcs, gate, readiness);
+        }
+      }
 
       // Return fade (600 ms) and the departure ritual share one overlay, redrawn only while something moves.
       const returning = Math.min(1, (t - createdAt) / DEPARTURE_RETURN_FADE_MS);
@@ -254,6 +270,21 @@ export function drawHeadquartersStations(
       prompt.setText(`F · ${station.action.toUpperCase()}`).setPosition(x, y + promptY);
     },
   };
+}
+
+/** One arc segment per connected seat around the gate; filled cyan for those standing at it, faint for the rest. */
+function drawGateArcs(g: Phaser.GameObjects.Graphics, gate: { x: number; y: number }, readiness: CrewReadiness): void {
+  if (readiness.total < 1) return;
+  const gap = 0.18;
+  const span = (Math.PI * 2) / readiness.total - gap;
+  for (let seat = 0; seat < readiness.total; seat++) {
+    const start = -Math.PI / 2 + seat * (span + gap) + gap / 2;
+    const filled = seat < readiness.ready;
+    g.lineStyle(filled ? 4 : 2, TETHER_CYAN, filled ? 0.95 : 0.25);
+    g.beginPath();
+    g.arc(gate.x, gate.y + 5, 44, start, start + span, false);
+    g.strokePath();
+  }
 }
 
 function cueContext(state: HubState, snapshot: GameSnapshot, classId: ClassId) {

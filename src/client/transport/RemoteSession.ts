@@ -11,6 +11,7 @@ import {
   type PreparedWorld,
 } from '../../shared/contracts';
 import { TICK_MS } from '../../shared/conventions';
+import { isAtDepartureGate } from '../../shared/headquarters';
 import { randomId } from '../../shared/ids';
 import {
   ClientMessageSchema, PROTOCOL_VERSION, decodeServerMessage, encodeMessage,
@@ -62,6 +63,8 @@ export class RemoteSession implements GameSession {
   private intentSequence = 0;
   private pendingIntent: LocalIntent | null = null;
   private lastInputAt = 0;
+  /** Last gate-readiness hint sent (HUB.md §7); the server derives the truth from position. */
+  private sentReady: boolean | null = null;
   private pendingContributions = new Set<string>();
   private startPromise: Promise<void> | null = null;
   private pendingStart: Pending<void> | null = null;
@@ -369,6 +372,19 @@ export class RemoteSession implements GameSession {
     this.snapshot = snapshot;
     for (const listener of this.snapshotListeners) listener(snapshot);
     if (snapshot.phase !== phase) for (const listener of this.phaseListeners) listener(snapshot.phase);
+    this.hintReadiness(snapshot);
+  }
+
+  /** Tell the server the moment we step on or off the gate so the crew strip updates without waiting a tick. */
+  private hintReadiness(snapshot: GameSnapshot): void {
+    if (snapshot.phase !== 'headquarters' || snapshot.players.length < 2) {
+      this.sentReady = null;
+      return;
+    }
+    const ready = isAtDepartureGate(snapshot, this.localPlayerId);
+    if (ready === this.sentReady) return;
+    this.sentReady = ready;
+    this.send({ type: 'ready', ready });
   }
 
   private setContributions(contributions: Contribution[]): void {

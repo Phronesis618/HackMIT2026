@@ -130,6 +130,30 @@ async function holdingIntent<T>(peer: Peer, playerId: string, seq: number, moveX
   }
 }
 
+/**
+ * HUB.md §7: the gate opens only once every connected operative stands at it. The HQ spawn (15,10)
+ * is straight north of the portal (15,18), so holding "down" walks a seat into range; the server
+ * stamps `ready` on the snapshot when it gets there.
+ */
+function atGate(message: ServerMessage, playerId: string): boolean {
+  return message.type === 'snapshot' && message.snapshot.players.some((player) => player.id === playerId && player.ready === true);
+}
+
+async function gatherAtGate(seats: Array<{ peer: Peer; playerId: string }>, seq = 1): Promise<void> {
+  await Promise.all(seats.map(({ peer, playerId }) => holdingIntent(peer, playerId, seq, 0, 1, false, () =>
+    peer.next('snapshot', (message) => atGate(message, playerId)))));
+}
+
+async function walkSessionToGate(session: RemoteSession): Promise<void> {
+  const timer = setInterval(() => session.setIntent({ moveX: 0, moveY: 1, aimX: 500, aimY: 600, attack: false, dash: false, ability: null }), 30);
+  try {
+    await vi.waitFor(() => expect(session.getSnapshot()?.players.find((player) => player.id === session.localPlayerId)?.ready).toBe(true), { timeout: 4000 });
+  } finally {
+    clearInterval(timer);
+    session.setIntent({ moveX: 0, moveY: 0, aimX: 500, aimY: 600, attack: false, dash: false, ability: null });
+  }
+}
+
 async function compactWorld(): Promise<PreparedWorld> {
   const world = await fixtureService.prepareWorld({ requestId: 'fixture-request', sessionId: 'test-session', contributions: [], plannedRoomCount: 3 });
   return PreparedWorldSchema.parse({
@@ -236,10 +260,11 @@ describe('authoritative realtime room', () => {
     expect(prepared.requestId).toBe('shared-world-request');
     expect(prepared.world.provenance.source).toBe('fixture');
     expect(await guest.next('world')).toEqual(prepared);
+    await gatherAtGate([{ peer: host, playerId: first.playerId }, { peer: guest, playerId: second.playerId }]);
     host.send({ type: 'enter_portal' });
     const entry = await guest.next('snapshot', (message) => message.snapshot.phase === 'expedition');
     const before = entry.snapshot.players.find((player) => player.id === first.playerId)!;
-    const moved = await holdingIntent(host, first.playerId, 1, 1, 0, true, () =>
+    const moved = await holdingIntent(host, first.playerId, 500, 1, 0, true, () =>
       host.next('snapshot', (message) => message.snapshot.players.some((player) => player.id === first.playerId && player.x > before.x)));
     expect(await guest.next('snapshot', (message) => message.snapshot.tick === moved.snapshot.tick)).toEqual(moved);
     const attacked = await holdingIntent(host, first.playerId, 1000, 0, 0, true, () =>
@@ -251,6 +276,81 @@ describe('authoritative realtime room', () => {
     expect(new Set(host.events().map((event) => event.id)).size).toBe(host.events().length);
     host.send({ type: 'return_to_hq' });
     await guest.next('snapshot', (message) => message.snapshot.tick > entry.snapshot.tick && message.snapshot.phase === 'headquarters');
+  });
+
+  it('opens the gate only once every connected seat stands at it, and never waits for a seat nobody is behind', async () => {
+    const server = await serve({ generation: fixtureService });
+    const host = await new Peer(server.url).open();
+    await host.hello('host');
+    const guest = await new Peer(server.url).open();
+    await guest.hello('guest');
+    host.send({ type: 'request_world', requestId: 'gate-world' });
+    await host.next('world');
+    await guest.next('world');
+
+    // Nobody at the gate: refused with the count; the snapshot carries a ready flag per seat.
+    host.send({ type: 'enter_portal' });
+    expect(await host.next('error')).toMatchObject({ action: 'enter_portal', message: expect.stringContaining('0 / 2') });
+    const idle = await host.next('snapshot');
+    expect(idle.snapshot.players.map((player) => player.ready)).toEqual([false, false]);
+
+    // Guest alone at the gate: 1 / 2, still closed.
+    await gatherAtGate([{ peer: guest, playerId: 'guest' }]);
+    host.send({ type: 'enter_portal' });
+    expect(await host.next('error')).toMatchObject({ action: 'enter_portal', message: expect.stringContaining('1 / 2') });
+    const half = await host.next('snapshot', (message) => atGate(message, 'guest'));
+    expect(half.snapshot.phase).toBe('headquarters');
+    expect(half.snapshot.players.find((player) => player.id === 'host')?.ready).toBe(false);
+
+    // Readiness is where you stand: walk off and it is gone.
+    await holdingIntent(guest, 'guest', 500, 0, -1, false, () =>
+      host.next('snapshot', (message) => message.snapshot.players.some((player) => player.id === 'guest' && player.ready === false)));
+    await gatherAtGate([{ peer: guest, playerId: 'guest' }], 1000);
+    // Only the host opens the gate, ready or not.
+    guest.send({ type: 'enter_portal' });
+    expect(await guest.next('error')).toMatchObject({ action: 'enter_portal', message: expect.stringContaining('host') });
+    // 2 / 2: the host's word (or the host's step onto the tile) opens it.
+    await gatherAtGate([{ peer: host, playerId: 'host' }]);
+    host.send({ type: 'enter_portal' });
+    const entry = await guest.next('snapshot', (message) => message.snapshot.phase === 'expedition');
+    expect(entry.snapshot.players.every((player) => player.ready === undefined)).toBe(true);
+
+    // Back home, a seat whose client left is marked, not counted and not waited for.
+    host.send({ type: 'return_to_hq' });
+    await host.next('snapshot', (message) => message.snapshot.phase === 'headquarters');
+    await guest.close();
+    await host.next('lobby', (message) => message.lobby.players.some((player) => player.identity.id === 'guest' && !player.connected));
+    const alone = await host.next('snapshot', (message) => message.snapshot.players.some((player) => player.id === 'guest' && player.connected === false));
+    expect(alone.snapshot.players.find((player) => player.id === 'guest')?.ready).toBe(false);
+    host.send({ type: 'enter_portal' });
+    await host.next('snapshot', (message) => message.snapshot.phase === 'expedition');
+  });
+
+  /**
+   * The demo-safety rule for the ready gate: a seat that is connected but never walks to the gate
+   * (AFK, a menu, a wedged client) must not keep the crew at headquarters. After the hold the host
+   * departs anyway, and the missing operative comes along.
+   */
+  it('lets the host depart after the hold when a connected seat never walks to the gate', async () => {
+    const server = await serve({ generation: fixtureService, gateForceStartMs: 400 });
+    const host = await new Peer(server.url).open();
+    await host.hello('host');
+    const guest = await new Peer(server.url).open();
+    await guest.hello('guest');
+    host.send({ type: 'request_world', requestId: 'afk-world' });
+    await host.next('world');
+    await guest.next('world');
+
+    // The guest never moves. While the hold runs the gate is shut and says so.
+    host.send({ type: 'enter_portal' });
+    expect(await host.next('error')).toMatchObject({ action: 'enter_portal', message: expect.stringContaining('0 / 2') });
+    expect((await host.next('snapshot')).snapshot.phase).toBe('headquarters');
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    host.send({ type: 'enter_portal' });
+    const entry = await guest.next('snapshot', (message) => message.snapshot.phase === 'expedition');
+    // The crew travels together: the seat that never stood at the gate is in the room too.
+    expect(entry.snapshot.players.map((player) => player.id).sort()).toEqual(['guest', 'host']);
   });
 
   it('restores authoritative late-join and reconnect state, replays missed events, and elects a new host', async () => {
@@ -340,10 +440,11 @@ describe('authoritative realtime room', () => {
     await guest.hello('guest');
     host.send({ type: 'request_world', requestId: 'stream-exit' });
     await host.next('world');
+    await gatherAtGate([{ peer: host, playerId: 'host' }, { peer: guest, playerId: 'guest' }]);
     host.send({ type: 'enter_portal' });
     await host.next('snapshot', (message) => message.snapshot.phase === 'expedition');
-    const waiting = await holdingIntent(host, 'host', 1, 0, 1, false, () =>
-      holdingIntent(guest, 'guest', 1, 0, 1, false, async () => {
+    const waiting = await holdingIntent(host, 'host', 500, 0, 1, false, () =>
+      holdingIntent(guest, 'guest', 500, 0, 1, false, async () => {
         await host.next('generation_status', (message) => message.status.message.includes('Waiting for room'));
         return guest.next('snapshot', (message) => message.snapshot.phase === 'expedition' && message.snapshot.players.some((player) => player.y >= 96));
       }));
@@ -405,6 +506,7 @@ describe('RemoteSession over real sockets', () => {
     const secondId = second.session.localPlayerId;
     expect(firstId).not.toBe(secondId);
     const world = await first.session.requestWorld();
+    await Promise.all([walkSessionToGate(first.session), walkSessionToGate(second.session)]);
     first.session.enterPortal();
     await vi.waitFor(() => expect(second.session.getPhase()).toBe('expedition'));
 
@@ -513,6 +615,7 @@ describe('RemoteSession over real sockets', () => {
     await vi.waitFor(() => expect(host.getContributions()[0]?.id).toBe(submitted?.id));
     const first = await host.requestWorld();
     expect(first.rooms).toHaveLength(1);
+    await Promise.all([walkSessionToGate(host), walkSessionToGate(guest)]);
     host.enterPortal();
     await vi.waitFor(() => expect(guest.getPhase()).toBe('expedition'));
     // Held, not sent once: the server ignores input older than 250 ms, so a stalled machine can

@@ -27,6 +27,7 @@ class Node {
   strokeRoundedRect = vi.fn(() => this);
   strokeEllipse = vi.fn(() => this);
   strokeCircle = vi.fn(() => this);
+  arc = vi.fn(() => this);
   lineBetween = vi.fn(() => this);
   beginPath = vi.fn(() => this);
   moveTo = vi.fn(() => this);
@@ -79,7 +80,7 @@ describe('headquarters renderer hook', () => {
     expect(currentTag.x).toBe(tileToWorld(4, 3).x);
     for (let n = 0; n < 100; n++) view.update(snapshot, player.id);
     expect(nodes.length).toBe(count);
-    expect(add.graphics).toHaveBeenCalledTimes(6);
+    expect(add.graphics).toHaveBeenCalledTimes(7);
     expect(prompt.setText).toHaveBeenCalledTimes(2);
     view.update({ ...snapshot, players: [{ ...player, classId: 'weaver' }] }, player.id);
     expect(currentTag.x).toBe(tileToWorld(8, 7).x);
