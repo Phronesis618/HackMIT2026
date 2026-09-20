@@ -54,6 +54,9 @@ three DIFFERENT sentence shapes. Some shapes that work:
   a countdown:                          "BULKHEADS CLOSING IN 5"
   the boss's own words:                 "TARN: I SAID CLEAR MY DECK. SHE MEANS THE RED PLATES."
   where safety is, and nothing else:    "DRY FLOOR BY THE LOCKERS. NOWHERE ELSE."
+Whatever the shape, a crew member who hears only this line knows where to stand: a tell
+that is all attitude ("KADER: JUST LET IT RUN.") or that uses briefing-room words
+(operative, sightline, radius, rearmost) is no use in a fight.
 "GET BEHIND THE <something>" has been used by every world so far: it is marked down
 by the checker, so say it another way. Rejected outright are the registry's own words for the counter ("dash the gap", "step off the
 mark", "sidestep one tile", "walk off it"): those are engine phrasing.
