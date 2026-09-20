@@ -1,5 +1,17 @@
 # Handoff — Agent C (Devin)
 
+## Production AI prompt packaging — 2026-09-20
+
+- Branch: `devin/1789914107-fix-generation-image`, based on `aaf9fdf`.
+- **Implemented:** user-authorized deployment repair: package `prompts/exemplars` and build
+  every prompt stage as the runtime user during the Docker build.
+- **Verified:** the original image throws `ENOENT` before reaching the provider; adding
+  the missing assets reaches the intercepted request. The fixed image builds successfully;
+  `npm run check` passed **1101 tests / 92 files**, typecheck and production build.
+- **Mocked:** the container provider check uses a placeholder key and intercepted HTTP 418,
+  with networking disabled. It proves request preparation, not provider acceptance.
+- **Unverified:** post-deploy live generation; the pre-fix Render request returned COMPOSED.
+
 ## Stranded-world Anchor totals — 2026-09-20
 
 - Branch: `devin/1789897630-stranded-anchor-totals`, implementation `b68a9e0`, based on `2353463`.

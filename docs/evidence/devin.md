@@ -2,6 +2,19 @@
 
 Agent C records only work and verification performed in this session.
 
+## Production AI prompt packaging — 2026-09-20
+
+A fresh request to `https://relay-a3yv.onrender.com/api/world` returned
+`COMPOSED · relay-composer`; live generation failed before contacting the provider.
+The image built from `aaf9fdf` reproduced `ENOENT` for `/app/prompts/exemplars/` and
+zero intercepted provider calls. Mounting that directory allowed prompt assembly and
+one intercepted call. The repaired image includes those assets and validates all prompt
+stages during its build. Its isolated provider check also reached one intercepted call.
+These container checks used no real credentials and had networking disabled.
+
+`npm run check`: **1101 tests / 92 files**, typecheck and production build passed.
+Post-deploy live provider acceptance remains to be verified; no browser test is claimed.
+
 ## Stranded-world Anchor accounting — 2026-09-20
 
 The 09:43 UTC watch checked main `2353463`: typecheck, **899 tests / 76 files**, build,
