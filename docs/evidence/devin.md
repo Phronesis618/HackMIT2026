@@ -18,6 +18,26 @@ storage isolation and UI keyboard handlers. Existing tests were not weakened.
 `git diff --check` passed. No paid model calls, public deployment or credentials were used.
 Browser/physical-LAN/live-provider claims remain pending separate evidence.
 
+## Memory archive and next-world ideas — 2026-09-20
+
+On `devin/1789890825-memory-seeds`, Devin added archive search/filtering, plain-text reports
+with provenance and source-event evidence, and editable memory-derived contribution drafts.
+The contribution composer uses the existing UI action and shared text validator; it never
+generates Chronicle events or changes stored records.
+
+`npm run check` passed: 542 tests / 37 files, TypeScript and Vite build.
+Implementation commit: `efab963`. Merged `main` at `1536031` without conflicts and repeated
+the full check: 547 tests / 38 files, typecheck and production build passed.
+Twenty new tests exercise archive filtering/export and memory idea constraints and rendering.
+Initial test runs caught two test typing errors and an HTML attribute-case assertion; those
+new tests were corrected without changing existing tests or configuration. Whitespace checks
+pass. UI actions and memory samples in tests are mocks, not gameplay evidence.
+
+Scope was posted to issue #4 before implementation. Direct messaging to other Devin
+sessions was access-denied; GitHub was used for coordination. This work avoids the active H1
+Stillpoint slice and the floors/writing paths. Browser play, file download and live-generation
+effects have not been tested in this session.
+
 ## Render hosting setup — 2026-09-20
 
 On `devin/1789889059-render-deploy` (`4c70ab3`, PR #17), Devin added a Render Blueprint and

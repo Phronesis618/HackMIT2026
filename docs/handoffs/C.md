@@ -20,6 +20,26 @@
 - The overnight floors/rendering/writing/tiles/hub/boss expansion remains its owners' work;
   this correction does not enable floors or claim planned collapse/relic features are complete.
 
+## Memory archive and next-world ideas — 2026-09-20
+
+- Branch: `devin/1789890825-memory-seeds`; implementation commit `efab963`.
+- **Implemented:** searchable device-local archive with world/type filters and bounded card
+  display; plain-text field reports preserve recorded participants, provenance and event IDs.
+  A saved memory can start an editable, 200-character contribution through the existing
+  `UiActions.submitContribution`. Three directions suggest carrying it forward, an earlier
+  world, or a possible continuation. No saved record is changed or invented.
+- **Verified:** after integrating `main` at `1536031`, `npm run check`: 547 tests / 38 files,
+  typecheck and production build pass.
+  Twenty new regressions cover search, ordering, export evidence, escaped rendering, Unicode
+  truncation, contribution eligibility, guest access and fixture disclosure.
+  `git diff --check` passes; the repository has no separate lint command.
+- **Mocked:** UI actions and sample records only in automated tests.
+- **Unverified:** browser interactions/download, layout, live generation and co-op delivery.
+  Field reports are keepsakes, not progress backups. Fixture generation does not respond to
+  memory ideas. A co-op host must prepare the world after contributions.
+- Coordinated scope on issue #4 with the active Stillpoint and integration workstreams.
+  No H1 station code, reducer/storage, shared contracts, root dependencies or server changes.
+
 ## Render hosting setup — 2026-09-20
 
 - Branch: `devin/1789889059-render-deploy`; implementation commit `4c70ab3`; PR #17.

@@ -77,7 +77,7 @@ export function GameMenu({ model, actions }: { model: UiModel; actions: UiAction
           {page === 'operative' && <OperativePage model={model} actions={actions} />}
           {page === 'skills' && <SkillsPage model={model} />}
           {page === 'controls' && <ControlsPage />}
-          {page === 'memories' && <MemoryWall memories={model.memories} actions={actions} />}
+          {page === 'memories' && <MemoryWall memories={model.memories} actions={actions} context={model} />}
         </section>
       </div>
     </div>, document.body)}
