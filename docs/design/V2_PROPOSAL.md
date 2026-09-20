@@ -18,7 +18,7 @@ Read before proposing, so nothing here proposes something already shipped.
 | Damage numbers | **already shipped** — `floatText` on `enemy_damaged`, 13 px, 16 px at >= 30 damage, rises 26 px over 650 ms | `RoomScene.ts:989`, `:934` |
 | Screen shake | 8 call sites, all `cameras.main.shake()`, 0.004–0.012 intensity | `RoomScene.ts:996,1002,1097,1101,1113,1127,1144` |
 | Screen flash | 5 call sites (`anchor_planted`, `room_entered`, two ultimates) | `RoomScene.ts:1074,1079,1102,1128` |
-| Audio | 573-line synth layer, mute persisted to `relay.audio.muted` | `src/client/audio/index.ts` |
+| Audio | 573-line synth layer, 18 procedural cues, mute persisted to `relay.audio.muted`. Every cue fired byte-identical every time. | `src/client/audio/index.ts` |
 | Reduced motion | **CSS only** — 5 `@media (prefers-reduced-motion)` blocks. The canvas ignores it entirely. | `src/client/styles/*.css` |
 | Tuning | 15 knobs in one leaf module, every value pinned by a test so a stray edit fails the suite | `src/sim/tuning.ts`, `tests/sim/tuning.test.ts` |
 | Theme in mechanics | contributions already become `RoomSpec.attributions` -> in-world lore markers you walk into; memory seeds carry between runs | `RoomScene.ts:826+`, `src/client/chronicle/memorySeeds.ts` |
@@ -51,18 +51,26 @@ live (squash, flash, shake, particles) and shows each addition separately.
 Today `enemy_damaged` draws a burst at a fixed `strength = 1` whatever the damage, and the local
 camera does nothing at all when you connect. Concretely:
 
-- **Hit flash** on the struck enemy, white, ~90 ms, decaying. `EntityView` already owns a
-  `Graphics` stack inside a container (`RoomScene.ts:738`), so this is one more child drawn from a
-  decaying timer in `update()`.
-- **Flinch / knockback nudge**, ~7 px along the hit direction, eased back over ~140 ms. Purely a
-  render offset: `updateEnemyView` sets `container.setPosition(enemy.x, enemy.y)` from the
-  snapshot, so the offset is added on top and decays to zero. **The simulation never sees it**, so
-  two clients can render different flinch phases and remain in perfect agreement about the world.
+- **Hit-stop**, 45 ms (three frames at 60 Hz). The struck hostile is *drawn where it was struck*
+  while the simulation carries on without it, then slides back. Shipped fighting games scale
+  hitlag with damage and cap it — Smash Ultimate uses `floor(damage * 0.65 + 6)` frames capped at
+  30, Melee `damage/3 + 3` capped at 20 — and action games sit at 2-5 frames for a light hit. Ours
+  is at the low end of that band deliberately, because a render-only freeze must never read as lag.
+  This is the single highest-value item in the whole document and it costs a position offset.
+- **Hit flash** on the struck enemy, white, 70 ms, front-loaded then decaying (Nijman's flash is
+  1-3 frames). `EntityView` already owns a `Graphics` stack inside a container
+  (`RoomScene.ts:738`), so this is one more child drawn from a decaying timer in `update()`.
+- **Flinch / knockback nudge**, up to 7 px along the hit direction ("a few pixels", Nijman step 11),
+  eased back over 150 ms. Purely a render offset: `updateEnemyView` sets
+  `container.setPosition(enemy.x, enemy.y)` from the snapshot, so the offset is added on top and
+  decays to exactly zero (pinned by a test). **The simulation never sees it**, so two clients can
+  render different flinch phases and remain in perfect agreement about the world.
 - **Damage-scaled impact**: `drawImpact` already takes a `strength` argument and is always passed
   `1`. Feed it the share of the target's max health the hit took, so a 40 % blow reads as a 40 %
   blow.
-- **Contact shake on your own hit**, tiny (0.002–0.006 by damage share), only for hits *you* dealt
-  — the thing the game currently never does.
+- **Contact shake on your own hit**, tiny (0.0015–0.006, squared by damage share after Eiserloh's
+  trauma model, where `trauma^2` is what makes the decay feel like an impact rather than a rumble),
+  only for hits *you* dealt — the thing the game currently never does.
 
 ### R2 — Motion settings: `prefers-reduced-motion` on the canvas + a menu toggle — **built**
 *Impact: high (accessibility + it unblocks R1). Cost: ~20 min. Risk: none.*
@@ -79,13 +87,20 @@ informational is removed** — damage numbers, telegraphs, health bars and the i
 because they carry information and shake does not. That distinction is the accessibility rule, not
 "turn the effects off".
 
-### R3 — Audio impact layering (pitch scatter + a low shelf on heavy hits)
-*Impact: medium-high. Cost: ~25 min. Risk: none (client-only).*
+### R3 — Audio pitch scatter on the cues that repeat — **built**
+*Impact: medium-high. Cost: ~15 min. Risk: none (client-only).*
 
-Nijman's cheapest listed trick is randomised pitch on repeated sounds so a burst of hits does not
-machine-gun the same sample. We synthesise everything, so a per-hit detune of ±6 % and a
-damage-keyed low-frequency thump on heavy blows is a small change in `src/client/audio/index.ts`.
-Not built: it needs an ear, and I cannot hear the build.
+Nijman's cheapest listed trick is randomised pitch on repeated sounds, so a burst of hits does not
+machine-gun the same sample. Every cue in this game was byte-identical every time it fired. We
+synthesise everything and every oscillator already takes a `detune`, so this costs almost nothing:
+`attack`, `hit`, `enemy_shot`, `dash` and `player_hit` now pick one scatter of up to 40 cents per
+play and apply it to **every layer of that play**, so the intervals inside a cue survive and only
+the whole sound moves. Cues that ring out (the anchor, the portal, a memory saved) are untouched,
+because variety there reads as a tuning fault rather than as life.
+
+The remaining half of this item is not built: a damage-keyed low-frequency thump on heavy blows,
+and a distinct confirm above the routine hit sound on a kill (Nijman's "more bass"). Both need an
+ear on the build, and I cannot hear it.
 
 ### R4 — First-biome ramp and a mercy mechanic (difficulty) — **proposed, not built**
 See [§2](#2-difficulty-the-one-that-is-actually-broken). Highest *player-facing* impact of anything
@@ -168,15 +183,30 @@ values, so any change fails a test on purpose and forces the conversation:
 
 | Knob | Now | Proposed | Why |
 |---|---|---|---|
-| first-biome ramp (new) | none | rooms 1–3 of biome 1 at `0.75×` enemy hp/damage, lerping to `1.0×` by room 4 | kishōtenketsu's *ki*: the first rooms teach, they do not test. The bot died in room 2. |
+| first-biome ramp (new) | none | rooms 1–3 of biome 1 at `0.75×` enemy hp/damage, lerping to `1.0×` by room 4 | kishōtenketsu's *ki*: the first rooms teach, they do not test. The bot died in room 2 having traversed **zero** doors. For scale, Hades puts its first boss at chamber **14** of a maximum 73: biome 1 is ~13 low-stakes rooms, and biomes get *shorter* after the ramp, not longer. |
 | `tierScalePerTier` | 0.18 | 0.15 | tier 4 goes `1.72×` -> `1.60×`. QA's dead runs are tier-4 fights, and the crew that got out was the one that reached the boss above 60 integrity. |
-| `restHealFraction` | 0.40 | 0.45, and **guarantee one rest site per biome from tier 2** | Hades puts a fountain on the route rather than in the loot table; a heal you cannot route to is not a heal. |
-| mercy (new) | none | one free stand at 25 hp already exists per run; make the *second* death in the same biome restore to 25 hp once, decaying | Hades' Death Defiance, not Hades' God Mode: a charge, not a difficulty slider, so the run stays honest. |
+| `restHealFraction` | 0.40 | 0.45, and **guarantee one rest site per biome from tier 2** | Hades guarantees a Healing Fountain in the chamber immediately after every biome boss, and makes the between-boss fountains optional on top. A heal you cannot route to is not a heal. |
+| mercy (new) | none | one free stand at 25 hp already exists per run; make the *second* death in the same biome restore to 25 hp once, decaying | **Death Defiance, not God Mode.** Hades' Death Defiance is up to 3 charges restoring 50 % health, refillable mid-run for 200 obols; God Mode is a flat 20 % resistance growing 2 % per death to a cap of 80 %. A charge keeps the run honest and keeps the panic recoverable; a slider quietly rewrites the difficulty the debrief is reporting on, which our honesty rules should not allow. |
 
-**Target to hold it to:** a solo `weaver` bot (the class QA used, on `crystal-tide`, the hard
-fixture) clears **biome 1 in 3 of 5 runs** with `scripts/solo-e2e.mjs --only fullrun`. Today's
-measured number is 0 of 1, in room 2. That is the before/after table this change has to fill in,
-and I am not shipping the numbers without it.
+**Measured on this branch, so the baseline is not hearsay.**
+`node scripts/solo-e2e.mjs --only fullrun --minutes 6 --class weaver --hints off`, cold profile,
+output in `/tmp/relay-shots/v2/baseline-a/`:
+
+```
+D1 FAIL  0.0 min of play: 0 door traversals, 2 distinct rooms, biomes=[] deepest tier=0;
+         room kinds=["entrance","rest","combat"]; tiles=["hazard floor","rubble"];
+         loop ended with "debrief" at phase=debrief
+15/22 checkpoints, 0 uncaught page errors
+```
+
+**Zero door traversals.** The bot never left the room it first fought in, on a six-minute budget.
+That is QA's room-2 death reproduced independently, and it is the number any tuning change has to
+move.
+
+**Target to hold it to:** the same command clears **biome 1 in 3 of 5 runs** and records at least
+**8 door traversals** in the median run. Today: **0 traversals, 0.0 minutes, deepest tier 0**.
+That is the before/after table the change has to fill in, and I am not shipping the numbers
+without it.
 
 **Why I did not build it in the time I had:** a tuning change without the bot run is exactly the
 kind of pre-demo edit that looks safe and is not. The measurement is the work, and it does not fit.
@@ -203,10 +233,24 @@ clients rendering the same snapshot differently is already true of every particl
   motion preference and the pure easing/intensity functions, unit-tested in
   `tests/client/feel.test.ts`. Reads `prefers-reduced-motion`, overridable and persisted at
   `relay.motion.reduced`, surfaced as a toggle in the menu's Controls page.
-- **R1**: hit flash, flinch offset, damage-scaled impact and contact shake in `RoomScene.ts`, every
-  one of them multiplied by the motion setting so "reduced" really is reduced.
+- **R1**: hit-stop, hit flash, flinch offset, damage-scaled impact and contact shake in
+  `RoomScene.ts`, every one of them multiplied by the motion setting so "reduced" really is
+  reduced. Every existing `cameras.main.shake`/`flash` call site was routed through the same gate,
+  so a new effect cannot forget the setting by being written in the wrong style.
+- **R3**: per-play pitch scatter in `src/client/audio/index.ts`, tested in
+  `tests/client/audio-scatter.test.ts`.
+- **R4's measurement** (not the change): the baseline in [§2](#2-difficulty-the-one-that-is-actually-broken)
+  was run on this branch so whoever does the tuning starts from a number rather than from a memory.
 
-Before/after evidence, screenshot paths and the check run are in the pull request.
+`npm run check` green: **91 files, 1108 tests**, up from 1103. Screenshots in
+`/tmp/relay-shots/v2/` (`probe.png` shows the reaction layer mid-fight; `menu-motion.png` shows the
+setting). Evidence and caveats are repeated in the pull request.
+
+**An honest gap in the evidence.** I could not produce a before/after *frame sequence*, because the
+DEV `?tier=` deep link re-rolls the biome per run, so two captures are two different rooms. The
+before/after for the reaction layer is therefore a code-and-test argument, not a screenshot
+argument: `drawImpact` was called with a literal `1` at every hit (`RoomScene.ts:988` on `main`),
+and nothing existed to flash, hold or move the thing that was hit. **A human should play it.**
 
 ## 5 What humans should consider next
 
@@ -220,9 +264,18 @@ Before/after evidence, screenshot paths and the check run are in the pull reques
 
 ## 6 Sources
 
-- Jan Willem Nijman (Vlambeer), *The Art of Screenshake*, INDIGO 2013 — hit flash on the target,
-  knockback, shake on your own hit, impact scaled to the blow, randomised pitch.
+- Jan Willem Nijman (Vlambeer), *The Art of Screenshake*, INDIGO 2013 — the 30-step list: hit flash
+  on the target (10), knockback "a few pixels" (11), permanence (12, 21, 29), screen shake (15),
+  **sleep / hit-stop (17)**, more bass (22). None of the thirty is visible alone; they compound.
   https://www.youtube.com/watch?v=AJdEqssNZ-U
+- Squirrel Eiserloh, *Juicing Your Cameras With Math*, GDC 2016 — the trauma model: keep
+  `trauma` in [0, 1], add on events, decay to zero, and drive the offset with `trauma^2`.
+  https://www.youtube.com/watch?v=tu-Qe66AvtY
+- SmashWiki, *Hitlag* — shipped hit-stop formulas and caps (Ultimate `floor(damage * 0.65 + 6)`,
+  cap 30 frames; Melee `damage/3 + 3`, cap 20). https://www.ssbwiki.com/Hitlag
+- MDN, *prefers-reduced-motion* — the media query, and that it targets vestibular disorders, which
+  is why the rule here is "remove camera motion, keep information".
+  https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion
 - Martin Jonasson & Petri Purho, *Juice it or lose it*, 2012 — the incremental juice list, each
   effect demonstrated in isolation. https://www.youtube.com/watch?v=Fy0aCDmgnxg
 - Steve Swink, *Game Feel: A Game Designer's Guide to Virtual Sensation*, 2008 — real-time control,

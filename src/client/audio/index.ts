@@ -67,6 +67,29 @@ export function voiceForWorld(art: ArtRecipe): WorldVoice {
   return { root, scale, timbre, brightness };
 }
 
+/**
+ * Cues that repeat fast enough to machine-gun if every play is identical. Nijman's cheapest
+ * listed trick in "The Art of Screenshake" is randomised pitch on repeated sounds; a synth gets
+ * it for nothing, because every oscillator already takes a detune.
+ */
+export const SCATTERED_CUES: ReadonlySet<AudioCueId> = new Set<AudioCueId>(['attack', 'hit', 'enemy_shot', 'dash', 'player_hit']);
+
+/** Widest detune applied to a repeated cue, in cents. 40 cents is under half a semitone: audible as variety, never as a wrong note. */
+export const PITCH_SCATTER_CENTS = 40;
+
+/**
+ * Detune for one play of `cue`, in cents, from a roll in [0, 1). The scatter is chosen ONCE per
+ * play and applied to every layer of it, so a chord stays in tune with itself and only the whole
+ * sound moves. Cues that ring out (bells, the anchor, the portal) are left alone: variety there
+ * would read as a tuning fault rather than as life.
+ */
+export function cueDetuneCents(cue: AudioCueId, roll: number, spread: number = PITCH_SCATTER_CENTS): number {
+  if (!SCATTERED_CUES.has(cue)) return 0;
+  // NaN fails both comparisons, so it is rejected explicitly rather than detuning by NaN.
+  const clamped = !Number.isFinite(roll) ? 0.5 : roll < 0 ? 0 : roll >= 1 ? 0.999999 : roll;
+  return Math.round((clamped * 2 - 1) * spread);
+}
+
 export function createBrowserAudio(): AudioPort {
   if (typeof AudioContext === 'undefined') return createSilentAudio();
   let context: AudioContext | null = null;
@@ -160,6 +183,11 @@ export function createBrowserAudio(): AudioPort {
     send?: number;
   }
 
+  /**
+   * `scatterCents` shifts the WHOLE sound, not each layer, so the intervals inside a cue survive.
+   * It is set per call by the cue dispatcher below and is 0 for everything that rings out.
+   */
+  let scatterCents = 0;
   const play = (layers: Layer[]): void => {
     const ctx = ensureGraph();
     if (!ctx || !master || !space || voices >= 48) return;
@@ -178,7 +206,8 @@ export function createBrowserAudio(): AudioPort {
         osc.type = layer.type ?? 'sine';
         osc.frequency.setValueAtTime(layer.freq, start);
         if (layer.to) osc.frequency.exponentialRampToValueAtTime(layer.to, end);
-        if (layer.detune) osc.detune.value = layer.detune;
+        const detune = (layer.detune ?? 0) + scatterCents;
+        if (detune) osc.detune.value = detune;
         source = osc;
         head = osc;
       } else {
@@ -465,7 +494,11 @@ export function createBrowserAudio(): AudioPort {
       const now = ctx.currentTime;
       if (now - (lastPlayed.get(cue) ?? -1) < 0.06) return;
       lastPlayed.set(cue, now);
+      // Chosen once per play, read by every oscillator this cue builds, reset afterwards so a
+      // cue that is not in SCATTERED_CUES can never inherit the last one's detune.
+      scatterCents = cueDetuneCents(cue, Math.random());
       cues[cue]();
+      scatterCents = 0;
     },
     setWorld(art) {
       voice = art ? voiceForWorld(art) : SANCTUARY_VOICE;
