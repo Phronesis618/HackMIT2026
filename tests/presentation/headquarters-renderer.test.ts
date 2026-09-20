@@ -101,7 +101,7 @@ describe('headquarters renderer hook', () => {
     // A recorded collapsed run, downed twice, last hit by a warden: the line names the warden.
     const lastRun: LastRun = {
       worldId: 'w', worldTitle: 'Vantage Spire', outcome: 'collapsed', classId: 'bastion', endedAt: 5, durationMs: 60_000, roomsEntered: 3,
-      deepestRoomIndex: 2, roomsCleared: 1, enemiesDefeated: 2, damageDealt: 10, damageTaken: 70, downs: 2, lastDownedByEnemyId: 'warden',
+      deepestRoomIndex: 2, deepestTier: -1, biomesCleared: 0, roomsCleared: 1, enemiesDefeated: 2, damageDealt: 10, damageTaken: 70, downs: 2, lastDownedByEnemyId: 'warden',
       revivesGiven: 0, revivesReceived: 1, loreRead: 0, abilityUnlocked: null, crew: [{ id: player.id, displayName: 'Jon' }], worldSource: 'fixture', sourceEventIds: ['1:0'],
     };
     hub.set({ ...createHubState(), lastRun, totals: { runs: 1, anchors: 0, worldsVisited: 1, relics: 0 } });
