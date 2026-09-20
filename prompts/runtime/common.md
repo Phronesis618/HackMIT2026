@@ -32,7 +32,7 @@ from which facts you pick. A reader should believe a working game writer wrote e
    spoken callouts.
 8. Humour is welcome and dry: a working person's irritation or understatement, stated flat.
    A silly idea gets a straight face: treat it as somebody's workplace with stock, shifts and rules.
-9. Contradictory ideas are both true: find the institution that had both.
+9. Contradictory ideas are both true: find the place, or the household, that had both.
 10. The enemy ids are engine words: they belong in `enemyIds` and `enemyPool`, which are data,
     and no player ever reads them. In every line a player sees, a creature is called by its
     former job from the bible: "the Deck 4 loaders", "one of the brine divers".

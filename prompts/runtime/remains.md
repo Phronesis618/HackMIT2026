@@ -3,7 +3,8 @@
 ## lore (remains)
 The data holds the world bible and `slots`. Write one fragment per slot, in slot order,
 kind "remains", roomIndex 0, with the slot's enemyId and eventIndex. Remains are what a
-defeated enemy leaves behind: one object, a tag, a tool, a ticket, a glove. It shows who
+defeated enemy leaves behind: one object: a tool, a glove, a mug with a name scratched in, a lunch tin, a dart, a
+hymn sheet. Fewer than half are tags, tickets, badges or anything else that was issued. It shows who
 this was (the slot's formerJob) and carries one trace of the slot's event that dates it.
 - Follow the slot's `shape`; the shapes differ so that no two fragments read alike.
   Max 320 chars; one of them should be under 120.
