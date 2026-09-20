@@ -16,10 +16,11 @@ import { createBrowserAudio } from './audio';
 import { createBrowserChronicle } from './chronicle';
 import { GameController, parsePreviewFlags } from './game/GameController';
 import { createIdentityPersistence } from './game/identity';
-import { createUiStore } from './game/uiStore';
+import { connectFloorsUi, createUiStore } from './game/uiStore';
 import { PhaserWorldRenderer } from './render/PhaserWorldRenderer';
 import { applyTokens } from './styles/applyTokens';
 import './styles/app.css';
+import './styles/floors.css';
 import { LocalSession } from './transport/LocalSession';
 import { RemoteSession } from './transport/RemoteSession';
 import { fixtureWorldProvider, serverWorldProvider } from './transport/worldProviders';
@@ -63,6 +64,7 @@ async function boot(): Promise<void> {
     session, renderer, chronicle, audio, store, flags, liveGenerationAvailable,
     persistIdentity: identityPersistence.save,
   });
+  connectFloorsUi(session, store, controller.actions); // floors UI bridge (agent F3): UiModel.floor + actions.chooseBiome
   window.addEventListener('pagehide', (event) => {
     if (!event.persisted) controller.dispose();
   });

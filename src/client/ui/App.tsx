@@ -11,6 +11,7 @@ import { DebriefPanel } from './DebriefPanel';
 import { AbilityBar } from './AbilityBar';
 import { GameMenu } from './GameMenu';
 import { HeadquartersPrompt, HeadquartersStationPanel } from './HeadquartersStations';
+import { FloorsHud } from './FloorsHud';
 
 export interface AppProps {
   store: UiStore;
@@ -69,6 +70,7 @@ export function App({ store, actions, onStageReady }: AppProps) {
             <div className="stage" ref={stageRef} tabIndex={0} data-game-stage aria-label="RELAY game canvas" aria-describedby="stage-controls" />
             <span id="stage-controls" hidden>Focus the game to move with WASD or arrows. Tab opens the menu. Shift+Tab leaves the game. Escape closes the menu.</span>
             {inRun && <Hud model={model} actions={actions} />}
+            <FloorsHud model={model} actions={actions} />
             {atHq && <HeadquartersPrompt model={model} actions={actions} />}
           </section>
           {model.phase !== 'debrief' && <AbilityBar model={model} actions={actions} />}

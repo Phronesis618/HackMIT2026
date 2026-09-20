@@ -15,12 +15,13 @@ import { CLASS_THEME, ENEMY_INFO, type ClassId } from '../../shared/registry';
 import { hexToInt, tokens } from '../../shared/tokens';
 import { ENEMY_COMBAT } from '../../sim/combat';
 import { drawHostile, drawOperative } from './characters';
-import { hexInt } from './color';
+import { hexInt, VOID_COLOR } from './color';
 import { drawAnchorRitual } from './anchorRitual';
 import { collectTerrainTiles, drawTerrain, terrainCaption, type TerrainTile } from './terrain';
 import { drawHeadquartersStations, type HeadquartersStationView } from './headquarters';
 import { drawMotif, drawProp, drawSanctuary, drawVignette } from './drawing';
 import { drawBackdrop, drawFloor, drawLightPools, drawMotes, drawWalls, makeMotes, type Mote } from './environment';
+import { drawDoorFrames, drawDoorStates, selectDoorViews, stepSeal, type DoorView } from './doors';
 import { drawFloorDressing, drawOverhead, drawWallDressing, FLOOR_PATTERN, MOTE_STYLE, stencilColors, type MoteStyle } from './dressing';
 import * as fx from './fx';
 
@@ -73,6 +74,10 @@ export class RoomScene extends Phaser.Scene {
   private headquartersStations: HeadquartersStationView | null = null;
   private statusLabels = new Map<string, Phaser.GameObjects.Text>();
   private portalPulse = 0;
+  /** Floors rooms only: per-door look for the latest snapshot and the eased shutter position. */
+  private doorsView: Phaser.GameObjects.Graphics | null = null;
+  private doorViews: DoorView[] = [];
+  private doorSeal = 0;
   private players = new Map<string, EntityView>();
   private enemies = new Map<string, EntityView>();
   private anchorView: Phaser.GameObjects.Graphics | null = null;
@@ -97,7 +102,7 @@ export class RoomScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor(tokens.color.ink900);
+    this.cameras.main.setBackgroundColor(VOID_COLOR);
     this.onReady();
   }
 
@@ -142,6 +147,9 @@ export class RoomScene extends Phaser.Scene {
     this.statusLabels.clear();
     this.loreNodesView = null;
     this.loreHint = null;
+    this.doorsView = null;
+    this.doorViews = [];
+    this.doorSeal = 0;
 
     const layer = this.add.layer();
     this.roomLayer = layer;
@@ -209,6 +217,16 @@ export class RoomScene extends Phaser.Scene {
     this.terrainView = this.add.graphics().setDepth(DEPTH.propsBehind + 0.5);
     layer.add(this.terrainView);
     drawTerrain(this.terrainView, room, this.terrainTiles, undefined, p, this.time.now);
+    if (room.kind !== undefined) {
+      // Floors room: real doorways on the border wall. Frames are static; the light, the
+      // chevron and the combat shutter are redrawn per frame in update().
+      const frames = this.add.graphics().setDepth(DEPTH.propsBehind + 0.2);
+      drawDoorFrames(frames, room, p);
+      layer.add(frames);
+      this.doorsView = this.add.graphics().setDepth(DEPTH.propsBehind + 0.6);
+      layer.add(this.doorsView);
+      this.doorViews = selectDoorViews(room, null);
+    }
     if (!opts.headquarters) {
       const dressing = this.add.graphics().setDepth(DEPTH.propsBehind);
       drawWallDressing(dressing, room, p, art.motifIds, seed);
@@ -230,8 +248,6 @@ export class RoomScene extends Phaser.Scene {
       drawProp(props, prop.propId, c.x, c.y, p, art.glowIntensity);
     }
     layer.add(props);
-
-    if (opts.headquarters) this.drawControlsFloorHint(layer, roomW / 2, 11 * TILE_SIZE, p);
 
     this.portalGlow = this.add.graphics().setDepth(DEPTH.floorDecal + 3);
     layer.add(this.portalGlow);
@@ -336,6 +352,7 @@ export class RoomScene extends Phaser.Scene {
     this.latestSnapshot = snapshot;
     this.localPlayerId = localPlayerId;
     this.headquartersStations?.update(snapshot, localPlayerId);
+    if (this.doorsView) this.doorViews = selectDoorViews(this.room, snapshot.floor);
 
     const seenPlayers = new Set<string>();
     for (const player of snapshot.players) {
@@ -750,10 +767,6 @@ export class RoomScene extends Phaser.Scene {
     return markers;
   }
 
-  /**
-   * Crude Isaac-style floor tutorial: WASD + mouse + the action keys, drawn once on the
-   * headquarters floor instead of repeating the same sentence in the HUD every room.
-   */
   /** The generated world's title and tagline, set into the arrival room's floor below the spawn. */
   private drawWorldStencil(
     layer: Phaser.GameObjects.Layer,
@@ -789,53 +802,6 @@ export class RoomScene extends Phaser.Scene {
     layer.add(this.text(cx, cy + 9, world.tagline, {
       fontFamily: tokens.font.body, fontSize: '9px', color: palette.text, align: 'center', wordWrap: { width: halfW * 2 - 24 },
     }).setOrigin(0.5).setAlpha(0.7).setDepth(DEPTH.floorDecal + 3));
-  }
-
-  private drawControlsFloorHint(layer: Phaser.GameObjects.Layer, cx: number, cy: number, palette: ArtRecipe['palette']): void {
-    const g = this.add.graphics().setDepth(DEPTH.floorDecal + 1);
-    const ink = hexToInt(palette.wallEdge);
-    const accent = hexToInt(palette.accent);
-    const key = (x: number, y: number, w: number, h: number): void => {
-      g.fillStyle(hexToInt(palette.wall), 0.9).fillRoundedRect(x - w / 2, y - h / 2, w, h, 4);
-      g.lineStyle(1.5, ink, 0.8).strokeRoundedRect(x - w / 2, y - h / 2, w, h, 4);
-    };
-    const labels: Phaser.GameObjects.Text[] = [];
-    const letter = (x: number, y: number, text: string): void => {
-      labels.push(this.text(x, y, text, { fontFamily: tokens.font.mono, fontSize: '11px', color: palette.text }).setOrigin(0.5));
-    };
-    const caption = (x: number, y: number, text: string): void => {
-      labels.push(this.text(x, y, text, { fontFamily: tokens.font.mono, fontSize: '8px', color: palette.text }).setOrigin(0.5).setAlpha(0.6));
-    };
-
-    // WASD cluster, left side.
-    const wasdX = cx - 150;
-    key(wasdX, cy - 16, 22, 22);
-    letter(wasdX, cy - 16, 'W');
-    for (const [dx, ch] of [[-24, 'A'], [0, 'S'], [24, 'D']] as const) {
-      key(wasdX + dx, cy + 8, 22, 22);
-      letter(wasdX + dx, cy + 8, ch);
-    }
-    caption(wasdX, cy + 30, 'MOVE');
-
-    // Mouse glyph, aim.
-    const mouseX = cx - 70;
-    g.lineStyle(1.5, ink, 0.85).fillStyle(hexToInt(palette.wall), 0.9);
-    g.fillRoundedRect(mouseX - 12, cy - 24, 24, 34, 12).strokeRoundedRect(mouseX - 12, cy - 24, 24, 34, 12);
-    g.lineStyle(1.5, accent, 0.9).lineBetween(mouseX, cy - 24, mouseX, cy - 8);
-    caption(mouseX, cy + 22, 'AIM');
-
-    // Action keys, right side: attack, dash, abilities, interact.
-    const actions: Array<[string, string]> = [['J', 'ATTACK'], ['SHIFT', 'DASH'], ['Q', 'Q'], ['E', 'E'], ['F', 'HOLD']];
-    actions.forEach(([label, cap], i) => {
-      const x = cx + 10 + i * 40;
-      const w = label.length > 1 ? 34 : 22;
-      key(x, cy - 6, w, 22);
-      letter(x, cy - 6, label);
-      caption(x, cy + 16, cap);
-    });
-
-    layer.add(g);
-    layer.add(labels);
   }
 
   private clearEntities(): void {
@@ -1088,7 +1054,12 @@ export class RoomScene extends Phaser.Scene {
     const g = this.portalGlow;
     g.clear();
     const pulse = 0.5 + 0.5 * Math.sin(t * 2.2);
-    for (const exit of this.room.exits) {
+    if (this.doorsView) {
+      this.doorSeal = stepSeal(this.doorSeal, this.doorViews.some((door) => door.state === 'sealed') ? 1 : 0, delta);
+      this.doorsView.clear();
+      drawDoorStates(this.doorsView, this.doorViews, this.art.palette, this.doorSeal, t, this.room.kind === 'exit');
+    }
+    for (const exit of this.doorsView ? [] : this.room.exits) {
       const c = tileToWorld(exit.x, exit.y);
       if (this.isHeadquarters) {
         // The portal: layered rings + rotating arcs, the luminous heart of the HQ.
