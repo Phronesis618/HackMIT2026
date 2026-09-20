@@ -115,6 +115,17 @@ describe('production keyboard listeners', () => {
     expect(dom.activeElement).toBe(game);
   });
 
+  it('still closes on Escape after the focused menu control unmounted and focus fell back to the body', () => {
+    const game = stage();
+    const menu = dom.body.append(new ElementStub('DIV'));
+    const close = vi.fn();
+    disposers.push(installMenuKeyboard({ isOpen: () => true, menu: () => element(menu), open: vi.fn(), close, selectPage: vi.fn() }));
+    expect(keyboard(game, 'Escape').defaultPrevented).toBe(false); // other background targets stay untouched
+    expect(close).not.toHaveBeenCalled();
+    expect(keyboard(dom.body, 'Escape').defaultPrevented).toBe(true);
+    expect(close).toHaveBeenCalledExactlyOnceWith();
+  });
+
   it('restores a clicked menu trigger and the prior inert state of other content', () => {
     const root = dom.body.append(new ElementStub('DIV'));
     const trigger = root.append(new ElementStub('BUTTON'));
