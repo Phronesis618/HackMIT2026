@@ -1,5 +1,29 @@
 # Handoff — Agent A (Fable, `feat/core`)
 
+## Judge-facing pass (Sep 20, 10:20–11:10 ET) — README, screenshot gallery, harness fixes
+
+- **Implemented — `README.md` rewritten for a judge, not a contributor.** Play links first
+  (hosted Render game, Pages fixture demo, local), then a fourteen-beat illustrated walkthrough of
+  a run, then what the AI actually does (pipeline diagram, the closed registry, the four
+  provenance labels, the measured latencies/costs), the honesty rules, the architecture and
+  boundaries, a verified-vs-unverified section, configuration, and who built it. Everything a
+  developer needs is still there, below the fold.
+- **Implemented — `docs/media/`, fifteen committed screenshots.** Every one is a frame from a real
+  harness run; provenance and refresh commands are tabled in `docs/SCREENSHOTS.md`. This is the
+  only place PNGs are committed (~4.8 MB).
+- **Observed — a live Claude world through the hosted service**: 46.4 s from *Prepare world* to
+  playable, badge `LIVE · claude-sonnet-4-6`, three model-written laws with real numbers, 11 lore
+  fragments, first room entered and played, zero console errors. This contradicts FOLLOWUPS J3/L2:
+  **Render is not stale** (it has the start screen and live Anthropic generation; `floors:false`).
+- **Fixed — both browser harnesses were broken by the start screen.** `solo-e2e.mjs` and
+  `coop-e2e.mjs` now dismiss it with a real click on its own button; before this, every hub
+  checkpoint after `H3` failed because the overlay intercepts pointer events (`#contribution` was
+  unclickable). `solo-e2e.mjs` also runs the debrief + hub checks on the legacy path, which used to
+  return early when there was no collapse to escape — so the ending we demo by default was never
+  screenshotted or asserted. `npm run check` green: **1107 tests / 92 files**.
+- **Found — one real co-op defect**, in FOLLOWUPS M2: the host's *Enter portal* button stays
+  enabled while the gate reads `1 / 2 READY`.
+
 ## Overnight (Sep 20, 02:40–05:30 ET) — composer, world rules, overlay, party frames, start screen
 
 Local commits on Jeffrey's machine, merged with `origin/main` through `c1abe97` (floors,

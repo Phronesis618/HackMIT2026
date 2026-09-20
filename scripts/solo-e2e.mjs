@@ -357,8 +357,21 @@ class Player {
     await this.page.goto(`${this.base}/${query}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     this.canvasMounted = await this.page.waitForSelector('.stage canvas', { state: 'attached', timeout: 60000 }).then(() => true).catch(() => false);
     if (!this.canvasMounted) console.log(`[solo] WARNING: no canvas after 60 s; errors=${J(this.errors.slice(0, 4))}`);
+    await this.dismissStart();
     await waitFor(async () => (await this.read())?.snap, { timeoutMs: 30000, label: 'first snapshot' }).catch(() => {});
     return this;
+  }
+
+  /**
+   * A cold profile opens on the start screen (src/client/ui/StartScreen.tsx), which covers the hub
+   * panels. Leave it the way a player does: one real click on its own button.
+   */
+  async dismissStart() {
+    const play = this.page.locator('[data-testid="start-screen"] .start__play');
+    if (!(await play.isVisible().catch(() => false))) return false;
+    await play.click({ timeout: 5000 }).catch(() => {});
+    await this.page.locator('[data-testid="start-screen"]').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+    return true;
   }
 
   async close() { await this.context?.close().catch(() => {}); this.context = null; this.page = null; }
@@ -1225,7 +1238,13 @@ async function finaleTail(ctx) {
   // vents, canisters and hazard floor stay exactly as they were, and a hazard ring closes in
   // from the walls every 25 s (COLLAPSE_RING_MS), up to 3 rings.
   const collapse0 = s.snap.collapse ?? s.ui.hud?.collapse;
-  if (!collapse0) { report.add('F5', 'collapse escape', 'SKIP', 'the collapse never started'); return; }
+  if (!collapse0) {
+    // Flags off, the shape we demo by default: a legacy world ends at the Anchor with no collapse
+    // to escape. The beats after it still exist, so check those instead of stopping here.
+    report.add('F5', 'collapse escape', 'SKIP', 'the collapse never started (a legacy world ends at the Anchor)');
+    await debriefAndHub(ctx);
+    return;
+  }
   const tEscape = Date.now();
   const totalMs = collapse0.totalMs;
   let stage = collapse0.stage;
@@ -1288,13 +1307,18 @@ async function finaleTail(ctx) {
     Boolean(chosen) && d.relicCards.length >= 1,
     `offer=${J(offer.map((o) => o.key))}; cards on screen=${J(d.relicCards)}; chosen=${chosen} (${J(d.relicChosen)}); head="${d.bodyText.includes('Stand on a pedestal') ? 'Stand on a pedestal…' : ''}"`, '24-relic-choice');
 
-  // --- debrief, then back to the hub.
+  await debriefAndHub(ctx);
+}
+
+/** The last two beats of any run, collapse or not: the debrief, then the hub that remembers it. */
+async function debriefAndHub(ctx) {
+  const { report, player } = ctx;
   const debrief = await waitFor(async () => {
     const w = await player.read();
     return w.snap.phase === 'debrief' || w.ui.phase === 'debrief' ? w : null;
   }, { timeoutMs: 60000, intervalMs: 400, label: 'debrief' }).catch(() => null);
   await sleep(800);
-  d = await player.dom();
+  let d = await player.dom();
   await player.shot('25-debrief');
   report.check('F7', 'the debrief names the run and what was carried out',
     Boolean(debrief) && Boolean(d.debriefTitle),
@@ -1303,7 +1327,7 @@ async function finaleTail(ctx) {
   await player.page.getByRole('button', { name: /^Return to headquarters/ }).click().catch(() => {});
   await waitFor(async () => ((await player.read()).snap.phase === 'headquarters'), { timeoutMs: 20000, label: 'back in HQ' }).catch(() => {});
   await sleep(1800);
-  s = await player.read();
+  const s = await player.read();
   d = await player.dom();
   await player.shot('26-hub-after-run');
   report.check('F8', 'the hub shows the run: quartermaster line, records, relic shelf, memories',

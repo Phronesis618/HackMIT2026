@@ -128,6 +128,14 @@ Every leftover, caveat or "not done" from a finished agent/PR lands here with an
 | L1 | Agent R1 is building `release/floors-default`: demo tuning preset merged in, Crystal Tide made viable, floors + laws ON by default with `=0` off switches, full e2e verification incl. one live co-op generation, `docs/RELEASE_FLOORS_DEFAULT.md`. **I will not merge it** - the default flip and the preset were left to you | me | R1 running → 🙋 |
 | L2 | Render is still stale although `render.yaml` auto-deploys `main`: R1 is emulating the Dockerfile to find out whether the image fails to build/start; any fix lands on a separate `fix/docker-context` branch, which I may merge as an ordinary bug fix after a green check. Redeploying still needs a human with Render access | me | R1 running |
 
+## M · Judge-facing pass (Sep 20, 11:00 ET) — README rewrite + committed screenshot gallery
+| # | Item | From | State |
+| --- | --- | --- | --- |
+| M1 | **Render is no longer stale (contradicts J3 / L2).** `/api/health` → `ok: true`, `provider: anthropic`, `effectiveMode: live`; through the hosted UI a live Claude world was prepared in **46.4 s** with an honest `LIVE · claude-sonnet-4-6` badge, its first room entered and played, **zero** console errors. `/api/config` → `floors:false, laws:false`, so the hosted game is the legacy three-room shape. Screenshots of that run are the README's beats 3–5 | me | ✅ info |
+| M2 | **Co-op finding, not a harness gap:** in today's `coop-e2e --only demo` (18/19) the gate read `1 / 2 READY` on both screens while the **host's `Enter portal` button stayed enabled** — a host can take the crew out before it is ready. Check the gate condition in `HeadquartersPanel` / the readiness flag it reads | me | 🙋 fix or accept |
+| M3 | **Harness fixes.** `scripts/solo-e2e.mjs` and `scripts/coop-e2e.mjs` now dismiss the start screen with a real click on its own button; every hub checkpoint after `H3` had been failing since `StartScreen` landed (the overlay intercepts pointer events, so `#contribution` was unclickable). `solo-e2e` also runs the debrief + hub checks (F7/F8) on the **legacy** path, which used to return early because there is no collapse to escape | me | ✅ |
+| M4 | `docs/media/` is now the one place screenshots are committed (the README gallery, 15 PNGs, ~4.8 MB). Everything else still goes to `/tmp/relay-shots/`. Provenance of each image and how to regenerate it: `docs/SCREENSHOTS.md` | me | ✅ |
+
 ## G · Last
 ✅ P1 presentation guide merged 08:00 (Devin PR #44: `docs/PRESENTATION.md` — judging research with UNCONFIRMED marks, 5–7 min / 90 s / 20 s pitches, demo runbook + pre-demo checklist + fallback ladder, 15–20 judge Q&A, don't-miss checklist). Needs a final fact-refresh after Q1's flip decision (flags default, test counts) → me at report time.
 P1 presentation advice doc → MORNING_REPORT → stretch (tag `overnight-v1`, V2 proposal, `next/v2` draft PR).

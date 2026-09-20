@@ -289,6 +289,13 @@ class Player {
     await this.page.goto(`${this.base}/?mode=coop&as=${this.name}&debug=1`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     this.canvasMounted = await this.page.waitForSelector('.stage canvas', { state: 'attached', timeout: 60000 }).then(() => true).catch(() => false);
     if (!this.canvasMounted) console.log(`[coop] WARNING ${this.name}: no canvas after 60 s; errors=${JSON.stringify(this.errors.slice(0, 4))}`);
+    // A cold profile opens on the start screen (src/client/ui/StartScreen.tsx), which covers the hub
+    // panels. Leave it the way a player does: one real click on its own button ("Join the crew").
+    const play = this.page.locator('[data-testid="start-screen"] .start__play');
+    if (await play.isVisible().catch(() => false)) {
+      await play.click({ timeout: 5000 }).catch(() => {});
+      await this.page.locator('[data-testid="start-screen"]').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+    }
     return this;
   }
 

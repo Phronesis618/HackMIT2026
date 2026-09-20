@@ -22,7 +22,8 @@ node scripts/shot.mjs --start-dev --coop --out /tmp/relay-shots/coop.png
 # -> writes /tmp/relay-shots/coop-a.png and /tmp/relay-shots/coop-b.png
 ```
 
-Output goes under `/tmp/relay-shots/` by convention — **never commit PNGs**.
+Output goes under `/tmp/relay-shots/` by convention — **never commit PNGs**, with exactly one
+exception: [the README gallery](#the-committed-readme-gallery-docsmedia) under `docs/media/`.
 
 ## How dependencies work
 
@@ -140,6 +141,27 @@ bar, right-side panel (hub) / HUD + ability bar (in-room), and the game menu (`T
 correctly at every width. `--coop` was also verified against a real running server: both
 `alice`/`bob` screenshots show `SHARED CREW 2/4`, confirming the two isolated contexts are
 genuinely talking to the same WebSocket session.
+
+## The committed README gallery (`docs/media/`)
+
+The README shows fifteen screenshots so a judge can see the game without running it. They are the
+only committed PNGs in the repo, they are all frames from **real runs** driven by the harnesses
+above (nothing is a mock-up or a composite), and each one was captured at 1440×900 (the co-op pair
+at 1280×800, the viewport `coop-e2e` uses).
+
+| README beat | File | Where it came from |
+| --- | --- | --- |
+| Start screen, sanctuary, forming ring, live receipt, live first room | `start-screen`, `sanctuary`, `forming-world`, `creation-receipt-live`, `first-room-live` | A live Claude world on the hosted Render service, 46.4 s to playable, driven with real input |
+| Class stand, floor map | `class-stand`, `floor-map` | `solo-e2e.mjs --only hub,biome,attune,deep` (fixture worlds, floors + laws on) |
+| Co-op fight, lore fragment | `coop-combat`, `lore-fragment` | `coop-e2e.mjs --only demo` (two browsers, one authoritative server) |
+| Custodian | `custodian` | `solo-e2e.mjs --only floorsend --tier 4 --tier-at exit` |
+| Anchor ritual, debrief | `anchor-ritual`, `debrief` | `solo-e2e.mjs --only finale --finale-entry play --legacy` (a run that won) |
+| Memory wall, codex, skill tree | `memory-wall`, `codex`, `skill-tree` | A local fixture server, driven through the Tab menu with real input |
+
+To refresh one, run the command in the right-hand column, look at the PNG it wrote under
+`/tmp/relay-shots/…`, and copy it over the file in `docs/media/` — keep the same name so the
+README does not need editing. Do not re-encode them (Playwright's PNGs are smaller than what
+`sips` produces at the same size).
 
 ## Co-op end-to-end (`scripts/coop-e2e.mjs`)
 
