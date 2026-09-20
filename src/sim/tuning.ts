@@ -16,7 +16,7 @@
 export const DEMO_TUNING = {
   // --- the last fight (docs/design/BOSS_FINALE.md §3) --------------------------------------
   /** Custodian health for a solo operative. The whole fight length keys off this. */
-  bossHpBase: 1200,
+  bossHpBase: 850,
   /** Added per operative beyond the first. Health scales with the crew, never with the tier. */
   bossHpPerExtraPlayer: 400,
   /** Biome-exit gatekeeper (a one-phase preview of the Custodian) at tier 0, and per extra operative. */
@@ -24,21 +24,21 @@ export const DEMO_TUNING = {
   gatekeeperHpPerExtraPlayer: 80,
   /**
    * Share of the Custodian's max health a SINGLE hit may take. Dead Cells' Conjunctivius uses
-   * 15 %; ours is 12 %. This is what keeps the three phases intact whatever a build does.
+   * 15 %; ours is 18 %. This is what keeps the three phases intact whatever a build does.
    */
-  bossHitCap: 0.12,
+  bossHitCap: 0.18,
   /** A corrupted conduit (and a live flood tile) hurts whoever stands on it this often... */
-  corruptedFloorTickMs: 600,
+  corruptedFloorTickMs: 900,
   /** ...for this much, per tick. Flood tiles carry their own pattern damage instead. */
-  corruptedFloorDamage: 10,
+  corruptedFloorDamage: 6,
 
   // --- damaging terrain (docs/design/TILES.md T0, §1.1) -----------------------------------
   /** One '~' damage tick per this many ms of standing still in it. */
-  hazardIntervalMs: 450,
-  /** The ramp's step: tick n deals `hazardBase * n`, so 3, 6, 9, 12, 15 at the default. */
-  hazardBase: 3,
+  hazardIntervalMs: 600,
+  /** The ramp's step: tick n deals `hazardBase * n`, so 2, 4, 6, 8 at the default. */
+  hazardBase: 2,
   /** The ramp stops here, so standing in fire is survivable for a known number of seconds. */
-  hazardStackMax: 5,
+  hazardStackMax: 4,
   /** Enemies burn harder than the crew: kiting a pack across a hazard is meant to be worth it. */
   enemyHazardMul: 1.6,
   /** Share of a kill's reward and ult charge paid when the ROOM made the kill, not the crew. */
@@ -54,9 +54,9 @@ export const DEMO_TUNING = {
 
   // --- floors (docs/design/FLOORS.md §12) --------------------------------------------------
   /** Enemy health and damage grow by this much per biome tier. Tier 0 is the legacy numbers. */
-  tierScalePerTier: 0.18,
+  tierScalePerTier: 0.1,
   /** Share of max Integrity a rest site restores to every living operative, once per run. */
-  restHealFraction: 0.4,
+  restHealFraction: 0.6,
 } as const;
 
 export type DemoTuning = typeof DEMO_TUNING;
