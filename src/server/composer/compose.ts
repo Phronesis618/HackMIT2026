@@ -24,6 +24,7 @@ import { hashString } from '../../shared/ids';
 import type { EnemyId, MotifId, PropId } from '../../shared/registry';
 import { sanitizeLaws, type WorldLaw, type WorldLawId } from '../../shared/laws';
 import { BiomeBriefListSchema, type BiomeBrief, type BiomeLayout } from '../../shared/floors';
+import { ENEMY_COST } from '../../shared/floorgen/director';
 import { CREATURE_SYNONYMS, HAZARD_WORDS, PROP_SYNONYMS, REMAINS_TEMPLATES, STOPWORDS, THEMES, type ThemeDef } from './themes';
 
 type RoomRole = 'entry' | 'mid' | 'final';
@@ -101,6 +102,12 @@ const MAX_ROOMS = 3;
  * layout personality; the composer fills the slots with its themes so a floors run through a
  * composed world changes construction, palette vocabulary and enemy mix at every biome choice.
  */
+/** Brief slot → route tier (1 opener, 2+2+2 choices, 1 finale) and the encounter caps floorgen's own
+ * derived briefs use per tier, so a composed opener is as gentle as a derived one. */
+const SLOT_TIER = [0, 1, 1, 2, 2, 3, 3, 4] as const;
+const TIER_POOL_SIZE = [2, 3, 3, 4, 4] as const;
+const TIER_MAX_COST = [2, 3, 4, 5, 5] as const;
+
 const BRIEF_LAYOUTS: Array<{ noun: string; layout: BiomeLayout; hazards: boolean }> = [
   { noun: 'Approach', hazards: false, layout: { linearity: 0.8, branchiness: 0.2, specials: { treasure: 1, lore: 1, rest: 0, elite: 0 } } },
   { noun: 'Warren', hazards: true, layout: { linearity: 0.1, branchiness: 0.9, specials: { treasure: 1, lore: 3, rest: 1, elite: 1 } } },
@@ -520,7 +527,15 @@ export function composeWorld(request: GenerationRequest): Composition {
     let name = clip(index === 0 ? `Outer ${pick(rand, theme.nouns)}` : index === 7 ? `Heart of the ${word ?? pick(rand, primary.nouns)}` : `${pick(rand, theme.adjectives)} ${slot.noun}`, 80);
     for (let n = 2; briefNames.has(name); n++) name = clip(`${pick(rand, theme.adjectives)} ${slot.noun} ${n}`, 80);
     briefNames.add(name);
-    const enemyPool = [...new Set([...theme.enemies.entry, ...theme.enemies.mid, ...theme.enemies.final])].filter((e) => e !== 'guardian').slice(0, 5);
+    const tier = SLOT_TIER[index]!;
+    // Cheapest kinds first so shallow biomes field husks and swarmlings, deep ones wardens and
+    // channelers; kinds over the tier's cost cap wait for deeper floors.
+    const themed = [...new Set([...theme.enemies.entry, ...theme.enemies.mid, ...theme.enemies.final])]
+      .filter((e) => e !== 'guardian' && ENEMY_COST[e] <= TIER_MAX_COST[tier]!)
+      .sort((a, b) => ENEMY_COST[a] - ENEMY_COST[b]);
+    const fillers: EnemyId[] = ['swarmling', 'husk', 'lurker'];
+    // The finale's pool stays small: the Custodian is the fight there, not its escorts.
+    const enemyPool = [...new Set([...themed, ...fillers])].slice(0, index === 7 ? 3 : TIER_POOL_SIZE[tier]!);
     const propPool = [...new Set(theme.props)].filter((p) => p !== 'anchor_pedestal').slice(0, 5);
     return {
       id: `b${index + 1}`,
