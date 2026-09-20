@@ -96,11 +96,13 @@ server through the script's env passthrough; `--env KEY=VALUE` adds more):
 
 Floors issues seen (reported to F2/F3, **not** fixed here):
 
-- The info notice "The way on is open. The host chooses: [1] … [2] …" stays on the guest's
+- ~~The info notice "The way on is open. The host chooses: [1] … [2] …" stays on the guest's
   screen after the host has chosen and the crew is already in the next biome (needs a manual
-  Dismiss). `s9-floors-biome-bob.png`.
-- In a floors run the rail says "Room 1/1" and the world brief "1/1 rooms", and the top bar
-  "room 1" in every room (legacy `plannedRoomCount`/index labels).
+  Dismiss). `s9-floors-biome-bob.png`.~~ Fixed (Z1, A2/A3): that notice is gone — the choice
+  screen says it all — and any `info` notice now ends when the crew changes room.
+- ~~In a floors run the rail says "Room 1/1"~~ fixed (Z1, A1): the rail reads rooms visited of
+  the biome's room budget and "Biome n/5". The world brief ("1/1 rooms") and the top bar
+  ("room 1" in every room) still use the legacy `plannedRoomCount`/index labels.
 
 ## Bugs found by playing
 
@@ -144,10 +146,13 @@ the co-op run. Fix in `keyboardFocus.ts` + test in `readiness-keyboard.test.ts`.
 
 ### Open (documented, not fixed)
 
-- **Ghost seats are invisible as such.** For 30 s after a disconnect the operative stands in the
-  room, still listed in the crew rail with no "disconnected" mark, still targeted by enemies,
-  and still counts as "living" — so if the only *connected* player is downed the run does not
-  collapse until the ghost dies or is pruned. (`UiModel.players` has no `connected` flag.)
+- ~~**Ghost seats are invisible as such.**~~ Fixed (Z1, A11). `PlayerState.connected` is false
+  while the server holds a dropped seat (absent = present, so solo and legacy snapshots are
+  unchanged). The nameplate reads "<name> · offline" and the crew rail dims the row; enemies and
+  the Custodian ignore the seat; and it is not counted as a living operative, so a run collapses
+  when the last *present* operative goes down. `UiModel.players` carries the flag.
+  Tests: `tests/sim/disconnected.test.ts`, `tests/presentation/room-scene.test.ts`,
+  `tests/presentation/combat-ui.test.ts`.
 - **A new browser profile is a new player.** `?as=` identities live in `sessionStorage`; the
   normal identity lives in `localStorage` but the resume credential is per tab. Closing the
   browser and reopening rejoins the running room as a new operative (fresh HP/resources) while

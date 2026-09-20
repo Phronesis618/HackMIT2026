@@ -43,7 +43,7 @@ describe('HTTP API', () => {
     const res = await fetch(`${base}/api/config`);
     const text = await res.text();
     expect(res.status).toBe(200);
-    expect(JSON.parse(text)).toEqual({ generationMode: 'fixture', liveGenerationAvailable: false });
+    expect(JSON.parse(text)).toEqual({ generationMode: 'fixture', liveGenerationAvailable: false, floors: false, laws: false });
     expect(text).not.toMatch(/OPENAI|key/i);
   });
 

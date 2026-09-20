@@ -166,6 +166,43 @@ describe('floor runtime', () => {
     expect(runtime.mapRooms(entrance.biomeId, runtime.plan(entrance.biomeId).rooms.map((room) => room.id))).toHaveLength(10);
   });
 
+  // C4: `recipe.biomeRoomLines` is written by the model and used to be read by nothing.
+  it('uses the model\'s room line for a biome and kind, and falls back to the derived one', () => {
+    const fixture = fixtures[0]!;
+    const floors = floorsFor(fixture, 'lines');
+    const biomeId = floors.route.tiers[0]![0]!;
+    const derived = createFloorRuntime(floors, { recipe: { lore: fixture.recipe.lore } });
+    const plan = derived.plan(biomeId);
+    const roomOfKind = (kind: string) => plan.rooms.find((room) => room.kind === kind);
+    const entranceId = plan.entranceId;
+
+    const lines = [{ biomeId, lines: [{ kind: 'entrance' as const, text: 'The lift doors are jammed open on the ninth floor.' }] }];
+    const authored = createFloorRuntime(floors, { recipe: { lore: fixture.recipe.lore, biomeRoomLines: lines } });
+    expect(authored.getRoom({ biomeId, roomId: entranceId }).description).toBe(lines[0]!.lines[0]!.text);
+    expect(derived.getRoom({ biomeId, roomId: entranceId }).description).not.toBe(lines[0]!.lines[0]!.text);
+    expect(derived.getRoom({ biomeId, roomId: entranceId }).description).toContain('door');
+
+    // A kind with no line, and a biome with no lines at all, keep the derived description.
+    const other = plan.rooms.find((room) => room.kind === 'combat')!;
+    expect(authored.getRoom({ biomeId, roomId: other.id }).description)
+      .toBe(derived.getRoom({ biomeId, roomId: other.id }).description);
+    const elsewhere = floors.route.tiers[1]![0]!;
+    const elsewhereRoom = authored.plan(elsewhere).entranceId;
+    expect(authored.getRoom({ biomeId: elsewhere, roomId: elsewhereRoom }).description)
+      .toBe(derived.getRoom({ biomeId: elsewhere, roomId: elsewhereRoom }).description);
+
+    // A4: a rest room keeps the once-per-run sentence whoever wrote the rest of the line.
+    const rest = roomOfKind('rest');
+    if (rest) {
+      const restLines = [{ biomeId, lines: [{ kind: 'rest' as const, text: 'Folding cots and a dead kettle.' }] }];
+      const withRest = createFloorRuntime(floors, { recipe: { lore: fixture.recipe.lore, biomeRoomLines: restLines } });
+      const description = withRest.getRoom({ biomeId, roomId: rest.id }).description;
+      expect(description).toContain('Folding cots and a dead kettle.');
+      expect(description).toContain('once, and not again');
+      expect(derived.getRoom({ biomeId, roomId: rest.id }).description).toContain('once, and not again');
+    }
+  });
+
   it('terrain mutator keeps every door reachable on bare rooms across many seeds', () => {
     const terrains = [
       { features: ['breakable_walls', 'bridges', 'rubble', 'conduits'], layout: 'crossroads', density: 'dense' },

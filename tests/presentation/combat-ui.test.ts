@@ -65,6 +65,17 @@ describe('run rail and command bar', () => {
     expect(renderToStaticMarkup(createElement(RunStatus, { model: ui }))).toContain('Clear');
   });
 
+  it('marks a crew seat whose client has gone away (A11)', () => {
+    const ui = model();
+    ui.players = ui.players.map((p, i) => ({ ...p, connected: i !== 1 }));
+    const html = renderToStaticMarkup(createElement(RunStatus, { model: ui }));
+    expect(html).toContain('is-offline');
+    expect(html).toContain('· offline');
+    // Everyone present: no marker anywhere.
+    ui.players = ui.players.map((p) => ({ ...p, connected: true }));
+    expect(renderToStaticMarkup(createElement(RunStatus, { model: ui }))).not.toContain('offline');
+  });
+
   it('puts a readable Integrity number and resources beside the abilities', () => {
     const ui = model();
     ui.hud = { ...ui.hud!, hp: 42, resources: 5, dashCooldownMs: 400 };

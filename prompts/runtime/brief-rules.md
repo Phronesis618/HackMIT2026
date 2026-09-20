@@ -29,5 +29,8 @@ person named in the bible, one on the way out, one on a number painted or printe
 room, one on the work that was going on when it stopped. Start on the thing itself, in
 this world's nouns; these are categories, not words to reuse. Reading the seven in a row,
 no two should start with the same word.
-Rest and treasure rooms differ from floor to floor:
-name what this particular room was used for and the one object left on its table.
+Rest and treasure rooms differ from floor to floor: name what this particular room was
+used for and the one object left on its table. That object comes out of THIS world's work:
+a part someone was cleaning, a half-filled form, a spare from the store, somebody's lunch
+in the wrong container. A thermos, a cold mug, a single chair and a lantern are the stock
+furniture of every empty room in every game and are rejected.

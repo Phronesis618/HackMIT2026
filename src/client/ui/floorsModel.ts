@@ -149,6 +149,7 @@ export function floorUiFrom(
   if (!run || !world?.floors) return null;
   const briefName = (id: string): string => world.floors?.briefs.find((brief) => brief.id === id)?.name ?? id;
   const brief = world.floors.briefs.find((candidate) => candidate.id === run.biomeId);
+  const roomCount = world.floors.route.graph.nodes.find((node) => node.biomeId === run.biomeId)?.roomBudget ?? run.map.length;
   let choice: UiBiomeChoice | null = null;
   if (run.biomeChoice && !run.biomeChoice.chosenBiomeId) {
     const state = run.biomeChoice;
@@ -172,7 +173,8 @@ export function floorUiFrom(
     pathNames: run.path.map(briefName),
     depth: run.tier + 1,
     depthCount: BIOME_TIER_COUNT,
-    roomCount: world.floors.route.graph.nodes.find((node) => node.biomeId === run.biomeId)?.roomBudget ?? run.map.length,
+    roomCount,
+    roomsVisited: Math.min(roomCount, run.map.filter((entry) => entry.state === 'visited').length),
     choice,
   };
 }

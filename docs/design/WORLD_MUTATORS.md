@@ -2,11 +2,14 @@
 
 **Status (agent M1, `feat/world-laws`): partly implemented.** Harness `src/sim/laws.ts` (`resolveLaws`, `NEUTRAL_LAWS`,
 `applyEncounterLaws`, `deriveWorldLaws`, `worldLawsView`, `lawEffectText`). In force: `thin_air`, `tidal_drag`,
-`committed_strike`, `glass_lattice`, `long_echo`, `first_light`, `few_and_terrible`, `the_many` (sim) and `long_dark`
+`committed_strike`, `glass_lattice`, `long_echo`, `first_light`, `few_and_terrible`, `the_many`, `unstable_matter` (sim) and `long_dark`
 (renderer, `src/client/render/lighting.ts`). Look: 6 palette families + contrast clamp (`color.ts`), 6 lighting modes,
-all 12 floor materials, all 12 atmospheres. Not yet: the other 9 laws (they resolve to numbers nobody reads), `wallStyle`,
+all 12 floor materials, all 12 atmospheres. Not yet: the other 8 laws (they resolve to numbers nobody reads), `wallStyle`,
 `skylineDepth`, `grain`, per-biome intensity scaling (§3.3). Laws in a recipe always apply; with no laws in the recipe,
-`RELAY_LAWS=1` (server/Node) or `?laws=1` (browser) derives 2 laws + a look from the motifs. Dev look switches:
+`RELAY_LAWS=1` (server/Node) derives 2 laws + a look from the motifs, **for every client**: the server reports the
+flag on `GET /api/config` and each browser adopts it (`src/shared/flags.ts`), so a co-op crew cannot play one game
+while half their screens draw another. `?laws=1` is only the fallback when no server answered. Derived laws are
+labelled as the engine's in the world panel — the engine picked and named them, no model did. Dev look switches:
 `?palette=&lighting=&floor=&atmo=&dark=<px>`. The rest of this document is the original design. This answers the lead's third ask: *"ideally the AI
 can also script strong gameplay mechanics or changes that help the game feel less repetitive and more
 different between worlds, and can also change up how things look in the worlds."*
@@ -234,7 +237,8 @@ resource, so a crew that ignores exploration is a crew on its last 30 HP at the 
 **Touch points:** the `beacon.e.rally` branch, `discoverLore`.
 
 **`first_light`** · budget **−1** · *the first cut is the deep one*
-`firstStrikeMul = lerp(2.0, 3.0, i)` on the first damage instance against an untouched enemy.
+`firstStrikeMul = lerp(2.0, 3.0, i)` on the first damage instance a PLAYER deals to an enemy (not on
+full health: a hazard tick that took a sliver off it must not spend the crew's opening strike).
 At 0.5: **×2.5**. A Shade one-shots swarmlings and husks from stealth. This promotes the existing
 `first_strike` attunement (`registry.ts:235`, status `planned`) from a skill node to a world law, which
 also means implementing it once serves both.
@@ -276,6 +280,14 @@ cleared. Never applies to `elite`, `gatekeeper` or `guardian`.
 At 0.5: **70 px, 12 to players, 20 to enemies.** Detonates `*` canisters (TILES.md T1) and chains through
 packs. The blast code is **literally the canister's** — if TILES cut #2 lands, this law is ~15 lines.
 Falls off linearly to 0.35× at the rim and requires `clearPath`, same as the canister.
+**Shipped (Z1, A13).** `detonateBody` in `src/sim/simulation.ts` calls the canister's own
+`armCanistersInCircle` / `blastFalloff`, so the `*` chain and the 0.35 rim are literally shared code;
+a burst chain is capped at 8 deep so a shoulder-to-shoulder pack cannot recurse for ever. Nothing is
+exempt (the doc exempts bosses from `restless`, not from this). The crew's damage is credited to the
+enemy that burst; the enemy-side damage is the room's, so a chain pays `ENV_KILL_CREDIT`, not full
+price. It is **not** added to the offline derivation: no motif in `MOTIF_IDENTITY` asks for it, and
+this document never says it should be derived.
+
 This is RoR2's Spite ("enemies drop exploding bombs on death",
 [wiki.gg](https://riskofrain2.wiki.gg/wiki/Artifacts)) with the bomb's fuse removed, because our rooms
 are small enough that a delayed bomb would just be a second hazard the player can't see.

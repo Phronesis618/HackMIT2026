@@ -777,7 +777,7 @@ export function lintWorld(parts: Lintable, bible: WorldBible | undefined): World
     });
   }
   const known = new Set(failures.map((failure) => failure.path));
-  for (const failure of [...lawFailures(parts), ...remainsNameFailures(parts, bible), ...openerFailures(parts), ...calloutFailures(parts), ...dateFailures(parts, bible)]) {
+  for (const failure of [...lawFailures(parts), ...remainsNameFailures(parts, bible), ...openerFailures(parts), ...calloutFailures(parts), ...dateFailures(parts, bible), ...stockPropFailures(parts)]) {
     if (known.has(failure.path)) continue;
     known.add(failure.path);
     rules.add(/^Rule ([a-z-]+):/.exec(failure.notes[0] ?? '')?.[1] ?? 'house-rule');
@@ -845,6 +845,28 @@ function remainsNameFailures(parts: Lintable, bible: WorldBible | undefined): Li
       maxChars: Math.min(POLISH_MAX.remains ?? Infinity, KIND_SPECS.remains.max),
       notes: [`Rule remains-author-name: "${hit[0]}" is one of the three authors, and the person this object belonged to is one of the many, not one of the three. Give the tag an ordinary name of your own, and keep the author's name only if they wrote a note on it.`],
     }];
+  });
+}
+
+/**
+ * The furniture a language model puts in an empty room when it has nothing to say about that
+ * particular room. Found by a blind reader on a rest-room line, and confirmed across a run:
+ * three of four worlds left a thermos in their rest room, and the fourth left a cold mug.
+ * A rest room's one object should come out of the work that was being done there.
+ */
+const STOCK_PROP = /\b(?:thermos|flask of (?:cold |luke ?warm )?\w+|(?:cold|half-drunk|untouched|luke ?warm) (?:mug|cup|tea|coffee)|mug of (?:cold|stewed) \w+|half-eaten \w+|family photo|teddy bear|child's drawing)\b/i;
+function stockPropFailures(parts: Lintable): LintFailure[] {
+  const max = Math.min(POLISH_MAX.roomLine ?? Infinity, KIND_SPECS.roomLine.max);
+  return (parts.biomes ?? []).flatMap((brief, biomeIndex) => {
+    const lines = parts.biomeRoomLines?.find((entry) => entry.biomeId === brief.id)?.lines ?? [];
+    return lines.flatMap((line, lineIndex) => {
+      const hit = STOCK_PROP.exec(line.text);
+      if (!hit) return [];
+      return [{
+        path: `biomes[${biomeIndex}].rooms[${lineIndex}].description`, kind: 'roomLine' as const, text: line.text, maxChars: max,
+        notes: [`Rule stock-prop: "${hit[0]}" is the furniture every empty room in every game has, and it says nothing about this one. Put down the thing the work here left behind: a part half cleaned, a form half filled, somebody's lunch in the wrong container.`],
+      }];
+    });
   });
 }
 

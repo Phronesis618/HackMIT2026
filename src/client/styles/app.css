@@ -1949,6 +1949,7 @@ body { font-size: var(--fs-body); }
 .rail-crew__row { display: flex; align-items: center; gap: var(--space-sm); min-height: 24px; }
 .rail-crew__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-mist300); }
 .rail-crew__row.is-local .rail-crew__name { color: var(--color-mist100); font-weight: 600; }
+.rail-crew__row.is-offline { opacity: 0.55; }
 
 /* compact, clickable rail entries (world, memories) */
 .world-brief,

@@ -23,9 +23,11 @@ The game prints the engine's own exact effect beside this name, so your second s
 carries NO numbers of its own: no percentages, no multipliers, no seconds, no Integrity
 totals. They would only argue with the number printed next to them. Write the rule the way
 one operative tells another on the way in, in the nouns of this world: what the crew will
-notice in the first fight, and what to do about it. Use your own words for it; a sentence
-that would fit any world with this law is the wrong sentence. A description that gives the
-fact and never gives the rule is sent back.
+notice in the first fight, and what to do about it. It is an instruction, not an image, so
+it carries a verb the player can act on: stand, wait, spread out, keep moving, hit the
+group, plant your feet. "One deliberate stroke per frame" is an image and tells nobody
+anything. Use your own words; a sentence that would fit any world with this law is the
+wrong sentence. A description that gives the fact and never gives the rule is sent back.
 
 ## terrainSkins
 One entry for each of the four terrain features in the registry: the world's own name for

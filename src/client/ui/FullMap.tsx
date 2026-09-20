@@ -14,7 +14,7 @@ const LEGEND: Array<{ className: string; label: string }> = [
   { className: 'fmap-key--exit', label: 'Exit gate' },
   { className: 'fmap-key--elite', label: 'Elite pack' },
   { className: 'fmap-key--treasure', label: 'Cache' },
-  { className: 'fmap-key--rest', label: 'Rest site' },
+  { className: 'fmap-key--rest', label: 'Rest site · mends the crew once' },
   { className: 'fmap-key--lore', label: 'Relic' },
 ];
 

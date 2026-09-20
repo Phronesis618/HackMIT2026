@@ -531,6 +531,16 @@ describe('lenient parsing and transport helpers', () => {
     expect(line('Bay C was sealed after Reyes turned the key on the Monday of that week, 118 patients inside.')).not.toContain('stitched-date');
   });
 
+  it('rejects the thermos every empty room in every game has', () => {
+    const brief = parseBrief({ ...briefRaw('Bay C'), roomLines: {
+      entrance: lines[0], combat: lines[1], elite: lines[2], treasure: lines[3], lore: lines[4],
+      rest: 'The staff corner off Bay C: one chair and a thermos of cold tea.', exit: lines[6],
+    } }, 0)!;
+    const parts = { biomes: [brief.brief], biomeRoomLines: [{ biomeId: brief.brief.id, lines: brief.lines }] };
+    expect(lintWorld(parts, bible).rules).toContain('stock-prop');
+    expect(lintWorld({ biomes: [brief.brief], biomeRoomLines: [{ biomeId: brief.brief.id, lines: parseBrief(briefRaw('Bay C'), 0)!.lines }] }, bible).rules).not.toContain('stock-prop');
+  });
+
   it('rejects a floor whose room lines keep opening the same way', () => {
     const repeated = ['Two beds block the aisle.', 'Three rigged patients by the hatch.', 'Four dispensers on the wall, 40 doses left.'];
     const brief = parseBrief({ ...briefRaw('Bay C'), roomLines: {
