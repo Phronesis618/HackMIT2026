@@ -21,7 +21,8 @@ import {
   type WorldRecipe,
 } from '../../shared/contracts';
 import { hashString } from '../../shared/ids';
-import type { EnemyId, MotifId, PropId, WorldRuleId } from '../../shared/registry';
+import type { EnemyId, MotifId, PropId } from '../../shared/registry';
+import { sanitizeLaws, type WorldLaw, type WorldLawId } from '../../shared/laws';
 import { BiomeBriefListSchema, type BiomeBrief, type BiomeLayout } from '../../shared/floors';
 import { CREATURE_SYNONYMS, HAZARD_WORDS, PROP_SYNONYMS, REMAINS_TEMPLATES, STOPWORDS, THEMES, type ThemeDef } from './themes';
 
@@ -57,14 +58,39 @@ const MOTIF_LABEL: Record<MotifId, string> = {
   spires: 'needle spires', arches: 'vaulted arches', cables: 'strung cables', crystals: 'crystal growths',
   roots: 'living roots', monoliths: 'carved monoliths', lanterns: 'hanging lanterns', ruined_machinery: 'ruined machinery',
 };
-/** Which gameplay rules each theme reaches for first; the composer takes one or two. */
-const THEME_RULES: Record<string, WorldRuleId[]> = {
-  pirates: ['scavenger', 'frenzy'], drowned: ['low_visibility', 'unstable_ground'], jungle: ['dense_swarm', 'regen_fields'],
-  frozen: ['bulwark', 'unstable_ground'], desert: ['scavenger', 'bulwark'], volcanic: ['unstable_ground', 'frenzy'],
-  neon: ['frenzy', 'scavenger'], haunted: ['low_visibility', 'dense_swarm'], void: ['gravity_well', 'low_visibility'],
-  archive: ['regen_fields', 'bulwark'], swamp: ['unstable_ground', 'dense_swarm'], clockwork: ['bulwark', 'scavenger'],
-  crystal: ['gravity_well', 'regen_fields'], storm: ['frenzy', 'gravity_well'], cathedral: ['regen_fields', 'bulwark'],
-  festival: ['scavenger', 'frenzy'],
+/**
+ * World laws (src/shared/laws.ts, docs/design/WORLD_MUTATORS.md): the two laws each theme reaches
+ * for, drawn only from the set the simulation/renderer enforce today. Names and lines are the
+ * world's own voice (house style: a number or an object in every line); the engine's exact
+ * effect text is added by the UI. sanitizeLaws applies the conflict/budget guard-rails.
+ */
+const THEME_LAWS: Record<string, [WorldLawId, WorldLawId]> = {
+  pirates: ['first_light', 'the_many'], drowned: ['tidal_drag', 'long_dark'], jungle: ['the_many', 'long_echo'],
+  frozen: ['few_and_terrible', 'tidal_drag'], desert: ['committed_strike', 'first_light'], volcanic: ['committed_strike', 'few_and_terrible'],
+  neon: ['long_echo', 'the_many'], haunted: ['long_dark', 'few_and_terrible'], void: ['thin_air', 'long_dark'],
+  archive: ['long_echo', 'committed_strike'], swamp: ['tidal_drag', 'the_many'], clockwork: ['committed_strike', 'few_and_terrible'],
+  crystal: ['glass_lattice', 'first_light'], storm: ['thin_air', 'first_light'], cathedral: ['long_echo', 'first_light'],
+  festival: ['thin_air', 'the_many'],
+};
+const LAW_VOICE: Record<WorldLawId, { noun: string; line: string }> = {
+  thin_air: { noun: 'Thin Air', line: 'Thin air over the {word}: a dash carries 65% farther and its cooldown runs 25% longer.' },
+  tidal_drag: { noun: 'Drag', line: 'Everything wades here at 83% pace; the dash comes back a third sooner to make up the ground.' },
+  committed_strike: { noun: 'Stance', line: 'A strike roots the striker for 220 ms and lands 25% harder; a planted foot pays in the {word}.' },
+  glass_lattice: { noun: 'Lattice', line: 'Integrity is 48 instead of 100, and every blow lands at 1.8 times its weight: glass on glass in the {word}.' },
+  long_echo: { noun: 'Echo', line: 'Abilities return a third sooner in the {word}; the ultimate charges 25% slower.' },
+  bleeding_light: { noun: 'Bleeding Light', line: 'Abilities heal nothing; a relic read restores 32 Integrity to every living operative, once.' },
+  first_light: { noun: 'First Light', line: 'The first blow on an untouched hostile lands at 2.5 times its weight anywhere in the {word}.' },
+  few_and_terrible: { noun: 'Few', line: 'Half the hostiles, each at 2.2 times the health and 28% more bite; duels all the way through the {word}.' },
+  the_many: { noun: 'Many', line: '1.8 times the hostiles at 55% health and 78% bite; wide swings pay all the way through the {word}.' },
+  wardens_watch: { noun: 'Watch', line: 'About 37% of hostiles are elites: 60% more health, 25% more bite, a visible ring, better drops.' },
+  restless: { noun: 'Restless', line: 'A defeated hostile stands back up once after 11.5 s at 42% health unless someone crosses its marker.' },
+  unstable_matter: { noun: 'Unstable Matter', line: 'A hostile bursts when it falls: 70 px, 12 damage to the crew, 20 to other hostiles.' },
+  hollow_ground: { noun: 'Hollow Ground', line: 'Every room gains one extra terrain feature and a denser floor.' },
+  slow_fire: { noun: 'Slow Fire', line: 'Within 3 tiles of a live hazard everything moves at 57% speed and bolts at 72%.' },
+  sealed_halls: { noun: 'Sealed Halls', line: 'Every combat room is split by a sealing door with the exit on the far side.' },
+  long_dark: { noun: 'Dark', line: 'Sight fails past 215 px of an operative in the {word}; lanterns and conduits add 1 pool of light each.' },
+  mirror_halls: { noun: 'Mirror Halls', line: 'The minimap stays blank and a room keeps its name until an operative steps inside.' },
+  held_breath: { noun: 'Held Breath', line: 'Hostile attack sounds are muted; every telegraph lasts 32% longer and draws brighter.' },
 };
 
 /** Legacy pipeline: at most three rooms per world (the floors pipeline derives its biomes from the recipe). */
@@ -469,13 +495,19 @@ export function composeWorld(request: GenerationRequest): Composition {
     });
   }
 
-  // Gameplay rules: the primary theme's signature rule, plus a second from the secondary theme
-  // (or the primary's own second) most of the time — so worlds play differently, not just look it.
-  const primaryRules = THEME_RULES[primary.id] ?? ['scavenger'];
-  const secondRule = secondary ? (THEME_RULES[secondary.id] ?? [])[0] : primaryRules[1];
-  const rules: WorldRuleId[] = [primaryRules[0]!];
-  if (secondRule && secondRule !== rules[0] && rand() < 0.75) rules.push(secondRule);
-  if (rules.includes('unstable_ground') && !rooms.some((r) => r.hazards)) rooms[Math.min(1, rooms.length - 1)]!.hazards = true;
+  // World laws: the primary theme's signature law, plus one from the secondary theme (or the
+  // primary's own second) most of the time — so worlds play differently, not just look it.
+  const primaryLaws = THEME_LAWS[primary.id] ?? ['first_light', 'the_many'];
+  const secondLaw = secondary ? (THEME_LAWS[secondary.id] ?? primaryLaws)[0] : primaryLaws[1];
+  const lawIds: WorldLawId[] = [primaryLaws[0]!];
+  if (secondLaw && secondLaw !== lawIds[0] && rand() < 0.8) lawIds.push(secondLaw);
+  const lawWord = (word ?? pick(rand, primary.nouns)).toLowerCase();
+  const laws: WorldLaw[] = sanitizeLaws(lawIds.map((lawId) => ({
+    lawId,
+    name: clip(`${pick(rand, primary.adjectives)} ${LAW_VOICE[lawId].noun}`, 36),
+    description: clip(LAW_VOICE[lawId].line.replace(/\{word\}/g, lawWord), 160),
+    intensity: Math.round((0.4 + Math.round(rand() * 4) / 10) * 10) / 10,
+  }))).laws;
 
   // Floors briefs: opener and finale in the primary theme; the three choice pairs alternate the
   // primary, the secondary/sibling and a contrasting third theme so every fork is a real change.
@@ -517,7 +549,7 @@ export function composeWorld(request: GenerationRequest): Composition {
     contributionMappings: mappings,
     lore,
     attunements,
-    rules,
+    laws,
     biomes,
   });
   return { recipe, themes: { primary: primary.id, secondary: secondary?.id ?? null, scores } };

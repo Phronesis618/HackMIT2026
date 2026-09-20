@@ -7,19 +7,12 @@ import {
   DASH_COOLDOWN_MS, DASH_DURATION_MS, DASH_INVULNERABLE_MS, DASH_SPEED,
   LORE_PICKUP_RANGE, LORE_READ_MS, LORE_READ_RANGE,
   PLAYER_MAX_HP, PLAYER_RADIUS, REVIVE_DURATION_MS, REVIVE_HP, REVIVE_RANGE,
-  HAZARD_DAMAGE, HAZARD_TICK_MS, LOW_VISIBILITY_RANGE, REGEN_FIELD_HP_PER_SEC, REGEN_FIELD_RANGE,
+  HAZARD_DAMAGE, HAZARD_TICK_MS,
   ROOM_CLEAR_REWARD, TICK_MS, TILE_SIZE, tileToWorld, worldToTile,
 } from '../shared/conventions';
-import { CLASS_ABILITIES, ENEMY_INFO, ULT_CHARGE_MAX, ULT_CHARGE_PER_DAMAGE, ULT_CHARGE_PER_KILL, type ClassId, type EnemyId, type WorldRuleId } from '../shared/registry';
-import type { WorldLawId } from '../shared/laws';
-import { buildSkillTree } from '../shared/skills';
-
-/** Model-written laws → the implemented rule with the closest effect (M1 replaces this with real law bands). */
-const LAW_TO_RULE: Partial<Record<WorldLawId, WorldRuleId>> = {
-  the_many: 'dense_swarm', few_and_terrible: 'bulwark', restless: 'frenzy', long_dark: 'low_visibility',
-  slow_fire: 'unstable_ground', thin_air: 'gravity_well', wardens_watch: 'scavenger',
-};
+import { CLASS_ABILITIES, ENEMY_INFO, ULT_CHARGE_MAX, ULT_CHARGE_PER_DAMAGE, ULT_CHARGE_PER_KILL, type ClassId, type EnemyId } from '../shared/registry';
 import { buildSolidGrid, circleHitsSolid, moveCircle, type SolidGrid } from './collision';
+import { buildSkillTree } from '../shared/skills';
 import {
   CHANNEL_PATTERN, CLASS_COMBAT, ENEMY_COMBAT, ENEMY_PROJECTILE_PATTERN,
   GUARDIAN_RING_DAMAGE, GUARDIAN_RING_PATTERN, GUARDIAN_VOLLEY_DAMAGE, GUARDIAN_VOLLEY_PATTERN,
@@ -49,6 +42,7 @@ import {
 } from './boss';
 import { TRAINING_REGEN_PER_TICK, TRAINING_RESPAWN_MS, TRAINING_WAKE_RANGE, trainingRoom } from './training';
 import { DOOR_SIDES, FLOOR_ENTRANCE_ROOM_ID } from '../shared/floors';
+import { NEUTRAL_LAWS, applyEncounterLaws, lawsSpareEncounter, resolveLaws, worldLawsView, type ResolvedLaws } from './laws';
 import { createRoomProvider, type RoomProvider } from './floorProvider';
 import {
   FLOOR_TUNING, TREASURE_REWARD, advanceBiome, clearReward, connectedTiles, createFloorsRun, doorArrival, floorRunState, focusPoint,
@@ -73,10 +67,8 @@ interface PlayerRuntime {
   interactPressed: boolean;
   damagedThisTick: boolean;
   history: Array<Point & { hp: number }>;
-  /** Time since the last hazard-floor bite (rules: unstable_ground). */
+  /** Time since the last hazard-floor bite. */
   hazardMs: number;
-  /** Accumulated fractional healing from regen fields. */
-  regenCarry: number;
 }
 
 interface EnemyRuntime {
@@ -172,22 +164,13 @@ export interface SimulationOptions {
   headquarters?: RoomSpec;
   /** Floors worlds: how room addresses become RoomSpecs. Tests inject doubles; default = createRoomProvider. */
   roomProvider?: (world: PreparedWorld) => RoomProvider | null;
+  /** Derive laws for worlds whose recipe has none. Default: RELAY_LAWS=1 / ?laws=1. Recipe laws always apply. */
+  deriveLaws?: boolean;
 }
 
 export function createSimulation(options: SimulationOptions = {}): Simulation {
   const hq = options.headquarters ?? headquartersRoom;
   let world: PreparedWorld | null = null;
-  /**
-   * World rules only apply on expeditions; HQ and the training range are neutral ground. A
-   * model-written world law (src/shared/laws.ts, not yet implemented on its own) maps onto the
-   * nearest implemented rule so a chosen law is never silent.
-   */
-  const hasRule = (rule: WorldRuleId): boolean => {
-    if (phase !== 'expedition' || !world) return false;
-    if (world.recipe.rules.includes(rule)) return true;
-    const laws = world.recipe.laws ?? [];
-    return laws.some((law) => LAW_TO_RULE[law.lawId] === rule);
-  };
   /** Learned skill-tree node (see learnSkill). */
   const hasSkill = (p: PlayerRuntime, id: string): boolean => p.state.skills.includes(id);
   let room = hq;
@@ -205,6 +188,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   let hostPlayerId: string | null = null;
   /** Floors tier scaling of enemy damage; 1 everywhere else. */
   let enemyDamageScale = 1;
+  /** The prepared world's laws; `laws` is what applies right now (neutral outside expeditions). */
+  let worldLaws: ResolvedLaws = NEUTRAL_LAWS;
+  let laws: ResolvedLaws = NEUTRAL_LAWS;
   let progress: RoomProgress = { enemies: [], anchor: null, cleared: false, loreNodes: [], pulseHitPlayers: new Set(), terrain: createTerrainState() };
   /** Ephemeral bullet-hell bolts; never persisted across room switches (combat gates exits). */
   let projectiles: ProjectileRuntime[] = [];
@@ -519,21 +505,17 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
 
   function spawnEnemies(): EnemyRuntime[] {
     const enemies: EnemyRuntime[] = [];
-    const encounters = [...room.encounters];
+    const encounters = applyEncounterLaws(room.encounters, laws);
     if (room.isFinal && !encounters.some((e) => e.enemyId === 'guardian')) {
       const at = findTile('A') ?? findTile('P') ?? tileToWorld(1, 1);
       const tile = worldToTile(at.x, at.y);
       encounters.push({ id: 'anchor-guardian', enemyId: 'guardian', x: tile.col, y: tile.row, count: 1 });
     }
-    const ruleHp = hasRule('bulwark') ? 1.35 : hasRule('frenzy') ? 0.8 : 1;
-    const hpScale = (floorsRun && phase === 'expedition' ? tierMultiplier(floorsRun.tier) : 1) * ruleHp;
+    const hpScale = floorsRun && phase === 'expedition' ? tierMultiplier(floorsRun.tier) : 1;
     for (const planned of encounters) {
       // Floors biome exits: the gatekeeper is a one-phase Custodian until B1 gives it its own fight.
       const gatekeeper = floorsRun !== null && planned.role === 'gatekeeper';
-      const swarmy = planned.enemyId === 'swarmling' || planned.enemyId === 'husk';
-      const encounter = gatekeeper
-        ? { ...planned, enemyId: 'guardian' as const, count: 1 }
-        : hasRule('dense_swarm') && swarmy ? { ...planned, count: planned.count + 1 } : planned;
+      const encounter = gatekeeper ? { ...planned, enemyId: 'guardian' as const, count: 1 } : planned;
       const info = ENEMY_INFO[encounter.enemyId];
       // The Custodian is the Anchor's keeper: the pattern registry, the crew-sized health and the
       // phase structure belong to the boss that stands over a relay ring, plus the gatekeepers that
@@ -544,7 +526,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       // so the last fight lasts a readable minute wherever the crew arrives from.
       const maxHp = boss
         ? (gatekeeper ? gatekeeperMaxHp(tier, players.size) : custodianMaxHp(players.size))
-        : Math.round(info.maxHp * hpScale);
+        : Math.round(info.maxHp * hpScale * (lawsSpareEncounter(encounter) ? 1 : laws.enemyHpMul));
       let reachable: Set<number> | undefined;
       for (let i = 0; i < encounter.count; i++) {
         const base = tileToWorld(encounter.x, encounter.y);
@@ -601,7 +583,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     phase = nextPhase;
     grid = buildSolidGrid(room);
     projectiles = [];
-    enemyDamageScale = floorsRun && nextPhase === 'expedition' ? tierMultiplier(floorsRun.tier) : 1;
+    laws = nextPhase === 'expedition' ? worldLaws : NEUTRAL_LAWS;
+    enemyDamageScale = (floorsRun && nextPhase === 'expedition' ? tierMultiplier(floorsRun.tier) : 1) * laws.enemyDamageMul;
     const saved = nextPhase === 'expedition' ? rooms.get(roomKey(next)) : undefined;
     const anchorPoint = room.isFinal ? findTile('A') : null;
     progress = saved ?? {
@@ -633,6 +616,12 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (nextPhase === 'expedition') rooms.set(roomKey(next), progress);
     // Floors: a room with nobody to fight is open from the start and pays nothing.
     if (floorsRun && nextPhase === 'expedition' && !saved && progress.enemies.length === 0) progress.cleared = true;
+    // Laws that change Integrity (glass_lattice) apply on the way in and lift on the way out.
+    for (const p of players.values()) {
+      if (p.state.maxHp === laws.playerMaxHp) continue;
+      p.state.hp = p.state.hp >= p.state.maxHp ? laws.playerMaxHp : Math.min(p.state.hp, laws.playerMaxHp);
+      p.state.maxHp = laws.playerMaxHp;
+    }
     rebuildGrid();
     placePlayers(arrival);
   }
@@ -694,7 +683,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     return {
       state: {
         ...identity, x: 0, y: 0, vx: 0, vy: 0, facing: 0,
-        hp: PLAYER_MAX_HP, maxHp: PLAYER_MAX_HP, state: 'idle',
+        hp: laws.playerMaxHp, maxHp: laws.playerMaxHp, state: 'idle',
         dashCooldownMs: 0, attackCooldownMs: 0, invulnerableMs: 0,
         // New operatives start with exactly one unlock's worth of resources so the E ability
         // can be unlocked at HQ before the first expedition.
@@ -703,7 +692,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       },
       intent: null, unlockedClasses: new Set(), dashRemainingMs: 0,
       dashDirection: { x: 1, y: 0 }, attackRemainingMs: 0, hitRemainingMs: 0,
-      onExit: false, interacting: false, interactHeld: false, interactPressed: false, damagedThisTick: false, history: [], hazardMs: 0, regenCarry: 0,
+      onExit: false, interacting: false, interactHeld: false, interactPressed: false, damagedThisTick: false, history: [], hazardMs: 0,
     };
   }
 
@@ -714,7 +703,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   function damageEnemy(e: EnemyRuntime, p: PlayerRuntime, damage: number, events: GameEvent[]): void {
     const s = e.state;
     if (s.hp <= 0) return;
-    const marked = Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1));
+    const lawMul = laws.playerDamageMul * (s.hp === s.maxHp ? laws.firstStrikeMul : 1);
+    const marked = Math.round(damage * ((s.markMs ?? 0) > 0 ? 1.3 : 1) * lawMul);
     // The Custodian caps single hits at 12% of its health, applies its phase-3 shield and any
     // vulnerability window it has opened (BOSS_FINALE §3.2, §4.2).
     const amount = Math.min(s.hp, e.custodian ? custodianIncomingDamage(e.custodian, s, marked) : marked);
@@ -722,12 +712,12 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     e.hitMs = 130;
     s.state = s.hp === 0 ? 'dead' : s.telegraph ? 'attacking' : 'hit';
     // Ultimates charge from real combat: damage dealt plus a bonus per kill.
-    p.state.ultCharge = Math.min(ULT_CHARGE_MAX, p.state.ultCharge + amount * ULT_CHARGE_PER_DAMAGE + (s.hp === 0 ? ULT_CHARGE_PER_KILL : 0));
+    p.state.ultCharge = Math.min(ULT_CHARGE_MAX, p.state.ultCharge + amount * ULT_CHARGE_PER_DAMAGE * laws.ultChargeMul + (s.hp === 0 ? ULT_CHARGE_PER_KILL * laws.ultChargeMul : 0));
     events.push(emit({ type: 'enemy_damaged', enemyId: s.id, byPlayerId: p.state.id, amount, remainingHp: s.hp }));
     if (s.hp === 0) {
       s.telegraph = null;
-      // Hostiles pay out on death: the roguelike loop's small change (bigger under scavenger).
-      if (phase === 'expedition') p.state.resources += ENEMY_INFO[s.enemyId].shards + (hasRule('scavenger') ? 1 : 0);
+      // Hostiles pay out on death: the roguelike loop's small change (ENEMY_INFO.shards).
+      if (phase === 'expedition') p.state.resources += ENEMY_INFO[s.enemyId].shards;
       events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: p.state.id,
         worldId: phase === 'expedition' ? world?.worldId ?? null : null }));
       dropRemains(e);
@@ -969,8 +959,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if ((slot === 'q' ? s.abilityQCooldownMs : slot === 'e' ? s.abilityECooldownMs : 0) > 0) return;
     const id = CLASS_ABILITIES[s.classId][slot];
     const spec = CLASS_COMBAT[s.classId];
-    if (slot === 'q') s.abilityQCooldownMs = spec.qCooldown;
-    else if (slot === 'e') s.abilityECooldownMs = spec.eCooldown;
+    if (slot === 'q') s.abilityQCooldownMs = spec.qCooldown * laws.abilityCooldownMul;
+    else if (slot === 'e') s.abilityECooldownMs = spec.eCooldown * laws.abilityCooldownMul;
     else {
       s.ultCharge = 0;
       s.abilityRCooldownMs = 1200;
@@ -1139,10 +1129,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (intent && distance(s, { x: intent.aimX, y: intent.aimY }) > 0.001) s.facing = Math.atan2(intent.aimY - s.y, intent.aimX - s.x);
     if (intent?.dash && s.dashCooldownMs === 0 && p.dashRemainingMs === 0) {
       p.dashDirection = length > 0 ? { x: moveX / length, y: moveY / length } : { x: Math.cos(s.facing), y: Math.sin(s.facing) };
-      p.dashRemainingMs = DASH_DURATION_MS;
+      p.dashRemainingMs = DASH_DURATION_MS * laws.dashDurationMul;
       p.attackRemainingMs = 0;
       const wind = hasSkill(p, 'core.wind');
-      s.dashCooldownMs = Math.round(DASH_COOLDOWN_MS * (wind ? 0.75 : 1));
+      s.dashCooldownMs = Math.round(DASH_COOLDOWN_MS * laws.dashCooldownMul * (wind ? 0.75 : 1));
       s.invulnerableMs = Math.max(s.invulnerableMs, DASH_INVULNERABLE_MS + (wind ? 50 : 0));
       // The event's facing is the direction of travel (renderers draw the trail behind it),
       // not the aim direction — you can dash sideways while looking at an enemy.
@@ -1153,15 +1143,12 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       basicAttack(p, events);
     }
     if (p.dashRemainingMs > 0) {
-      const dashScale = hasRule('gravity_well') ? 1.4 : 1;
-      s.vx = p.dashDirection.x * DASH_SPEED * dashScale;
-      s.vy = p.dashDirection.y * DASH_SPEED * dashScale;
+      s.vx = p.dashDirection.x * DASH_SPEED * laws.dashSpeedMul;
+      s.vy = p.dashDirection.y * DASH_SPEED * laws.dashSpeedMul;
     } else {
-      const onHazard = tileUnder(s.x, s.y) === '~';
-      const speed = CLASS_COMBAT[s.classId].speed * (p.attackRemainingMs > 0 ? 0.35 : 1) *
+      const speed = CLASS_COMBAT[s.classId].speed * laws.walkSpeedMul * (p.attackRemainingMs > 0 ? laws.attackMoveMul : 1) *
         (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1) * ((s.slowMs ?? 0) > 0 ? 0.6 : 1) *
-        terrainSpeedMultiplier(room, s.x, s.y, progress.terrain.brokenWalls) *
-        (hasRule('gravity_well') ? 0.9 : 1) * (onHazard && hasRule('unstable_ground') ? 0.6 : 1);
+        terrainSpeedMultiplier(room, s.x, s.y, progress.terrain.brokenWalls);
       s.vx = length > 0 ? moveX / length * speed : 0;
       s.vy = length > 0 ? moveY / length * speed : 0;
     }
@@ -1349,8 +1336,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     }
     const target = orderedPlayers().filter((p) => p.state.hp > 0 && p.state.shroudMs === 0)
       .sort((a, b) => distance(s, a.state) - distance(s, b.state))[0];
-    if (!target || (phase === 'training' && distance(s, target.state) > TRAINING_WAKE_RANGE)
-      || (hasRule('low_visibility') && distance(s, target.state) > LOW_VISIBILITY_RANGE && e.hitMs === 0)) {
+    if (!target || (phase === 'training' && distance(s, target.state) > TRAINING_WAKE_RANGE)) {
       // Training targets doze in their pens until an operative walks up to them.
       s.state = 'idle';
       return;
@@ -1372,8 +1358,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (distance(s, target.state) > stopRange || !clearPath(grid, s, target.state)) {
       const waypoint = chaseWaypoint(grid, s, target.state, ENEMY_INFO[s.enemyId].radius);
       const d = distance(s, waypoint);
-      const paceScale = hasRule('frenzy') ? 1.25 : hasRule('bulwark') ? 0.85 : 1;
-      const step = Math.min(d, spec.speed * paceScale * (s.slowMs > 0 ? 0.35 : 1) * (collapse !== null ? COLLAPSE_CHASE_SPEED : 1) *
+      const step = Math.min(d, spec.speed * laws.walkSpeedMul * (s.slowMs > 0 ? 0.35 : 1) * (collapse !== null ? COLLAPSE_CHASE_SPEED : 1) *
         terrainSpeedMultiplier(room, s.x, s.y, progress.terrain.brokenWalls) * TICK_MS / 1000);
       if (d > 0) {
         const moved = moveCircle(grid, s.x, s.y, ENEMY_INFO[s.enemyId].radius,
@@ -1393,34 +1378,19 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     return room.tiles[tile.row]?.[tile.col] ?? ' ';
   }
 
-  /**
-   * Hazard floor really bites (harder and stickier under unstable_ground) and lantern light
-   * mends under regen_fields — the two floor rules that make walking a world feel different.
-   */
-  function applyFloorEffects(living: PlayerRuntime[], events: GameEvent[]): void {
+  /** Hazard floor ('~') bites anyone standing in it: HAZARD_DAMAGE every HAZARD_TICK_MS; dashing across is free. */
+  function applyHazardFloor(living: PlayerRuntime[], events: GameEvent[]): void {
     if (phase !== 'expedition') return;
-    const regen = hasRule('regen_fields');
-    const unstable = hasRule('unstable_ground');
-    const lanterns = regen ? room.props.filter((prop) => prop.propId === 'lantern').map((prop) => tileToWorld(prop.x, prop.y)) : [];
     for (const p of living) {
       const s = p.state;
       if (tileUnder(s.x, s.y) === '~' && p.dashRemainingMs === 0) {
         p.hazardMs += TICK_MS;
         if (p.hazardMs >= HAZARD_TICK_MS) {
           p.hazardMs = 0;
-          const bite = Math.round(HAZARD_DAMAGE * (unstable ? 1.6 : 1));
-          if (s.invulnerableMs === 0) damagePlayer(p, 'hazard', bite, false, events);
+          if (s.invulnerableMs === 0) damagePlayer(p, 'hazard', HAZARD_DAMAGE, false, events);
         }
       } else {
         p.hazardMs = Math.max(0, p.hazardMs - TICK_MS);
-      }
-      if (regen && s.hp < s.maxHp && lanterns.some((c) => distance(c, s) <= REGEN_FIELD_RANGE)) {
-        p.regenCarry += REGEN_FIELD_HP_PER_SEC * TICK_MS / 1000;
-        if (p.regenCarry >= 1) {
-          const amount = Math.floor(p.regenCarry);
-          p.regenCarry -= amount;
-          heal(p, p, amount, events);
-        }
       }
     }
   }
@@ -1463,10 +1433,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       }
     }
     updateLore(living, busy, events);
-    applyFloorEffects(living, events);
+    applyHazardFloor(living, events);
     if (!progress.cleared && living.length > 0 && livingEnemies().length === 0) {
       progress.cleared = true;
-      const reward = (floorsRun ? clearReward(room) : ROOM_CLEAR_REWARD) + (hasRule('scavenger') ? 2 : 0);
+      const reward = floorsRun ? clearReward(room) : ROOM_CLEAR_REWARD;
       for (const p of players.values()) p.state.resources += reward + (hasSkill(p, 'core.salvage') ? 1 : 0);
       events.push(emit({ type: 'room_cleared', worldId: world.worldId, roomIndex: room.index, roomId: room.id, playerIds: playerIds(), reward }));
       if (floorsRun && room.roomId !== undefined) {
@@ -1621,6 +1591,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         custodianLog = null;
       }
       world = next;
+      worldLaws = resolveLaws(worldLawsView(next, options.deriveLaws).laws);
       // Outside a run the provider follows the latest copy of the world (briefs may arrive late).
       if (!floorsRun) roomProvider = next?.floors ? (options.roomProvider ?? createRoomProvider)(next) : null;
     },

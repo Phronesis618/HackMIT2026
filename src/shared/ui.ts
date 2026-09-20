@@ -9,7 +9,6 @@ import type {
   ClassId,
   ImplementationStatus,
   MotifId,
-  WorldRuleId,
 } from './registry';
 import type {
   AnchorState,
@@ -56,21 +55,31 @@ export interface UiWorldSummary {
   lore: LoreFragment[];
   /** World-grown skill nodes (see src/shared/skills.ts). */
   attunements: Attunement[];
+  /** World laws (agent M1): the world's name for each law beside the engine's plain effect. Absent = none. */
+  laws?: UiWorldLaw[];
   /** Visual identity for reveal/loading UI (from the compiled ArtRecipe). */
   palette?: Palette;
   motifIds?: MotifId[];
   /** Names of the rooms committed so far. */
   roomNames?: string[];
-  /** Biomes (regions) of the world with the rooms committed in each, for the reveal card and menus. */
+  /** Floors biomes (regions) with the rooms committed in each, for the reveal card. */
   biomes?: Array<{ name: string; roomNames: string[]; palette: Palette }>;
-  /** Active gameplay rules of this world (registry ids; see WORLD_RULE_INFO). */
-  rules?: WorldRuleId[];
+}
+
+export interface UiWorldLaw {
+  lawId: string;
+  /** Model-written (or derived) in-world name. */
+  name: string;
+  /** Model-written in-world line. */
+  description: string;
+  /** Engine-written: game terms and the real numbers at this world's intensity. */
+  effect: string;
+  /** False while the sim does not apply this law yet; the panel says so. */
+  active: boolean;
 }
 
 export interface UiRoomSummary {
   index: number;
-  biomeName?: string;
-  biomeIndex?: number;
   name: string;
   description: string;
   isFinal: boolean;

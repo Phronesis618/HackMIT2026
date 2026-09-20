@@ -6,16 +6,7 @@
  * Foundation implementation: PhaserWorldRenderer (placeholder art, real wiring).
  */
 import type { ArtRecipe, GameEvent, GameSnapshot, ReceiptLine, RoomSpec } from './contracts';
-
-/** World context for room presentation: all validated recipe text, no gameplay meaning. */
-export interface RoomWorldContext {
-  title: string;
-  tagline: string;
-  /** The biome this room belongs to, when the world has biomes. */
-  biome?: { name: string; index: number; count: number; firstRoom: boolean };
-  /** Where the exit leads ("→ Plunder Hold · Rusted Flotilla"), for the in-world exit label. */
-  exitLabel?: string;
-}
+import type { WorldLook } from './laws';
 
 export interface WorldRenderer {
   /** Create the canvas inside `container`. Resolves when the first scene is ready. */
@@ -32,7 +23,7 @@ export interface WorldRenderer {
    * `world` (title + tagline of the generated world) lets the renderer label rooms and
    * stencil the world's name into the arrival room. Both are validated recipe text.
    */
-  showRoom(room: RoomSpec, art: ArtRecipe, loreLines?: ReceiptLine[], world?: RoomWorldContext): void;
+  showRoom(room: RoomSpec, art: ArtRecipe, loreLines?: ReceiptLine[], world?: WorldPresentation): void;
   /** Called every animation frame with the latest authoritative snapshot. */
   renderSnapshot(snapshot: GameSnapshot, localPlayerId: string): void;
   /** Fire-and-forget visual/audio reactions to events (dash trail, hit flash, ...). */
@@ -42,4 +33,18 @@ export interface WorldRenderer {
   /** Optional: capture a small JPEG/PNG data URL for keepsakes. May return null. */
   captureThumbnail(): Promise<string | null>;
   destroy(): void;
+}
+
+/**
+ * What the renderer may know about the world beyond its art: its name, and (agent M1) its
+ * bounded look and the `long_dark` light radius. All optional: absent = today's rendering.
+ */
+export interface WorldPresentation {
+  title: string;
+  tagline: string;
+  look?: WorldLook | null;
+  /** `long_dark`: px of sight around each living operative; null/absent = fully lit. */
+  lightRadius?: number | null;
+  /** Where the exit leads ("→ Plunder Hold"), set beside the door as an in-world label. */
+  exitLabel?: string;
 }

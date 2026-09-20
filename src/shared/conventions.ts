@@ -43,12 +43,9 @@ export const ATTACK_DURATION_MS = 220;
 export const ATTACK_COOLDOWN_MS = 360;
 export const ATTACK_RANGE = 46; // reach from player centre
 export const ATTACK_ARC_RAD = Math.PI * 0.7; // total arc width
-/** World rules (see registry WORLD_RULE_INFO) and hazard floor tuning. */
-export const HAZARD_DAMAGE = 6;          // per bite while standing in '~'
+/** Hazard floor ('~' tiles) bites operatives who stand in it. */
+export const HAZARD_DAMAGE = 6;          // per bite
 export const HAZARD_TICK_MS = 700;
-export const LOW_VISIBILITY_RANGE = 230; // px: hostiles hold position beyond this under low_visibility
-export const REGEN_FIELD_RANGE = 90;     // px from a lantern prop under regen_fields
-export const REGEN_FIELD_HP_PER_SEC = 3;
 export const ROOM_CLEAR_REWARD = 3;
 export const ABILITY_UNLOCK_COST = 3;
 export const REVIVE_RANGE = 56;

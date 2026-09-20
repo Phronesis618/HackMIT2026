@@ -25,7 +25,6 @@ import {
   TERRAIN_FEATURE_IDS,
   TERRAIN_LAYOUT_IDS,
   TILE_CHARS,
-  WORLD_RULE_IDS,
   WALKABLE_TILES,
 } from './registry';
 import { CustodianPatternIdSchema, CustodianSchema } from './custodian';
@@ -61,7 +60,6 @@ export const AbilityIdSchema = z.enum(ABILITY_IDS);
 export const EnemyIdSchema = z.enum(ENEMY_IDS);
 export const MotifIdSchema = z.enum(MOTIF_IDS);
 export const PropIdSchema = z.enum(PROP_IDS);
-export const WorldRuleIdSchema = z.enum(WORLD_RULE_IDS);
 
 // ---------------------------------------------------------------------------
 // Identity & contributions
@@ -519,8 +517,6 @@ export const WorldRecipeSchema = z.object({
   lore: z.array(LoreFragmentSchema).max(12),
   /** 2–4 world-specific skill nodes; see `src/shared/skills.ts` for how they join the tree. */
   attunements: z.array(AttunementSchema).max(4).default([]),
-  /** Up to two gameplay modifiers from the registry's closed set (see WORLD_RULE_INFO). */
-  rules: z.array(WorldRuleIdSchema).max(2).default([]),
 });
 
 /**

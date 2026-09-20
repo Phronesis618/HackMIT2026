@@ -561,7 +561,7 @@ export const REMAINS_TEMPLATES: Record<EnemyId, LoreTemplate[]> = {
   ],
   spewer: [
     { title: 'Ruptured sac', source: 'what a spewer leaves behind', text: 'Something that was once a container for water or fuel, {flavor}, until it learned to make its own and aim it.' },
-    { title: 'Corroded badge', source: 'half dissolved in a spewer\'s residue', text: 'Sanitation detail, {word} sector. Whoever wore it worked {flavor} with the wrong chemicals for far too long.' },
+    { title: 'Corroded badge', source: 'half dissolved in a spewer\'s residue', text: 'Sanitation detail, {word} sector, badge number 212. Whoever wore it worked {flavor} with the wrong 3 chemicals for 14 months.' },
   ],
   warden: [
     { title: 'First mate\'s whistle', source: 'on a chain around a warden\'s neck', text: 'Three notes to advance, two to fall back, one to hold. The mate has been blowing one note {flavor} for a very long time.' },

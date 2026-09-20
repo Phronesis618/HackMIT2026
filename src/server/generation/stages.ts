@@ -535,7 +535,6 @@ export function assembleRecipe(parts: {
     contributionMappings: roomsPart.contributionMappings,
     lore: parts.lore.slice(0, 12),
     attunements: parts.attunements,
-    rules: [],
     bible: foundation.bible,
     ...(lawsPart?.laws.length ? { laws: lawsPart.laws } : {}),
     ...(lawsPart?.look ? { look: lawsPart.look } : {}),

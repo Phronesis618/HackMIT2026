@@ -7,7 +7,6 @@
  */
 import { useEffect, useState, type CSSProperties } from 'react';
 import type { UiActions, UiModel, UiWorldSummary } from '../../shared/ui';
-import { WORLD_RULE_INFO } from '../../shared/registry';
 import { dismissOverlay, INITIAL_OVERLAY_STATE, stepOverlay, type OverlayState } from './generationOverlayState';
 import { ProvenanceBadge } from './ProvenanceBadge';
 
@@ -123,11 +122,11 @@ export function RevealCard({ world, onEnter, onDismiss }: { world: UiWorldSummar
             {world.roomNames.map((name, i) => <li key={i}><span className="reveal__roomno">{i + 1}</span>{name}</li>)}
           </ol>
         )}
-        {world.rules && world.rules.length > 0 && (
-          <ul className="rules" aria-label="World rules">
-            {world.rules.map((rule) => (
-              <li key={rule} className="rules__chip" title={WORLD_RULE_INFO[rule].summary}>
-                <b>{WORLD_RULE_INFO[rule].name}</b><span>{WORLD_RULE_INFO[rule].summary}</span>
+        {world.laws && world.laws.length > 0 && (
+          <ul className="rules" aria-label="Laws of this world">
+            {world.laws.map((law) => (
+              <li key={law.lawId} className="rules__chip" title={law.effect}>
+                <b>{law.name}</b><span>{law.effect}</span>
               </li>
             ))}
           </ul>
