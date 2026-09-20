@@ -1011,7 +1011,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     invulnerableMsAfter = 350, scaled = true, wardKind?: IncomingKind,
   ): boolean {
     const s = p.state;
-    if (s.hp <= 0 || s.invulnerableMs > 0 || (ranged && s.shieldMs > 0)) return false;
+    if (s.connected === false || s.hp <= 0 || s.invulnerableMs > 0 || (ranged && s.shieldMs > 0)) return false;
     // Tier scaling multiplies what ENEMIES hit for; the room itself is not an enemy.
     if (scaled && enemyDamageScale !== 1 && sourceEnemyId !== 'anchor-pulse' && !isTerrainDamageSource(sourceEnemyId)) {
       damage = Math.round(damage * enemyDamageScale);
@@ -1096,7 +1096,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       pr.remainingMs = decay(pr.remainingMs);
       if (pr.remainingMs === 0) continue;
       if (pr.homingTurnRate) {
-        const target = orderedPlayers().filter((p) => p.state.hp > 0 && (p.state.shroudMs ?? 0) === 0)
+        const target = presentPlayers().filter((p) => p.state.hp > 0 && (p.state.shroudMs ?? 0) === 0)
           .sort((a, b) => distance(pr, a.state) - distance(pr, b.state))[0];
         if (target) {
           const desired = Math.atan2(target.state.y - pr.y, target.state.x - pr.x);
@@ -1124,7 +1124,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       pr.x = nx;
       pr.y = ny;
       let hit = false;
-      for (const p of orderedPlayers()) {
+      for (const p of presentPlayers()) {
         if (p.state.hp <= 0) continue;
         if (distance(pr, p.state) <= pr.radius + PLAYER_RADIUS) {
           damagePlayer(p, pr.ownerEnemyId, pr.damage, true, events);
@@ -1425,6 +1425,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     p.damagedThisTick = false;
     const intent = p.intent;
     p.intent = null;
+    if (s.connected === false) return;
     p.interacting = intent?.interact === true && s.hp > 0;
     p.interactPressed = p.interacting && !p.interactHeld;
     if (intent) p.interactHeld = intent.interact === true;
@@ -1836,6 +1837,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
 
   /** T1 hook: everything the room does to the people in it, once per tick. */
   function stepTerrain(events: GameEvent[]): void {
+    if (collapse && (collapse.stage === 'extraction' || escapeKey(room) === collapse.portalKey)) return;
     stepHazardFloors(events);
     stepCanisters(events);
   }
@@ -1849,7 +1851,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const tuning = roomTerrainTuning(room);
     const timeMs = tick * TICK_MS;
     const walls = progress.terrain.brokenWalls;
-    for (const p of orderedPlayers()) {
+    for (const p of presentPlayers()) {
       if (p.state.hp <= 0) continue;
       const subject = { x: p.state.x, y: p.state.y, kind: 'player' as const, immune: p.dashRemainingMs > 0 };
       for (const hit of stepHazardTiles(room, walls, timeMs, subject, p.hazard, tuning)) {
@@ -1907,7 +1909,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   function updateExits(events: GameEvent[]): void {
     if (phase === 'debrief') return;
     const open = phase === 'headquarters' || phase === 'training' || progress.cleared || collapse !== null;
-    for (const p of orderedPlayers()) {
+    for (const p of presentPlayers()) {
       const { col, row } = worldToTile(p.state.x, p.state.y);
       const exit = room.exits.find((e) => e.x === col && e.y === row);
       if (exit && open && p.state.hp > 0 && !p.onExit && floorsRun && phase === 'expedition' && exit.toRoomId !== undefined) {
@@ -2036,7 +2038,16 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       if (!p) return;
       // Absent means present: a solo snapshot and every legacy snapshot stay byte-identical.
       if (connected) delete p.state.connected;
-      else p.state.connected = false;
+      else {
+        p.state.connected = false;
+        p.state.vx = p.state.vy = 0;
+        p.state.state = p.state.hp > 0 ? 'idle' : 'down';
+        p.intent = null;
+        p.dashRemainingMs = p.attackRemainingMs = 0;
+        p.interacting = p.interactHeld = p.interactPressed = false;
+        p.trail = null;
+        p.hazard = createHazardClock();
+      }
     },
     purchaseSkill(playerId, nodeId) {
       const p = players.get(playerId);
@@ -2086,7 +2097,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     },
     applyIntent(intent) {
       const p = players.get(intent.playerId);
-      if (!p || phase === 'debrief') return;
+      if (!p || p.state.connected === false || phase === 'debrief') return;
       const previous = p.intent;
       p.intent = { ...intent, attack: intent.attack || (previous?.attack ?? false),
         dash: intent.dash || (previous?.dash ?? false), ability: intent.ability ?? previous?.ability ?? null };
