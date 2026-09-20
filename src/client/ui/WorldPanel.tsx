@@ -46,21 +46,14 @@ export function WorldPanel({ world, discoveredLore = [] }: { world: UiWorldSumma
         <ProvenanceBadge provenance={world.provenance} />
       </div>
       <p className="tagline">{world.tagline}</p>
-      <Codex world={world} discovered={discoveredLore} />
-      {world.provenance.source !== 'live' && (
-        <p className="receipt__disclosure">
-          {world.provenance.source === 'fixture' ? 'Offline fixture.' : 'Live generation failed; using an offline fixture.'}
-          {' '}Your ideas are recorded, but did not shape this world.
-        </p>
-      )}
-      {/* Player-contributed lore that actually shaped a room surfaces in-world instead, near
-          the prop/encounter it shaped (RoomScene lore markers). This stays as the full record. */}
-      <details className="notes">
-        <summary>Full dossier · {r.lines.length} contribution{r.lines.length === 1 ? '' : 's'} recorded</summary>
-        <p className="muted">{world.themeSummary}</p>
-        <p className="muted">
-          Prepared in {Math.round(world.provenance.durationMs)} ms · {world.provenance.attempts} model call{world.provenance.attempts === 1 ? '' : 's'}
-        </p>
+      <section aria-label="Creation receipt" aria-live="polite">
+        <p className="eyebrow">Creation receipt · {r.lines.length} contribution{r.lines.length === 1 ? '' : 's'} recorded</p>
+        {world.provenance.source !== 'live' && (
+          <p className="receipt__disclosure">
+            {world.provenance.source === 'fixture' ? 'Offline fixture.' : 'Live generation failed; using an offline fixture.'}
+            {' '}Your ideas are recorded, but did not shape this world.
+          </p>
+        )}
         <p className="receipt__headline">{r.headline}</p>
         {r.lines.length > 0 && (
           <ul className="list">
@@ -73,6 +66,14 @@ export function WorldPanel({ world, discoveredLore = [] }: { world: UiWorldSumma
           </ul>
         )}
         {r.lines.length === 0 && <p className="muted">No contributions were submitted for this world.</p>}
+      </section>
+      <Codex world={world} discovered={discoveredLore} />
+      <details className="notes">
+        <summary>World dossier · generation details</summary>
+        <p className="muted">{world.themeSummary}</p>
+        <p className="muted">
+          Prepared in {Math.round(world.provenance.durationMs)} ms · {world.provenance.attempts} model call{world.provenance.attempts === 1 ? '' : 's'}
+        </p>
         {world.provenance.notes.length > 0 && (
           <details className="notes">
             <summary>Provenance notes</summary>
