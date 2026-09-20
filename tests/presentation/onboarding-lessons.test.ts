@@ -75,10 +75,18 @@ describe('hub lessons', () => {
     expect(lesson('hub.gate').trigger(context({ model: worldModel('headquarters') }))).toBe(true);
   });
 
-  it('hub.guest only speaks to a co-op guest', () => {
-    const armed = { phaseMs: 3000, facts: { tookWeapon: true } } as const;
-    expect(lesson('hub.guest').trigger(hq(armed))).toBe(false);
-    expect(lesson('hub.guest').trigger(hq({ ...armed, isCoOp: true, isHost: false }))).toBe(true);
+  it('hub.guest only speaks to a co-op guest, and only once their own part is done', () => {
+    const done = { phaseMs: 3000, facts: { contributed: true } } as const;
+    expect(lesson('hub.guest').trigger(hq(done))).toBe(false); // solo
+    expect(lesson('hub.guest').trigger(hq({ ...done, isCoOp: true, isHost: true }))).toBe(false); // the host
+    expect(lesson('hub.guest').trigger(hq({ phaseMs: 3000, isCoOp: true, isHost: false }))).toBe(false); // too early
+    expect(lesson('hub.guest').trigger(hq({ ...done, isCoOp: true, isHost: false }))).toBe(true);
+  });
+
+  it('a guest is never told to prepare a world or to open the gate', () => {
+    const guest = { isCoOp: true, isHost: false, phaseMs: 3000, facts: { tookWeapon: true, contributed: true } } as const;
+    expect(lesson('hub.prepare').trigger(hq(guest))).toBe(false);
+    expect(lesson('hub.gate').trigger(context({ model: worldModel('headquarters'), isCoOp: true, isHost: false }))).toBe(false);
   });
 
   it('hub.receipt waits for a world to exist, not for the one-tick event', () => {

@@ -92,10 +92,12 @@ const HUB_LESSONS: Lesson[] = [
     group: 'hub',
     scope: 'run',
     text: HUB_TEXT.guestGate,
-    priority: P.hub - 1,
+    priority: P.hub,
     holdMs: 8000,
+    // The guest's counterpart to `hub.prepare` and `hub.gate`, which are host-only: it
+    // arrives at the same moment, once their own idea is in or the host has a world.
     // No `satisfied`: leaving the hub stops the trigger, which is what takes it away.
-    trigger: (ctx) => atHub(ctx) && ctx.isCoOp && !ctx.isHost && ctx.facts.tookWeapon,
+    trigger: (ctx) => atHub(ctx) && ctx.isCoOp && !ctx.isHost && (ctx.facts.contributed || ctx.model.world !== null),
   },
   {
     id: 'hub.receipt',
