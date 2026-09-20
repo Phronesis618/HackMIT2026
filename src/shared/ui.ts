@@ -132,6 +132,8 @@ export interface UiFloor {
   depthCount: number;
   /** Rooms in the current biome (its budget; shown on the choice card before entering, so not a spoiler). */
   roomCount: number;
+  /** Rooms of the current biome the crew has stood in, including this one. Never above `roomCount`. */
+  roomsVisited: number;
   choice: UiBiomeChoice | null;
 }
 
