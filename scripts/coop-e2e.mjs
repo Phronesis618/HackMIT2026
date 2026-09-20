@@ -59,6 +59,8 @@ function parseArgs(argv) {
       case '--only': args.only = argv[++i].split(',').map((s) => s.trim()).filter(Boolean); break;
       case '--floors': args.floors = true; break;
       case '--gl': args.gl = argv[++i]; break;
+      case '--width': args.width = Number(argv[++i]); break;
+      case '--height': args.height = Number(argv[++i]); break;
       case '--full-run-minutes': args.fullRunMinutes = Number(argv[++i]); break;
       case '--env': {
         const pair = argv[++i] ?? '';
@@ -84,6 +86,7 @@ const HELP = `coop-e2e.mjs — scripted two/four-browser co-op verification (rea
   --server-port <n>        API/WS port. Default port + 3614
   --base <url>             Use an already-running server (no spawn, no restarts), e.g. a LAN production build
   --gl metal|swiftshader   GL backend for headless Chromium. Default: metal on macOS, swiftshader elsewhere
+  --width <n> --height <n> Viewport per player. Default 1280x800
   --out-dir <dir>          Screenshots + results.json. Default /tmp/relay-shots/coop
   --full-run-minutes <n>   Time budget for the three-room + boss attempt. Default 8
 `;
@@ -253,6 +256,8 @@ function readDom() {
     notice: text('.notice span'),
     telemetry: text('.brand__telemetry'),
     caption: text('.rail-status .panel__title'),
+    gate: text('.hq-crew__gate'),
+    crewChips: all('.hq-crew__chip'),
     runCrew: all('.rail-crew__row'),
     memoryCount: text('.memory-brief__count'),
     bodyText: document.body.innerText.slice(0, 4000),
@@ -677,7 +682,23 @@ async function groupDemo(ctx) {
   report.check('3c', 'host prepares; same title, provenance label, receipt on both', world.ok && JSON.parse(world.values[0]).title && JSON.parse(world.values[0]).receipt.length === 2,
     `${((Date.now() - t0) / 1000).toFixed(1)} s; both screens: ${world.values[0]}`);
 
-  // --- 4: host walks onto the portal, the crew lands together, movement syncs.
+  // --- 4: ready-up at the gate, then the host walks onto the portal and the crew lands together.
+  await gatherAtGate([bob]);
+  await sleep(500);
+  const half = await agree(pair, (s, d) => ({ gate: d.gate, ready: s.snap.players.map((p) => `${p.displayName}:${p.ready === true}`).sort() }));
+  const halfHost = await alice.dom();
+  await shots(pair, 's4-gate-1of2');
+  report.check('4c', 'guest at the gate: both screens read 1 / 2 READY and the host cannot enter yet',
+    half.ok && /1 \/ 2 READY/.test(JSON.parse(half.values[0]).gate ?? '') && halfHost.enterDisabled === true,
+    `both screens: ${half.values[0]}; host Enter portal disabled=${halfHost.enterDisabled}`);
+  await gatherAtGate([alice]);
+  await sleep(500);
+  const full = await agree(pair, (s, d) => ({ gate: d.gate, ready: s.snap.players.map((p) => `${p.displayName}:${p.ready === true}`).sort() }));
+  const fullHost = await alice.dom();
+  await shots(pair, 's4-gate-2of2');
+  report.check('4d', 'whole crew at the gate: both screens read 2 / 2 READY and the host may enter',
+    full.ok && /2 \/ 2 READY/.test(JSON.parse(full.values[0]).gate ?? '') && fullHost.enterDisabled === false,
+    `both screens: ${full.values[0]}; host Enter portal disabled=${fullHost.enterDisabled}`);
   const entered = await enterByWalkingOntoPortal(alice, pair).catch(() => null);
   await sleep(1200);
   const where = await agree(pair, (s, d) => ({ phase: s.snap.phase, roomIndex: s.snap.roomIndex, roomId: s.snap.roomId, telemetry: d.telemetry, caption: d.caption }));
@@ -859,6 +880,24 @@ async function groupDemo(ctx) {
   await shots(pair, 's6-back-in-hq');
   report.check('6e', 'host returns crew -> both back in HQ; memories on each device', home.ok && JSON.parse(home.values[0]).phase === 'headquarters' && mem.every((n) => n > 0),
     `both screens: ${home.values[0]}; memory records alice=${mem[0]} bob=${mem[1]} (each browser context has its own localStorage)`);
+
+  // --- 6f: the gate must never strand the host. A seat nobody is behind is marked offline, not
+  // counted and not waited for, so the run still starts with the crew one short.
+  await bob.close();
+  const offlineSeat = await waitFor(async () => {
+    const s = await alice.read();
+    return s.snap.players.some((p) => p.connected === false) ? await alice.dom() : null;
+  }, { timeoutMs: 20000, label: 'alice sees bob offline' }).catch(() => null);
+  await alice.shot('s6-guest-offline');
+  await prepareWorld(alice, [alice]);
+  await sleep(500);
+  const aloneDom = await alice.dom();
+  await alice.page.getByRole('button', { name: /^Enter portal/ }).first().click();
+  await alice.focusStage();
+  const startedAlone = await waitFor(async () => ((await alice.read()).snap.phase === 'expedition'), { timeoutMs: 20000, label: 'host starts without the offline seat' }).catch(() => false);
+  await alice.shot('s6-offline-start');
+  report.check('6f', 'guest offline -> the host can still start the run', startedAlone === true && aloneDom.enterDisabled === false,
+    `crew strip read ${J(offlineSeat?.crewChips ?? null)} / gate "${offlineSeat?.gate ?? null}" with bob gone; host Enter portal disabled=${aloneDom.enterDisabled}; phase after the click=${(await alice.read()).snap.phase}`);
 }
 
 async function startRun(ctx, tag) {
