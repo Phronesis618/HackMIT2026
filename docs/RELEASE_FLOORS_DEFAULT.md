@@ -85,12 +85,35 @@ on the legacy path that `main` serves today:
 | `npm run check` after the Crystal Tide change | **PASS** — 89 files, 1080 tests |
 | `npm run check` after merging `origin/main` | **PASS** — 89 files, 1080 tests |
 | `node scripts/coop-e2e.mjs` default groups (lobby, demo, reconnect) | **PASS — 28/28 checkpoints, 0 skipped, exit 0** |
+| `node scripts/solo-e2e.mjs` default groups (hub, biome, attune, deep) | 15/21, exit 1 — **no regression; see below** |
 
 The co-op run covers the lobby (4-player cap and refusal), class pick, shared idea board, the
 host-only Prepare and portal gate, the 2/2 READY gate, position sync (median 56 ms), damage/HP
 agreement, room clear and rewards, per-player E unlock, downed/revive (2049 ms against a 2000 ms
 design), the collapse debrief, host-only Return, and all four reconnect cases including host
 migration. Screenshots and `results.json` in `/tmp/relay-shots/r1/coop-default`.
+
+**About that solo run.** `scripts/solo-e2e.mjs` sets `RELAY_FLOORS=1 RELAY_LAWS=1` itself (line 98)
+unless `--legacy`, so this *was* a floors run, and it happened to prepare **Crystal Tide** — the
+fixture this branch edits. That makes it worth being explicit about what failed:
+
+- **PASS** — the whole hub and biome-1 half: floors world delivered (`floors=true`, 8 biomes), laws,
+  look, custodian and terrain skins present, minimap on screen, hold-`M` full floor map, doors
+  sealing while a room is hostile, more than one room kind entered, terrain tiles present. **`E1`
+  no uncaught page errors over the whole session — PASS.**
+- **FAIL** — `A1`/`A2` (buy a world-written attunement with run resources) and `D1`/`D2`/`D3` (keep
+  playing, reach the gatekeeper, choose a biome). `D4` SKIP.
+
+**These are pre-existing and documented, not a regression from the law change.** `docs/QA.md:69`
+records the biome gate and biome choice as reached **"in CO-OP, not solo"**; FOLLOWUPS `I4` records
+room-kind notes as "never seen in a browser (bot couldn't reach a floors exit)"; FOLLOWUPS `K4`
+records the solo full-run bot on floors managing "0 door traversals". The solo bot has never been
+able to get deep into a floors run, and the attunement checks fail downstream of that because the
+bot never banks the resources. The law change cannot be the cause in the other direction either:
+biome-1 survival on Crystal Tide measures 100 % for all four classes.
+
+Someone should still confirm it against `main` before merging, since the run was not baselined
+here — that is the one loose end in this branch.
 
 **Still owed before the flip can ship** (all of it needs step 3 present): co-op e2e with floors on,
 co-op e2e with `RELAY_FLOORS=0 RELAY_LAWS=0`, solo e2e default groups with floors on, cold-profile
