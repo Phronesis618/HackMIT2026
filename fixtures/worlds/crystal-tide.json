@@ -112,9 +112,9 @@
     "lore": [
       {
         "kind": "relic",
-        "title": "Gauge 3, 15 Rime",
-        "source": "tide-gauge log, page clipped to the gauge post",
-        "text": "15 Rime, 06:00. Gauge 3: 1.2 m. Water 4 degrees. Sky clear. Remark: crystal on the surface from the pier to 40 m out. Walked on it to 10 m. It held. Reading sent 06:04. B. Okonkwo.",
+        "title": "Card to Ada, 15 Rime",
+        "source": "postcard of Gauge Pier, unstamped, in the gauge box",
+        "text": "Ada, no boat again so this goes in the box with the others, 6 now. Gauge 3 read 1.2 m at 06:00 on 15 Rime and the water was 4 degrees. The shallows have gone to crystal from Gauge Pier to 40 m out. I walked on it to 10 m and it held. You would have gone to 20. Bram.",
         "roomIndex": 0,
         "enemyId": null,
         "authorIndex": 0,
@@ -142,9 +142,9 @@
       },
       {
         "kind": "relic",
-        "title": "Gauge 3, 17 Rime",
-        "source": "tide-gauge log, page water-stained",
-        "text": "Gauge 3: 1.1 m. Water 91 degrees under the beam, 5 degrees at the gauge. Sky clear. Remark: the crystal at Berth 2 is climbing the piles at 10 cm a minute by my watch. It was 3 cm a day. 17 Rime, 13:40. Reading sent 13:44. B. Okonkwo.",
+        "title": "Card to Ada, the 17th",
+        "source": "postcard, water-stained; the picture is the lens",
+        "text": "Ada, the lens on the front of this card is pointed at Berth 2 as I write, 17 Rime, 13:40. Gauge 3 says 1.1 m and 5 degrees at the post. Under the beam it is 91. The crystal on the piles was growing 3 cm a day and is doing 10 cm a minute by my watch. Dr Aalto can say why. I read the gauge. 7 cards in the box. Bram.",
         "roomIndex": 1,
         "enemyId": null,
         "authorIndex": 0,
@@ -184,7 +184,7 @@
         "kind": "remains",
         "title": "Fog lamp housing",
         "source": "brass lamp housing, crystal 4 cm over the glass",
-        "text": "Gauge Pier fog lamp, number 6 of 9. Okonkwo logged the crystal at 40 m out on 15 Rime and the lamps still under it lit at dusk. Through 4 cm of salt the beam comes out in three lines.",
+        "text": "Gauge Pier fog lamp, number 6 of 9. Okonkwo's card to Ada has the crystal at 40 m out on 15 Rime and the lamps still under it lit at dusk. Through 4 cm of salt the beam comes out in three lines.",
         "roomIndex": 0,
         "enemyId": "sentinel",
         "authorIndex": 0,
@@ -655,8 +655,8 @@
       "authors": [
         {
           "name": "Bram Okonkwo",
-          "document": "tide-gauge log",
-          "register": "Time, height in metres, water temperature, sky. Four short lines a reading. A remark only when the numbers change.",
+          "document": "postcards to his sister Ada, unposted",
+          "register": "Opens Ada, signs Bram. Gives the gauge reading as small talk. Counts the cards waiting in the box for a boat.",
           "never": "guesses at a cause"
         },
         {

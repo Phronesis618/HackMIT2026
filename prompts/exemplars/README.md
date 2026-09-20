@@ -1,14 +1,17 @@
 # Exemplar bank
 
-75 exemplars across three invented worlds, written for RELAY in imitation of the structures described in `docs/WRITING.md` section 6. Original text; nothing copied. Every exemplar passes `lintProse` with its world's bible (`tests/shared/prose.test.ts` checks this on each run).
+101 exemplars across four invented worlds, written for RELAY in imitation of the structures described in `docs/WRITING.md` section 6. Original text; nothing copied. Every exemplar passes `lintProse` with its world's bible (`tests/shared/prose.test.ts` checks this on each run).
 
 | File | World | Authors and registers |
 | --- | --- | --- |
 | `cinder-ward-9.json` | Orbital quarantine ward locked by its billing system | night nurse's handover notes · billing clerk's letters · union steward's grievance forms |
 | `tollgate-meridian.json` | Desert rail customs post with a train shut in the gate | chief inspector's seizure receipts · smuggler's letters to her brother · signalman's timetable notes |
 | `glasshouse-12.json` | Seed-trial dome whose irrigation controller lost its yield cap | trial lead's plant labels · cook's menu board · the controller's own log |
+| `swan-lock.json` | Canal lock and its pub, drained over a 3-pint bet | a child's letters to her mum · the landlady's slate of tabs and bets · a skipper's verses painted on her cabin |
 
-A fourth world, Halloran Deep, is the worked example in `docs/WRITING.md` and supplies two more exemplars per type there.
+Swan Lock is the world with no institution in it: no forms, no log, a private cause. Keep at least one such world in the bank, or every generated world comes back as an office.
+
+A fifth world, Halloran Deep, is the worked example in `docs/WRITING.md` and supplies two more exemplars per type there.
 
 ## File shape
 

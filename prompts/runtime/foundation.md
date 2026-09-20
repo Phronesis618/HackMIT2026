@@ -16,12 +16,14 @@ a flat short fact is worth more than a long one.
   there: if geese run quality control, the quality inspectors are geese, with names, a shift
   pattern and a line in the budget. No idea is quietly replaced by something more sensible.
 - premise (max 120 chars): one flat sentence, what this place was for. A working place
-  with a purpose, staff and a budget. Build it from the players' ideas.
+  with a purpose and people who turned up to it; it may be as small as a pub, a ferry or
+  a school kitchen, and it does not need a head office. Build it from the players' ideas.
 - collapse (max 200): one cause. A named person did one physical thing on a date: they
   moved, opened, overfilled, swapped, wedged, switched off, held back or let in a named
   object. Give the number that went wrong and how many people were caught by it. No unknown
   forces. The data carries a `collapseKind`: build the act on it unless the ideas clearly
-  point elsewhere. A signature, a countersigned order or an unread form can be the evidence
+  point elsewhere. The reason is as often private as professional: a bet, a sulk, a favour,
+  a child who could not be left at home. Nobody here needs a policy to ruin a place. A signature, a countersigned order or an unread form can be the evidence
   the crew finds afterwards; the act itself is something done with hands, to a thing.
 - people: 3 or 4. name, job (max 36), want (max 56). The want is small and concrete: a transfer, a count that
   balances, a letter answered. Names are ordinary, the kind found on a payroll: mix origins,
@@ -43,10 +45,16 @@ a flat short fact is worth more than a long one.
   count, how long their sentences run, a verbal habit. never (max 56) is what they would not write.
   The three must differ sharply in sentence length and in what they count: a quartermaster
   counts stock, a child counts days, an engineer counts readings. At most one of them is sad.
-  At most ONE document is a log, ledger or register with dated entries. The data carries
-  two `documentKinds`: those are the other two documents (adapt them to the place), so the
-  world is read through letters, labels, notes to a colleague, a menu board, not three logs.
+  At most ONE document is a log, ledger, register, form or report with dated entries, and
+  a world with none at all is welcome. At least ONE author is not writing for the
+  institution in any sense: a child's letters, a verse painted on a wall, a bet chalked on a
+  slate, a recipe with remarks, words somebody said that somebody else took down. The data
+  carries two `documentKinds`: those are the other two documents (adapt them to the place).
+  Places like this one are mostly remembered through what people wrote to each other and
+  on things, and hardly at all through their paperwork.
   At least one author writes to somebody: a person with a name who is expected to answer.
+  At most one author opens entries with a date or a time; the others date nothing, or date
+  things the way people do ("the Friday after", "12 sleeps to my birthday").
 - enemies: the cast of this world: 4 or 5 registry enemy ids, guardian included, chosen so
   the way each kind fights suits its job. formerJob (max 48) says what those creatures were
   before the collapse: a group of workers in the plural with their place ("Deck 4 loaders"),
