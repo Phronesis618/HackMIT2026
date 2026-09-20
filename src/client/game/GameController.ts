@@ -113,6 +113,14 @@ export class GameController {
       chronicle.subscribe((memories) => store.set({ memories })),
     );
     if (session.onError) this.disposers.push(session.onError((message) => this.notice('error', message)));
+    // The departure ritual is device-local presentation state, so it raises no game event: the
+    // cue hangs off the bus the UI and the renderer already share (HUB.md §8).
+    let departing = false;
+    this.disposers.push(departureBus.subscribe(() => {
+      const now = isDeparting(departureBus.get());
+      if (now && !departing) this.deps.audio.play('departure');
+      departing = now;
+    }));
 
     this.loop();
     await session.start();

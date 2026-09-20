@@ -11,19 +11,21 @@
   "cues": {
     "attack": "melee swing: bandpass air whoosh sweeping down + low thump + noise-colour tick",
     "enemy_shot": "enemy attack release: short zap from the 5th down to the root + high click",
-    "hit": "enemy damaged: dry noise-colour transient + 160→70 Hz body",
-    "player_hit": "you are hit: 95→38 Hz sub, dissonant square chirp, dark noise",
+    "hit": "enemy damaged: dry noise-colour transient + 160\u219270 Hz body",
+    "player_hit": "you are hit: 95\u219238 Hz sub, dissonant square chirp, dark noise",
     "player_down": "downed: slow hollow fall over two octaves with sub and rumble",
     "enemy_down": "enemy dies: pitched crumble resolving into the root bell",
     "dash": "rising air tear + two-note tick",
     "ability": "two-note flourish (root, fifth) with shimmer",
     "ui_confirm": "two quick bells (root, third)",
     "portal_open": "saw swell up an octave under an ascending bell line",
-    "room_enter": "48 Hz thud, root bell, fifth, dark noise — a door closing behind you",
+    "room_enter": "48 Hz thud, root bell, fifth, dark noise \u2014 a door closing behind you",
     "room_clear": "resolved rising triad ending on the root above",
     "revive": "fifth then root with a bright breath",
     "lore": "slow reverent bell pattern (root, fifth, third, root) with air; the only cue that takes its time",
     "anchor": "the biggest moment: low saw swell, 40 Hz sub, four-bell chord, rising air",
-    "memory_saved": "two soft high bells"
+    "memory_saved": "two soft high bells",
+    "terrain_blast": "a canister goes up: hard noise-colour crack, 90->32 Hz sub, a short saw drop and a scatter of debris 90 ms later",
+    "departure": "the departure ritual: a 2.4 s saw and air swell arriving on the root as the flash lands, with root/fifth/root bells on the way"
   }
 }
