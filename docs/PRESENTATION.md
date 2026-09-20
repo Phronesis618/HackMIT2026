@@ -1,5 +1,8 @@
 # RELAY presentation guide
 
+> **Status at 08:45 ET Sunday (added by the overnight orchestrator after this guide was written).** main `overnight-v1` tag, 1,080 tests green. Floors + world laws are still **off by default** (`RELAY_FLOORS=1 RELAY_LAWS=1`, clients follow the server; or `?floors=1&laws=1`). Since this guide was written: the floors ENDING has been played in a browser from the final biome (`docs/QA_FULLRUN.md`: Custodian → ritual → collapse escape → carry one relic → hub; 13 runs, no crash, softlock or console error); live generation was observed end to end in the browser (49 s and 51 s to portal-ready, honest LIVE label); audio cues, the production bundle and a legacy solo run were checked. The risk with floors is **difficulty, not stability**: most bot runs died to the final Custodian, and one died in room 2 of Crystal Tide — tune `src/sim/tuning.ts` or demo biome 1 only. The **Render service serves a stale build** from before the flags existed: redeploy from main or use a laptop server / GitHub Pages. Everything else below still holds.
+
+
 Written 20 Sept 2026 against `main` at `7a279d2`. Every claim about the game below points at a
 file in this repo; every claim about HackMIT points at a URL or is marked **UNCONFIRMED**.
 Scale of the night: `git log --since='14 hours ago' --oneline | wc -l` = **336 commits**
