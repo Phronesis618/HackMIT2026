@@ -74,7 +74,6 @@ export class RoomScene extends Phaser.Scene {
   private terrainHint: Phaser.GameObjects.Text | null = null;
   private terrainTiles: TerrainTile[] = [];
   private headquartersStations: HeadquartersStationView | null = null;
-  private statusLabels = new Map<string, Phaser.GameObjects.Text>();
   private portalPulse = 0;
   /** Floors rooms only: per-door look for the latest snapshot and the eased shutter position. */
   private doorsView: Phaser.GameObjects.Graphics | null = null;
@@ -151,7 +150,6 @@ export class RoomScene extends Phaser.Scene {
     this.terrainHint = null;
     this.terrainTiles = collectTerrainTiles(room);
     this.headquartersStations = null;
-    this.statusLabels.clear();
     this.loreNodesView = null;
     this.loreHint = null;
     this.doorsView = null;
@@ -302,7 +300,7 @@ export class RoomScene extends Phaser.Scene {
     }).setOrigin(0.5, 1).setDepth(DEPTH.overlay).setVisible(false);
     layer.add(this.loreHint);
 
-    // In-world Integrity strip; one row per crew member.
+    // Boss bar (crew Integrity lives in the React HUD).
     this.statusView = this.add.graphics().setDepth(DEPTH.overlay - 1);
     layer.add(this.statusView);
     this.terrainHint = this.text(0, 0, '', {
@@ -341,24 +339,9 @@ export class RoomScene extends Phaser.Scene {
     drawVignette(fog, roomW, roomH, art.fog * 0.6, p);
     layer.add(fog);
 
-    const title = this
-      .text(roomW / 2, -28, opts.headquarters ? room.name.toUpperCase() : `${room.index + 1} · ${room.name.toUpperCase()}`, {
-        fontFamily: tokens.font.display,
-        fontSize: '14px',
-        color: p.text,
-        letterSpacing: 3,
-      })
-      .setOrigin(0.5)
-      .setAlpha(0.85)
-      .setDepth(DEPTH.overlay);
-    layer.add(title);
-
+    // The room title and the crew's Integrity bars live in the React HUD now (U1); the canvas
+    // keeps only what belongs to the place itself: the world's name set into the arrival floor.
     if (!opts.headquarters && opts.world) {
-      // Which world this is, in every room; the full title stencilled into the floor of
-      // the arrival room so the generated name is the first thing players read.
-      layer.add(this.text(roomW / 2, -13, opts.world.title.toUpperCase(), {
-        fontFamily: tokens.font.mono, fontSize: '9px', color: p.accent, letterSpacing: 2,
-      }).setOrigin(0.5).setAlpha(0.7).setDepth(DEPTH.overlay));
       if (room.index === 0) this.drawWorldStencil(layer, room, opts.world, p);
     }
 
@@ -615,7 +598,7 @@ export class RoomScene extends Phaser.Scene {
     caption.setPosition(nearest.x, nearest.y - 30).setVisible(true);
   }
 
-  /** In-world Integrity strip above the room: one compact bar per crew member. */
+  /** Boss bar under the room. Crew Integrity is shown by the React HUD, not in the canvas. */
   private updateStatusStrip(snapshot: GameSnapshot, localPlayerId: string): void {
     const bars = this.statusView;
     if (!bars) return;
@@ -638,36 +621,6 @@ export class RoomScene extends Phaser.Scene {
       }
       this.bossLabel.setVisible(true).setText(`${guardianTitle(boss)}${(boss.recoveryMs ?? 0) > 0 ? ' · EXPOSED' : ''}`);
     } else this.bossLabel?.setVisible(false);
-    const rowH = 15;
-    const barX = 14;
-    const barW = 108;
-    snapshot.players.forEach((player, i) => {
-      const y = -50 + i * rowH;
-      const pct = player.maxHp > 0 ? Math.max(0, Math.min(1, player.hp / player.maxHp)) : 0;
-      const down = player.state === 'down';
-      const isLocal = player.id === localPlayerId;
-      const fillColor = down ? hexToInt(tokens.color.danger) : pct <= 0.25 ? hexToInt(tokens.color.danger) : hexToInt(tokens.color.success);
-      const edgeColor = hexToInt(isLocal ? tokens.canvas.localPlayerAccent : tokens.canvas.remotePlayerAccent);
-      bars.fillStyle(0x000000, 0.55).fillRoundedRect(barX, y, barW, 8, 3);
-      if (!down) bars.fillStyle(fillColor, 0.95).fillRoundedRect(barX, y, barW * pct, 8, 3);
-      bars.lineStyle(1, edgeColor, isLocal ? 0.9 : 0.5).strokeRoundedRect(barX, y, barW, 8, 3);
-
-      let label = this.statusLabels.get(player.id);
-      if (!label) {
-        label = this.text(0, 0, '', { fontFamily: tokens.font.mono, fontSize: '9px', color: tokens.color.mist100 }).setOrigin(0, 0.5).setDepth(DEPTH.overlay);
-        this.roomLayer?.add(label);
-        this.statusLabels.set(player.id, label);
-      }
-      label.setPosition(barX + barW + 6, y + 4);
-      const text = `${player.displayName}${down ? ' · down' : ''}`;
-      if (label.text !== text) label.setText(text);
-    });
-    for (const [id, label] of this.statusLabels) {
-      if (!snapshot.players.some((p) => p.id === id)) {
-        label.destroy();
-        this.statusLabels.delete(id);
-      }
-    }
   }
 
   /** Windup telegraph: danger zone brightens and a ring fills as the strike approaches. */

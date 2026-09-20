@@ -25,7 +25,8 @@ export function FloorsHud({ model, actions }: { model: UiModel; actions: UiActio
   const floor = model.phase === 'expedition' ? model.floor ?? null : null;
   const [held, setHeld] = useState(false);
   const [pinned, setPinned] = useState(false);
-  const slot = useMinimapSlot(floor?.run.roomId ?? null);
+  const found = useMinimapSlot(`${model.phase}|${floor?.run.biomeId ?? ''}|${floor?.run.roomId ?? ''}`);
+  const slot = found?.isConnected ? found : null;
   useEffect(() => createHoldKey(FULL_MAP_KEYS, setHeld), []);
   if (!floor) return null;
   const toggle = (): void => setPinned((value) => !value);
@@ -39,7 +40,7 @@ export function FloorsHud({ model, actions }: { model: UiModel; actions: UiActio
   );
   return (
     <>
-      {/* TODO(orchestrator): once U1's `.hud-minimap-slot` is on main the fallback corner box can go. */}
+      {/* U1's rail slot when it is mounted; otherwise a corner box over the stage (narrow layouts hide the rail). */}
       {slot ? createPortal(mini, slot) : <div className="floors-hud">{mini}</div>}
       {(held || pinned) && !floor.choice && <FullMap floor={floor} onClose={() => setPinned(false)} />}
       {floor.choice && (
