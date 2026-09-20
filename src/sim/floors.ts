@@ -14,7 +14,12 @@ import type { RoomProvider } from './floorProvider';
 export const FLOOR_TUNING = {
   /** Enemy HP and damage grow by this much per biome tier (tier 0 = legacy numbers). */
   tierScalePerTier: 0.18,
-  /** A rest site restores this share of max HP to every living operative, once per room. */
+  /**
+   * A rest site restores this share of max HP to every living operative. ONCE PER RUN, not
+   * once per visit: `FloorsRun.usedFeatures` remembers the room for as long as the crew is in
+   * that biome, so walking out and back in does not refill it. Every player-facing line says so
+   * (docs/design/FLOORS.md §12).
+   */
   restHealFraction: 0.4,
   /** Touch range (px) of rest sites and treasure caches; F-range of the biome choice site. */
   featureRange: 44,

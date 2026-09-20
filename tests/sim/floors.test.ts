@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GameSnapshotSchema, GameEventSchema, type GameEvent } from '../../src/shared/contracts';
 import { ROOM_CLEAR_REWARD, tileToWorld } from '../../src/shared/conventions';
+import { lintProse } from '../../src/shared/prose';
 import { createSimulation, FLOOR_TUNING, TREASURE_REWARD, tierMultiplier } from '../../src/sim';
 import { FloorsBot, floorsWorld, makeProvider, planPath } from './floorsBot';
 
@@ -131,6 +132,12 @@ describe('floors: room kinds', () => {
     bot.useFocus();
     expect(bot.events.filter((event) => event.type === 'player_healed' && event.amount > 35)).toHaveLength(heals);
     expect(sim.getPhase()).toBe('expedition');
+
+    // A4: a rest site is once per RUN, not once per visit — and the room says so out loud, so
+    // nobody walks back across a biome expecting a second one.
+    expect(bot.room().description).toContain('once, and not again');
+    const lint = lintProse(bot.room().description, { kind: 'roomLine' });
+    expect(lint.hardFail, JSON.stringify(lint.issues)).toBe(false);
   });
 });
 

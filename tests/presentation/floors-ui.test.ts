@@ -13,6 +13,7 @@ import { buildMinimap, describeLayout, floorUiFrom, minimapPitch } from '../../s
 import { RunStatus } from '../../src/client/ui/Hud';
 import { IDLE_GENERATION_STATUS, type GameSnapshot } from '../../src/shared/contracts';
 import { ROOM_BUDGETS } from '../../src/shared/floors';
+import { lintProse } from '../../src/shared/prose';
 import { samplePlayers, sampleSnapshot } from '../../src/shared/samples';
 import type { GameSession } from '../../src/shared/session';
 import type { UiActions, UiModel } from '../../src/shared/ui';
@@ -198,6 +199,16 @@ describe('run rail in floors mode', () => {
     expect(html).toContain('<dt>Room</dt>');
     expect(html).toContain('<dd>1<small>/3</small></dd>');
     expect(html).not.toContain('<dt>Biome</dt>');
+  });
+});
+
+describe('the full map legend', () => {
+  it('says a rest site works once, so nobody walks back for a second one (A4)', () => {
+    const floor = floorUiFrom({ floor: runState([plan.entranceId]), players }, world, local)!;
+    const html = renderToStaticMarkup(createElement(FullMap, { floor, onClose: () => {} }));
+    expect(html).toContain('Rest site · mends the crew once');
+    const lint = lintProse('Rest site · mends the crew once', { kind: 'uiLabel' });
+    expect(lint.hardFail, JSON.stringify(lint.issues)).toBe(false);
   });
 });
 

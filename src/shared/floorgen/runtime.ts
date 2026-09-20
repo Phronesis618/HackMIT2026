@@ -256,7 +256,7 @@ function roomDescription(built: BuiltRoom, brief: BiomeBrief): string {
     case 'entrance': return `${shape}. The way into ${brief.name}. Nothing moves here.`;
     case 'treasure': return `${shape}. A sealed store stands in the middle.`;
     case 'lore': return `${shape}. Someone left a record here.`;
-    case 'rest': return `${shape}. A cold camp, safe to stop in.`;
+    case 'rest': return `${shape}. A cold camp. Stopping here mends the crew once, and not again.`;
     case 'shop': return `${shape}. Shelves, mostly empty.`;
     case 'exit': return built.feature === 'anchor'
       ? `${shape}. The Anchor site, and the custodian that guards it.`
