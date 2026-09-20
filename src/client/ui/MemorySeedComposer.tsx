@@ -11,8 +11,13 @@ export function MemorySeedComposer({ memory, context, actions, onClose, onSubmit
   onClose: () => void;
   onSubmit: () => void;
 }) {
-  const [draft, setDraft] = useState(() => createMemorySeed(memory, 'carry'));
+  const [drafts, setDrafts] = useState<Record<SeedDirection, string>>(() => ({
+    carry: createMemorySeed(memory, 'carry'),
+    before: createMemorySeed(memory, 'before'),
+    after: createMemorySeed(memory, 'after'),
+  }));
   const [direction, setDirection] = useState<SeedDirection>('carry');
+  const draft = drafts[direction];
   const helpId = useId();
   const reason = memorySeedBlockReason(context);
   const contribution = validMemorySeed(draft);
@@ -33,15 +38,12 @@ export function MemorySeedComposer({ memory, context, actions, onClose, onSubmit
       <p className="hint">Use this record as a starting point. Edit the idea before contributing as {context.localPlayer.displayName}. The saved record stays unchanged.</p>
       <div className="memory-seed__directions" aria-label="Idea direction">
         {(Object.keys(SEED_DIRECTIONS) as SeedDirection[]).map((id) => (
-          <button type="button" className={`chip ${direction === id ? 'chip--active' : ''}`} key={id} aria-pressed={direction === id} onClick={() => {
-            setDirection(id);
-            setDraft(createMemorySeed(memory, id));
-          }}>{SEED_DIRECTIONS[id].label}</button>
+          <button type="button" className={`chip ${direction === id ? 'chip--active' : ''}`} key={id} aria-pressed={direction === id} onClick={() => setDirection(id)}>{SEED_DIRECTIONS[id].label}</button>
         ))}
       </div>
       <label className="field">
         <span className="field__label">Idea from this memory</span>
-        <textarea className="input input--area" rows={3} maxLength={200} value={draft} autoFocus aria-describedby={helpId} onChange={(event) => setDraft(event.target.value)} />
+        <textarea className="input input--area" rows={3} maxLength={200} value={draft} autoFocus aria-describedby={helpId} onChange={(event) => setDrafts((current) => ({ ...current, [direction]: event.target.value }))} />
       </label>
       <div className="memory-seed__footer">
         <span className="hint">{draft.length}/200</span>
