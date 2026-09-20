@@ -30,6 +30,12 @@
   backdrop-filter: blur(3px);
 }
 .hud-minimap-slot > .fmini-button { position: absolute; inset: 0; display: grid; place-items: center; }
+/* Sign-off: the minimap is authored at 196 px but the slot is 180 px on a 1280 rail, so the
+   footer fell under the slot's clip. In the slot the map fills the square and the grid row
+   takes what the head and foot leave; the drawing scales down instead of being cut. */
+.hud-minimap-slot .fmini { width: 100% !important; height: 100%; }
+.hud-minimap-slot .fmini__grid { height: auto !important; min-height: 0; }
+.hud-minimap-slot .fmini__grid .fmap { max-width: 100%; max-height: 100%; }
 
 .fmini-button { display: block; cursor: pointer; color: inherit; }
 .fmini-button:hover .fmini__foot span:last-child { color: var(--color-mist100, #e8eefc); }
@@ -65,6 +71,8 @@
 .fmini__foot {
   display: flex;
   justify-content: space-between;
+  gap: var(--space-sm, 8px);
+  white-space: nowrap;
   padding: var(--space-xs, 4px) var(--space-sm, 8px);
   border-top: 1px solid var(--floor-hair);
   font: var(--fs-stamp, 11px) var(--font-mono, ui-monospace, monospace);

@@ -95,14 +95,22 @@ export function WorldPanel(
         <span className="world-brief__title">{world.title}</span>
         <span className="tagline">{world.tagline}</span>
         <span className="world-brief__foot">
-          <span className="world-brief__facts">{rooms}</span>
+          {/* Sign-off: the full "biome 1/5 · room 1 of 10" never fit beside the Codex link and
+              ended in an ellipsis. The room count is on the tile above; keep the short half. */}
+          <span className="world-brief__facts">{floor ? `biome ${floor.depth} of ${floor.depthCount}` : rooms}</span>
           <span className="world-brief__codex">Codex {new Set(discoveredLore).size}/{world.lore.length} ›</span>
           {/* The law names get their own row: run together with the room count they wrapped
               into three ragged lines around the Codex link. A derived name carries the
               engine-chosen stamp here too, not only inside the dossier's note. */}
           {activeLawNames(world).length > 0 && (
             <span className="world-brief__laws">
-              <span>{activeLawNames(world).join(' · ')}</span>
+              {/* Each name is unbreakable and carries its own trailing dot, so a wrapped row
+                  never opens on a separator or splits a law's name in two. */}
+              <span>
+                {activeLawNames(world).map((name, i, all) => (
+                  <span key={name} className="world-brief__law">{name}{i < all.length - 1 ? ' · ' : ''}</span>
+                ))}
+              </span>
               {world.lawsDerived && <em className="derived-stamp">Engine-chosen</em>}
             </span>
           )}

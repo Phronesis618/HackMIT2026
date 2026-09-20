@@ -33,6 +33,8 @@ const stage = vi.hoisted(() => {
     setVisible = vi.fn((visible: boolean) => { this.visible = visible; return this; });
     setOrigin = vi.fn(() => this);
     setAlpha = vi.fn(() => this);
+    setMask = vi.fn(() => this);
+    createGeometryMask = vi.fn(() => ({}));
     setRotation = vi.fn(() => this);
     setScale = vi.fn(() => this);
     fillStyle = vi.fn(() => this);
@@ -79,6 +81,7 @@ vi.mock('phaser', () => ({
         graphics: stage.node, layer: stage.node, container: stage.node,
         text: (x: number, y: number, text: string) => stage.node().setPosition(x, y).setText(text),
       };
+      make = { graphics: stage.node };
       cameras = { main: stage.camera };
       tweens = stage.tweens;
       time = { now: 0 };

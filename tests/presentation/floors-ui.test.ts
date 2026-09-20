@@ -214,7 +214,8 @@ describe('run rail in floors mode', () => {
     expect(floorLocationLabel(ui.floor!)).toBe(where);
     expect(telemetryLabel(ui)).toBe(`${world.recipe.title} · ${where}`);
     const brief = renderToStaticMarkup(createElement(WorldPanel, { world: ui.world!, compact: true, floor: ui.floor }));
-    expect(brief).toContain(where);
+    // The rail brief keeps the short half: the full line never fit beside the Codex link.
+    expect(brief).toContain('biome 1 of 5');
     expect(brief).not.toContain('1/1 rooms');
     const dossier = renderToStaticMarkup(createElement(WorldPanel, { world: ui.world!, floor: ui.floor }));
     expect(dossier).toContain(where);

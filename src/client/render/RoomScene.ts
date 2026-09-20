@@ -63,6 +63,7 @@ export class RoomScene extends Phaser.Scene {
   private roomLayer: Phaser.GameObjects.Layer | null = null;
   private portalGlow: Phaser.GameObjects.Graphics | null = null;
   private telegraphs: Phaser.GameObjects.Graphics | null = null;
+  private telegraphClip: Phaser.GameObjects.Graphics | null = null;
   private motesGfx: Phaser.GameObjects.Graphics | null = null;
   private motes: Mote[] = [];
   private moteStyle: MoteStyle = 'sparks';
@@ -163,6 +164,8 @@ export class RoomScene extends Phaser.Scene {
     this.roomLayer?.destroy(true);
     this.portalGlow = null;
     this.telegraphs = null;
+    this.telegraphClip?.destroy();
+    this.telegraphClip = null;
     this.motesGfx = null;
     this.anchorView?.destroy();
     this.anchorView = null;
@@ -301,6 +304,9 @@ export class RoomScene extends Phaser.Scene {
     // Under `long_dark` telegraphs draw above the dark: danger is never hidden by a law.
     this.telegraphs = this.add.graphics().setDepth(this.lightRadius !== null ? DEPTH.entities - 1.5 : DEPTH.floorDecal + 4);
     layer.add(this.telegraphs);
+    // A wind-up's range can reach past the walls; clip it to the room so no band hangs in the void.
+    this.telegraphClip = this.make.graphics({}, false).fillStyle(0xffffff).fillRect(0, 0, roomW, roomH);
+    this.telegraphs.setMask(this.telegraphClip.createGeometryMask());
     this.projectilesView = this.add.graphics().setDepth(DEPTH.effects - 1);
     layer.add(this.projectilesView);
     // Under the entities: the trail is on the floor, and it must not hide what is standing in it.
@@ -859,9 +865,19 @@ export class RoomScene extends Phaser.Scene {
     const letterSpacing = title.length > 22 ? 2 : 3;
     // Estimate the title width so the plate fits it and the whole stencil stays inside the room.
     const estimated = title.length * (fontSize * 0.68 + letterSpacing);
-    const halfW = Math.min(roomW / 2 - TILE_SIZE, Math.max(150, estimated / 2 + 22));
-    const cx = Math.min(Math.max(spawn.col * TILE_SIZE + TILE_SIZE / 2, halfW + TILE_SIZE / 2), roomW - halfW - TILE_SIZE / 2);
     const cy = below ? (spawn.row + 2.6) * TILE_SIZE : (spawn.row - 2.2) * TILE_SIZE;
+    // Floors rooms are not rectangles: keep the plate on the open floor around the spawn column,
+    // or a wall block drawn above the decals cuts the tagline off mid-word.
+    const rows = [Math.floor((cy - 28) / TILE_SIZE), Math.floor((cy + 28) / TILE_SIZE)];
+    const open = (col: number): boolean => rows.every((row) => { const ch = room.tiles[row]?.[col]; return ch !== undefined && ch !== '#' && ch !== ' '; });
+    let left = spawn.col;
+    let right = spawn.col;
+    while (open(left - 1)) left--;
+    while (open(right + 1)) right++;
+    const minX = open(spawn.col) ? left * TILE_SIZE + 6 : TILE_SIZE / 2;
+    const maxX = open(spawn.col) ? (right + 1) * TILE_SIZE - 6 : roomW - TILE_SIZE / 2;
+    const halfW = Math.min((maxX - minX) / 2, Math.max(150, estimated / 2 + 22));
+    const cx = Math.min(Math.max(spawn.col * TILE_SIZE + TILE_SIZE / 2, minX + halfW), maxX - halfW);
     const colors = stencilColors(palette);
     // U2a: the plate was a fixed 46 px tall, so a tagline that wrapped to two lines broke out
     // of its bottom edge and ran over the props beneath. Lay the text out first, measure it,

@@ -119,8 +119,11 @@ async function boot(): Promise<void> {
     </StrictMode>,
   );
 
-  // Handy for debugging in the browser console; not an API.
-  (window as unknown as { relay?: unknown }).relay = { session, controller, store };
+  // Debug handle for the browser console and the screenshot/e2e harnesses; not an API.
+  // Dev builds always get it; a production build only with `?debug` in the URL.
+  if (import.meta.env.DEV || new URLSearchParams(window.location.search).has('debug')) {
+    (window as unknown as { relay?: unknown }).relay = { session, controller, store };
+  }
 }
 
 boot().catch((err: unknown) => {
