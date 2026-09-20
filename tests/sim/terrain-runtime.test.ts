@@ -6,6 +6,10 @@ import {
 } from '../../src/shared/contracts';
 import { tileToWorld } from '../../src/shared/conventions';
 import { createSimulation, type Simulation } from '../../src/sim';
+import { collectTerrainTiles, terrainCaption } from '../../src/client/render/terrain';
+import { TERRAIN_CAPTION } from '../../src/shared/registry';
+import { RoomTerrainSchema, TerrainSkinSchema, WorldRecipeSchema } from '../../src/shared/contracts';
+import { DEFAULT_TERRAIN_INTENSITY, terrainTuning } from '../../src/shared/terrain';
 
 function arena(tile: string, index = 0): RoomSpec {
   const tiles: string[][] = Array.from({ length: 10 }, (_, y) =>
@@ -107,5 +111,54 @@ describe('terrain in the authoritative simulation', () => {
     sim.returnToHeadquarters();
     sim.enterRoom(0);
     expect(sim.getSnapshot().terrain!.brokenWalls).toEqual([]);
+  });
+});
+
+describe('the world names its terrain, the engine owns it', () => {
+  it('lets a world rename a feature and falls back to the built-in caption', () => {
+    const room = arena('B');
+    const tiles = collectTerrainTiles(room);
+    const at = tileToWorld(5, 4);
+    expect(terrainCaption(room, tiles, undefined, at)).toBe(TERRAIN_CAPTION.breakable_walls);
+    expect(terrainCaption(room, tiles, undefined, at, [
+      { featureId: 'breakable_walls', name: 'ledger stacks', caption: 'LEDGER STACK · shove it over' },
+    ])).toBe('LEDGER STACK · shove it over');
+    // A skin for a feature this tile is not gets ignored, not applied.
+    expect(terrainCaption(room, tiles, undefined, at, [
+      { featureId: 'vents', name: 'tide gauges', caption: 'TIDE GAUGE · mind the steam' },
+    ])).toBe(TERRAIN_CAPTION.breakable_walls);
+  });
+
+  it('bounds what a world may say and which mechanics it may name', () => {
+    expect(TerrainSkinSchema.safeParse({ featureId: 'pits', name: 'the sump', caption: 'THE SUMP · it is a long way down' }).success).toBe(true);
+    for (const bad of [
+      { featureId: 'trapdoors', name: 'x', caption: 'y' },
+      { featureId: 'pits', name: '', caption: 'y' },
+      { featureId: 'pits', name: 'x'.repeat(29), caption: 'y' },
+      { featureId: 'pits', name: 'x', caption: 'y'.repeat(61) },
+    ]) expect(TerrainSkinSchema.safeParse(bad).success).toBe(false);
+    const recipe = WorldRecipeSchema.parse({ ...WorldFixtureSchema.parse(fixtureJson).recipe, terrainSkins: [] });
+    expect(recipe.terrainSkins).toEqual([]);
+  });
+
+  it('clamps the model\'s intensity into a band it cannot leave, and defaults to the baseline', () => {
+    expect(RoomTerrainSchema.parse({ features: [], layout: 'arena', density: 'sparse' }).intensity).toBeUndefined();
+    expect(RoomTerrainSchema.safeParse({ features: [], layout: 'arena', density: 'sparse', intensity: 1.5 }).success).toBe(false);
+    expect(RoomTerrainSchema.safeParse({ features: [], layout: 'gauntlet', density: 'sparse', intensity: -0.1 }).success).toBe(false);
+    // Every tuned number stays inside its endpoints for every legal intensity.
+    for (let i = 0; i <= 1.0001; i += 0.05) {
+      const tuning = terrainTuning(i);
+      expect(tuning.hazardIntervalMs).toBeGreaterThanOrEqual(350);
+      expect(tuning.hazardIntervalMs).toBeLessThanOrEqual(600);
+      expect(tuning.hazardBase).toBeGreaterThanOrEqual(2);
+      expect(tuning.hazardBase).toBeLessThanOrEqual(4);
+      expect(tuning.ventDamage).toBeGreaterThanOrEqual(10);
+      expect(tuning.ventDamage).toBeLessThanOrEqual(18);
+      expect(tuning.coverHp).toBeGreaterThanOrEqual(18);
+      expect(tuning.coverHp).toBeLessThanOrEqual(34);
+      expect(tuning.canisterFuseMs).toBeGreaterThanOrEqual(300);
+      expect(tuning.canisterFuseMs).toBeLessThanOrEqual(600);
+    }
+    expect(terrainTuning()).toEqual(terrainTuning(DEFAULT_TERRAIN_INTENSITY));
   });
 });

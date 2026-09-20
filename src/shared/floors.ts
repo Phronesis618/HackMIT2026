@@ -13,7 +13,9 @@
  *    re-declared with identical bounds.
  */
 import { z } from 'zod';
-import { ENEMY_IDS, MOTIF_IDS, PROP_IDS, TERRAIN_DENSITIES, TERRAIN_FEATURE_IDS, TERRAIN_LAYOUT_IDS } from './registry';
+import {
+  ENEMY_IDS, HAZARD_BIAS_IDS, MOTIF_IDS, PROP_IDS, TERRAIN_DENSITIES, TERRAIN_FEATURE_IDS, TERRAIN_LAYOUT_IDS,
+} from './registry';
 
 // ---------------------------------------------------------------------------
 // Primitives (same bounds as contracts.ts IdString / ShortText / TileCoord)
@@ -75,6 +77,9 @@ export const BiomeTerrainSchema = z.object({
   features: z.array(z.enum(TERRAIN_FEATURE_IDS)).max(4),
   layout: z.enum(TERRAIN_LAYOUT_IDS),
   density: z.enum(TERRAIN_DENSITIES),
+  /** How hard this biome's terrain is tuned, 0..1 (docs/design/TILES.md §4.2). Absent = 0.5. */
+  intensity: z.number().min(0).max(1).optional(),
+  hazardBias: z.enum(HAZARD_BIAS_IDS).optional(),
 });
 export type BiomeTerrain = z.infer<typeof BiomeTerrainSchema>;
 

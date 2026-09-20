@@ -220,7 +220,12 @@ export const TERRAIN_FEATURE_IDS = [
   'hazard_floor', 'canisters', 'pits', 'vents', 'cover', // docs/design/TILES.md — combat-facing
 ] as const;
 export type TerrainFeatureId = (typeof TERRAIN_FEATURE_IDS)[number];
-export const TERRAIN_LAYOUT_IDS = ['scattered', 'barricades', 'crossroads'] as const;
+/**
+ * How a room arranges its terrain. 'gauntlet' runs hazards and cover in lanes along the long
+ * axis (the crew picks a lane); 'arena' rings the perimeter and leaves the centre clean.
+ */
+export const TERRAIN_LAYOUT_IDS = ['scattered', 'barricades', 'crossroads', 'gauntlet', 'arena'] as const;
+export type TerrainLayoutId = (typeof TERRAIN_LAYOUT_IDS)[number];
 export const TERRAIN_DENSITIES = ['sparse', 'balanced', 'dense'] as const;
 /** Where hazards prefer to sit. A generator hint only; it never overrides reachability. */
 export const HAZARD_BIAS_IDS = ['none', 'edges', 'centre', 'lanes'] as const;

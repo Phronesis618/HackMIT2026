@@ -1,8 +1,8 @@
 import type Phaser from 'phaser';
-import type { Palette, RoomSpec } from '../../shared/contracts';
+import type { Palette, RoomSpec, TerrainSkin } from '../../shared/contracts';
 import { TILE_SIZE, tileToWorld } from '../../shared/conventions';
 import { terrainTileAt, terrainTileKey, ventChargeProgress, ventState, type TerrainState } from '../../shared/terrain';
-import { TERRAIN_CAPTION } from '../../shared/registry';
+import { TERRAIN_CAPTION, type TerrainFeatureId } from '../../shared/registry';
 import { hexInt, mix, solidColors } from './color';
 
 export interface TerrainTile { x: number; y: number }
@@ -21,8 +21,22 @@ export function collectTerrainTiles(room: RoomSpec): TerrainTile[] {
   return tiles;
 }
 
+/** Which feature a tile belongs to, for the skin lookup. */
+const TILE_FEATURE: Record<string, TerrainFeatureId> = {
+  B: 'breakable_walls', ':': 'rubble', '+': 'conduits', '~': 'hazard_floor',
+  '*': 'canisters', o: 'pits', '^': 'vents', '-': 'cover', '=': 'bridges', '>': 'bridges',
+};
+
+/**
+ * The HUD line for whatever the player is standing beside.
+ *
+ * `skins` is the world's own naming of its terrain (WorldRecipe.terrainSkins). The default from
+ * the registry is always present, so a world that writes nothing — or writes something the
+ * prose linter rejects — degrades to today's text rather than to nothing.
+ */
 export function terrainCaption(
   room: RoomSpec, tiles: TerrainTile[], state: TerrainState | undefined, player: { x: number; y: number },
+  skins: readonly TerrainSkin[] = [],
 ): string | null {
   let nearest: TerrainTile | undefined;
   let distance = TILE_SIZE * 1.45;
@@ -32,7 +46,11 @@ export function terrainCaption(
     if (d < distance) { distance = d; nearest = tile; }
   }
   if (!nearest) return null;
-  switch (terrainTileAt(room, nearest.x, nearest.y, state?.brokenWalls)) {
+  const type = terrainTileAt(room, nearest.x, nearest.y, state?.brokenWalls);
+  const feature = TILE_FEATURE[type];
+  const skinned = feature ? skins.find((skin) => skin.featureId === feature)?.caption : undefined;
+  if (skinned) return skinned;
+  switch (type) {
     case 'B': return TERRAIN_CAPTION.breakable_walls;
     case ':': return TERRAIN_CAPTION.rubble;
     case '+': return TERRAIN_CAPTION.conduits;

@@ -1,9 +1,12 @@
 import fs from 'node:fs';
 import vantageSpire from '../../../fixtures/worlds/vantage-spire.json';
-import { WorldFixtureSchema, WorldRecipeSchema, type ArtRecipe, type RoomTerrain, type WorldRecipe } from '../../shared/contracts';
+import {
+  WorldFixtureSchema, WorldRecipeSchema,
+  type ArtRecipe, type RoomTerrainInput, type WorldRecipe,
+} from '../../shared/contracts';
 import { compileWorldRecipe } from './compiler';
 
-const vantageTerrain: RoomTerrain[] = [
+const vantageTerrain: RoomTerrainInput[] = [
   { features: ['breakable_walls', 'bridges', 'conduits'], layout: 'crossroads', density: 'balanced' },
   { features: ['bridges', 'rubble', 'conduits'], layout: 'barricades', density: 'dense' },
   { features: ['breakable_walls', 'bridges', 'rubble', 'conduits'], layout: 'crossroads', density: 'balanced' },

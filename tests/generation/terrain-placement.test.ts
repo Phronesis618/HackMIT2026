@@ -88,6 +88,35 @@ describe('terrain placement keeps every generated room safe', () => {
     expect(canisterRooms).toBeGreaterThan(20);
   });
 
+  it('honours layout and hazardBias as placement hints, never as safety overrides', () => {
+    const brief = DEFAULT_BIOME_BRIEFS[2]!;
+    const plan = generateFloorPlan(brief, 1, 'bias');
+    const planned = plan.rooms.find((room) => room.kind === 'combat') ?? plan.rooms[0]!;
+    const built = buildRoom(plan, planned.id, brief, 'bias');
+    const base = { features: ['vents', 'cover', 'pits'], density: 'dense' } as const;
+    const place = (extra: Partial<BiomeTerrain>) =>
+      applyBiomeTerrain(built, { ...base, layout: 'scattered', features: [...base.features], ...extra } as BiomeTerrain, 'bias');
+
+    const edges = place({ hazardBias: 'edges' });
+    const centre = place({ hazardBias: 'centre' });
+    expect(edges).not.toEqual(centre);
+    // Whatever the hint, the room still has to pass every safety rule.
+    for (const tiles of [edges, centre, place({ layout: 'arena' }), place({ layout: 'gauntlet' })]) {
+      const room = {
+        ...built, tiles, relics: [],
+        exits: built.doors.map((door) => ({ x: door.x, y: door.y, toRoomIndex: 0, entry: door.entry })),
+      } as unknown as RoomSpec;
+      expect(validateRoomSafety(room)).toEqual([]);
+    }
+    const spread = (tiles: string[], ch: string) => {
+      const rows = tiles.flatMap((row, y) => [...row].flatMap((c, x) => (c === ch ? [{ x, y }] : [])));
+      const cy = (built.height - 1) / 2;
+      return rows.length === 0 ? 0 : rows.reduce((sum, at) => sum + Math.abs(at.y - cy), 0) / rows.length;
+    };
+    // 'edges' really does push vents outward compared with 'centre'.
+    expect(spread(edges, '^')).toBeGreaterThan(spread(centre, '^'));
+  });
+
   it('reports the rules a hand-broken room violates instead of throwing', () => {
     const tiles = [
       '##################',

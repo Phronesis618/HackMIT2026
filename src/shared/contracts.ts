@@ -13,9 +13,11 @@
  *  - localStorage (Agent C) -> MemoryRecord array.
  */
 import { z } from 'zod';
+import { DEFAULT_TERRAIN_INTENSITY } from './terrain';
 import {
   ABILITY_IDS,
   ATTUNEMENT_EFFECT_IDS,
+  HAZARD_BIAS_IDS,
   CLASS_IDS,
   ENEMY_IDS,
   MOTIF_IDS,
@@ -446,8 +448,18 @@ export const RoomTerrainSchema = z.object({
   features: z.array(z.enum(TERRAIN_FEATURE_IDS)).max(4),
   layout: z.enum(TERRAIN_LAYOUT_IDS),
   density: z.enum(TERRAIN_DENSITIES),
+  /**
+   * 0 = the gentlest legal room, 1 = the harshest (docs/design/TILES.md §4.2). The model picks
+   * one number; trusted code decides what it means, inside a hard-clamped band it cannot leave
+   * (`terrainTuning` in shared/terrain.ts). Absent = 0.5, today's numbers exactly.
+   */
+  intensity: z.number().min(0).max(1).optional(),
+  /** Where hazards prefer to sit. A generator hint only; it never overrides reachability. */
+  hazardBias: z.enum(HAZARD_BIAS_IDS).optional(),
 });
 export type RoomTerrain = z.infer<typeof RoomTerrainSchema>;
+/** Before defaults: what a recipe (or a fixture author) may write. */
+export type RoomTerrainInput = z.input<typeof RoomTerrainSchema>;
 
 const roomBlueprintShape = {
   name: ShortText,
@@ -507,6 +519,20 @@ export const AttunementSchema = z.object({
 });
 export type Attunement = z.infer<typeof AttunementSchema>;
 
+/**
+ * One world's name for one mechanic (docs/design/TILES.md §4.1). Same shape as
+ * `AttunementSchema`: the engine owns the mechanic, the world owns the identity. The
+ * simulation never reads this, so nothing here can affect determinism or co-op sync.
+ */
+export const TerrainSkinSchema = z.object({
+  featureId: z.enum(TERRAIN_FEATURE_IDS),
+  /** In-world name. "tide-gauge vents", "ledger stacks", "the sump". */
+  name: z.string().trim().min(1).max(28),
+  /** Replaces the built-in HUD caption from TERRAIN_CAPTION. */
+  caption: z.string().trim().min(1).max(60),
+});
+export type TerrainSkin = z.infer<typeof TerrainSkinSchema>;
+
 export const WorldRecipeSchema = z.object({
   title: z.string().trim().min(1).max(40),
   tagline: z.string().trim().min(1).max(80),
@@ -518,6 +544,11 @@ export const WorldRecipeSchema = z.object({
   lore: z.array(LoreFragmentSchema).max(12),
   /** 2–4 world-specific skill nodes; see `src/shared/skills.ts` for how they join the tree. */
   attunements: z.array(AttunementSchema).max(4).default([]),
+  /**
+   * What this world calls its terrain. One entry per feature at most; unknown ids are dropped.
+   * Optional rather than defaulted, so a recipe round-trips through the operator byte for byte.
+   */
+  terrainSkins: z.array(TerrainSkinSchema).max(15).optional(),
 });
 
 /**

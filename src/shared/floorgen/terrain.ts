@@ -69,7 +69,9 @@ export function applyBiomeTerrain(room: BuiltRoom, terrain: BiomeTerrain, seed: 
   const density = terrain.density === 'sparse' ? 1 : terrain.density === 'dense' ? 3 : 2;
   const cells: Coord[] = [];
   for (let y = 1; y < room.height - 1; y++) for (let x = 1; x < room.width - 1; x++) if (free(x, y)) cells.push({ x, y });
-  const order = rng.shuffle(cells);
+  // `layout` and `hazardBias` are hints about WHERE terrain prefers to sit, never about whether
+  // a room stays playable: they only reorder the candidates every stamp walks (TILES.md §4.2).
+  const order = biasOrder(rng.shuffle(cells), terrain, room.width, room.height);
 
   if (features.has('bridges')) stampBridges(grid, order, free, terrain, density, room.spawn, blocked, rng);
   if (features.has('breakable_walls')) stampBreakableWalls(grid, density, rng);
@@ -77,7 +79,7 @@ export function applyBiomeTerrain(room: BuiltRoom, terrain: BiomeTerrain, seed: 
   if (features.has('pits')) stampPits(grid, order, free, density, room.spawn, reachPoints, blocked, rng);
   if (features.has('canisters')) stampCanisters(grid, order, free, density, room.spawn, reachPoints, blocked);
   if (features.has('vents')) stampVents(grid, order, free, density, room.spawn, reachPoints, blocked, rng);
-  if (features.has('cover')) stampCover(grid, order, free, density, room.width, room.height, rng);
+  if (features.has('cover')) stampCover(grid, order, free, density, room.width, room.height, terrain.layout, rng);
   for (const feature of ['rubble', 'conduits'] as const) {
     if (!features.has(feature)) continue;
     const offsets = feature === 'rubble'
@@ -147,16 +149,39 @@ function stampBridges(
 }
 
 /**
+ * Reorder candidate cells by the room's stated preference. 'arena' rings the perimeter,
+ * 'gauntlet' prefers lanes, and `hazardBias` overrides the layout's own default when given.
+ * A stable sort over an already-shuffled list keeps this deterministic and still varied.
+ */
+function biasOrder(cells: readonly Coord[], terrain: BiomeTerrain, width: number, height: number): Coord[] {
+  const bias = terrain.hazardBias ?? (terrain.layout === 'arena' ? 'edges' : terrain.layout === 'gauntlet' ? 'lanes' : 'none');
+  if (bias === 'none') return [...cells];
+  const cx = (width - 1) / 2;
+  const cy = (height - 1) / 2;
+  const score = (cell: Coord): number => {
+    const fromCentre = Math.max(Math.abs(cell.x - cx) / Math.max(1, cx), Math.abs(cell.y - cy) / Math.max(1, cy));
+    if (bias === 'edges') return -fromCentre;
+    if (bias === 'centre') return fromCentre;
+    // lanes: prefer cells sitting on every third line of the room's long axis.
+    return (width >= height ? cell.y : cell.x) % 3;
+  };
+  return [...cells].sort((a, b) => score(a) - score(b));
+}
+
+/**
  * Cover runs are 2-4 tiles laid across the room's short axis, so they cut the long sight lines
  * a sentinel or a warden wants (TILES.md T4). At least three tiles from any wall, because cover
  * with your back to a wall breaks no line anyone was using. Walkable, so reachability is free.
  */
 function stampCover(
   grid: Grid, order: readonly Coord[], free: (x: number, y: number) => boolean, density: number,
-  width: number, height: number, rng: Rng,
+  width: number, height: number, layout: BiomeTerrain['layout'], rng: Rng,
 ): void {
-  // Perpendicular to the long axis: a wide room gets vertical runs, a tall room horizontal ones.
-  const [dx, dy] = width >= height ? [0, 1] : [1, 0];
+  // Perpendicular to the long axis, so a run cuts the long sight lines — except in a
+  // 'gauntlet', where the whole point is lanes running WITH the long axis.
+  const across = width >= height ? [0, 1] : [1, 0];
+  const along = width >= height ? [1, 0] : [0, 1];
+  const [dx, dy] = layout === 'gauntlet' ? along : across;
   const wanted = Math.min(MAX_COVER_RUNS, density);
   let placed = 0;
   for (const start of order) {

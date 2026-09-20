@@ -134,6 +134,8 @@ function compileRoom(
     isFinal,
     attributions: [],
     relics: [],
+    // The model's one tuning number, carried to the sim (TILES.md §4.2).
+    ...(blueprint.terrain?.intensity !== undefined ? { terrainIntensity: blueprint.terrain.intensity } : {}),
   });
   room.encounters = placeEncounters(room, grid, blueprint, candidates, mappings, notes);
   room.attributions = buildAttributions(grid, blueprint, index, pathY, mappings, room.props, room.encounters);
