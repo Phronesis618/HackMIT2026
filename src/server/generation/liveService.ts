@@ -66,6 +66,7 @@ export function createLiveGenerationService(options: {
   ): AsyncGenerator<PreparedWorld> {
     signal?.throwIfAborted();
     const request = GenerationRequestSchema.parse(rawRequest);
+    request.floors ??= options.floors ?? false;
     const startedAt = Date.now();
     const seed = request.seed ?? hashString(request.requestId);
     const status = (phase: GenerationStatus['phase'], message: string): void =>
@@ -91,7 +92,7 @@ export function createLiveGenerationService(options: {
     try {
       generated = await generateRecipe({
         provider: options.provider, request, seed, signal, notes, status,
-        floors: request.floors ?? options.floors ?? false,
+        floors: request.floors,
         budgetMs: options.worldBudgetMs ?? DEFAULT_WORLD_BUDGET_MS,
         startedAt,
         floorsSeed: request.seed === undefined ? worldId : String(request.seed),
