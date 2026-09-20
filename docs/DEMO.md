@@ -49,8 +49,8 @@ For a container host, use the production-container commands in the README.
    the signal, watch the discharge, then return to the sanctuary and its Archive.
 9. Review the debrief, return to headquarters and show the new event-derived memories.
    Back in the sanctuary open **Tab → Skills**: hostiles paid shards on defeat and the room
-   clears paid more; learn a bright node (Reinforced Plating, Second Wind, Salvager, or the
-   class weapon node) and point at the tree filling in — the between-runs roguelike loop.
+   clears paid too; buy an implemented node (Reinforced Plating, Second Wind, Salvager, or one
+   of this world's attunements) and point at the tree filling in — the between-runs roguelike loop.
 10. Reload to show that the memory wall persists on this browser. Co-op shares event content;
    storage and captured arrival images belong to each browser.
 
