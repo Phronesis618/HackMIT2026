@@ -18,7 +18,7 @@ server
       `[server] static client: ${config.staticDir ? config.staticDir : 'not built — dev uses Vite on :5173'}`,
     );
     console.log(
-      `[server] generation: requested=${config.generation.mode} provider=${config.generation.provider} available=${describeForClient(config).liveGenerationAvailable} model=${config.generation.provider === 'anthropic' ? config.generation.anthropicModel : config.generation.openaiModel}`,
+      `[server] generation: requested=${config.generation.mode} provider=${config.generation.provider} available=${describeForClient(config).liveGenerationAvailable} model=${config.generation.provider === 'anthropic' ? config.generation.anthropicModel : config.generation.provider === 'openai' ? config.generation.openaiModel : config.generation.provider}`,
     );
     if (host === '0.0.0.0') {
       console.log('[server] LAN mode: teammates connect to http://<your-lan-ip>:' + port);

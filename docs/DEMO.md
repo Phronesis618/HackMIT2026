@@ -72,8 +72,22 @@ on the server, then restart it. Claude defaults to `claude-sonnet-4-6`; override
 remain configured; only the selected provider is called. Never expose keys through a
 `VITE_` variable. Full examples are in [the README](../README.md#configuration).
 
+### Composer mode (no API key, instant, honest)
+
+`RELAY_GENERATION_MODE=live` + `RELAY_AI_PROVIDER=composer` (the `.env` default for the demo laptop)
+turns every request into a world in a few milliseconds without a model call: the offline
+composer (`src/server/composer`) picks one of sixteen themes from the crew's words (pirates,
+drowned, jungle, frozen, desert, volcanic, neon, haunted, void, archive, swamp, clockwork,
+crystal, storm, cathedral, festival), blends a secondary theme into the middle room, echoes the
+players' words into the title, room names and lore, chooses up to two world rules (see
+`WORLD_RULE_INFO`) and eight floors biome briefs, and only ever maps an idea to a feature it
+really placed. Worlds are labelled `COMPOSED · relay-composer` with source `procedural` — never
+`live`. With an API provider selected, the composer is the fallback when the model fails,
+so the demo never shows a canned fixture for a failed live call.
+
 The receipt reports the actual generation source. Missing credentials, timeouts, rejected
-model output, or unavailable models can fall back to an explicitly labelled fixture.
+model output, or unavailable models can fall back to an explicitly labelled fixture (or, when
+the composer is available, to a composed world that says so in its notes).
 The first committed room can be entered while later rooms arrive; an uncommitted exit must
 wait for its destination.
 

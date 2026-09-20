@@ -1,5 +1,44 @@
 # Handoff — Agent A (Fable, `feat/core`)
 
+## Overnight (Sep 20, 02:40–05:30 ET) — composer, world rules, overlay, party frames, start screen
+
+Local commits on Jeffrey's machine, merged with `origin/main` through `dc2c934` (floors,
+writing, hub, tiles, UI audit, memory integration); `npm run check` green at **733 tests / 63
+files**. Pushing was deferred to a human (the agent's pushes need approval).
+
+- **Implemented — offline composer (`src/server/composer/`, "Jeffrey's area" per the overnight
+  plan):** `RELAY_AI_PROVIDER=composer` builds a validated `WorldRecipe` from the crew's ideas in
+  ~1–20 ms, no model call. Sixteen themes (motifs, palette, room banks, enemy/prop pools,
+  hazards, relic/remains lore in each theme's voice, attunements); keyword theme selection with
+  a secondary-theme middle room; player words echoed into title/room names/lore; mappings only
+  for features actually placed (compiler cross-check tested); up to two `rules`; **eight floors
+  `BiomeBrief`s** across three themes so a floors run through a composed world changes vocabulary
+  at every fork (`resolveBiomeBriefs` uses them, tested with `upgradeToFloors`). New provenance
+  source `procedural` (`ATTRIBUTING_SOURCES` = live + procedural) — badge `COMPOSED · relay-composer`,
+  never `live`. `RecipeProvider` gained optional `source`/`badge`; the generation service takes a
+  `fallbackProvider` so a failed Claude/GPT/operator attempt yields a composed world (with the
+  failure in its notes) instead of a canned fixture. `.env` on this laptop runs the composer.
+- **Implemented — world rules (`WORLD_RULE_IDS`, all in the sim, `tests/sim/world-rules.test.ts`):**
+  frenzy, bulwark, low_visibility (murk + aggro gating, compiler thickens fog), unstable_ground,
+  scavenger, dense_swarm, regen_fields (lantern light heals), gravity_well. Hazard floor now
+  really bites (6 per 0.7 s). Hostiles pay `ENEMY_INFO.shards` on defeat (expeditions only).
+  This is a working first cut of `docs/design/WORLD_MUTATORS.md`; extend, don't fork.
+- **Implemented — app shell:** `GenerationOverlay` (forming ring with the crew's ideas orbiting →
+  reveal card with title, tagline, palette, rooms, rule chips, honest idea counts, real duration;
+  pure state machine in `generationOverlayState.ts`, tested); `PartyPlate` (class portrait +
+  Integrity + ult/resources for the local operative, compact frames for crewmates, rule chips);
+  `StartScreen` (premise, run loop, controls, class/name pick, solo vs LAN co-op; once per tab,
+  `?start=0/1`); bigger pop-in damage/heal numbers and an in-world exit label in `RoomScene`;
+  `GameController` syncs connection status on a timer (no false "offline" in throttled tabs) and
+  publishes crew vitals + world palette/rooms/rules to the UI model.
+- **Dropped during the merge:** an interim 3-biome recipe extension of mine (superseded by floors).
+- **Verified:** unit/integration tests above; composer output inspected for ~20 prompts;
+  browser: HQ + composed world + party frames + start screen screenshots on the merged build.
+- **Unverified / open:** reveal-card and forming-ring visuals on the merged layout (Cursor's tab
+  cannot run rAF unfocused; logic is unit-tested); live Claude/GPT still not run against a real
+  key; HQ **shop / currency spend** and in-room **NPC witnesses** not built — left for the morning
+  so they extend H1's hub (`HeadquartersStations`) and ECONOMY.md/ITEMS.md rather than fork them.
+
 ## Terrain, Custodian finale, and Stillpoint sanctuary — 2026-09-20
 
 - Branch: `devin/1789887155-terrain-boss-sanctuary`; integration commits through `e1e43c2`.
