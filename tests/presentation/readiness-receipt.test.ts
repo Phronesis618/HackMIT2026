@@ -26,7 +26,7 @@ describe('immediate creation receipt', () => {
   it('shows real attribution and unused contributions before any collapsed dossier while rooms stream', () => {
     const summary = world();
     const html = visibleReceipt(summary);
-    expect(html).toContain('1/3 rooms ready');
+    expect(html).toContain('World dossier · 1/3 rooms');
     expect(html).toContain('Creation receipt');
     expect(html).toContain(summary.receipt.headline);
     for (const line of summary.receipt.lines) {

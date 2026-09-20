@@ -161,7 +161,7 @@ export function BestiaryPage({ model }: { model: UiModel }) {
                   <span>{remains.fragment.text}</span>
                 </blockquote>
               ) : remains ? (
-                <p className="bestiary__locked">??? · defeat one and recover what it leaves behind</p>
+                <p className="bestiary__locked">Not found yet · defeat one and recover what it leaves behind</p>
               ) : (
                 <p className="bestiary__locked">Not encountered in this world</p>
               )}
