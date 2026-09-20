@@ -17,6 +17,7 @@ import { ENEMY_COMBAT } from '../../sim/combat';
 import { drawHostile, drawOperative } from './characters';
 import { hexInt } from './color';
 import { drawAnchorRitual } from './anchorRitual';
+import { collectTerrainTiles, drawTerrain, terrainCaption, type TerrainTile } from './terrain';
 import { drawMotif, drawProp, drawSanctuary, drawVignette } from './drawing';
 import { drawBackdrop, drawFloor, drawLightPools, drawMotes, drawWalls, makeMotes, type Mote } from './environment';
 import { drawFloorDressing, drawOverhead, drawWallDressing, FLOOR_PATTERN, MOTE_STYLE, stencilColors, type MoteStyle } from './dressing';
@@ -65,6 +66,9 @@ export class RoomScene extends Phaser.Scene {
   /** In-world Integrity/status strip above the room. */
   private statusView: Phaser.GameObjects.Graphics | null = null;
   private bossLabel: Phaser.GameObjects.Text | null = null;
+  private terrainView: Phaser.GameObjects.Graphics | null = null;
+  private terrainHint: Phaser.GameObjects.Text | null = null;
+  private terrainTiles: TerrainTile[] = [];
   private statusLabels = new Map<string, Phaser.GameObjects.Text>();
   private portalPulse = 0;
   private players = new Map<string, EntityView>();
@@ -129,6 +133,9 @@ export class RoomScene extends Phaser.Scene {
     this.loreMarkers = this.computeLoreMarkers(room, loreLines);
     this.statusView = null;
     this.bossLabel = null;
+    this.terrainView = null;
+    this.terrainHint = null;
+    this.terrainTiles = collectTerrainTiles(room);
     this.statusLabels.clear();
     this.loreNodesView = null;
     this.loreHint = null;
@@ -196,6 +203,9 @@ export class RoomScene extends Phaser.Scene {
     const walls = this.add.graphics().setDepth(DEPTH.propsBehind);
     drawWalls(walls, room, p, seed);
     layer.add(walls);
+    this.terrainView = this.add.graphics().setDepth(DEPTH.propsBehind + 0.5);
+    layer.add(this.terrainView);
+    drawTerrain(this.terrainView, room, this.terrainTiles, undefined, p, this.time.now);
     if (!opts.headquarters) {
       const dressing = this.add.graphics().setDepth(DEPTH.propsBehind);
       drawWallDressing(dressing, room, p, art.motifIds, seed);
@@ -254,6 +264,11 @@ export class RoomScene extends Phaser.Scene {
     // In-world Integrity strip; one row per crew member.
     this.statusView = this.add.graphics().setDepth(DEPTH.overlay - 1);
     layer.add(this.statusView);
+    this.terrainHint = this.text(0, 0, '', {
+      fontFamily: tokens.font.mono, fontSize: '9px', color: p.accent,
+      backgroundColor: 'rgba(7, 9, 15, 0.85)', padding: { left: 6, right: 6, top: 4, bottom: 4 },
+    }).setOrigin(0.5, 0).setDepth(DEPTH.overlay - 1).setVisible(false);
+    layer.add(this.terrainHint);
     // A DM-style beat on arrival: the room's mood in its own words, then it fades out.
     if (room.description && !opts.headquarters) {
       const descriptionCard = this
@@ -410,6 +425,13 @@ export class RoomScene extends Phaser.Scene {
 
     this.updateLoreCaption(snapshot, localPlayerId);
     this.updateLoreNodes(snapshot, localPlayerId);
+    if (this.terrainView) drawTerrain(this.terrainView, this.room, this.terrainTiles, snapshot.terrain, this.art.palette, this.time.now);
+    const local = snapshot.players.find((player) => player.id === localPlayerId);
+    const caption = local ? terrainCaption(this.room, this.terrainTiles, snapshot.terrain, local) : null;
+    if (caption && local && !this.loreCaption?.visible && !this.loreHint?.visible) {
+      this.terrainHint?.setPosition(local.x, local.y + 30).setText(caption).setVisible(true);
+    }
+    else this.terrainHint?.setVisible(false);
     if (!this.isHeadquarters) this.updateStatusStrip(snapshot, localPlayerId);
   }
 
@@ -598,7 +620,7 @@ export class RoomScene extends Phaser.Scene {
   private drawTelegraph(g: Phaser.GameObjects.Graphics, enemy: EnemyState): void {
     const warning = enemy.telegraph;
     if (!warning) return;
-    const total = ENEMY_COMBAT[enemy.enemyId].windup;
+    const total = enemy.bossPhase === 3 ? 900 : ENEMY_COMBAT[enemy.enemyId].windup;
     const progress = total > 0 ? 1 - Math.min(1, warning.remainingMs / total) : 1;
     const color = fx.enemyAccent(enemy.enemyId);
     const hot = hexToInt(tokens.canvas.telegraph);

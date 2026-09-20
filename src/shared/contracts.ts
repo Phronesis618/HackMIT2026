@@ -627,6 +627,10 @@ export const GameSnapshotSchema = z.object({
   discoveredLore: z.array(z.number().int().min(0)).optional(),
   anchor: AnchorStateSchema.nullable(),
   roomCleared: z.boolean().optional(),
+  terrain: z.object({
+    brokenWalls: z.array(z.string().regex(/^\d+,\d+$/)).max(2048),
+    wallDamage: z.record(z.string().regex(/^\d+,\d+$/), z.number().nonnegative()),
+  }).optional(),
 });
 export type GameSnapshot = z.infer<typeof GameSnapshotSchema>;
 

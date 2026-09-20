@@ -18,6 +18,8 @@ import {
   nearestOpenPosition, type Point, type ProjectilePattern,
 } from './combat';
 import { headquartersRoom } from './headquarters';
+import { terrainSpeedMultiplier, type TerrainState } from '../shared/terrain';
+import { createTerrainState, strikeBreakableWalls } from './terrain';
 import { ANCHOR_DISCHARGE_MS, ANCHOR_PULSE_SPEED, ANCHOR_PULSE_WARNING_MS, guardianPhase, RELAY_ACTIVATION_RANGE } from '../shared/finale';
 import { TRAINING_REGEN_PER_TICK, TRAINING_RESPAWN_MS, TRAINING_WAKE_RANGE, trainingRoom } from './training';
 
@@ -79,6 +81,7 @@ interface RoomProgress {
   cleared: boolean;
   loreNodes: LoreNodeRuntime[];
   pulseHitPlayers: Set<string>;
+  terrain: TerrainState;
 }
 
 export interface Simulation {
@@ -118,7 +121,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   let eventCounter = 0;
   const players = new Map<string, PlayerRuntime>();
   const rooms = new Map<number, RoomProgress>();
-  let progress: RoomProgress = { enemies: [], anchor: null, cleared: false, loreNodes: [], pulseHitPlayers: new Set() };
+  let progress: RoomProgress = { enemies: [], anchor: null, cleared: false, loreNodes: [], pulseHitPlayers: new Set(), terrain: createTerrainState() };
   /** Ephemeral bullet-hell bolts; never persisted across room switches (combat gates exits). */
   let projectiles: ProjectileRuntime[] = [];
   let projectileCounter = 0;
@@ -241,6 +244,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       } : null,
       cleared: false,
       pulseHitPlayers: new Set(),
+      terrain: createTerrainState(),
       loreNodes: nextPhase === 'expedition' ? room.relics.map((relic) => ({
         state: {
           id: relic.id, kind: 'relic', ...tileToWorld(relic.x, relic.y), fragmentIndex: relic.fragmentIndex,
@@ -250,6 +254,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       })) : [],
     };
     if (nextPhase === 'expedition') rooms.set(next.index, progress);
+    grid = buildSolidGrid(room, progress.terrain.brokenWalls);
     placePlayers();
   }
 
@@ -480,6 +485,11 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       damageEnemy(e, p, spec.damage + bonus, events);
       if (s.classId === 'weaver') e.state.slowMs = Math.max(e.state.slowMs ?? 0, 1000);
     }
+    const terrainStrike = strikeBreakableWalls(room, grid, progress.terrain, {
+      x: s.x, y: s.y, facing: s.facing, range: spec.range, arc: spec.arc, damage: spec.damage + bonus,
+    });
+    progress.terrain = terrainStrike.state;
+    if (terrainStrike.hits.some((hit) => hit.destroyed)) grid = buildSolidGrid(room, progress.terrain.brokenWalls);
   }
 
   /** Push an enemy away from (or toward, with negative distance) a point, respecting walls. */
@@ -685,7 +695,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       s.vy = p.dashDirection.y * DASH_SPEED;
     } else {
       const speed = CLASS_COMBAT[s.classId].speed * (p.attackRemainingMs > 0 ? 0.35 : 1) *
-        (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1);
+        (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1) *
+        terrainSpeedMultiplier(room, s.x, s.y, progress.terrain.brokenWalls);
       s.vx = length > 0 ? moveX / length * speed : 0;
       s.vy = length > 0 ? moveY / length * speed : 0;
     }
@@ -860,7 +871,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (distance(s, target.state) > stopRange || !clearPath(grid, s, target.state)) {
       const waypoint = chaseWaypoint(grid, s, target.state, ENEMY_INFO[s.enemyId].radius);
       const d = distance(s, waypoint);
-      const step = Math.min(d, spec.speed * (s.slowMs > 0 ? 0.35 : 1) * TICK_MS / 1000);
+      const step = Math.min(d, spec.speed * (s.slowMs > 0 ? 0.35 : 1) *
+        terrainSpeedMultiplier(room, s.x, s.y, progress.terrain.brokenWalls) * TICK_MS / 1000);
       if (d > 0) {
         const moved = moveCircle(grid, s.x, s.y, ENEMY_INFO[s.enemyId].radius,
           (waypoint.x - s.x) / d * step, (waypoint.y - s.y) / d * step);
@@ -1121,6 +1133,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
           ...(progress.anchor.ritual ? { ritual: { ...progress.anchor.ritual,
             relays: progress.anchor.ritual.relays.map((relay) => ({ ...relay })) } } : {}) } : null,
         roomCleared: phase !== 'headquarters' && progress.cleared,
+        terrain: { brokenWalls: [...progress.terrain.brokenWalls], wallDamage: { ...progress.terrain.wallDamage } },
       };
     },
     getTick() { return tick; },

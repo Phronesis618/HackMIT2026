@@ -207,7 +207,7 @@ export function OperativePage({ model, actions }: { model: UiModel; actions: UiA
         })}
       </ul>
       <h3 className="panel__subtitle">Controls</h3>
-      <p className="muted">WASD / arrows move · mouse aims · J or click attacks · Shift / Space dashes · Q / E / R abilities · hold F to read a relic, plant the Anchor or revive a teammate. Cleared rooms open their exits.</p>
+      <p className="muted">WASD / arrows move · mouse aims · J or click attacks and breaks cracked barriers · Shift / Space dashes · Q / E / R abilities · hold F to read a relic or revive a teammate. After the Custodian falls, tap F at each lit relay, dodge the Anchor pulses, then return to the core and release the signal. Cleared rooms open their exits.</p>
       <h3 className="panel__subtitle">Crew</h3>
       <ul className="crew">
         {model.players.map((p) => (
