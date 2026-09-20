@@ -3,8 +3,8 @@
   "fixtureNote": "Authored offline theme compiled with a fixed seed. Not generated from player contributions.",
   "recipe": {
     "title": "Root Archive",
-    "tagline": "A living archive grows through the remains of a silent machine.",
-    "themeSummary": "Bioluminescent roots consume broken terminals. Warm lanterns mark a dry path through branching pillars to the ancient archive core.",
+    "tagline": "A record vault grown from root fibre. On Dry Day 30 the water went to the seeds.",
+    "themeSummary": "Twelve thousand seed jars at 4 degrees under a record vault of living root fibre. On Dry Day 30 Adjei sent the last 400 litres a day to the Seed Vault and the record roots went through the Index and Reading Room West for water.",
     "motifIds": [
       "roots",
       "ruined_machinery",
@@ -24,8 +24,8 @@
     },
     "rooms": [
       {
-        "name": "Root Vestibule",
-        "description": "Lanterns light the roots threading through abandoned records.",
+        "name": "Dry Path",
+        "description": "Index couriers in satchel rigs run the flagstones from the far arch, two abreast. Lind's lanterns, 9 of them, mark the path; root crosses it in three places at ankle height.",
         "motifIds": [
           "roots",
           "lanterns"
@@ -52,8 +52,8 @@
         }
       },
       {
-        "name": "Buried Index",
-        "description": "Broken machines have become planters for a luminous forest.",
+        "name": "The Index",
+        "description": "Card terminals spray coolant across the aisles from the left, root through their tank housings. Reading Room patrons walk the stacks with their chairs still on them. Slip 4471 is pinned to the first cabinet.",
         "motifIds": [
           "ruined_machinery",
           "roots"
@@ -65,8 +65,7 @@
           "lantern"
         ],
         "enemyIds": [
-          "lurker",
-          "lurker",
+          "channeler",
           "husk"
         ],
         "hazards": false,
@@ -83,7 +82,7 @@
       },
       {
         "name": "Seed Vault",
-        "description": "The Guardian defends the archive seed beside the Anchor site.",
+        "description": "The vault door is a tree now, 3 m across, and it moves. Adjei is behind it at 4 degrees with 12,000 seed jars. Ten metres short of the door the ration tank plinth, drained, takes the Anchor.",
         "motifIds": [
           "roots",
           "lanterns"
@@ -114,78 +113,633 @@
     "lore": [
       {
         "kind": "relic",
-        "title": "Reading-room notice",
-        "source": "a laminated notice, half swallowed by root",
-        "text": "Please return all records to the roots when finished. Do not water the terminals. Do not answer the terminals. The archive remembers what you forget to, and it has been getting very good at remembering.",
+        "title": "Order 7",
+        "source": "card pinned to the Reading Room West door",
+        "text": "ORDER 7. Dry Day 18. Ration tank draw: 400 litres. Seed Vault chillers: 360 litres. Reading wings, all: 40 litres. Patrons: 1 cup at opening. Reading Room West stays open. By order. B.A.",
         "roomIndex": 0,
-        "enemyId": null
+        "enemyId": null,
+        "authorIndex": 0,
+        "eventIndex": 1
       },
       {
         "kind": "relic",
-        "title": "Index card, overgrown",
-        "source": "an index card with a root grown through the pin-hole",
-        "text": "Subject: the machine. Filed under: soil. Cross-reference: everyone. A second hand has added, in green: it is not filed under soil, it is filed as soil, and so, soon, are we.",
+        "title": "Day book, Dry Day 22",
+        "source": "porter's day book, page marked with a lantern wick",
+        "text": "Dry Day 22. Closing 21:00: 30 patrons, all seated, none out. Mrs Halloway in seat 4 says she is on the last chapter. She has been on it since Day 15. Opening 07:00: 30 patrons, same seats. Lit 9 lanterns on the Dry Path. Root over the path at lanterns 3, 6 and 8, 2 m of it since last night, and my cup went in the ration tank untouched. T. Lind.",
+        "roomIndex": 0,
+        "enemyId": null,
+        "authorIndex": 1,
+        "eventIndex": 2
+      },
+      {
+        "kind": "relic",
+        "title": "Delivery slip 4471",
+        "source": "carbon slip pinned to the first Index cabinet",
+        "text": "SLIP 4471. Dry Day 26, 14:10. To: Seed Vault door. From: Index wing. Item: coolant, 20 litres, for the card terminals. Carried by: N. Farrow. Signature: refused. Reason given: \"Order 7. Water does not pass this door in either direction.\" Time of refusal: 14:12. Coolant returned to the Index, 15:00. Slip not closed.",
         "roomIndex": 1,
-        "enemyId": null
+        "enemyId": null,
+        "authorIndex": 2,
+        "eventIndex": 3
       },
       {
         "kind": "relic",
-        "title": "Lantern-lighter’s ledger",
-        "source": "a ledger left on the dry path, pages damp",
-        "text": "Lit nine lanterns along the dry path, the way my mother did. Heard the terminals humming a tune I taught them as a girl. Did not light the tenth. The tenth is where the path stops being dry, and where the humming stops being a tune.",
+        "title": "Order 9",
+        "source": "card pinned over Order 7 on the Seed Vault door",
+        "text": "ORDER 9. Dry Day 30. Ration tank draw: 400 litres. Seed Vault chillers: 400 litres. Reading wings: nil. Index coolant: nil. Patrons: nil. Jars at 4 degrees: 12,000. By order. B.A.",
         "roomIndex": 1,
-        "enemyId": null
+        "enemyId": null,
+        "authorIndex": 0,
+        "eventIndex": 4
       },
       {
         "kind": "relic",
-        "title": "Seed vault plaque",
-        "source": "a brass plaque above the Anchor site",
-        "text": "Here the archive keeps one copy of everything it was ever told, so that endings can be argued with. Plant carefully. What is planted here is read aloud, forever, to the roots.",
+        "title": "Day book, Dry Day 31",
+        "source": "porter's day book, last page written in",
+        "text": "Dry Day 31. Opening 07:00: 30 patrons, 30 seats, root up through every chair leg and into the seat. Mrs Halloway has turned a page. Lit 9 lanterns. Lantern 10 marks the end of the Dry Path and I did not light it, since the path has root on it from lantern 3. Locking up at 21:00 regardless. T. Lind.",
         "roomIndex": 2,
-        "enemyId": null
+        "enemyId": null,
+        "authorIndex": 1,
+        "eventIndex": 5
+      },
+      {
+        "kind": "relic",
+        "title": "Slip 4490",
+        "source": "carbon slip, pencil, tucked under the ration tank lid",
+        "text": "SLIP 4490. Dry Day 34, 09:00. To: Seed Vault door. From: Well Head, H. Mbeki. Item: well reading, 0 m. Carried by: N. Farrow. Door: grown shut, bark to the lintel. Signature: none. Adjei answered through the door: \"4 degrees. Hold.\" Slip 4471 still open. N.F.",
+        "roomIndex": 2,
+        "enemyId": null,
+        "authorIndex": 2,
+        "eventIndex": 6
       },
       {
         "kind": "remains",
-        "title": "Reader’s spectacles",
-        "source": "cheap wire frames, lenses fogged green",
-        "text": "The husks were patrons who stayed past closing. The roots offered to do their reading for them, and they accepted, and they are still reading. Behind the fogged lenses the eyes move left to right, left to right.",
+        "title": "Reading-room chair, seat 4",
+        "source": "oak chair, root through all four legs",
+        "text": "Reading Room West chair, seat 4, Mrs Halloway's since Day 15. Lind's day book of Dry Day 31 has root up every leg and into the seat. The book on the arm is open at chapter 40 of 40.",
         "roomIndex": 0,
-        "enemyId": "husk"
+        "enemyId": "husk",
+        "authorIndex": 1,
+        "eventIndex": 5
       },
       {
         "kind": "remains",
-        "title": "Runner’s satchel",
-        "source": "a courier satchel, strap worn through",
-        "text": "Lurkers were the couriers who carried records between wings until the roots learned to carry them instead. The satchel is empty. The last delivery slip inside reads: recipient will come to you.",
+        "title": "Satchel rig, Index wing",
+        "source": "canvas satchel on a shoulder frame, strap chewed",
+        "text": "Index courier satchel rig, frame number 12. Inside: 6 carbon slips, all with Signature: refused. The top one is slip 4471, coolant, 20 litres, Dry Day 26. Farrow wrote the refusal down word for word and underlined \"either direction\".",
         "roomIndex": 0,
-        "enemyId": "lurker"
+        "enemyId": "lurker",
+        "authorIndex": 2,
+        "eventIndex": 3
       },
       {
         "kind": "remains",
-        "title": "Head archivist’s seal",
-        "source": "a wax seal, root-fibre and one fingerprint",
-        "text": "The Guardian was the last archivist, who chose to be grown into the vault rather than leave it unkept. It refused every withdrawal for a very long time. Under the wax, the fingerprint has the whorl of a leaf.",
+        "title": "Coolant tank, card terminal 9",
+        "source": "steel coolant tank, root through the drain plug",
+        "text": "Coolant tank off Index card terminal 9, 20 litres, empty. Order 9 put Index coolant at nil on Dry Day 30. Root came through the drain plug that night and the terminal has run hot since. It throws what coolant is left in the lines at 60 degrees.",
         "roomIndex": 0,
-        "enemyId": "guardian"
+        "enemyId": "channeler",
+        "authorIndex": 0,
+        "eventIndex": 4
+      },
+      {
+        "kind": "remains",
+        "title": "Bark from the Seed Vault door",
+        "source": "slab of bark, 4 cm thick, cold to the touch",
+        "text": "Bark off the Seed Vault door. Farrow logged the door grown shut on Dry Day 34 at 09:00 and the answer through it: \"4 degrees. Hold.\" The bark is 4 degrees on the inside face. The well behind the Well Head read 0 m the same morning.",
+        "roomIndex": 0,
+        "enemyId": "guardian",
+        "authorIndex": 2,
+        "eventIndex": 6
       }
     ],
     "attunements": [
       {
         "effectId": "melee_ward",
-        "name": "Reader’s Calm",
-        "description": "Patrons who stayed past closing learned to let the roots pass over them."
+        "name": "Seat 4",
+        "description": "Melee and charge hits deal 25% less. Mrs Halloway held seat 4 in Reading Room West through 31 dry days and one chapter."
       },
       {
         "effectId": "relic_mend",
-        "name": "Returned to the Roots",
-        "description": "A record read and returned is a record that keeps you."
+        "name": "One Cup at Opening",
+        "description": "Reading a relic restores 25 Integrity. Order 7 allowed each patron one cup from the ration tank at 07:00. Lind's went back in the tank."
       },
       {
         "effectId": "remains_charge",
-        "name": "Courier’s Ledger",
-        "description": "Every satchel recovered is a delivery the archive still owes you."
+        "name": "Slip Not Closed",
+        "description": "Recovering remains adds 40% ultimate charge. Farrow carried slip 4471 for 8 days and never got the signature. It is still in the rig."
+      },
+      {
+        "effectId": "first_strike",
+        "name": "Lantern 10",
+        "description": "The first hit on an untouched enemy deals double. Lind lit 9 lanterns a night on the Dry Path and never lantern 10."
       }
-    ]
+    ],
+    "terrainSkins": [
+      {
+        "featureId": "breakable_walls",
+        "name": "card cabinets",
+        "caption": "CARD CABINETS · break with attacks, rubble slows"
+      },
+      {
+        "featureId": "bridges",
+        "name": "stack ladders",
+        "caption": "STACK LADDERS · cross the root, ramps both ends"
+      },
+      {
+        "featureId": "rubble",
+        "name": "dry root",
+        "caption": "DRY ROOT · walking slows, dashes do not"
+      },
+      {
+        "featureId": "conduits",
+        "name": "coolant lines",
+        "caption": "COOLANT LINES · walking speeds up 25%"
+      },
+      {
+        "featureId": "canisters",
+        "name": "coolant cylinders",
+        "caption": "COOLANT CYLINDERS · one hit and it blows, both ways"
+      },
+      {
+        "featureId": "cover",
+        "name": "reading desks",
+        "caption": "READING DESKS · stop shots, not footsteps"
+      }
+    ],
+    "biomes": [
+      {
+        "id": "b0-dry-path",
+        "name": "Dry Path",
+        "tagline": "Lind's 9 lanterns on 200 m of flagstone. Root over the path at 3, 6 and 8.",
+        "motifIds": [
+          "roots",
+          "lanterns"
+        ],
+        "enemyPool": [
+          "lurker",
+          "husk"
+        ],
+        "propPool": [
+          "lantern",
+          "root_mass",
+          "crate"
+        ],
+        "hazards": false,
+        "layout": {
+          "linearity": 0.85,
+          "branchiness": 0.15,
+          "specials": {
+            "treasure": 1,
+            "lore": 1,
+            "rest": 1,
+            "elite": 0
+          }
+        },
+        "terrain": {
+          "features": [
+            "rubble",
+            "breakable_walls"
+          ],
+          "layout": "scattered",
+          "density": "sparse"
+        }
+      },
+      {
+        "id": "b1-the-index",
+        "name": "The Index",
+        "tagline": "400 card cabinets in aisles 1 m wide. 40 terminals, every coolant tank tapped.",
+        "motifIds": [
+          "ruined_machinery",
+          "roots"
+        ],
+        "enemyPool": [
+          "channeler",
+          "husk",
+          "lurker"
+        ],
+        "propPool": [
+          "terminal",
+          "crate",
+          "root_mass",
+          "cable_bundle"
+        ],
+        "hazards": true,
+        "layout": {
+          "linearity": 0.1,
+          "branchiness": 0.9,
+          "specials": {
+            "treasure": 1,
+            "lore": 4,
+            "rest": 1,
+            "elite": 1
+          }
+        },
+        "terrain": {
+          "features": [
+            "breakable_walls",
+            "conduits"
+          ],
+          "layout": "barricades",
+          "density": "dense"
+        }
+      },
+      {
+        "id": "b2-reading-room-west",
+        "name": "Reading Room West",
+        "tagline": "30 seats, 30 patrons, one chapter left. The ration tank is by the door.",
+        "motifIds": [
+          "lanterns",
+          "roots"
+        ],
+        "enemyPool": [
+          "husk"
+        ],
+        "propPool": [
+          "lantern",
+          "crate",
+          "root_mass",
+          "pillar"
+        ],
+        "hazards": false,
+        "layout": {
+          "linearity": 0.35,
+          "branchiness": 0.35,
+          "specials": {
+            "treasure": 1,
+            "lore": 2,
+            "rest": 2,
+            "elite": 1
+          }
+        },
+        "terrain": {
+          "features": [
+            "breakable_walls",
+            "rubble"
+          ],
+          "layout": "scattered",
+          "density": "balanced"
+        }
+      },
+      {
+        "id": "b3-well-head",
+        "name": "Well Head",
+        "tagline": "Mbeki's pump house over a 2 m well, then a 0 m well. Coolant lines run hot here.",
+        "motifIds": [
+          "ruined_machinery",
+          "monoliths"
+        ],
+        "enemyPool": [
+          "channeler",
+          "lurker"
+        ],
+        "propPool": [
+          "terminal",
+          "cable_bundle",
+          "pillar",
+          "monolith_shard"
+        ],
+        "hazards": true,
+        "layout": {
+          "linearity": 0.7,
+          "branchiness": 0.3,
+          "specials": {
+            "treasure": 1,
+            "lore": 1,
+            "rest": 1,
+            "elite": 2
+          }
+        },
+        "terrain": {
+          "features": [
+            "conduits",
+            "bridges",
+            "rubble"
+          ],
+          "layout": "crossroads",
+          "density": "dense"
+        }
+      },
+      {
+        "id": "b4-courier-run",
+        "name": "Courier Run",
+        "tagline": "One corridor from the Index to the vault door. 6 satchel rigs on the floor.",
+        "motifIds": [
+          "roots",
+          "arches"
+        ],
+        "enemyPool": [
+          "lurker",
+          "husk"
+        ],
+        "propPool": [
+          "crate",
+          "root_mass",
+          "pillar"
+        ],
+        "hazards": false,
+        "layout": {
+          "linearity": 0.95,
+          "branchiness": 0.05,
+          "specials": {
+            "treasure": 1,
+            "lore": 1,
+            "rest": 0,
+            "elite": 3
+          }
+        },
+        "terrain": {
+          "features": [
+            "bridges",
+            "breakable_walls"
+          ],
+          "layout": "barricades",
+          "density": "balanced"
+        }
+      },
+      {
+        "id": "b5-lantern-store",
+        "name": "Lantern Store",
+        "tagline": "Lind's cupboard and the rooms behind it: 40 lanterns, 200 wicks, oil for a year.",
+        "motifIds": [
+          "lanterns",
+          "ruined_machinery"
+        ],
+        "enemyPool": [
+          "husk",
+          "lurker"
+        ],
+        "propPool": [
+          "lantern",
+          "crate",
+          "terminal"
+        ],
+        "hazards": false,
+        "layout": {
+          "linearity": 0.5,
+          "branchiness": 0.5,
+          "specials": {
+            "treasure": 2,
+            "lore": 1,
+            "rest": 1,
+            "elite": 1
+          }
+        },
+        "terrain": {
+          "features": [
+            "breakable_walls",
+            "bridges"
+          ],
+          "layout": "barricades",
+          "density": "sparse"
+        }
+      },
+      {
+        "id": "b6-root-stacks",
+        "name": "Root Stacks",
+        "tagline": "Where the records grow: 12 rows of root fibre, 3 m high, dry as paper.",
+        "motifIds": [
+          "roots",
+          "monoliths"
+        ],
+        "enemyPool": [
+          "husk",
+          "channeler",
+          "lurker"
+        ],
+        "propPool": [
+          "root_mass",
+          "monolith_shard",
+          "lantern"
+        ],
+        "hazards": true,
+        "layout": {
+          "linearity": 0.2,
+          "branchiness": 0.8,
+          "specials": {
+            "treasure": 1,
+            "lore": 3,
+            "rest": 0,
+            "elite": 2
+          }
+        },
+        "terrain": {
+          "features": [
+            "breakable_walls",
+            "rubble",
+            "conduits"
+          ],
+          "layout": "scattered",
+          "density": "dense"
+        }
+      },
+      {
+        "id": "b7-seed-vault",
+        "name": "Seed Vault",
+        "tagline": "12,000 jars at 4 degrees behind a door that is a tree. Adjei is inside.",
+        "motifIds": [
+          "roots",
+          "lanterns",
+          "monoliths"
+        ],
+        "enemyPool": [
+          "guardian",
+          "husk",
+          "lurker",
+          "channeler"
+        ],
+        "propPool": [
+          "root_mass",
+          "lantern",
+          "monolith_shard",
+          "crate"
+        ],
+        "hazards": true,
+        "layout": {
+          "linearity": 0.5,
+          "branchiness": 0.5,
+          "specials": {
+            "treasure": 2,
+            "lore": 2,
+            "rest": 2,
+            "elite": 4
+          }
+        },
+        "terrain": {
+          "features": [
+            "breakable_walls",
+            "bridges",
+            "rubble",
+            "conduits"
+          ],
+          "layout": "crossroads",
+          "density": "dense"
+        }
+      }
+    ],
+    "bible": {
+      "premise": "The Root Archive is a record vault where documents are grown into living root fibre, with 12,000 seed jars kept at 4 degrees in the Seed Vault below.",
+      "collapse": "A drought took the well to 2 m on Dry Day 1 and pump engineer Hal Mbeki cut the supply to 400 litres a day. On Dry Day 30 chief archivist Berenike Adjei signed Order 9 and sent all 400 litres to the Seed Vault chillers. The record roots in the Index and Reading Room West grew 2 m a night toward the only water left: the terminal coolant tanks and the patrons.",
+      "people": [
+        {
+          "name": "Berenike Adjei",
+          "job": "chief archivist",
+          "want": "the 12,000 seed jars held at 4 degrees until the rains"
+        },
+        {
+          "name": "Tomasz Lind",
+          "job": "reading-room porter and lantern-lighter",
+          "want": "his 30 patrons out of Reading Room West by 21:00 closing"
+        },
+        {
+          "name": "Ngozi Farrow",
+          "job": "courier, Index wing",
+          "want": "delivery slip 4471 signed so she can go home"
+        },
+        {
+          "name": "Hal Mbeki",
+          "job": "pump engineer, Well Head",
+          "want": "the well back above 2 m"
+        }
+      ],
+      "places": [
+        "Reading Room West",
+        "the Index",
+        "Seed Vault",
+        "Well Head",
+        "Dry Path"
+      ],
+      "objects": [
+        "the ration tank",
+        "delivery slip 4471",
+        "Lind's nine lanterns",
+        "the coolant tanks",
+        "Order 9"
+      ],
+      "events": [
+        {
+          "date": "Dry Day 1",
+          "fact": "The well fell to 2 m and Mbeki cut the pump to 400 litres a day into the ration tank."
+        },
+        {
+          "date": "Dry Day 18",
+          "fact": "Adjei's Order 7 gave the reading wings 40 litres a day and the Seed Vault 360."
+        },
+        {
+          "date": "Dry Day 22",
+          "fact": "Lind counted 30 patrons in Reading Room West at closing and 30 at opening; root had crossed the Dry Path in the night, 2 m of it."
+        },
+        {
+          "date": "Dry Day 26",
+          "fact": "Farrow carried 20 litres of coolant for the Index terminals on delivery slip 4471 and had her signature refused at the Seed Vault door."
+        },
+        {
+          "date": "Dry Day 30",
+          "fact": "Adjei's Order 9 sent all 400 litres to the Seed Vault; by morning root had tapped every coolant tank in the Index."
+        },
+        {
+          "date": "Dry Day 31",
+          "fact": "Root reached Reading Room West; Lind's day book counts 30 patrons in their seats with root through the chair legs."
+        },
+        {
+          "date": "Dry Day 34",
+          "fact": "Mbeki found the well dry and the Seed Vault door grown shut, with Adjei inside at 4 degrees."
+        }
+      ],
+      "authors": [
+        {
+          "name": "Berenike Adjei",
+          "document": "ration orders posted on doors",
+          "register": "Numbered orders. Litres, degrees, wing names. By order, then her initials. No reasons given.",
+          "never": "explains herself"
+        },
+        {
+          "name": "Tomasz Lind",
+          "document": "porter's day book",
+          "register": "Patrons by name and seat number, lantern count, the time he locked up. One mild joke a page, about the patrons.",
+          "never": "writes the word root with a capital letter or a verb of its own"
+        },
+        {
+          "name": "Ngozi Farrow",
+          "document": "delivery slips",
+          "register": "Recipient, item, weight, time, signature. One clause a line. Refusals recorded word for word.",
+          "never": "writes a sentence with two clauses"
+        }
+      ],
+      "enemies": [
+        {
+          "enemyId": "husk",
+          "formerJob": "Reading Room West patrons, root through the chair legs, still in their seats"
+        },
+        {
+          "enemyId": "lurker",
+          "formerJob": "Index couriers in satchel rigs"
+        },
+        {
+          "enemyId": "channeler",
+          "formerJob": "Index card terminals, coolant tanks tapped by root"
+        },
+        {
+          "enemyId": "guardian",
+          "formerJob": "the Seed Vault door, grown into a tree, Adjei behind it"
+        }
+      ]
+    },
+    "biomeRoomLines": [],
+    "laws": [
+      {
+        "lawId": "long_dark",
+        "name": "Order 9",
+        "description": "Sight fails past 215 px from an operative; lanterns and conduits add light. Adjei's Order 9 cut the reading wings to nil, lamp oil included.",
+        "intensity": 0.6
+      },
+      {
+        "lawId": "restless",
+        "name": "Still in Their Seats",
+        "description": "A fallen enemy stands again after 11.5 s at 42% health unless an operative walks over its marker. Lind counted 30 patrons in Reading Room West every morning.",
+        "intensity": 0.5
+      },
+      {
+        "lawId": "long_echo",
+        "name": "Courier Pace",
+        "description": "Ability cooldowns are a third shorter and the ultimate charges 25% slower. Farrow ran the Index to the Seed Vault door in 4 minutes, 8 days in a row.",
+        "intensity": 0.5
+      }
+    ],
+    "look": {
+      "paletteFamily": "bloom",
+      "floorMaterial": "boards",
+      "wallStyle": "overgrown",
+      "lighting": "underlit",
+      "atmosphere": "spores",
+      "atmosphereDensity": 0.6,
+      "skylineDepth": 0.1,
+      "grain": 0.3
+    },
+    "custodian": {
+      "title": "Adjei, the Seed Vault door",
+      "phaseTitles": [
+        "Order 7: one cup at opening",
+        "Order 9: reading wings nil",
+        "4 degrees. Hold."
+      ],
+      "moves": [
+        {
+          "patternId": "siege_charge",
+          "name": "The vault door",
+          "tell": "THE VAULT DOOR COMES DOWN THE AISLE. TAKE THE NEXT AISLE."
+        },
+        {
+          "patternId": "ring_bloom",
+          "name": "Seed jars",
+          "tell": "SEED JARS BURST FROM THE DOOR, 12 A RING. DASH THE GAP."
+        },
+        {
+          "patternId": "gravity_well",
+          "name": "Root draw",
+          "tell": "THE ROOT DRINKS. THE FLOOR PULLS TO THE DOOR FOR 2 S."
+        }
+      ]
+    }
   },
   "art": {
     "paletteFamily": "ink-neon",
@@ -212,72 +766,76 @@
   },
   "rooms": [
     {
-      "id": "generated-room-3h7gyz-0",
+      "id": "generated-room-ppwb74-0",
       "index": 0,
-      "name": "Root Vestibule",
-      "description": "Lanterns light the roots threading through abandoned records.",
-      "width": 25,
-      "height": 12,
+      "name": "Dry Path",
+      "description": "Index couriers in satchel rigs run the flagstones from the far arch, two abreast. Lind's lanterns, 9 of them, mark the path; root crosses it in three places at ankle height.",
+      "width": 28,
+      "height": 16,
       "tiles": [
-        "#########################",
-        "#.......................#",
-        "#..#.................#..#",
-        "#..#.....-...........#..#",
-        "#........-..............#",
-        "#.......................#",
-        "#P......................X",
-        "#.......................#",
-        "#..B.................#..#",
-        "#..B.........::......#..#",
-        "#............::.........#",
-        "#########################"
+        "############################",
+        "#..........................#",
+        "#....#................#....#",
+        "#....#................#....#",
+        "#..........................#",
+        "#..........................#",
+        "#..........................#",
+        "#..........................#",
+        "#P.........................X",
+        "#..........................#",
+        "#.............-............#",
+        "#.............-............#",
+        "#....#........::......B....#",
+        "#....#........::......B....#",
+        "#..........................#",
+        "############################"
       ],
       "props": [
         {
           "id": "room-0-prop-0",
           "propId": "root_mass",
-          "x": 2,
-          "y": 4
+          "x": 9,
+          "y": 1
         },
         {
           "id": "room-0-prop-1",
           "propId": "root_mass",
-          "x": 20,
-          "y": 4
+          "x": 9,
+          "y": 3
         },
         {
           "id": "room-0-prop-2",
           "propId": "lantern",
-          "x": 2,
-          "y": 10
+          "x": 14,
+          "y": 14
         },
         {
           "id": "room-0-prop-3",
           "propId": "terminal",
-          "x": 2,
-          "y": 1
+          "x": 24,
+          "y": 11
         }
       ],
       "encounters": [
         {
           "id": "room-0-encounter-0",
           "enemyId": "lurker",
-          "x": 20,
-          "y": 3,
+          "x": 9,
+          "y": 2,
           "count": 1
         },
         {
           "id": "room-0-encounter-1",
           "enemyId": "husk",
-          "x": 20,
-          "y": 2,
+          "x": 24,
+          "y": 10,
           "count": 1
         }
       ],
       "exits": [
         {
-          "x": 24,
-          "y": 6,
+          "x": 27,
+          "y": 8,
           "toRoomIndex": 1,
           "direction": "east"
         }
@@ -287,90 +845,86 @@
       "relics": [
         {
           "id": "room-0-relic-0",
-          "x": 2,
-          "y": 3,
+          "x": 9,
+          "y": 5,
           "fragmentIndex": 0
+        },
+        {
+          "id": "room-0-relic-1",
+          "x": 24,
+          "y": 13,
+          "fragmentIndex": 1
         }
       ]
     },
     {
-      "id": "generated-room-1idks1o-1",
+      "id": "generated-room-1l9lr1w-1",
       "index": 1,
-      "name": "Buried Index",
-      "description": "Broken machines have become planters for a luminous forest.",
-      "width": 24,
-      "height": 16,
+      "name": "The Index",
+      "description": "Card terminals spray coolant across the aisles from the left, root through their tank housings. Reading Room patrons walk the stacks with their chairs still on them. Slip 4471 is pinned to the first cabinet.",
+      "width": 28,
+      "height": 13,
       "tiles": [
-        "########################",
-        "#......................#",
-        "#..B#........+.........#",
-        "#..#........+++.....-..#",
-        "#............+......-..#",
-        "#......................#",
-        "#...............*......#",
-        "#......................#",
-        "#P.....................X",
-        "#......................#",
-        "#......................#",
-        "#.*.+...........-......#",
-        "#..+++..........-...B..#",
-        "#...+..............BB..#",
-        "#......................#",
-        "########################"
+        "############################",
+        "#..........................#",
+        "#....BB*...................#",
+        "#....#.-...................#",
+        "#......-...................#",
+        "#..........................#",
+        "#P.........................X",
+        "#..........................#",
+        "#.......-....+.............#",
+        "#...+..*-...+++.......B....#",
+        "#..+++.......+.......#B....#",
+        "#...+......................#",
+        "############################"
       ],
       "props": [
         {
           "id": "room-1-prop-0",
           "propId": "terminal",
-          "x": 2,
-          "y": 10
+          "x": 6,
+          "y": 3
         },
         {
           "id": "room-1-prop-1",
           "propId": "root_mass",
-          "x": 20,
-          "y": 2
+          "x": 7,
+          "y": 1
         },
         {
           "id": "room-1-prop-2",
           "propId": "crate",
-          "x": 2,
-          "y": 12
+          "x": 23,
+          "y": 8
         },
         {
           "id": "room-1-prop-3",
           "propId": "lantern",
-          "x": 20,
-          "y": 1
+          "x": 23,
+          "y": 9
         }
       ],
       "encounters": [
         {
           "id": "room-1-encounter-0",
-          "enemyId": "lurker",
-          "x": 2,
-          "y": 13,
+          "enemyId": "channeler",
+          "x": 13,
+          "y": 1,
           "count": 1
         },
         {
           "id": "room-1-encounter-1",
-          "enemyId": "lurker",
-          "x": 2,
-          "y": 14,
-          "count": 1
-        },
-        {
-          "id": "room-1-encounter-2",
           "enemyId": "husk",
-          "x": 20,
-          "y": 6,
+          "x": 23,
+          "y": 4,
           "count": 1
         }
       ],
       "exits": [
         {
-          "x": 23,
-          "y": 8,
+          "x": 27,
+          "y": 6,
           "toRoomIndex": 2,
           "direction": "east"
         }
@@ -379,16 +933,16 @@
       "attributions": [],
       "relics": [
         {
-          "id": "room-1-relic-1",
-          "x": 16,
-          "y": 13,
-          "fragmentIndex": 1
-        },
-        {
           "id": "room-1-relic-2",
           "x": 13,
-          "y": 1,
+          "y": 3,
           "fragmentIndex": 2
+        },
+        {
+          "id": "room-1-relic-3",
+          "x": 5,
+          "y": 1,
+          "fragmentIndex": 3
         }
       ]
     },
@@ -396,7 +950,7 @@
       "id": "generated-room-11i4o0v-2",
       "index": 2,
       "name": "Seed Vault",
-      "description": "The Guardian defends the archive seed beside the Anchor site.",
+      "description": "The vault door is a tree now, 3 m across, and it moves. Adjei is behind it at 4 degrees with 12,000 seed jars. Ten metres short of the door the ration tank plinth, drained, takes the Anchor.",
       "width": 27,
       "height": 16,
       "tiles": [
@@ -464,10 +1018,16 @@
       "attributions": [],
       "relics": [
         {
-          "id": "room-2-relic-3",
+          "id": "room-2-relic-4",
           "x": 19,
           "y": 1,
-          "fragmentIndex": 3
+          "fragmentIndex": 4
+        },
+        {
+          "id": "room-2-relic-5",
+          "x": 22,
+          "y": 3,
+          "fragmentIndex": 5
         }
       ],
       "anchorRelays": [

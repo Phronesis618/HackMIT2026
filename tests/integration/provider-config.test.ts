@@ -54,7 +54,7 @@ describe('AI provider configuration', () => {
 
   it.each(['anthropic', 'openai'])('routes HTTP generation to %s with both keys configured', async (provider) => {
     const config = loadServerConfig({ env: { ...env, RELAY_AI_PROVIDER: provider }, argv: [] });
-    const recipe = loadWorldFixtures(config.fixturesDir)[0]!.recipe;
+    const { bible: _bible, ...recipe } = loadWorldFixtures(config.fixturesDir)[0]!.recipe; // legacy single-call shape: no bible
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () => Response.json(provider === 'anthropic' ? {
       type: 'message', stop_reason: 'tool_use',
       content: [{ type: 'tool_use', name: 'world_recipe', input: recipe }],

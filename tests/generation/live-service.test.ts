@@ -16,8 +16,9 @@ const request: GenerationRequest = {
   requestId: 'live-req', sessionId: 'session-test', contributions: sampleContributions, plannedRoomCount: 3,
 };
 const fixture = loadWorldFixtures(fixturesDir).find((world) => world.fixtureId === 'vantage-spire')!;
+const { bible: _bible, ...legacyFixtureRecipe } = fixture.recipe; // legacy single-call shape: no bible
 const recipe: WorldRecipe = {
-  ...fixture.recipe,
+  ...legacyFixtureRecipe,
   title: 'Generated Observatory',
   contributionMappings: [
     { contributionId: sampleContributions[0]!.id, kind: 'prop', featureDescription: 'Lanterns', roomIndex: 0 },

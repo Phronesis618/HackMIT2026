@@ -3,8 +3,8 @@
   "fixtureNote": "Authored offline theme compiled with a fixed seed. Not generated from player contributions.",
   "recipe": {
     "title": "Crystal Tide",
-    "tagline": "A prism observatory suspended above a frozen electric sea.",
-    "themeSummary": "Broken crystal chambers and arched galleries guard an observatory core. Violet crystal shelves flank hazardous luminous shallows.",
+    "tagline": "A tide observatory on a salt shelf. The 4-metre lens still points at Berth 2.",
+    "themeSummary": "Gauge Pier, Berth 2 and the Lens Gallery of a tide observatory, grown over in salt crystal since Dr Aalto turned the 4-metre lens on the shallows to free the Petrel. The crystal is 30 cm thick on the lower decks and still climbing.",
     "motifIds": [
       "crystals",
       "arches",
@@ -25,7 +25,7 @@
     "rooms": [
       {
         "name": "Prism Landing",
-        "description": "Crystal shelves interrupt the violet shallows.",
+        "description": "Gauge Pier fog lamps fire from under the crystal on the left, in threes. The brine between the crystal shelves burns boots. Okonkwo's gauge 3 stands in the middle of it, reading 1.2 m.",
         "motifIds": [
           "crystals",
           "arches"
@@ -51,8 +51,8 @@
         }
       },
       {
-        "name": "Refraction Gallery",
-        "description": "Arched buttresses hold a cracked observatory aloft.",
+        "name": "Berth 2",
+        "description": "Petrel deckhands in crusted survival suits come off the hull at a run, 6 of them. The pier piles are crystal to the arches. The Petrel's bow is 40 m out and 2 m deep in salt.",
         "motifIds": [
           "arches",
           "crystals"
@@ -80,8 +80,8 @@
         }
       },
       {
-        "name": "Prism Heart",
-        "description": "The Guardian stands watch over the final crystal lens.",
+        "name": "Lens Gallery",
+        "description": "Aalto at the tilt wheel of the 4-metre lens, 31 degrees down, at the far end. The Anchor plinth stands under the lens in the beam. Along the north wall, 11 water cans, ten of them full.",
         "motifIds": [
           "monoliths",
           "crystals"
@@ -112,83 +112,641 @@
     "lore": [
       {
         "kind": "relic",
-        "title": "Tide gauge, cracked",
-        "source": "scratched into the glass of a brass tide gauge",
-        "text": "Hour 1: two fingers over the low mark. Hour 6: the glass is warm. Hour 14: it is not water, whatever they say in the gallery, water does not look back. I have stopped marking the hours and started marking the faces.",
+        "title": "Gauge 3, 15 Rime",
+        "source": "tide-gauge log, page clipped to the gauge post",
+        "text": "15 Rime, 06:00. Gauge 3: 1.2 m. Water 4 degrees. Sky clear. Remark: crystal on the surface from the pier to 40 m out. Walked on it to 10 m. It held. Reading sent 06:04. B. Okonkwo.",
         "roomIndex": 0,
-        "enemyId": null
+        "enemyId": null,
+        "authorIndex": 0,
+        "eventIndex": 1
       },
       {
         "kind": "relic",
-        "title": "Observatory roster",
-        "source": "a duty roster pinned under a crystal shelf",
-        "text": "Forty-one names, each with a small lens sigil, each with a watch assigned. Thirty-eight are struck through in the same violet ink the shallows glow with. The three untouched names all share one shift: the night the lens was first turned downward.",
+        "title": "Dive slate, 16 Rime",
+        "source": "plastic dive slate, grease pencil, tied to a pile",
+        "text": "DIVE 1. 3 M. CUT 3 M OFF HULL. 40 MIN AIR. DIVE 2. 4 M. CUT 3 M. 22 MIN. DIVE 3. 4 M. CUT 2 M. 9 MIN. LOW TIDE 19:10 IT IS ALL BACK. TORCH BOTTLE EMPTY. STORES SAYS THURSDAY. QUINTERO.",
+        "roomIndex": 0,
+        "enemyId": null,
+        "authorIndex": 1,
+        "eventIndex": 2
+      },
+      {
+        "kind": "relic",
+        "title": "Lens log, 17 Rime, 13:00",
+        "source": "lens log, bound, open at the last full page",
+        "text": "17 Rime, 13:00. I have tilted the 4-metre lens 31 degrees below the horizontal onto Berth 2. The Petrel has 11 crew and 3 days of water. Quintero cut 8 m off the hull yesterday and it grew back in six hours; a torch will not do it. The beam boils brine at 4 degrees in 20 minutes by my tables. A boiled channel 3 m wide should let Alsted back off the berth. S. Aalto.",
         "roomIndex": 1,
-        "enemyId": null
+        "enemyId": null,
+        "authorIndex": 2,
+        "eventIndex": 3
       },
       {
         "kind": "relic",
-        "title": "Prayer to the Focus",
-        "source": "etched around the rim of a cracked lens-plate",
-        "text": "Turn your face to the lens and be counted. Be seen and be kept. The sea only takes what refuses to be seen, and we have refused nothing, so why is the gallery quiet, and why does my watch-partner answer in the wrong voice.",
+        "title": "Gauge 3, 17 Rime",
+        "source": "tide-gauge log, page water-stained",
+        "text": "17 Rime, 13:40. Gauge 3: 1.1 m. Water 91 degrees under the beam, 5 degrees at the gauge. Sky clear. Remark: the crystal at Berth 2 is climbing the piles at 10 cm a minute by my watch. It was 3 cm a day. Reading sent 13:44. B. Okonkwo.",
         "roomIndex": 1,
-        "enemyId": null
+        "enemyId": null,
+        "authorIndex": 0,
+        "eventIndex": 4
       },
       {
         "kind": "relic",
-        "title": "Lens-keeper’s last entry",
-        "source": "a logbook wedged beneath the Anchor pedestal",
-        "text": "I have stopped the lens. Whatever it was showing the sea, the sea was learning, and it had nearly learned enough to show it back. The observatory core will hold as long as something is planted here that the sea cannot count. Tell no one where the Anchor sits.",
+        "title": "Dive slate, 18 Rime",
+        "source": "dive slate wedged in the Sluice 2 gate",
+        "text": "SLUICE 2 GATE SEALED. 20 CM SALT. NO TORCH, NO BOTTLE, STORES SAYS THURSDAY. ALSTED TOOK 10 OFF THE PETREL ON FOOT AT 05:00. I COUNTED 4 REACH THE PIER. QUINTERO.",
         "roomIndex": 2,
-        "enemyId": null
+        "enemyId": null,
+        "authorIndex": 1,
+        "eventIndex": 5
+      },
+      {
+        "kind": "relic",
+        "title": "Lens log, 19 Rime",
+        "source": "lens log, last entry, pencil",
+        "text": "19 Rime. The lens stays on Berth 2 at 31 degrees; if the beam moves, the crystal under it sets in an hour and the Petrel is lost for good. I have 11 cans of water in the Lens Gallery, one for each of her crew. Okonkwo has not sent a reading since the 17th. The doors are salt to the lintel. S. Aalto.",
+        "roomIndex": 2,
+        "enemyId": null,
+        "authorIndex": 2,
+        "eventIndex": 6
       },
       {
         "kind": "remains",
-        "title": "Surveyor’s badge",
-        "source": "a crystal badge, still warm from the volley",
-        "text": "The etching reads Sentinel, Second Watch, with a tally of tides counted underneath. Whoever wore it was posted to count the sea, not to shoot at it. The last tally mark is scratched so hard it went through the crystal.",
+        "title": "Survival suit, Petrel",
+        "source": "orange suit, salt through the seams",
+        "text": "Petrel survival suit, deckhand's size, 2 cm of crystal in every seam. On the sleeve in grease pencil, Quintero's hand: WALK IN MY STEPS, 05:00. Alsted took 10 of them onto the salt. Quintero counted 4 at the pier.",
         "roomIndex": 0,
-        "enemyId": "sentinel"
+        "enemyId": "lurker",
+        "authorIndex": 1,
+        "eventIndex": 5
       },
       {
         "kind": "remains",
-        "title": "Diver’s tether",
-        "source": "frayed tether cable and a mouthful of violet salt",
-        "text": "Divers went down to read the sea up close, on lines like this one, and reported back in words that grew shorter every trip. The final reports are single syllables. The cable is chewed through from the diver’s end.",
+        "title": "Fog lamp housing",
+        "source": "brass lamp housing, crystal 4 cm over the glass",
+        "text": "Gauge Pier fog lamp, number 6 of 9. Okonkwo logged the crystal at 40 m out on 15 Rime and the lamps still under it lit at dusk. Through 4 cm of salt the beam comes out in three lines.",
         "roomIndex": 0,
-        "enemyId": "lurker"
+        "enemyId": "sentinel",
+        "authorIndex": 0,
+        "eventIndex": 1
       },
       {
         "kind": "remains",
-        "title": "The Focus itself",
-        "source": "six lens-plates that fell away from a body",
-        "text": "It was never a person. It was the observatory’s own eye, the great lens given something to stand with, and it did not want to be blinded a second time. Through the plates, faintly, the sea is still trying to show you something.",
+        "title": "Sluice 2 pump impeller",
+        "source": "steel impeller, salt-jammed on the shaft",
+        "text": "Impeller from a Sluice 2 brine pump. Aalto's log of 17 Rime has the pumps run at full to carry the boiled brine off Berth 2; the pumps threw it 12 m onto the pier instead and the crystal followed it. The impeller has 3 cm of salt on every blade.",
         "roomIndex": 0,
-        "enemyId": "guardian"
+        "enemyId": "spewer",
+        "authorIndex": 2,
+        "eventIndex": 4
+      },
+      {
+        "kind": "remains",
+        "title": "Lens mount wheel",
+        "source": "brass tilt wheel, 31 marked in red",
+        "text": "Tilt wheel from the 4-metre lens mount, 31 degrees marked in red where Aalto's hand wore the brass. Her log of 19 Rime: 11 cans of water, one for each of the Petrel's crew. Ten cans are still full.",
+        "roomIndex": 0,
+        "enemyId": "guardian",
+        "authorIndex": 2,
+        "eventIndex": 6
       }
     ],
     "attunements": [
       {
-        "effectId": "bolt_ward",
-        "name": "Counted by the Lens",
-        "description": "Turn your face to the lens and be kept: the sea’s bolts find less of you."
+        "effectId": "hazard_ward",
+        "name": "Quintero's Boots",
+        "description": "Hazard floor and area bolts deal 40% less. Quintero walked the Berth 2 salt in dive boots on 16 Rime and kept all ten toes."
       },
       {
-        "effectId": "hazard_ward",
-        "name": "Salt-Sure Footing",
-        "description": "The divers’ trick for the shallows: what glows underfoot burns a watcher less."
+        "effectId": "melee_ward",
+        "name": "Survival Suit, Petrel Issue",
+        "description": "Melee and charge hits deal 25% less. The Petrel's suits are rated for 6 hours in 4-degree water; Alsted's crew wore them onto the salt."
       },
       {
         "effectId": "relic_mend",
-        "name": "Tide-Gauge Reading",
-        "description": "Each mark read from the glass steadies the hand that reads it."
+        "name": "Reading Sent 06:04",
+        "description": "Reading a relic restores 25 Integrity. Okonkwo sent gauge 3 to the mainland every 6 hours for 9 years and missed one, on 18 Rime."
       },
       {
         "effectId": "guardian_bane",
-        "name": "Lens-Keeper’s Stop",
-        "description": "You know where the Focus was blinded once. Strike there."
+        "name": "31 Degrees",
+        "description": "The Custodian takes 20% more damage. Aalto tilted the 4-metre lens to 31 degrees; at 32 the beam falls short of Berth 2 and the mount jams."
       }
-    ]
+    ],
+    "terrainSkins": [
+      {
+        "featureId": "breakable_walls",
+        "name": "salt shelves",
+        "caption": "SALT SHELVES · break with attacks, rubble slows"
+      },
+      {
+        "featureId": "bridges",
+        "name": "pier catwalks",
+        "caption": "PIER CATWALKS · cross the brine, ramps both ends"
+      },
+      {
+        "featureId": "rubble",
+        "name": "crystal scree",
+        "caption": "CRYSTAL SCREE · walking slows, dashes do not"
+      },
+      {
+        "featureId": "conduits",
+        "name": "brine channels",
+        "caption": "BRINE CHANNELS · walking speeds up 25%"
+      },
+      {
+        "featureId": "pits",
+        "name": "boiled-out sluices",
+        "caption": "BOILED-OUT SLUICES · dash across, or knock something in"
+      },
+      {
+        "featureId": "vents",
+        "name": "tide-gauge vents",
+        "caption": "TIDE-GAUGE VENTS · steam on a beat you can watch"
+      },
+      {
+        "featureId": "canisters",
+        "name": "torch gas bottles",
+        "caption": "TORCH GAS BOTTLES · one hit and it blows, both ways"
+      },
+      {
+        "featureId": "cover",
+        "name": "gauge housings",
+        "caption": "GAUGE HOUSINGS · stop shots, not footsteps"
+      }
+    ],
+    "biomes": [
+      {
+        "id": "b0-prism-landing",
+        "name": "Prism Landing",
+        "tagline": "Where the boats used to land. 40 m of salt shelf and the first fog lamps.",
+        "motifIds": [
+          "crystals",
+          "arches"
+        ],
+        "enemyPool": [
+          "sentinel",
+          "lurker"
+        ],
+        "propPool": [
+          "crystal_cluster",
+          "monolith_shard",
+          "crate"
+        ],
+        "hazards": true,
+        "layout": {
+          "linearity": 0.75,
+          "branchiness": 0.25,
+          "specials": {
+            "treasure": 1,
+            "lore": 1,
+            "rest": 1,
+            "elite": 0
+          }
+        },
+        "terrain": {
+          "features": [
+            "rubble",
+            "breakable_walls"
+          ],
+          "layout": "scattered",
+          "density": "sparse"
+        }
+      },
+      {
+        "id": "b1-gauge-pier",
+        "name": "Gauge Pier",
+        "tagline": "Okonkwo's three gauges on a 200 m pier, 9 fog lamps and no cover.",
+        "motifIds": [
+          "arches",
+          "lanterns"
+        ],
+        "enemyPool": [
+          "sentinel",
+          "spewer"
+        ],
+        "propPool": [
+          "pillar",
+          "lantern",
+          "crystal_cluster"
+        ],
+        "hazards": false,
+        "layout": {
+          "linearity": 0.9,
+          "branchiness": 0.1,
+          "specials": {
+            "treasure": 1,
+            "lore": 2,
+            "rest": 0,
+            "elite": 2
+          }
+        },
+        "terrain": {
+          "features": [
+            "bridges",
+            "conduits"
+          ],
+          "layout": "barricades",
+          "density": "balanced"
+        }
+      },
+      {
+        "id": "b2-berth-2",
+        "name": "Berth 2",
+        "tagline": "The Petrel, 2 m deep in salt, and 10 of her crew between her and the pier.",
+        "motifIds": [
+          "crystals",
+          "monoliths"
+        ],
+        "enemyPool": [
+          "lurker",
+          "sentinel",
+          "spewer"
+        ],
+        "propPool": [
+          "crystal_cluster",
+          "crate",
+          "monolith_shard",
+          "pillar"
+        ],
+        "hazards": true,
+        "layout": {
+          "linearity": 0.4,
+          "branchiness": 0.5,
+          "specials": {
+            "treasure": 1,
+            "lore": 1,
+            "rest": 0,
+            "elite": 3
+          }
+        },
+        "terrain": {
+          "features": [
+            "breakable_walls",
+            "rubble",
+            "bridges"
+          ],
+          "layout": "crossroads",
+          "density": "dense"
+        }
+      },
+      {
+        "id": "b3-sluice-2",
+        "name": "Sluice 2",
+        "tagline": "Four brine pumps still running and 20 cm of salt on the gate.",
+        "motifIds": [
+          "ruined_machinery",
+          "crystals"
+        ],
+        "enemyPool": [
+          "spewer",
+          "lurker"
+        ],
+        "propPool": [
+          "terminal",
+          "crystal_cluster",
+          "cable_bundle"
+        ],
+        "hazards": true,
+        "layout": {
+          "linearity": 0.7,
+          "branchiness": 0.3,
+          "specials": {
+            "treasure": 1,
+            "lore": 1,
+            "rest": 1,
+            "elite": 2
+          }
+        },
+        "terrain": {
+          "features": [
+            "conduits",
+            "rubble",
+            "breakable_walls"
+          ],
+          "layout": "barricades",
+          "density": "dense"
+        }
+      },
+      {
+        "id": "b4-salvage-store",
+        "name": "Salvage Store",
+        "tagline": "Quintero's store. Torch bottles, all empty, and a sign that says THURSDAY.",
+        "motifIds": [
+          "arches",
+          "ruined_machinery"
+        ],
+        "enemyPool": [
+          "lurker"
+        ],
+        "propPool": [
+          "crate",
+          "terminal",
+          "pillar"
+        ],
+        "hazards": false,
+        "layout": {
+          "linearity": 0.3,
+          "branchiness": 0.4,
+          "specials": {
+            "treasure": 2,
+            "lore": 2,
+            "rest": 2,
+            "elite": 0
+          }
+        },
+        "terrain": {
+          "features": [
+            "breakable_walls"
+          ],
+          "layout": "scattered",
+          "density": "sparse"
+        }
+      },
+      {
+        "id": "b5-petrel-s-hold",
+        "name": "Petrel's Hold",
+        "tagline": "Alsted's 6 tonnes of stores, still lashed, in two holds under 2 m of salt.",
+        "motifIds": [
+          "monoliths",
+          "crystals"
+        ],
+        "enemyPool": [
+          "lurker",
+          "sentinel"
+        ],
+        "propPool": [
+          "crate",
+          "crystal_cluster",
+          "pillar"
+        ],
+        "hazards": false,
+        "layout": {
+          "linearity": 0.55,
+          "branchiness": 0.45,
+          "specials": {
+            "treasure": 2,
+            "lore": 1,
+            "rest": 0,
+            "elite": 3
+          }
+        },
+        "terrain": {
+          "features": [
+            "breakable_walls",
+            "bridges"
+          ],
+          "layout": "barricades",
+          "density": "balanced"
+        }
+      },
+      {
+        "id": "b6-mirror-stands",
+        "name": "Mirror Stands",
+        "tagline": "Aalto's 12 relay mirrors on a cross of catwalks. The beam passes through here.",
+        "motifIds": [
+          "monoliths",
+          "arches"
+        ],
+        "enemyPool": [
+          "sentinel",
+          "spewer",
+          "lurker"
+        ],
+        "propPool": [
+          "monolith_shard",
+          "pillar",
+          "crystal_cluster"
+        ],
+        "hazards": true,
+        "layout": {
+          "linearity": 0.3,
+          "branchiness": 0.6,
+          "specials": {
+            "treasure": 1,
+            "lore": 2,
+            "rest": 1,
+            "elite": 2
+          }
+        },
+        "terrain": {
+          "features": [
+            "bridges",
+            "conduits",
+            "breakable_walls"
+          ],
+          "layout": "crossroads",
+          "density": "balanced"
+        }
+      },
+      {
+        "id": "b7-lens-gallery",
+        "name": "Lens Gallery",
+        "tagline": "The 4-metre lens at 31 degrees, Aalto at the wheel, 11 water cans on the wall.",
+        "motifIds": [
+          "monoliths",
+          "crystals",
+          "arches"
+        ],
+        "enemyPool": [
+          "guardian",
+          "sentinel",
+          "lurker",
+          "spewer"
+        ],
+        "propPool": [
+          "monolith_shard",
+          "crystal_cluster",
+          "pillar",
+          "crate"
+        ],
+        "hazards": true,
+        "layout": {
+          "linearity": 0.45,
+          "branchiness": 0.55,
+          "specials": {
+            "treasure": 2,
+            "lore": 2,
+            "rest": 2,
+            "elite": 4
+          }
+        },
+        "terrain": {
+          "features": [
+            "breakable_walls",
+            "bridges",
+            "conduits",
+            "rubble"
+          ],
+          "layout": "crossroads",
+          "density": "dense"
+        }
+      }
+    ],
+    "bible": {
+      "premise": "Crystal Tide is a tide observatory on a salt shelf: a 4-metre lens, three gauges on Gauge Pier, and a berth for the supply boat Petrel.",
+      "collapse": "Crystal grew 30 cm up the Petrel's hull in one night and froze her at Berth 2 with 11 crew. On 17 Rime at 13:00 lens-keeper Dr Sunniva Aalto tilted the 4-metre lens 31 degrees down to boil a channel. The brine under the beam boiled and the crystal grew back three times as fast, up the piles, over the pier and through the Lens Gallery doors.",
+      "people": [
+        {
+          "name": "Sunniva Aalto",
+          "job": "lens-keeper",
+          "want": "the Petrel and her 11 crew off the shelf before their water runs out"
+        },
+        {
+          "name": "Bram Okonkwo",
+          "job": "tide-gauge reader",
+          "want": "the gauge 3 reading sent to the mainland every 6 hours, on the hour"
+        },
+        {
+          "name": "Marisol Quintero",
+          "job": "pier diver and salvage hand",
+          "want": "her cutting torch back from stores, with a full bottle"
+        },
+        {
+          "name": "Ferro Alsted",
+          "job": "master of the Petrel",
+          "want": "to sail on the 18 Rime tide with 6 tonnes of stores delivered"
+        }
+      ],
+      "places": [
+        "Gauge Pier",
+        "Berth 2",
+        "Lens Gallery",
+        "Sluice 2",
+        "Prism Landing"
+      ],
+      "objects": [
+        "the 4-metre lens",
+        "gauge 3",
+        "the cutting torch",
+        "the Petrel",
+        "the dive slate"
+      ],
+      "events": [
+        {
+          "date": "14 Rime, 22:00",
+          "fact": "The Petrel tied up at Berth 2 with 11 crew and 6 tonnes of stores; by morning crystal had grown 30 cm up her hull."
+        },
+        {
+          "date": "15 Rime, 06:00",
+          "fact": "Okonkwo read gauge 3 at 1.2 m and 4 degrees; the shallows had crystallised 40 m out from Gauge Pier."
+        },
+        {
+          "date": "16 Rime",
+          "fact": "Quintero cut 8 m of crystal off the Petrel's hull in three dives with the cutting torch; it grew back by the next low tide."
+        },
+        {
+          "date": "17 Rime, 13:00",
+          "fact": "Aalto tilted the 4-metre lens 31 degrees down onto Berth 2 to boil a channel for the Petrel."
+        },
+        {
+          "date": "17 Rime, 13:40",
+          "fact": "The brine under the beam boiled and the crystal came back at three times the rate, up the pier piles and over the deck."
+        },
+        {
+          "date": "18 Rime, 05:00",
+          "fact": "Crystal sealed Sluice 2 and the Lens Gallery doors; Alsted's crew walked out over the salt toward Gauge Pier and did not reach it."
+        },
+        {
+          "date": "19 Rime",
+          "fact": "Aalto locked the lens on Berth 2 and stayed in the Lens Gallery with 11 cans of water."
+        }
+      ],
+      "authors": [
+        {
+          "name": "Bram Okonkwo",
+          "document": "tide-gauge log",
+          "register": "Time, height in metres, water temperature, sky. Four short lines a reading. A remark only when the numbers change.",
+          "never": "guesses at a cause"
+        },
+        {
+          "name": "Marisol Quintero",
+          "document": "dive slate",
+          "register": "Capitals, depth in metres, minutes of air left. Eight words a line at most. Jokes about stores.",
+          "never": "mentions being cold"
+        },
+        {
+          "name": "Sunniva Aalto",
+          "document": "lens log",
+          "register": "Full sentences, lens angles in degrees, water in cans. Defends each decision in the sentence after it.",
+          "never": "writes the word sorry"
+        }
+      ],
+      "enemies": [
+        {
+          "enemyId": "lurker",
+          "formerJob": "Petrel deckhands in crusted survival suits"
+        },
+        {
+          "enemyId": "sentinel",
+          "formerJob": "Gauge Pier fog lamps, crystal grown over the housings"
+        },
+        {
+          "enemyId": "spewer",
+          "formerJob": "the Sluice 2 brine pumps"
+        },
+        {
+          "enemyId": "guardian",
+          "formerJob": "the 4-metre lens on its mount, Aalto at the wheel"
+        }
+      ]
+    },
+    "biomeRoomLines": [],
+    "laws": [
+      {
+        "lawId": "tidal_drag",
+        "name": "Salt Underfoot",
+        "description": "Walking is 17% slower for crew and enemies and dashes recharge a third faster. The salt at Berth 2 is 2 m deep and wet on top.",
+        "intensity": 0.5
+      },
+      {
+        "lawId": "glass_lattice",
+        "name": "Aalto's Tables",
+        "description": "Operatives have 48 Integrity and deal 1.8x damage. Aalto's tables say brine boils under the beam in 20 minutes; skin takes 4 seconds.",
+        "intensity": 0.5
+      },
+      {
+        "lawId": "held_breath",
+        "name": "Fog on Gauge Pier",
+        "description": "Enemy attack sounds are muted; every telegraph lasts a third longer and draws brighter. Gauge Pier fog lamp 6 of 9 still lights at dusk under 4 cm of salt.",
+        "intensity": 0.5
+      }
+    ],
+    "look": {
+      "paletteFamily": "bleach",
+      "floorMaterial": "crystal",
+      "wallStyle": "glass",
+      "lighting": "flat",
+      "atmosphere": "glints",
+      "atmosphereDensity": 0.7,
+      "skylineDepth": 0.4,
+      "grain": 0.35
+    },
+    "custodian": {
+      "title": "Aalto, the 4-metre lens",
+      "phaseTitles": [
+        "31 degrees on Berth 2",
+        "Brine at 91 degrees",
+        "Ten cans still full"
+      ],
+      "moves": [
+        {
+          "patternId": "sweep_arc",
+          "name": "The 4-metre lens",
+          "tell": "THE BEAM CROSSES BERTH 2 LEFT TO RIGHT. GET INSIDE ITS ARC."
+        },
+        {
+          "patternId": "arena_flood",
+          "name": "Sluice 2 brine",
+          "tell": "SLUICE 2 OPENS. THE MARKED SALT BOILS IN 3."
+        },
+        {
+          "patternId": "shatter_step",
+          "name": "Lens mount",
+          "tell": "THE LENS MOUNT SWINGS TO THE MARK. WALK OFF IT."
+        }
+      ]
+    }
   },
   "art": {
     "paletteFamily": "ink-neon",
@@ -218,7 +776,7 @@
       "id": "generated-room-g18j8z-0",
       "index": 0,
       "name": "Prism Landing",
-      "description": "Crystal shelves interrupt the violet shallows.",
+      "description": "Gauge Pier fog lamps fire from under the crystal on the left, in threes. The brine between the crystal shelves burns boots. Okonkwo's gauge 3 stands in the middle of it, reading 1.2 m.",
       "width": 23,
       "height": 12,
       "tiles": [
@@ -280,76 +838,82 @@
           "x": 16,
           "y": 9,
           "fragmentIndex": 0
+        },
+        {
+          "id": "room-0-relic-1",
+          "x": 4,
+          "y": 4,
+          "fragmentIndex": 1
         }
       ]
     },
     {
-      "id": "generated-room-4iyffj-1",
+      "id": "generated-room-1g2eox5-1",
       "index": 1,
-      "name": "Refraction Gallery",
-      "description": "Arched buttresses hold a cracked observatory aloft.",
-      "width": 27,
+      "name": "Berth 2",
+      "description": "Petrel deckhands in crusted survival suits come off the hull at a run, 6 of them. The pier piles are crystal to the arches. The Petrel's bow is 40 m out and 2 m deep in salt.",
+      "width": 28,
       "height": 13,
       "tiles": [
-        "###########################",
-        "#................++++.....#",
-        "#...##...........*...##...#",
-        "#................-........#",
-        "#....~~~~........-........#",
-        "#.........................#",
-        "#P........................X",
-        "#.........................#",
-        "#......-..................#",
-        "#.....>-..................#",
-        "#..###=###....*......##...#",
-        "#.....>.......++++........#",
-        "###########################"
+        "############################",
+        "#.................++++.....#",
+        "#....##...........*..##....#",
+        "#..........-...............#",
+        "#..........-...............#",
+        "#..........................#",
+        "#P.........................X",
+        "#..........................#",
+        "#......-........~~~>.......#",
+        "#......-........###=###....#",
+        "#....##.......*....>.......#",
+        "#.............++++.........#",
+        "############################"
       ],
       "props": [
         {
           "id": "room-1-prop-0",
           "propId": "pillar",
           "x": 18,
-          "y": 10
+          "y": 3
         },
         {
           "id": "room-1-prop-1",
           "propId": "crystal_cluster",
           "x": 18,
-          "y": 11
+          "y": 4
         },
         {
           "id": "room-1-prop-2",
           "propId": "monolith_shard",
-          "x": 20,
-          "y": 8
+          "x": 21,
+          "y": 4
         },
         {
           "id": "room-1-prop-3",
           "propId": "crystal_cluster",
-          "x": 12,
-          "y": 10
+          "x": 11,
+          "y": 9
         }
       ],
       "encounters": [
         {
           "id": "room-1-encounter-0",
           "enemyId": "sentinel",
-          "x": 12,
-          "y": 11,
+          "x": 11,
+          "y": 8,
           "count": 1
         },
         {
           "id": "room-1-encounter-1",
           "enemyId": "lurker",
-          "x": 17,
-          "y": 10,
+          "x": 21,
+          "y": 3,
           "count": 1
         }
       ],
       "exits": [
         {
-          "x": 26,
+          "x": 27,
           "y": 6,
           "toRoomIndex": 2,
           "direction": "east"
@@ -359,73 +923,74 @@
       "attributions": [],
       "relics": [
         {
-          "id": "room-1-relic-1",
-          "x": 20,
-          "y": 4,
-          "fragmentIndex": 1
+          "id": "room-1-relic-2",
+          "x": 21,
+          "y": 8,
+          "fragmentIndex": 2
         },
         {
-          "id": "room-1-relic-2",
-          "x": 7,
+          "id": "room-1-relic-3",
+          "x": 11,
           "y": 1,
-          "fragmentIndex": 2
+          "fragmentIndex": 3
         }
       ]
     },
     {
-      "id": "generated-room-ttv436-2",
+      "id": "generated-room-t5s2yj-2",
       "index": 2,
-      "name": "Prism Heart",
-      "description": "The Guardian stands watch over the final crystal lens.",
-      "width": 22,
-      "height": 12,
+      "name": "Lens Gallery",
+      "description": "Aalto at the tilt wheel of the 4-metre lens, 31 degrees down, at the far end. The Anchor plinth stands under the lens in the beam. Along the north wall, 11 water cans, ten of them full.",
+      "width": 25,
+      "height": 13,
       "tiles": [
-        "######################",
-        "#....................#",
-        "#..##...+.......+#B..#",
-        "#......+++.....+++...#",
-        "#.......+.......+....#",
-        "#....................#",
-        "#P.................A.#",
-        "#....................#",
-        "#....................#",
-        "#..BB............#B..#",
-        "#....................#",
-        "######################"
+        "#########################",
+        "#.......................#",
+        "#..#B........+......BB..#",
+        "#...........+++.........#",
+        "#............+..........#",
+        "#.......................#",
+        "#P....................A.#",
+        "#.......................#",
+        "#..............+........#",
+        "#.............+++.......#",
+        "#..##..........+....#B..#",
+        "#.......................#",
+        "#########################"
       ],
       "props": [
         {
           "id": "room-2-prop-0",
           "propId": "anchor_pedestal",
-          "x": 19,
+          "x": 22,
           "y": 6
         },
         {
           "id": "room-2-prop-1",
           "propId": "crystal_cluster",
-          "x": 6,
-          "y": 10
+          "x": 4,
+          "y": 9
         },
         {
           "id": "room-2-prop-2",
           "propId": "monolith_shard",
-          "x": 16,
-          "y": 8
+          "x": 4,
+          "y": 3
         }
       ],
       "encounters": [
         {
           "id": "room-2-encounter-0",
           "enemyId": "guardian",
-          "x": 4,
-          "y": 4,
+          "x": 6,
+          "y": 10,
           "count": 1
         },
         {
           "id": "room-2-encounter-1",
           "enemyId": "sentinel",
-          "x": 16,
-          "y": 1,
+          "x": 4,
+          "y": 8,
           "count": 1
         }
       ],
@@ -434,23 +999,29 @@
       "attributions": [],
       "relics": [
         {
-          "id": "room-2-relic-3",
-          "x": 2,
-          "y": 10,
-          "fragmentIndex": 3
+          "id": "room-2-relic-4",
+          "x": 13,
+          "y": 1,
+          "fragmentIndex": 4
+        },
+        {
+          "id": "room-2-relic-5",
+          "x": 14,
+          "y": 4,
+          "fragmentIndex": 5
         }
       ],
       "anchorRelays": [
         {
-          "x": 10,
+          "x": 11,
+          "y": 11
+        },
+        {
+          "x": 9,
           "y": 1
         },
         {
-          "x": 10,
-          "y": 10
-        },
-        {
-          "x": 4,
+          "x": 17,
           "y": 1
         }
       ]

@@ -23,8 +23,10 @@ const ARENA: RoomEncounter[] = [
 function fixtureWorld(name: string, laws?: WorldLaw[], arena = false): PreparedWorld {
   const fixture = WorldFixtureSchema.parse(JSON.parse(fs.readFileSync(path.resolve(__dirname, `../../fixtures/worlds/${name}.json`), 'utf8')));
   if (arena) fixture.rooms[0]!.encounters = ARENA;
+  // The offline-derivation cases want a recipe without authored laws / look / custodian.
+  const { laws: _laws, look: _look, custodian: _custodian, ...bare } = fixture.recipe;
   return PreparedWorldSchema.parse({
-    worldId: `test-${name}`, createdAt: 0, recipe: { ...fixture.recipe, ...(laws ? { laws } : {}) }, art: fixture.art, rooms: fixture.rooms,
+    worldId: `test-${name}`, createdAt: 0, recipe: { ...bare, ...(laws ? { laws } : {}) }, art: fixture.art, rooms: fixture.rooms,
     plannedRoomCount: fixture.plannedRoomCount,
     provenance: { source: 'fixture', label: 'TEST FIXTURE', fixtureId: fixture.fixtureId, generatedAt: 0, durationMs: 0, attempts: 0, notes: [] },
     receipt: { worldTitle: fixture.recipe.title, source: 'fixture', headline: 'test', lines: [] },

@@ -3,8 +3,8 @@
   "fixtureNote": "Authored offline theme compiled with a fixed seed. Not generated from player contributions.",
   "recipe": {
     "title": "Vantage Spire",
-    "tagline": "A relay tower that forgot which world it was built for.",
-    "themeSummary": "A vertical transit spire mid-collapse: concourses strung with live cables, lantern-lit galleries, and a sealed vault where the Anchor must be planted before the structure folds into itself.",
+    "tagline": "A 40-storey passenger relay. Cage 2's counterweight is in the concourse floor.",
+    "themeSummary": "A 40-storey passenger relay tower run through Founders' Week on a condemned cable. Cage 2's counterweight sits in the Threshold Concourse floor and every handrail carries lantern current.",
     "motifIds": [
       "cables",
       "spires",
@@ -25,7 +25,7 @@
     "rooms": [
       {
         "name": "Threshold Concourse",
-        "description": "The arrival platform. Lanterns still burn over abandoned crates.",
+        "description": "Twelve belted riders at the barriers, facing the split-flap board. The handrails spark. The iron block in the floor is Cage 2's counterweight.",
         "motifIds": [
           "lanterns",
           "cables"
@@ -52,8 +52,8 @@
         }
       },
       {
-        "name": "Cable Gallery",
-        "description": "A long gallery where severed trunk cables hang and spark.",
+        "name": "Cable Gallery 12",
+        "description": "Barrier lamps on tripods fire down the walkway from the far end. Trunk 4's cut end swings across the gallery at head height.",
         "motifIds": [
           "cables",
           "spires"
@@ -80,8 +80,8 @@
         }
       },
       {
-        "name": "Anchor Vault",
-        "description": "The spire's core. The Guardian waits between the operatives and the Anchor site.",
+        "name": "Winch House 40",
+        "description": "Osei stands at the brake lever with four trunks turning on the drum behind him. The Anchor site is 6 m to his left, under the tally board.",
         "motifIds": [
           "spires",
           "monoliths"
@@ -112,83 +112,618 @@
     "lore": [
       {
         "kind": "relic",
-        "title": "Departures board",
-        "source": "a split-flap departures board, still cycling",
-        "text": "Every line reads DELAYED. The flaps keep turning anyway, trying letters, settling on nothing, like a mouth practising a word. The last line has stopped on NOWHERE and is blinking, patient, as if it expects someone to board.",
+        "title": "Platform 3 log, Day 4",
+        "source": "warden's logbook, page torn at the spine",
+        "text": "17:30. Headcount Platform 3: 1,100. Rated 400. Radioed Winch House 40 at 17:31 and 17:36, no answer. Held the barrier with two lamps and the rope. Sanjay, if you read this before I do, Priya is at the school gate from 18:00 and I am not.",
         "roomIndex": 0,
-        "enemyId": null
+        "enemyId": null,
+        "authorIndex": 1,
+        "eventIndex": 3
       },
       {
         "kind": "relic",
-        "title": "Left luggage tag",
-        "source": "a paper tag tied to a locked case",
-        "text": "Hold for collection. Owner will return once the tower decides which world it is in. Do not open; the contents were packed for a different address than this one. Signed in a hurry, and then signed again underneath in a hand that is almost the same.",
+        "title": "Notice to riders",
+        "source": "printed card taped to the kiosk glass",
+        "text": "The departures board shows DELAYED on all lines. This is a fault, reported on forms 112, 118, 121 and 130. Riders in cage belts may unclip at the barrier and wait in the concourse. As of 17:52, 300 riders have not. The kiosk closes at 18:00 as normal. L. Brandt.",
         "roomIndex": 0,
-        "enemyId": null
+        "enemyId": null,
+        "authorIndex": 2,
+        "eventIndex": 5
       },
       {
         "kind": "relic",
-        "title": "Line engineer's chalk note",
-        "source": "chalk on a junction box, smeared by sparks",
-        "text": "Cut trunk 4 before it cuts you. The relay is not routing passengers any more; it is routing itself, room by room, looking for a world that will take it. If the lanterns start answering the cables, do not stay to hear what they say.",
+        "title": "Inspection tag 4-17",
+        "source": "brass tag wired to the cut end of Trunk 4",
+        "text": "TRUNK 4. Diameter 41 mm. Minimum 46 mm. Broken wires per lay: 9. Rated load 60 t. Load with six cages up: 88 t. CONDEMNED. H. Vik, Day 2, 09:15. Below, in blue ink: IN SERVICE THROUGH DAY 7. M. Osei.",
         "roomIndex": 1,
-        "enemyId": null
+        "enemyId": null,
+        "authorIndex": 0,
+        "eventIndex": 1
       },
       {
         "kind": "relic",
-        "title": "Vault door plaque",
-        "source": "a brass plaque beside the Anchor bay",
-        "text": "Anchor bay. Plant nothing you are not willing to leave behind. The spire keeps what is planted and forgets what is carried through; that is the whole of the arrangement, and it has never once been renegotiated.",
+        "title": "Tag on the Gallery 12 rail",
+        "source": "inspection tag wired to the walkway rail",
+        "text": "Trunks 1, 2, 3, 5. Measured Day 3, 14:00. Diameters 46, 45, 46, 44 mm. Load with six cages up: 88 t on four ropes, 22 t each. Rating 15 t each. Trunk 4 parted at 11:20 in this gallery, 3 m from this rail. STOP THE CAGES. H. Vik.",
+        "roomIndex": 1,
+        "enemyId": null,
+        "authorIndex": 0,
+        "eventIndex": 2
+      },
+      {
+        "kind": "relic",
+        "title": "Log, Day 5, 17:40",
+        "source": "warden's logbook, last written page",
+        "text": "17:40. Cage 2 counterweight came through the concourse roof, 40 storeys, and landed 8 m from the kiosk. The handrails are live. Mrs Okafor took a shock off the Platform 3 rail and is sitting down. Headcount at the barrier 300, all still clipped in. Radioed Winch House 40 at 17:41. No answer, Sanjay. Keep everyone off the rails.",
+        "roomIndex": 0,
+        "enemyId": null,
+        "authorIndex": 1,
+        "eventIndex": 4
+      },
+      {
+        "kind": "relic",
+        "title": "Form 131",
+        "source": "maintenance request, filled in and never filed",
+        "text": "Form 131. Location: Winch House 40. Fault: door bolted from inside; drum running with no cages attached. Reported by: L. Brandt, kiosk. Previous forms on this location: none, as the door used to be open. Mr Osei answered through the door that the timetable is being held. Requested action: unbolt the door.",
         "roomIndex": 2,
-        "enemyId": null
+        "enemyId": null,
+        "authorIndex": 2,
+        "eventIndex": 6
       },
       {
         "kind": "remains",
-        "title": "Commuter's ticket stub",
-        "source": "a ticket stub punched for platform 9",
-        "text": "There has never been a platform 9. The husks were the last passengers, the ones who stayed on the concourse when the boards went dark, waiting for a train the spire forgot to send. They are still holding their tickets out; they still expect them to be checked.",
+        "title": "Cage belt, size M",
+        "source": "webbing belt, clip still closed",
+        "text": "Cage belt, Vantage Spire issue, size M. In the chest pocket, a Day 5 ticket punched for Cage 2 at 17:45. The clip is closed. The kiosk notice from Brandt said riders may unclip at the barrier; the clip needs two hands, and a rider holding a bag has one.",
         "roomIndex": 0,
-        "enemyId": "husk"
+        "enemyId": "husk",
+        "authorIndex": 2,
+        "eventIndex": 5
       },
       {
         "kind": "remains",
-        "title": "Platform warden's lamp",
-        "source": "a warden's signal lamp, lens cracked",
-        "text": "Wardens kept the crowds in line with these, one flash to hold, two to board. They kept doing it after the crowds were gone, flashing hold at empty platforms, and somewhere along the way the lamp stopped being a lamp and started being an argument.",
+        "title": "Barrier lamp, Platform 3",
+        "source": "signal lamp on a bent tripod, lens hot",
+        "text": "Signal lamp, Platform 3 issue, on its tripod. One flash holds, two flashes board. Ramaswami's log has it flashing hold at 1,100 riders from 17:30 on Day 4 until the battery went. Somebody has since wired it to the handrail current.",
         "roomIndex": 0,
-        "enemyId": "sentinel"
+        "enemyId": "sentinel",
+        "authorIndex": 1,
+        "eventIndex": 3
       },
       {
         "kind": "remains",
-        "title": "Relay core fragment",
-        "source": "a shard of switching core, humming",
-        "text": "Six voices at once, all of them routing, none of them agreeing. The Guardian was the relay's own switching heart, defending the one world it had left to route to. Hold the shard to your ear and it will offer you a connection; do not accept.",
+        "title": "Marshal's load rig",
+        "source": "steel load rig, belt rings sheared",
+        "text": "Cage marshal's load rig, rated 120 kg. The marshal counted riders into the cage and stopped the count at 40. Vik's tag on the Gallery 12 rail puts six cages on four trunks from Day 3, 11:20. The rig's counter reads 61.",
         "roomIndex": 0,
-        "enemyId": "guardian"
+        "enemyId": "warden",
+        "authorIndex": 0,
+        "eventIndex": 2
+      },
+      {
+        "kind": "remains",
+        "title": "Brake lever, Winch House 40",
+        "source": "lever head snapped off the winch brake",
+        "text": "Winch House 40 brake lever, cast iron, snapped 10 cm above the pivot. Vik measured the four trunks on Day 6 through the bolted door: 44 mm each, at full speed with nothing on them. Osei gave her the same answer he gave Brandt. The timetable is being held.",
+        "roomIndex": 0,
+        "enemyId": "guardian",
+        "authorIndex": 0,
+        "eventIndex": 6
       }
     ],
     "attunements": [
       {
         "effectId": "bolt_ward",
-        "name": "Warden's Two Flashes",
-        "description": "Hold, then board: the platform wardens' signal, learned, makes the tower's bolts hesitate around you."
+        "name": "Two Flashes",
+        "description": "Enemy bolts deal 25% less. Ramaswami's signal lamp, Platform 3 issue: one flash holds, two flashes board."
       },
       {
         "effectId": "dash_echo",
-        "name": "Trunk 4, Cut",
-        "description": "A dash through the gallery drags live cable behind it; what follows you gets the charge."
+        "name": "Trunk 4 Parted",
+        "description": "A dash leaves a charged trail that burns what follows. Trunk 4 carried lantern current for 3 s after it parted in Cable Gallery 12."
       },
       {
         "effectId": "anchor_grace",
-        "name": "Left for Collection",
-        "description": "The spire keeps what is planted, and it has been waiting to keep something. The Anchor takes faster."
+        "name": "Tag 4-17",
+        "description": "The Anchor plants in half the time. Vik wired inspection tag 4-17 to Trunk 4 in 40 seconds; Osei needed two to countersign it."
       },
       {
         "effectId": "clear_surge",
-        "name": "Departures Clear",
-        "description": "When the board finally reads a destination, the concourse moves like a crowd that hears its train."
+        "name": "Board Clears",
+        "description": "Clearing a room grants 4 s of haste. Brandt's split-flap board took 4 s to cycle from DELAYED to a platform number, on the days it did."
       }
-    ]
+    ],
+    "terrainSkins": [
+      {
+        "featureId": "breakable_walls",
+        "name": "kiosk shutters",
+        "caption": "KIOSK SHUTTERS · break with attacks, rubble slows"
+      },
+      {
+        "featureId": "bridges",
+        "name": "gantry bridges",
+        "caption": "GANTRY BRIDGES · cross the shaft, ramps both ends"
+      },
+      {
+        "featureId": "rubble",
+        "name": "counterweight rubble",
+        "caption": "COUNTERWEIGHT RUBBLE · walking slows, dashes do not"
+      },
+      {
+        "featureId": "conduits",
+        "name": "handrail conduits",
+        "caption": "HANDRAIL CONDUITS · walking speeds up 25%"
+      }
+    ],
+    "biomes": [
+      {
+        "id": "b0-threshold-concourse",
+        "name": "Threshold Concourse",
+        "tagline": "Twelve belted riders at the barriers and a counterweight in the floor.",
+        "motifIds": [
+          "lanterns",
+          "cables"
+        ],
+        "enemyPool": [
+          "husk",
+          "sentinel"
+        ],
+        "propPool": [
+          "lantern",
+          "crate",
+          "terminal",
+          "cable_bundle"
+        ],
+        "hazards": true,
+        "layout": {
+          "linearity": 0.8,
+          "branchiness": 0.2,
+          "specials": {
+            "treasure": 1,
+            "lore": 1,
+            "rest": 1,
+            "elite": 0
+          }
+        },
+        "terrain": {
+          "features": [
+            "conduits",
+            "bridges"
+          ],
+          "layout": "crossroads",
+          "density": "sparse"
+        }
+      },
+      {
+        "id": "b1-platform-3",
+        "name": "Platform 3",
+        "tagline": "Rated for 400 and holding 1,100. One barrier line, a lamp at each end.",
+        "motifIds": [
+          "lanterns",
+          "spires"
+        ],
+        "enemyPool": [
+          "husk",
+          "sentinel",
+          "warden"
+        ],
+        "propPool": [
+          "lantern",
+          "pillar",
+          "crate"
+        ],
+        "hazards": false,
+        "layout": {
+          "linearity": 0.95,
+          "branchiness": 0.05,
+          "specials": {
+            "treasure": 1,
+            "lore": 1,
+            "rest": 0,
+            "elite": 3
+          }
+        },
+        "terrain": {
+          "features": [
+            "breakable_walls",
+            "bridges"
+          ],
+          "layout": "barricades",
+          "density": "dense"
+        }
+      },
+      {
+        "id": "b2-cable-gallery-12",
+        "name": "Cable Gallery 12",
+        "tagline": "Trunk 4's cut end swings 3 m from the rail. Four live trunks run overhead.",
+        "motifIds": [
+          "cables",
+          "spires"
+        ],
+        "enemyPool": [
+          "sentinel",
+          "husk"
+        ],
+        "propPool": [
+          "cable_bundle",
+          "pillar",
+          "monolith_shard"
+        ],
+        "hazards": true,
+        "layout": {
+          "linearity": 0.7,
+          "branchiness": 0.3,
+          "specials": {
+            "treasure": 1,
+            "lore": 2,
+            "rest": 0,
+            "elite": 2
+          }
+        },
+        "terrain": {
+          "features": [
+            "conduits",
+            "bridges",
+            "rubble"
+          ],
+          "layout": "barricades",
+          "density": "dense"
+        }
+      },
+      {
+        "id": "b3-kiosk-row",
+        "name": "Kiosk Row",
+        "tagline": "Brandt's kiosk and 9 shuttered stalls, stock still on the shelves.",
+        "motifIds": [
+          "lanterns"
+        ],
+        "enemyPool": [
+          "husk",
+          "warden"
+        ],
+        "propPool": [
+          "crate",
+          "terminal",
+          "lantern"
+        ],
+        "hazards": false,
+        "layout": {
+          "linearity": 0.3,
+          "branchiness": 0.7,
+          "specials": {
+            "treasure": 2,
+            "lore": 2,
+            "rest": 1,
+            "elite": 1
+          }
+        },
+        "terrain": {
+          "features": [
+            "breakable_walls"
+          ],
+          "layout": "scattered",
+          "density": "balanced"
+        }
+      },
+      {
+        "id": "b4-cage-2-shaft",
+        "name": "Cage 2 Shaft",
+        "tagline": "Forty storeys of open shaft on gantry bridges. Cage 2's rails end at storey 31.",
+        "motifIds": [
+          "spires",
+          "cables"
+        ],
+        "enemyPool": [
+          "sentinel",
+          "warden",
+          "husk"
+        ],
+        "propPool": [
+          "pillar",
+          "cable_bundle",
+          "monolith_shard"
+        ],
+        "hazards": true,
+        "layout": {
+          "linearity": 0.6,
+          "branchiness": 0.4,
+          "specials": {
+            "treasure": 1,
+            "lore": 1,
+            "rest": 1,
+            "elite": 2
+          }
+        },
+        "terrain": {
+          "features": [
+            "bridges",
+            "rubble"
+          ],
+          "layout": "crossroads",
+          "density": "balanced"
+        }
+      },
+      {
+        "id": "b5-rope-store",
+        "name": "Rope Store",
+        "tagline": "Vik's store: 6 spare trunks on drums, a tag on every one, and a kettle.",
+        "motifIds": [
+          "cables",
+          "ruined_machinery"
+        ],
+        "enemyPool": [
+          "husk"
+        ],
+        "propPool": [
+          "cable_bundle",
+          "crate",
+          "terminal"
+        ],
+        "hazards": false,
+        "layout": {
+          "linearity": 0.35,
+          "branchiness": 0.35,
+          "specials": {
+            "treasure": 1,
+            "lore": 2,
+            "rest": 2,
+            "elite": 1
+          }
+        },
+        "terrain": {
+          "features": [
+            "breakable_walls",
+            "conduits"
+          ],
+          "layout": "scattered",
+          "density": "sparse"
+        }
+      },
+      {
+        "id": "b6-marshals-mess",
+        "name": "Marshals' Mess",
+        "tagline": "Two locked mess rooms, 40 load rigs on hooks, the Day 5 rota still on the wall.",
+        "motifIds": [
+          "lanterns",
+          "ruined_machinery"
+        ],
+        "enemyPool": [
+          "warden",
+          "husk"
+        ],
+        "propPool": [
+          "crate",
+          "lantern",
+          "pillar"
+        ],
+        "hazards": false,
+        "layout": {
+          "linearity": 0.55,
+          "branchiness": 0.45,
+          "specials": {
+            "treasure": 2,
+            "lore": 1,
+            "rest": 0,
+            "elite": 3
+          }
+        },
+        "terrain": {
+          "features": [
+            "breakable_walls",
+            "bridges"
+          ],
+          "layout": "barricades",
+          "density": "balanced"
+        }
+      },
+      {
+        "id": "b7-winch-house-40",
+        "name": "Winch House 40",
+        "tagline": "Osei at the brake, four trunks turning on the drum with nothing on them.",
+        "motifIds": [
+          "spires",
+          "monoliths",
+          "cables"
+        ],
+        "enemyPool": [
+          "guardian",
+          "warden",
+          "sentinel",
+          "husk"
+        ],
+        "propPool": [
+          "pillar",
+          "monolith_shard",
+          "cable_bundle",
+          "lantern"
+        ],
+        "hazards": true,
+        "layout": {
+          "linearity": 0.5,
+          "branchiness": 0.5,
+          "specials": {
+            "treasure": 2,
+            "lore": 2,
+            "rest": 2,
+            "elite": 4
+          }
+        },
+        "terrain": {
+          "features": [
+            "breakable_walls",
+            "bridges",
+            "rubble",
+            "conduits"
+          ],
+          "layout": "crossroads",
+          "density": "dense"
+        }
+      }
+    ],
+    "bible": {
+      "premise": "Vantage Spire is a 40-storey passenger relay tower: six lift cages on five trunk cables, 9,000 riders a day through Founders' Week.",
+      "collapse": "Rope inspector Hanne Vik condemned Trunk 4 at 41 mm on Founders' Day 2 and superintendent Marek Osei signed it back into service. It parted on Day 3. On Day 5 at 17:40 Cage 2's counterweight dropped 40 storeys into the Threshold Concourse and shorted the lantern circuits into every handrail in the tower.",
+      "people": [
+        {
+          "name": "Marek Osei",
+          "job": "line superintendent",
+          "want": "9,000 riders a day through all seven days of Founders' Week"
+        },
+        {
+          "name": "Hanne Vik",
+          "job": "rope inspector",
+          "want": "Trunk 4 out of service and the cages stopped"
+        },
+        {
+          "name": "Dev Ramaswami",
+          "job": "platform warden, Platform 3",
+          "want": "his 18:00 relief to turn up so he can collect Priya from the school gate"
+        },
+        {
+          "name": "Lotte Brandt",
+          "job": "ticket clerk, Threshold Concourse kiosk",
+          "want": "the split-flap board repaired, as requested on four forms"
+        }
+      ],
+      "places": [
+        "Threshold Concourse",
+        "Platform 3",
+        "Cable Gallery 12",
+        "Winch House 40",
+        "Cage 2"
+      ],
+      "objects": [
+        "Trunk 4",
+        "the split-flap board",
+        "Cage 2's counterweight",
+        "the signal lamp",
+        "inspection tag 4-17"
+      ],
+      "events": [
+        {
+          "date": "Day 1, 06:00",
+          "fact": "Osei opened all six cages for Founders' Week; 9,400 riders went up the spire before midnight."
+        },
+        {
+          "date": "Day 2, 09:15",
+          "fact": "Vik measured Trunk 4 at 41 mm against a 46 mm minimum, wired inspection tag 4-17 to it marked CONDEMNED, and Osei countersigned the tag IN SERVICE."
+        },
+        {
+          "date": "Day 3, 11:20",
+          "fact": "Trunk 4 parted in Cable Gallery 12; Osei ran all six cages on the four remaining trunks."
+        },
+        {
+          "date": "Day 4, 17:30",
+          "fact": "Ramaswami counted 1,100 riders on Platform 3, rated for 400, and radioed Winch House 40 twice with no answer."
+        },
+        {
+          "date": "Day 5, 17:40",
+          "fact": "Cage 2's counterweight dropped 40 storeys into the Threshold Concourse and the lantern current shorted into the handrails."
+        },
+        {
+          "date": "Day 5, 17:52",
+          "fact": "Brandt's split-flap board locked every line on DELAYED; 300 riders in cage belts stayed clipped in at the barriers."
+        },
+        {
+          "date": "Day 6, 04:00",
+          "fact": "Osei bolted Winch House 40 from inside and kept the four trunks turning with no cage on any of them."
+        }
+      ],
+      "authors": [
+        {
+          "name": "Hanne Vik",
+          "document": "rope inspection tags",
+          "register": "Millimetres, tonnes, dates. One measurement per line. The verdict in capitals at the end, then her initials.",
+          "never": "writes an adjective without a number beside it"
+        },
+        {
+          "name": "Dev Ramaswami",
+          "document": "platform warden's log",
+          "register": "Times to the minute, headcounts, radio calls logged as sent and answered. Addresses the relief warden, Sanjay, by name.",
+          "never": "blames a rider"
+        },
+        {
+          "name": "Lotte Brandt",
+          "document": "kiosk notices and maintenance request forms",
+          "register": "Printed notices, form numbers, 'as previously requested'. Counts how many times she has asked. Signs L. Brandt.",
+          "never": "uses an exclamation mark"
+        }
+      ],
+      "enemies": [
+        {
+          "enemyId": "husk",
+          "formerJob": "Founders' Week riders still clipped into their cage belts"
+        },
+        {
+          "enemyId": "sentinel",
+          "formerJob": "barrier lamps on tripods, wired to the handrail current"
+        },
+        {
+          "enemyId": "warden",
+          "formerJob": "cage marshals in their load rigs"
+        },
+        {
+          "enemyId": "guardian",
+          "formerJob": "the Winch House 40 drum, Osei at the brake"
+        }
+      ]
+    },
+    "biomeRoomLines": [],
+    "laws": [
+      {
+        "lawId": "sealed_halls",
+        "name": "Barrier Drop",
+        "description": "Every fighting room is split by a barrier gate with the exit beyond it. Ramaswami dropped the Platform 3 barriers at 17:40 on Day 5 and nobody has lifted them.",
+        "intensity": 0.6
+      },
+      {
+        "lawId": "wardens_watch",
+        "name": "Marshals on Shift",
+        "description": "A third of what stands here is a cage marshal in a load rig: ringed, tougher, better drops. Osei kept 40 marshals on shift through Day 5.",
+        "intensity": 0.5
+      },
+      {
+        "lawId": "slow_fire",
+        "name": "Handrail Current",
+        "description": "Within 3 tiles of a live hazard everything but a dash moves at half speed. The lantern circuits have run through every handrail since Cage 2 fell.",
+        "intensity": 0.5
+      }
+    ],
+    "look": {
+      "paletteFamily": "ink_neon",
+      "floorMaterial": "plates",
+      "wallStyle": "girder",
+      "lighting": "rim",
+      "atmosphere": "sparks",
+      "atmosphereDensity": 0.5,
+      "skylineDepth": 0.8,
+      "grain": 0.2
+    },
+    "custodian": {
+      "title": "Osei, Winch House 40",
+      "phaseTitles": [
+        "Four trunks turning",
+        "Cage 2 loose in the shaft",
+        "Brake lever snapped"
+      ],
+      "moves": [
+        {
+          "patternId": "siege_charge",
+          "name": "Cage 2's counterweight",
+          "tell": "COUNTERWEIGHT DROPS DOWN THE LANE. STEP ONE TILE ASIDE."
+        },
+        {
+          "patternId": "ring_bloom",
+          "name": "Handrail current",
+          "tell": "12 BOLTS OFF THE HANDRAILS, THEN 12 MORE. DASH A GAP."
+        },
+        {
+          "patternId": "gravity_well",
+          "name": "Trunk 4",
+          "tell": "TRUNK 4 WINDS ON. THE FLOOR SLIDES TO THE DRUM FOR 2 S."
+        }
+      ]
+    }
   },
   "art": {
     "paletteFamily": "ink-neon",
@@ -218,7 +753,7 @@
       "id": "vantage-spire-room-0",
       "index": 0,
       "name": "Threshold Concourse",
-      "description": "The arrival platform. Lanterns still burn over abandoned crates.",
+      "description": "Twelve belted riders at the barriers, facing the split-flap board. The handrails spark. The iron block in the floor is Cage 2's counterweight.",
       "width": 25,
       "height": 15,
       "tiles": [
@@ -301,79 +836,83 @@
           "x": 12,
           "y": 12,
           "fragmentIndex": 1
+        },
+        {
+          "id": "room-0-relic-4",
+          "x": 18,
+          "y": 12,
+          "fragmentIndex": 4
         }
       ]
     },
     {
       "id": "vantage-spire-room-1",
       "index": 1,
-      "name": "Cable Gallery",
-      "description": "A long gallery where severed trunk cables hang and spark.",
-      "width": 28,
-      "height": 15,
+      "name": "Cable Gallery 12",
+      "description": "Barrier lamps on tripods fire down the walkway from the far end. Trunk 4's cut end swings across the gallery at head height.",
+      "width": 24,
+      "height": 13,
       "tiles": [
-        "############################",
-        "#..........................#",
-        "#..::......................#",
-        "#..::.####.................#",
-        "#..::......................#",
-        "#..::..~~~~................#",
-        "#..........................#",
-        "#P.........................X",
-        "#..........................#",
-        "#...........>..............#",
-        "#........###=###..++++++++.#",
-        "#...........>.....#...>....#",
-        "#...........::.....###=###.#",
-        "#...........::....++++>....#",
-        "############################"
+        "########################",
+        "#.........++++......::.#",
+        "#.........>.........::.#",
+        "#...######=###......::.#",
+        "#.........>.....~~~~::.#",
+        "#......................#",
+        "#P.....................X",
+        "#......................#",
+        "#........>++++....++++.#",
+        "#.....###=###...####...#",
+        "#........>..........::.#",
+        "#...................::.#",
+        "########################"
       ],
       "props": [
         {
           "id": "room-1-prop-0",
           "propId": "cable_bundle",
-          "x": 18,
-          "y": 12
+          "x": 9,
+          "y": 2
         },
         {
           "id": "room-1-prop-1",
           "propId": "lantern",
-          "x": 3,
+          "x": 9,
           "y": 1
         },
         {
           "id": "room-1-prop-2",
           "propId": "monolith_shard",
-          "x": 7,
-          "y": 12
+          "x": 9,
+          "y": 4
         },
         {
           "id": "room-1-prop-3",
           "propId": "crystal_cluster",
-          "x": 14,
-          "y": 3
+          "x": 8,
+          "y": 8
         }
       ],
       "encounters": [
         {
           "id": "room-1-encounter-0",
           "enemyId": "husk",
-          "x": 14,
-          "y": 2,
+          "x": 8,
+          "y": 4,
           "count": 1
         },
         {
           "id": "room-1-encounter-1",
           "enemyId": "sentinel",
-          "x": 7,
-          "y": 10,
+          "x": 8,
+          "y": 2,
           "count": 1
         }
       ],
       "exits": [
         {
-          "x": 27,
-          "y": 7,
+          "x": 23,
+          "y": 6,
           "toRoomIndex": 2,
           "direction": "east"
         }
@@ -383,65 +922,74 @@
       "relics": [
         {
           "id": "room-1-relic-2",
-          "x": 14,
-          "y": 5,
+          "x": 20,
+          "y": 9,
           "fragmentIndex": 2
+        },
+        {
+          "id": "room-1-relic-3",
+          "x": 11,
+          "y": 4,
+          "fragmentIndex": 3
         }
       ]
     },
     {
       "id": "vantage-spire-room-2",
       "index": 2,
-      "name": "Anchor Vault",
-      "description": "The spire's core. The Guardian waits between the operatives and the Anchor site.",
-      "width": 25,
-      "height": 12,
+      "name": "Winch House 40",
+      "description": "Osei stands at the brake lever with four trunks turning on the drum behind him. The Anchor site is 6 m to his left, under the tally board.",
+      "width": 28,
+      "height": 15,
       "tiles": [
-        "#########################",
-        "#.............::........#",
-        "#...#.........::..+.B...#",
-        "#...#.........::.+++B...#",
-        "#.............::..+.....#",
-        "#.......................#",
-        "#P....................A.#",
-        "#.......................#",
-        "#...#........>....+.B...#",
-        "#...#......B#=##.+++#...#",
-        "#............>....+.....#",
-        "#########################"
+        "############################",
+        "#...::.....................#",
+        "#...::#..............#.....#",
+        "#...>................#.....#",
+        "#.##=##....................#",
+        "#...>......................#",
+        "#..........................#",
+        "#P.......................A.#",
+        "#..........................#",
+        "#..........................#",
+        "#......................+...#",
+        "#.....B::.........+..B+++..#",
+        "#.....B::........+++.B.+...#",
+        "#.................+........#",
+        "############################"
       ],
       "props": [
         {
           "id": "room-2-prop-0",
           "propId": "anchor_pedestal",
-          "x": 22,
-          "y": 6
+          "x": 25,
+          "y": 7
         },
         {
           "id": "room-2-prop-1",
           "propId": "lantern",
-          "x": 19,
+          "x": 7,
           "y": 10
         },
         {
           "id": "room-2-prop-2",
           "propId": "monolith_shard",
-          "x": 22,
-          "y": 1
+          "x": 3,
+          "y": 5
         },
         {
           "id": "room-2-prop-3",
           "propId": "pillar",
-          "x": 20,
-          "y": 10
+          "x": 7,
+          "y": 13
         }
       ],
       "encounters": [
         {
           "id": "room-2-encounter-0",
           "enemyId": "guardian",
-          "x": 22,
-          "y": 4,
+          "x": 4,
+          "y": 9,
           "count": 1
         }
       ],
@@ -450,24 +998,24 @@
       "attributions": [],
       "relics": [
         {
-          "id": "room-2-relic-3",
-          "x": 15,
-          "y": 8,
-          "fragmentIndex": 3
+          "id": "room-2-relic-5",
+          "x": 3,
+          "y": 2,
+          "fragmentIndex": 5
         }
       ],
       "anchorRelays": [
         {
-          "x": 11,
+          "x": 13,
           "y": 1
         },
         {
-          "x": 10,
-          "y": 10
+          "x": 12,
+          "y": 13
         },
         {
-          "x": 18,
-          "y": 1
+          "x": 20,
+          "y": 13
         }
       ]
     }
