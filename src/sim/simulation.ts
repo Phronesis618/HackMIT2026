@@ -50,6 +50,12 @@ import {
 import { TRAINING_REGEN_PER_TICK, TRAINING_RESPAWN_MS, TRAINING_WAKE_RANGE, trainingRoom } from './training';
 import { DOOR_SIDES, FLOOR_ENTRANCE_ROOM_ID } from '../shared/floors';
 import { NEUTRAL_LAWS, applyEncounterLaws, lawsSpareEncounter, resolveLaws, worldLawsView, type ResolvedLaws } from './laws';
+import {
+  NO_EFFECTS, anchorRateMul, clearBonusResources, clearHasteMs, dashCooldownMul, dashInvulnerableBonusMs, dropTrailPoint, effectsFor,
+  hasteAttackCooldownMul, hasteMoveMul, incomingDamageMul, outgoingDamageMul, relicMendHp, remainsCharge, skillWorldContext, stepDashTrail,
+  DASH_TRAIL_DAMAGE, type DashTrail, type EffectSet,
+} from './effects';
+import { buildSkillTree, skillPurchaseCheck } from '../shared/skills';
 import { createRoomProvider, type RoomProvider } from './floorProvider';
 import {
   FLOOR_TUNING, TREASURE_REWARD, advanceBiome, clearReward, connectedTiles, createFloorsRun, doorArrival, floorRunState, focusPoint,
@@ -76,6 +82,11 @@ interface PlayerRuntime {
   history: Array<Point & { hp: number }>;
   /** T1: damaging-tile bookkeeping; derived from sim state, never serialised. */
   hazard: HazardClock;
+  /** S1: `effectsFor(state, world)`, cached; refreshed on purchase, class change and world change. */
+  effects: EffectSet;
+  /** S1: clear_surge haste left, and the dash_echo burn trail; both derived, never serialised. */
+  hasteMs: number;
+  trail: DashTrail | null;
 }
 
 interface EnemyRuntime {
@@ -165,6 +176,12 @@ export interface Simulation {
   /** Floors: vote while the biome choice is open; the host's vote moves the crew on the next step. */
   chooseBiome(playerId: string, biomeId: string): void;
   unlockAbility(playerId: string): GameEvent[];
+  /**
+   * Buys one skill-tree node for one operative with their own resources (S1). Authoritative:
+   * refuses unknown, planned, owned, unmet-prerequisite or unaffordable nodes. Returns whether
+   * the purchase happened; the result is visible in `PlayerState.skillNodeIds` and `resources`.
+   */
+  purchaseSkill(playerId: string, nodeId: string): boolean;
   /** Buttons are pressed this tick; interact is held this tick. */
   applyIntent(intent: PlayerIntent): void;
   step(): GameEvent[];
@@ -252,6 +269,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     p.history = [];
     p.onExit = false;
     p.hazard = createHazardClock();
+    p.hasteMs = 0;
+    p.trail = null;
   }
 
   function doorsLocked(): boolean {
@@ -706,8 +725,12 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       intent: null, unlockedClasses: new Set(), dashRemainingMs: 0,
       dashDirection: { x: 1, y: 0 }, attackRemainingMs: 0, hitRemainingMs: 0,
       onExit: false, interacting: false, interactHeld: false, interactPressed: false, damagedThisTick: false, history: [],
-      hazard: createHazardClock(),
+      hazard: createHazardClock(), effects: NO_EFFECTS, hasteMs: 0, trail: null,
     };
+  }
+
+  function refreshEffects(p: PlayerRuntime): void {
+    p.effects = effectsFor(p.state, world);
   }
 
   function livingEnemies(): EnemyRuntime[] {
@@ -854,6 +877,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (scaled && enemyDamageScale !== 1 && sourceEnemyId !== 'anchor-pulse' && !isTerrainDamageSource(sourceEnemyId)) {
       damage = Math.round(damage * enemyDamageScale);
     }
+    const wardMul = incomingDamageMul(p.effects, sourceEnemyId, ranged);
+    if (wardMul !== 1) damage = Math.round(damage * wardMul);
     let amount = Math.min(s.hp, s.shieldMs > 0 ? Math.ceil(damage * 0.2) : damage);
     // Training range: hits land (so the telegraphs teach), but nobody goes down.
     if (phase === 'training') amount = Math.min(amount, Math.max(0, s.hp - 1));
@@ -1746,6 +1771,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         p.state.classId = identity.classId;
         p.state.abilityEUnlocked = p.unlockedClasses.has(identity.classId);
         resetTransient(p);
+        refreshEffects(p);
       }
     },
     getPlayerIds: playerIds,
@@ -1759,6 +1785,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       }
       world = next;
       worldLaws = resolveLaws(worldLawsView(next, options.deriveLaws).laws);
+      for (const p of players.values()) refreshEffects(p);
       // Outside a run the provider follows the latest copy of the world (briefs may arrive late).
       if (!floorsRun) roomProvider = next?.floors ? (options.roomProvider ?? createRoomProvider)(next) : null;
     },
@@ -1825,6 +1852,17 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       p.unlockedClasses.add(p.state.classId);
       return [emit({ type: 'ability_unlocked', playerId, abilityId: CLASS_ABILITIES[p.state.classId].e,
         cost: ABILITY_UNLOCK_COST, remainingResources: p.state.resources })];
+    },
+    purchaseSkill(playerId, nodeId) {
+      const p = players.get(playerId);
+      if (!p || phase === 'debrief' || p.state.hp <= 0) return false;
+      const tree = buildSkillTree(p.state.classId, skillWorldContext(world));
+      const owned = p.state.skillNodeIds ?? [];
+      if (skillPurchaseCheck(tree, nodeId, owned, p.state.resources) !== null) return false;
+      p.state.resources -= tree.nodes.find((n) => n.id === nodeId)!.cost;
+      p.state.skillNodeIds = [...owned, nodeId];
+      refreshEffects(p);
+      return true;
     },
     setHostPlayerId(playerId) {
       hostPlayerId = playerId;
