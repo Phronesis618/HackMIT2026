@@ -54,6 +54,34 @@ These are the acceptance criteria for a tile, not prose. A proposed tile that fa
   group) goes in an additive `terrainLinks` side-table, not a second char. Char budget is scarce.
 - **R6 — Snapshot cost is bounded.** Per-tile mutable state is a sparse record keyed `"col,row"`,
   capped at 2048 entries, exactly like `TerrainState.wallDamage` already is.
+- **R7 — Attribution is preserved.** See §1.1: the sim currently has no way to damage an enemy without
+  a player. Every tile here needs that, and there is exactly one right way to add it.
+
+### 1.1 · The one piece of plumbing every tile here needs
+
+`damageEnemy(e, p: PlayerRuntime, damage, events)` (`simulation.ts:282`) requires a player, because it
+credits `p.state.ultCharge` and stamps `enemy_defeated.byPlayerId`, which is `IdString` and **not
+nullable**. There is no enemy-vs-enemy or terrain-vs-enemy damage path in the codebase at all.
+
+Add one function, used by every tile in §2 and by the `unstable_matter` world law:
+
+```ts
+type DamageSource =
+  | { kind: 'player'; player: PlayerRuntime }
+  | { kind: 'terrain'; tile: string }                      // 'hazard' | 'vent' | 'pit' | 'canister'
+  | { kind: 'displaced'; by: PlayerRuntime | null };        // knocked/pulled into something lethal
+
+function damageEnemyFrom(e, source: DamageSource, damage, events): void
+```
+
+Rules:
+- `kind: 'player'` behaves exactly as today. **No behaviour change, no test churn.**
+- `kind: 'displaced'` with a non-null `by` credits ult charge and `byPlayerId` normally — *if you knock
+  something into a pit, you killed it.* This is the whole reason pits are fun and it must not be lost.
+- `kind: 'terrain'` (and `displaced` with `by: null`) credits nobody. It needs
+  `enemy_defeated.byPlayerId` to become `IdString.nullable()` — **one character in `contracts.ts`**,
+  plus one `?? 'the room'` in whatever the Chronicle renders. Do not fake a player id; the honesty rule
+  in PRODUCT.md applies to the memory wall and a fabricated kill credit would reach it.
 
 ## 2 · The tiles
 
@@ -167,8 +195,10 @@ same tick-ordered inputs (co-op desync guard).
 
 **Sim rules.** `o` joins `SOLID_TILES` for `moveCircle`, but:
 
-- **Projectiles pass over it.** `stepProjectiles` already tests solidity — add an `allowOverPit` flag so
-  bolts and beams cross. `clearPath` ignores `o`.
+- **Projectiles pass over it.** `stepProjectiles` tests `circleHitsSolid(grid, …)` at
+  `simulation.ts:449`. Build a **second** `SolidGrid` — `projectileGrid = buildSolidGrid(room, broken,
+  { pitsSolid: false })` — and point projectiles and `clearPath` at that one. Two grids, rebuilt on the
+  same ticks the existing one is.
 - **Dashes cross it.** While `dashRemainingMs > 0` a player's collision ignores `o`. A dash covers
   96 px = 3 tiles, so any gap of ≤ 2 tiles is dashable with margin.
 - **Dash ending over a pit:** the player is snapped to `nearestOpenPosition` and takes
