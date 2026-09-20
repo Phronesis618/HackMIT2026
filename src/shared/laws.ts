@@ -220,17 +220,18 @@ const DEFAULT_MOVE_TEXT: Record<(typeof DEFAULT_CUSTODIAN_MOVES)[number], { name
 
 // Single source of truth for the recipe's Custodian slot is src/shared/custodian.ts (agent B1's
 // runtime reads it). Re-exported here so the generation pipeline keeps importing from laws.ts.
-import { CustodianSchema, CustodianMoveSchema, type CustodianRecipe } from './custodian';
+import { CustodianSchema, CustodianMoveSchema, movesAreLegal, type CustodianRecipe } from './custodian';
 export { CustodianSchema, CustodianMoveSchema };
 export type Custodian = CustodianRecipe;
 
-/** True when the three moves are legal under BOSS_FINALE section 2.1. */
+/**
+ * True when the three moves are legal under BOSS_FINALE section 2.1. One rule, one owner:
+ * this defers to `movesAreLegal` in custodian.ts, which the boss runtime uses. Callers here
+ * hold a count of the non-boss cast rather than the cast itself, so a pool of that size is
+ * synthesised; `movesAreLegal` only ever counts its non-guardian entries.
+ */
 export function custodianMovesValid(patternIds: readonly CustodianPatternId[], nonBossPoolSize: number): boolean {
-  const classes = patternIds.map((id) => CUSTODIAN_PATTERN_INFO[id].class);
-  return new Set(patternIds).size === 3
-    && classes.filter((c) => c === 'arena').length <= 1
-    && classes.includes('close') && classes.includes('ranged')
-    && (!patternIds.includes('summon_choir') || nonBossPoolSize >= 2);
+  return movesAreLegal(patternIds, Array.from({ length: Math.max(0, nonBossPoolSize) }, () => 'husk' as const));
 }
 
 /**

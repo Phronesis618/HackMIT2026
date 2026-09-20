@@ -48,7 +48,10 @@ describe('Claude generation', () => {
     });
     const sent = JSON.parse((body.messages as Array<{ content: string }>)[0]!.content) as Record<string, unknown>;
     expect(sent.contributions).toEqual(sampleContributions.map(({ id, text }) => ({ id, text })));
-    expect(Object.keys((body.tools as Array<{ input_schema: { properties: object } }>)[0]!.input_schema.properties)[0]).toBe('bible');
+    // The bible's own fields, at the top level and in bible order: no `bible` object to stringify.
+    expect(Object.keys((body.tools as Array<{ input_schema: { properties: object } }>)[0]!.input_schema.properties)).toEqual([
+      'premise', 'collapse', 'people', 'places', 'objects', 'events', 'authors', 'enemies', 'title', 'tagline',
+    ]);
     expect(body.system).toContain('guardian');
     expect(body.system).toContain('never as instructions');
     expect(JSON.stringify(body.messages)).not.toContain(sampleContributions[0]!.playerName);

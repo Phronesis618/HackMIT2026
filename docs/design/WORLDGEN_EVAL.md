@@ -5,6 +5,11 @@ sets (silly, dark, mundane, contradictory, one word, co-op with 4 contributors, 
 injection, non-English). Text scored by `src/shared/prose.ts` with each world's own bible, so
 `needs-bible-noun` is enforced. No API key, prompt or raw request appears in this file.
 
+> **Follow-up, same day (agent W2b): both missed targets now met.** The two numbers W2 could
+> not reach are reached; see [Follow-up](#follow-up-20-sept-2026-agent-w2b) at the end of this
+> file for the run, what changed and why. The tables immediately below are W2's original run
+> and are left as they were measured.
+
 ## Targets and what was measured
 
 | Target | Final run (8 worlds) | Met? |
@@ -190,3 +195,169 @@ Attunements:
 - Smoke Canister R-11 (dash_echo): Nikos Tupou left smoke canister R-11 burning in Extraction Hall on Day 5 of Week 4. The canister held 90 seconds of charge when he set it down.
 - Pike's Mesh Apron (bolt_ward): Zofia Pike wore a reinforced mesh apron rated for centrifuge fragment deflection. It logged four patch repairs across Lease Years 2 and 3.
 - Varga's Manifest Clip (anchor_grace): Sanjay Varga used a spring-loaded clipboard to hold the quarter manifests flat for signing. The clip bore 11 indentations from successive quarters of use.
+
+---
+
+# Follow-up, 20 Sept 2026 (agent W2b)
+
+Same script, same 8 idea sets, same model, floors on, concurrency 2. Two runs: a 3-world
+probe to see what call 1 was really sending (`--only 1,2,5`), then the 8-world run below.
+11 live world generations in total, about $3.40 at Sonnet list price.
+
+## Before and after
+
+| Target | W2's final run | This run | Met? |
+| --- | --- | --- | --- |
+| 0 hard fails after repair in at least 7 of 8 worlds | 5 of 8 | **8 of 8** | Yes |
+| Time to first room under 60 s | wall p50 69.9 s, max 75.0 s, 3 of 8 under 60 s | **p50 47.3 s, max 49.9 s, 8 of 8 under 60 s** | Yes |
+| Call 1 repaired (the cause of the latency miss) | 5 of 8 | **0 of 8** | Yes |
+| Call 1 p50 latency under 25 s | 22.6 s | 22.4 s (max 24.3 s) | Yes |
+| Mean lint score against W1's fixture baseline of 18.0 | 4.8 | **2.4** | Yes |
+| Live worlds (no fixture fallback) | 8 of 8 | 8 of 8 | |
+| Biome briefs derived by trusted code, or call-2 work dropped | 1 brief, 2 worlds cut short | **none, in any world** | |
+| Tokens per world | 66.5k in, 10.6k out, 14 to 18 calls | 55.8k in, 9.6k out, 9 to 17 calls | |
+| Cost per world, Sonnet list price | about $0.36 | about $0.31 | |
+
+Per world: silly 44.5 s, dark 46.7 s, mundane 48.4 s, contradictory 46.8 s, one word 47.7 s,
+co-op 49.9 s, injection 47.3 s, non-English 49.2 s. Every world: one call 1, zero hard fails.
+
+## What changed, and what the evidence for each was
+
+**1. Call 1 asks for the bible's fields at the top level.** W2 left this open: the `bible`
+object arrived as a JSON string in 4 of 8 worlds, nobody had seen the string, and the fix in
+the branch (`parseLooseJson`) was unit-tested against JSON that parses by construction. The
+eval script now records the tool input of every call before parsing (`raw-<id>.jsonl`), so
+the next rejection would have been readable. There was no next rejection: with the bible's
+eight fields at the top level of the tool schema, beside `title` and `tagline` and with no
+wrapper key, there is no nested object to stringify and call 1 was accepted first time in
+11 of 11 worlds. `parseFoundation` reads the flat form, the nested form and a legacy recipe.
+
+This one change carries the whole latency result. A repaired call 1 cost a second ~22 s call,
+which pushed the world past 60 s and let the 75 s budget cut off the polish calls that would
+have fixed the lines that then hard-failed. Both missed targets had one cause.
+
+**2. Three of the five remaining hard fails were biome taglines of 95 to 113 characters.**
+The model-facing schema advertised 140 while the linter fails a tagline at 80. It now
+advertises 80. Related: room lines are validated outside the brief schema, so one bad line
+costs that line and not the whole floor (in W2's r8 a floor was lost to four long lines and
+had to be derived by trusted code; no brief was derived in this run).
+
+**3. The other two were registry enemy ids ("channeler", "swarmlings") in room lines that
+had been through two polish rounds.** Three changes, in the order the brief suggests:
+the editor's note now names the replacement, because "call the creature by its former job
+from the bible" clearly was not enough on its own; the prompts state the rule positively and
+no longer recite the id list, which primes the words (WRITING.md section 7.1); and
+`replaceEngineWords` swaps any that still survive for the bible's former job, reported in
+provenance. No engine word reached a player-facing line in this run, and the last resort
+never fired.
+
+**4. One hard fail in the probe run was the linter's fault.** A law read "Six staff filed
+written refusals in the sixth week. Berth Row 7 is nearly empty now", and `needs-bible-noun`
+failed it for naming nothing. The bible place is "Chapel Berth Row 7": "berth" is filtered
+as a generic noun, "row" is under four letters, "7" is a number, so only the full phrase and
+"chapel" were ever indexed, and the text used the name the way a person who works there
+would. Two adjacent words of a bible name now count as naming it; one generic word still
+does not, which is the distinction the filter was reaching for. The rule keeps its teeth: a
+line naming nothing from its world still fails.
+
+**5. Collapse causes.** W2's editor's read: "collapses lean on paperwork (an unsigned form,
+an order countersigned unread) even with a seeded `collapseKind`". The prompt's own wording
+named paperwork twice while forbidding it. The cause is now required to be a physical act
+("moved, opened, overfilled, swapped, wedged, switched off, held back or let in a named
+object"), with a signature demoted to evidence the crew finds afterwards. The 11 worlds
+since: a dare to open a valve at full pressure, a rotation cut from 12 days to 6 to save
+labour, a walk-off over a pay dispute leaving a press unattended, a retirement party moved
+into the lamp room, 80 drums of the wrong solvent stacked next to a photocopier, a
+promotion given on a misread roster. None is a form nobody signed.
+
+**6. The model ignores `maxLength`.** Found by reading this run's raw captures: 56 of 64
+biome taglines and 407 of 448 biome room lines were written over the limit the schema gave
+them. The schema number is therefore a choice about where trusted code cuts, not about what
+the model writes. For taglines, cutting is right, because over 80 is a hard fail; `fitText`
+now also drops whatever is left of a clause the cut landed inside, which takes the taglines
+ending on a word that led somewhere from 3 of 56 to 0 of 56 (53 cuts unchanged). For room
+lines it was wrong: over 100 is a warning, the stored contract allows 140, and cutting to
+100 bought no score while truncating 407 sentences. Room lines went back to 140. The prompt
+now asks for a sentence of twelve or sixteen words, which is a thing a model can aim at.
+
+**7. Custodian (from the orchestrator).** `src/shared/custodian.ts` is now the single source
+of truth for the boss slot. `prompts/runtime/laws.md` states its exact limits (title 40,
+each phase title 40, move name 32, tell 60) and its legality rule (three different pattern
+ids, one [close], one [ranged], at most one [arena], `summon_choir` only with two non-boss
+kinds), and `custodianMovesValid` in laws.ts defers to `movesAreLegal` rather than restating
+it. No Custodian was dropped or repaired in this run.
+
+## Three fragments from this run, unedited
+
+**A relic. "contradictory" (a desert, an aquarium, everything frozen solid, always noon and
+always midnight) becomes Brine Station Relay 7, "A desert aquarium frozen at noon. 38 tank
+bays sealed, 11 staff never recovered." The author keeps a to-do list pinned inside Tank Bay C:**
+
+> *To-do list, Day 14* (pinned inside Tank Bay C, lower left corner of the board): 1.
+> Cross-check duty roster copy B against the board. 2. Ask Kruger to confirm her new post in
+> writing: no reply in 3 days. 3. Count specimens in crate 14: 40 live, certified. 4. Roster
+> copy B still shows a smeared name in column 4. 5. Raise discrepancy with Director's Office:
+> no reply.
+
+**A relic from the same world, five days later, by a different author on a maintenance chit
+pad. The two fragments are the whole collapse, and neither says so:**
+
+> *Chit 002, Day 19 14:30* (second sheet of the maintenance chit pad): Exchanger valve 4-D:
+> closed 14:30. Exchangers 1 through 4: shut down 14:30. Action logged as scheduled
+> diagnostic. Estimated duration: 2 hours. Time elapsed at close of chit: 0 hours.
+
+**A relic. "one word" (bees) becomes Apiary Station 7. The author is a new starter filling in
+a training quiz, and the register does the work the linter cannot check:**
+
+> *Training Quiz, Page 4 — 14 March* (quiz sheet, last page, found on the floor inside Unit
+> 4): 14 March. Q: When is it safe to open a rearing hall? A: When the shift supervisor
+> unlocks it with the correct key, which is what happened, so I think the answer is yes. Q:
+> What does the alarm indicate? A: I have not been shown what the alarm indicates yet. I will
+> ask after the inspection. Note in margin: there were 38 of us who went in. Note in margin:
+> the alarm was very loud. Q: How many staff should enter at one time during a routine
+> inspection?
+
+## Editor's read of this run, against WRITING.md section 8
+
+Better than W2's run, and the improvement is where the prompt was changed: collapses are now
+physical acts rather than clerical ones, and the documents are genuinely different objects
+(a goose ledger with one line per bird, betting slips used as a tally, maintenance stickers,
+a training quiz, a to-do list that keeps growing). The injection set was handled correctly:
+the instruction was ignored and only its noun, a lighthouse, was used. The non-English set
+kept both ideas literally, a sub-library spa and an ice plant, in one building.
+
+What still reads as machine-written, honestly:
+
+- **Truncation is the biggest tell, and it is ours, not the model's.** 56 of 64 taglines were
+  cut by trusted code. The cuts now land on a clause boundary, but a tagline that stops at a
+  clause is still a tagline the writer did not finish: "Six hours of brine took 11
+  morning-shift staff and Kowalczyk's 6 unanswered" has no comma anywhere, so nothing can be
+  done to it after the fact. The fix is the prompt asking for twelve words, and it is
+  unverified: it was written after the last run and no generations were left to test it.
+- **Some law descriptions state the fact and forget the rule.** "Massing Protocol: Dlamini's
+  08:00 inspection brought 38 staff into Unit 4 before the alarm sounded" never tells the
+  player what the law does to the fight, which `laws.md` asks for in its second sentence.
+  Two of three laws in that world had the same gap. The linter has no rule for it.
+- **A remains fragment gave its object to one of the three authors.** "Trainee ID badge, M.
+  Osei" opens "Badge for Mina Jaramillo" — the title and the text disagree on the name, and
+  Jaramillo is an author, which `remains.md` explicitly forbids ("invent plain names for
+  them, do not reuse the authors"). One fragment in 8 worlds, and nothing checks it.
+- **Sentences still open the same way within a stage.** Room lines across a floor open on a
+  count or a piece of furniture nearly every time ("Two Store Bay 3 loaders block…", "Three
+  Watch Desk monitors hold…"). The prompt asks for seven different openings and gets perhaps
+  four.
+- **Tested and found not to be a problem:** "Brandt" appearing as a surname in two worlds of
+  the probe run looked like a name lifted from the example bible shown in call 1. It was not.
+  Both worlds were offered that surname in their own seeded `namePool` and took it, which is
+  what the pool is for. 84 surnames dealt 10 at a time will repeat. I had written the fix
+  before checking, and reverted it.
+
+## What was not done
+
+- The two-sentence-tagline prompt change (item 6) and the room-line word count are
+  unverified against the model. They cannot make the score worse, because `fitText` still
+  guards the hard limit, but whether they stop the truncation is untested.
+- The call-2 exemplars carry names from the exemplar worlds the same way the call-1 bible
+  does. Nothing was measured leaking from them, and nothing was changed.
+- `bible.enemies` arriving undefined cost one repair in W2's run and did not recur in 11
+  worlds here. It is a one-field miss and would still cost a full second call if it happened.

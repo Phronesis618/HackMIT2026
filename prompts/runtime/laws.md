@@ -27,11 +27,15 @@ a separator, then what it does in five or six plain words that keep the registry
 
 
 ## custodian
-The final boss. title (max 40): the bible person responsible or the machine they left
-running, with their title: a name, a comma, the machine or room they hold. phaseTitles: exactly three short
-labels (max 40 each) for the fight's three phases, each a bible fact in two to five words.
-moves: exactly three patternIds from custodianPatterns, in this order: one marked [close],
-one marked [ranged], then one marked [control] or [arena]. Pick summon_choir only if the
-bible casts two or more non-guardian enemy kinds. For each, name (max 32) is the bible object
-doing the damage, and tell (hard max 60, aim 50, capitals) is a callout: the bible object
-about to hurt the crew, a plain verb, and where to stand.
+The final boss. title (hard max 40): the bible person responsible or the machine they left
+running, with their title: a name, a comma, the machine or room they hold. phaseTitles:
+exactly three labels, hard max 40 characters each, for the fight's three phases, each a
+bible fact in two to five words.
+moves: exactly three patternIds from custodianPatterns, all three different, in this order:
+one marked [close], one marked [ranged], then one marked [control] or [arena]. At most one
+of the three may be marked [arena]. Pick summon_choir only if the bible casts two or more
+non-guardian enemy kinds. For each move, name (hard max 32) is the bible object doing the
+damage, and tell (hard max 60, aim 50, capitals) is a callout: the bible object about to
+hurt the crew, a plain verb, and where to stand.
+A move set that breaks these rules is replaced wholesale, and its names and tells are lost
+with it.

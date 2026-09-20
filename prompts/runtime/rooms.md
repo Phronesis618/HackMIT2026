@@ -17,8 +17,9 @@ props, encounters and terrain, not only colours and names. The final room has `g
 enemyIds and `anchor_pedestal` in propIds.
 - name (max 80, aim 28): a bible place or a part of one.
 - description (max 100 chars): what is visible from the door, threat first with where it is,
-  then one feature of the room the crew can use. Present tense. Name the enemies by their
-  former job from the bible, never by registry id.
+  then one feature of the room the crew can use. Present tense. The ids you put in enemyIds
+  are engine words and appear in no description: name each creature by its former job from
+  the bible, singular or plural as the sentence needs ("one of the brine divers").
 - terrain: `features` (up to four IDs), `layout`, `density`; null for motif defaults. Pick
   combinations the ideas suggest and vary them across rooms:
   breakable_walls: brittle bulkheads; attacks open a passage and leave slowing rubble.
