@@ -23,7 +23,7 @@
 ## Memory archive and next-world ideas — 2026-09-20
 
 - Merged PR #20; implementation `efab963`, draft retention `f5c17eb`, menu integration
-  `626ca0d`. Focus follow-up: `devin/1789892418-memory-integration`.
+  `626ca0d`. Focus follow-up: `devin/1789892418-memory-integration`, `40c8b53`, PR #24.
 - **Implemented:** searchable device-local archive with world/type filters and bounded card
   display; plain-text field reports preserve recorded participants, provenance and event IDs.
   A saved memory can start an editable, 200-character contribution through the existing
@@ -43,8 +43,15 @@
   name, with host-only preparation/entry retained.
 - **Focus follow-up:** submitting/cancelling the composer or completing clear restores
   focus to the persistent archive region so the enclosing menu can receive Escape.
-  Browser verification of this correction and the 24-contribution cap is pending.
-- **Unverified:** live generation, disconnected/busy guards and >18-record pagination.
+  Browser verification at `40c8b53` passed submit/cancel/clear focus and immediate Escape.
+  A guest's open composer was enabled at 23 shared ideas and disabled live when the host
+  added idea 24; attempted submission added no 25th idea. Both clients retained exactly 24.
+  Guest-only erase persisted after reload while the host retained its three genuine records.
+  Both clients had no fresh console runtime errors.
+- **Follow-up observation for A:** browser reload temporarily duplicated crew entries and
+  transferred host status. Not established as a regression from this UI-only change.
+- **Unverified:** live generation, disconnected/busy guards, >18-record pagination,
+  beyond-visible-page exports and exhaustive modal focus trapping.
   Field reports are keepsakes, not progress backups. Fixture generation does not respond to
   memory ideas. A co-op host must prepare the world after contributions.
 - Coordinated scope on issue #4 with the active Stillpoint and integration workstreams.

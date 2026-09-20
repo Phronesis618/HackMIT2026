@@ -51,9 +51,19 @@ confirmed current name; 5,514 serialized memory characters were unchanged. Host-
 preparation/entry remained enforced. No gameplay state or records were injected.
 
 This run exposed focus falling to BODY after composer submission, preventing immediate
-Escape. The follow-up restores focus to the persistent archive region after composer/clear
-actions. Its browser retest and the 24-contribution boundary are pending. Live-generation,
-disconnected/busy and >18-record pagination remain untested in the browser.
+Escape. Follow-up `40c8b53` / PR #24 restores persistent archive focus after composer/clear
+actions. Focused browser verification passed submit, composer cancel, clear cancel and
+confirmed erase with immediate Escape. At 23 shared ideas the guest composer remained
+enabled; the host's 24th idea disabled it live, and attempted submission added no 25th idea.
+Both clients retained exactly 24 contributions. Guest-only erase persisted after reload;
+the host retained three actual records. Both clients had no fresh console runtime errors.
+
+The testing agent recorded the focused pass and preserved earlier co-op evidence separately;
+the earlier recording includes the subsequently fixed focus defect. Reload temporarily
+duplicated crew entries and transferred host status; this observation is referred to A and
+is not established as a regression from the focus change. Live generation, disconnected/busy
+guards, >18-record pagination, beyond-visible-page exports and exhaustive modal focus
+trapping remain untested in the browser. No state, records or events were injected.
 
 ## Render hosting setup — 2026-09-20
 
