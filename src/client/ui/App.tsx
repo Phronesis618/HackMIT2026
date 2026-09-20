@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { lazy, Suspense, useCallback } from 'react';
 import type { UiActions } from '../../shared/ui';
 import type { UiStore } from '../game/uiStore';
 import { HeadquartersPanel } from './HeadquartersPanel';
@@ -7,11 +7,12 @@ import { MemoryBrief } from './MemoryWall';
 import { ProvenanceBadge } from './ProvenanceBadge';
 import { useUiModel } from './useUiModel';
 import { WorldPanel } from './WorldPanel';
-import { DebriefPanel } from './DebriefPanel';
 import { AbilityBar } from './AbilityBar';
 import { GameMenu } from './GameMenu';
 import { HeadquartersPrompt, HeadquartersStationPanel } from './HeadquartersStations';
 import { FloorsHud } from './FloorsHud';
+
+const DebriefPanel = lazy(() => import('./DebriefPanel').then((m) => ({ default: m.DebriefPanel })));
 
 export interface AppProps {
   store: UiStore;
@@ -80,7 +81,7 @@ export function App({ store, actions, onStageReady }: AppProps) {
             {inRun && <RunStatus model={model} />}
             {atHq && <HeadquartersStationPanel model={model} actions={actions} />}
             {atHq && <HeadquartersPanel model={model} actions={actions} />}
-            {model.phase === 'debrief' && <DebriefPanel model={model} actions={actions} />}
+            {model.phase === 'debrief' && <Suspense fallback={null}><DebriefPanel model={model} actions={actions} /></Suspense>}
             {model.world && <WorldPanel world={model.world} discoveredLore={model.discoveredLore} compact={inRun} />}
             <MemoryBrief memories={model.memories} />
           </div>

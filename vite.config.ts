@@ -18,8 +18,13 @@ export default defineConfig({
     outDir: 'dist/client',
     emptyOutDir: true,
     sourcemap: false,
-    // Phaser alone is ~1.5 MB minified; a single chunk is fine for this project.
+    // Phaser alone is ~1.5 MB minified; keep it in its own vendor chunk.
     chunkSizeWarningLimit: 2000,
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => id.includes('/node_modules/phaser/') ? 'phaser' : undefined,
+      },
+    },
   },
   server: {
     port: 5173,

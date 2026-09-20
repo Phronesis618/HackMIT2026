@@ -3,13 +3,14 @@
  * overlay and the biome choice screen. The minimap fills U1's `.hud-minimap-slot` through
  * a portal when that slot exists and falls back to its own corner box when it does not.
  */
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { UiActions, UiModel } from '../../shared/ui';
 import { createHoldKey, FULL_MAP_KEYS } from '../game/input';
 import { BiomeChoice } from './BiomeChoice';
-import { FullMap } from './FullMap';
 import { Minimap } from './Minimap';
+
+const FullMap = lazy(() => import('./FullMap').then((m) => ({ default: m.FullMap })));
 
 /** Finds U1's reserved slot if it is mounted; re-checked on every render of the HUD. */
 function useMinimapSlot(dependency: unknown): Element | null {
@@ -44,7 +45,7 @@ export function FloorsHud({ model, actions }: { model: UiModel; actions: UiActio
     <>
       {/* U1's rail slot when it is mounted; otherwise a corner box over the stage (narrow layouts hide the rail). */}
       {slot ? createPortal(mini, slot) : <div className="floors-hud">{mini}</div>}
-      {(held || pinned) && !floor.choice && <FullMap floor={floor} onClose={() => setPinned(false)} />}
+      {(held || pinned) && !floor.choice && <Suspense fallback={null}><FullMap floor={floor} onClose={() => setPinned(false)} /></Suspense>}
       {floor.choice && (
         <BiomeChoice choice={floor.choice} fromBiomeName={floor.biomeName} localPlayerId={model.localPlayer.id} onChoose={(biomeId) => {
             actions.chooseBiome?.(biomeId);
