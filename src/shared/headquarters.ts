@@ -27,17 +27,17 @@ export interface HeadquartersStation {
 }
 
 export const HEADQUARTERS_STATIONS: readonly HeadquartersStation[] = [
-  { id: 'bastion', classId: 'bastion', name: 'Arc-blade stand', wing: 'Armory', description: 'Arc-blade and tower shield on a rack. Heavy, slow, and hard to move once planted.', action: 'Take the arc-blade', x: 4, y: 3 },
+  { id: 'bastion', classId: 'bastion', name: 'Arc-blade stand', wing: 'Armory', description: 'Arc-blade and tower shield on a rack. Wide sweeps, and a shield that cuts melee hits to 20%.', action: 'Take the arc-blade', x: 4, y: 3 },
   { id: 'shade', classId: 'shade', name: 'Phase blade stand', wing: 'Armory', description: 'Twin phase blades on a rack. Short reach, fast cadence, no shield.', action: 'Take the phase blades', x: 8, y: 3 },
   { id: 'beacon', classId: 'beacon', name: 'Lantern staff stand', wing: 'Armory', description: 'Lantern staff on a rack. Repairs the crew and quickens their weapons.', action: 'Take the lantern staff', x: 4, y: 7 },
   { id: 'weaver', classId: 'weaver', name: 'Plasma loom stand', wing: 'Armory', description: 'Plasma loom on a rack. Pulls enemies into shape at range.', action: 'Take the plasma loom', x: 8, y: 7 },
-  { id: 'archive', name: 'Echo archive', wing: 'Records wing', description: 'What survives a world is what you carried back. Read the records held on this device.', action: 'Read records', x: 24, y: 4 },
+  { id: 'archive', name: 'Records archive', wing: 'Records wing', description: 'Creation receipts, arrival keepsakes and run records. All of it is stored on this device only.', action: 'Read records', x: 24, y: 4 },
   { id: 'records', name: 'Class plinths', wing: 'Records wing', description: 'Four plinths, one per weapon. Counts come from runs recorded on this device.', action: 'Read service record', x: 24, y: 8 },
   { id: 'quartermaster', name: 'Quartermaster', wing: 'Returns hall', description: 'Keeps the returns bench. Counts what came back and what did not.', action: 'Speak to the quartermaster', x: 15, y: 6 },
   { id: 'relics', name: 'Relic shelf', wing: 'Returns hall', description: 'Five brackets. A relic is shelved only if it came back from an anchored run.', action: 'Read the shelf', x: 15, y: 1 },
-  { id: 'observatory', name: 'World observatory', wing: 'Navigation wing', description: 'Every expedition begins as a signal. Add your idea to the next world.', action: 'Plan expedition', x: 24, y: 16 },
-  { id: 'training', name: 'Proving chamber', wing: 'Training wing', description: 'A safe place to learn a dangerous craft. Practice against the real enemy patterns.', action: 'Inspect range', x: 5, y: 16 },
-  { id: 'portal', name: 'Departure gate', wing: 'Transit hall', description: 'The way out, and the promise of a way back.', action: 'Inspect destination', x: 15, y: 18 },
+  { id: 'observatory', name: 'World observatory', wing: 'Navigation wing', description: 'Console for the next world. Type one idea each; the host takes them all through the portal.', action: 'Plan expedition', x: 24, y: 16 },
+  { id: 'training', name: 'Proving chamber', wing: 'Training wing', description: 'A pen for each of the 8 hostiles, with their real attack patterns. E and R are unlocked; nothing here is recorded.', action: 'Inspect range', x: 5, y: 16 },
+  { id: 'portal', name: 'Departure gate', wing: 'Transit hall', description: 'Gate to the prepared world. A crew of 1 to 4 goes through together.', action: 'Inspect destination', x: 15, y: 18 },
 ];
 
 /**

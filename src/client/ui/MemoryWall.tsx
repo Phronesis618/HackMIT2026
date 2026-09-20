@@ -21,7 +21,7 @@ export function MemoryBrief({ memories }: { memories: MemoryRecord[] }) {
         <span className="eyebrow">Memory wall</span>
         <span className="memory-brief__count">{memories.length} <span className="memory-brief__open" aria-hidden="true">›</span></span>
       </span>
-      <span className="memory-brief__latest">{latest ? latest.title : 'Nothing yet — memories appear from real play.'}</span>
+      <span className="memory-brief__latest">{latest ? latest.title : 'Nothing yet. Memories are saved from real play.'}</span>
     </button>
   );
 }
@@ -73,7 +73,7 @@ export function MemoryWall({ memories, actions, context }: { memories: MemoryRec
     }}>
       <div className="wall__head">
         <h2 className="panel__title">Memory wall</h2>
-        <span className="muted">{memories.length === 0 ? 'Nothing yet — memories appear from real play on this device.' : `${memories.length} saved on this device`}</span>
+        <span className="muted">{memories.length === 0 ? 'Nothing yet. Memories are saved from real play on this device.' : `${memories.length} saved on this device`}</span>
         {memories.length > 0 && (
           <div className="wall__actions">
             <button type="button" className="btn" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>

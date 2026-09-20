@@ -20,7 +20,10 @@ import {
 } from '../../src/sim/terrain';
 import { createSimulation, type Simulation } from '../../src/sim';
 
-const fixture = WorldFixtureSchema.parse(fixtureJson);
+// The fixture's own world laws are stripped: these cases measure the base rules, and
+// vantage-spire now carries laws the engine really applies (tests/sim/laws.test.ts covers those).
+const { laws: _laws, look: _look, custodian: _custodian, ...bareRecipe } = WorldFixtureSchema.parse(fixtureJson).recipe;
+const fixture = { ...WorldFixtureSchema.parse(fixtureJson), recipe: bareRecipe };
 
 /** 18x11 arena; callers paint the tiles they need on an otherwise clean floor. */
 function arena(paint: (tiles: string[][]) => void, index = 0, isFinal = false, encounters: unknown[] = []): RoomSpec {

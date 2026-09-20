@@ -15,7 +15,7 @@ import { BIOME_LINE_KINDS, WorldBibleSchema, clampLoreRefs, type BiomeRoomLines,
 import { BIOME_BRIEF_COUNT, BiomeBriefSchema, BiomeTerrainSchema, ROOM_KINDS, type BiomeBrief } from '../../shared/floors';
 import { seededInt } from './exemplars';
 import {
-  CustodianSchema, TerrainSkinSchema, WorldLawSchema, WorldLookSchema, sanitizeCustodian, sanitizeLaws, sanitizeTerrainSkins,
+  CustodianSchema, LAW_INFO, TerrainSkinSchema, WorldLawSchema, WorldLookSchema, sanitizeCustodian, sanitizeLaws, sanitizeTerrainSkins,
   type Custodian, type TerrainSkin, type WorldLaw, type WorldLook,
 } from '../../shared/laws';
 import { KIND_SPECS, lintProse, lintRecipeText, formatRepairFeedback, type ProseKind } from '../../shared/prose';
@@ -91,8 +91,16 @@ export const ModelBibleSchema = z.object({
  * than its seven room lines, and a single over-long one used to cost the whole brief, which
  * trusted code then had to derive (seen live: one floor lost to four lines over the limit).
  * Missing and null lines are normal too (`rest: null` for a floor with no rest room).
+ *
+ * The tagline is parsed at the STORED limit of 140, not the 80 the model is shown. Measured:
+ * 56 of 64 taglines in the last live run were written over 80, and cutting at parse time hid
+ * the fault from the linter, so the player, not the model, got the half sentence. At 140 the
+ * over-long tagline survives to the linter, fails `too-long`, and the polish call rewrites it;
+ * `fitOverlong` still cuts anything that comes back long, as a last resort rather than a habit.
  */
-const LenientBriefSchema = ModelBriefSchema.omit({ roomLines: true });
+const LenientBriefSchema = ModelBriefSchema.omit({ roomLines: true }).extend({
+  tagline: z.string().trim().min(1).max(140),
+});
 
 const foundationShape = {
   bible: ModelBibleSchema,
@@ -184,12 +192,28 @@ export function fitText(text: string, max: number): string {
 }
 
 /**
+ * One string trusted code shortened to make it fit. A cut is a defect, not a tidy-up: the
+ * player is left with a sentence that stops, which reads as machine-written more reliably
+ * than any word choice. The pipeline turns these into polish failures so the line is written
+ * again, short, by the writer (`cutFailures`).
+ */
+export interface TextCut { path: string; length: number; max: number }
+
+/** `a.b.3.c` (Zod issue path) -> `a.b[3].c` (the lint path shape). */
+const lintPath = (path: readonly PropertyKey[]): string =>
+  path.reduce<string>((out, key) => (typeof key === 'number' ? `${out}[${key}]` : out ? `${out}.${String(key)}` : String(key)), '');
+
+/**
  * safeParse that treats an over-long string, an over-long list or an unknown id inside a list
  * of registry ids as something to fit, not a failed world: strings are cut with `fitText`,
  * lists are cut to their maximum, unknown list entries are dropped, and the value is parsed
  * again. Anything else (a missing field, a wrong type, an unknown id outside a list) still fails.
+ *
+ * Every string cut is appended to `cuts` when one is supplied, because in most fields the
+ * schema maximum and the linter's maximum are the same number: cutting here is what stopped
+ * the linter ever seeing an over-long line.
  */
-export function parseWithFit<T extends z.ZodType>(schema: T, raw: unknown): ReturnType<T['safeParse']> {
+export function parseWithFit<T extends z.ZodType>(schema: T, raw: unknown, cuts?: TextCut[]): ReturnType<T['safeParse']> {
   let value = raw;
   for (let pass = 0; pass < 4; pass++) {
     const result = schema.safeParse(value);
@@ -211,7 +235,11 @@ export function parseWithFit<T extends z.ZodType>(schema: T, raw: unknown): Retu
       if (!parent || last === undefined) continue;
       if (issue.code === 'invalid_value') (parent as unknown[]).splice(Number(last), 1);
       else if (issue.code !== 'too_big') continue;
-      else if (issue.origin === 'string') (parent as Record<PropertyKey, unknown>)[last] = fitText(String((parent as Record<PropertyKey, unknown>)[last]), Number(issue.maximum));
+      else if (issue.origin === 'string') {
+        const before = String((parent as Record<PropertyKey, unknown>)[last]);
+        cuts?.push({ path: lintPath(issue.path), length: before.trim().length, max: Number(issue.maximum) });
+        (parent as Record<PropertyKey, unknown>)[last] = fitText(before, Number(issue.maximum));
+      }
       else (parent as Record<PropertyKey, unknown>)[last] = ((parent as Record<PropertyKey, unknown>)[last] as unknown[]).slice(0, Number(issue.maximum));
     }
   }
@@ -276,7 +304,12 @@ export function coerceJson(input: unknown): unknown {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
-export interface ParsedBrief { brief: BiomeBrief; lines: BiomeRoomLines['lines'] }
+export interface ParsedBrief {
+  brief: BiomeBrief;
+  lines: BiomeRoomLines['lines'];
+  /** Strings trusted code cut, addressed relative to this brief: `tagline`, `rooms[2].description`. */
+  cuts: TextCut[];
+}
 
 const slug = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'biome';
 
@@ -300,7 +333,8 @@ export function parseBrief(raw: unknown, index: number): ParsedBrief | undefined
     roomLines = coerceJson(value.roomLines);
     delete value.roomLines;
   }
-  const model = parseWithFit(LenientBriefSchema, value);
+  const cuts: TextCut[] = [];
+  const model = parseWithFit(LenientBriefSchema, value, cuts);
   if (!model.success) {
     briefRejections.set(index, issuesText(model.error));
     return undefined;
@@ -311,17 +345,26 @@ export function parseBrief(raw: unknown, index: number): ParsedBrief | undefined
     briefRejections.set(index, issuesText(brief.error));
     return undefined;
   }
-  return { brief: brief.data, lines: parseRoomLines(roomLines) };
+  const lines = parseRoomLines(roomLines, cuts);
+  return { brief: brief.data, lines, cuts };
 }
 
-/** One line per room kind, each fitted to the house limit; anything that is not text is dropped. */
-export function parseRoomLines(raw: unknown): ParsedBrief['lines'] {
+/**
+ * One line per room kind, each fitted to the storage limit; anything that is not text is
+ * dropped. A line that had to be cut is recorded so the polish call can write a short one
+ * instead: the cut itself is the tell (`docs/design/WORLDGEN_EVAL.md` follow-up).
+ */
+export function parseRoomLines(raw: unknown, cuts?: TextCut[]): ParsedBrief['lines'] {
   if (!isRecord(raw)) return [];
+  let index = 0;
   return BIOME_LINE_KINDS.flatMap((kind) => {
     const value = raw[kind];
     if (typeof value !== 'string') return [];
     const text = fitText(value, MODEL_ROOM_LINE_MAX);
-    return text ? [{ kind, text }] : [];
+    if (!text) return [];
+    if (value.trim().length > MODEL_ROOM_LINE_MAX) cuts?.push({ path: `rooms[${index}].description`, length: value.trim().length, max: MODEL_ROOM_LINE_MAX });
+    index++;
+    return [{ kind, text }];
   });
 }
 
@@ -335,6 +378,7 @@ export interface RoomsPart {
   palette: WorldRecipe['palette'];
   rooms: WorldRecipe['rooms'];
   contributionMappings: WorldRecipe['contributionMappings'];
+  cuts: TextCut[];
 }
 export interface LawsPart {
   look?: WorldLook;
@@ -342,6 +386,7 @@ export interface LawsPart {
   terrainSkins: TerrainSkin[];
   custodian?: Custodian;
   notes: string[];
+  cuts: TextCut[];
 }
 
 /**
@@ -379,12 +424,13 @@ export function parseFoundation(input: unknown): { legacy: z.infer<typeof WorldR
 export function parseRooms(input: unknown): RoomsPart {
   const raw = coerceJson(input);
   if (!isRecord(raw)) throw new StageParseError('Recipe failed schema validation at (root): expected an object.');
+  const cuts: TextCut[] = [];
   const core = parseWithFit(z.object({
     themeSummary: WorldRecipeSchema.shape.themeSummary, motifIds: roomsShape.motifIds, palette: roomsShape.palette,
     rooms: roomsShape.rooms, contributionMappings: roomsShape.contributionMappings.catch([]),
-  }), raw);
+  }), raw, cuts);
   if (!core.success) throw new StageParseError(`Recipe failed schema validation at ${issuesText(core.error)}.`);
-  return core.data;
+  return { ...core.data, cuts };
 }
 
 /** Look, laws, terrain skins and the Custodian are flavour: they degrade item by item and never fail a world. */
@@ -394,39 +440,62 @@ export function parseLaws(input: unknown, bible: WorldBible): LawsPart {
   const notes: string[] = [];
   const look = WorldLookSchema.safeParse(record.look);
   if (!look.success && record.look != null) notes.push('World look was invalid and was dropped; the renderer derives it from motifs.');
-  const lawItems = Array.isArray(record.laws) ? record.laws.map((law) => parseWithFit(WorldLawSchema, law)).flatMap((r) => (r.success ? [r.data] : [])) : [];
-  const { laws } = sanitizeLaws(lawItems);
+  // Each law is parsed with its own cut list, then re-addressed by its place in the kept
+  // laws: sanitizeLaws drops and reorders, so the index the model wrote at is not the path.
+  const perLawCuts = new Map<WorldLaw, TextCut[]>();
+  const lawItems = Array.isArray(record.laws) ? record.laws.flatMap((law) => {
+    const lawCuts: TextCut[] = [];
+    const parsed = parseWithFit(WorldLawSchema, law, lawCuts);
+    if (!parsed.success) return [];
+    perLawCuts.set(parsed.data, lawCuts);
+    return [parsed.data];
+  }) : [];
+  // Honesty: a live world never carries a law the engine does not apply (LAW_INFO.implemented).
+  const { laws } = sanitizeLaws(lawItems.filter((law) => LAW_INFO[law.lawId].implemented));
+  const cuts = laws.flatMap((law, index) => (perLawCuts.get(law) ?? []).map((cut) => ({ ...cut, path: `laws[${index}].${cut.path}` })));
   const lawCount = Array.isArray(record.laws) ? record.laws.length : 0;
-  if (lawCount > laws.length) notes.push(`Dropped ${lawCount - laws.length} world law(s): invalid, conflicting, over a group cap or outside the difficulty budget.`);
+  if (lawCount > laws.length) notes.push(`Dropped ${lawCount - laws.length} world law(s): invalid, conflicting, over a group cap, outside the difficulty budget or not implemented by the engine.`);
   const skins = (Array.isArray(record.terrainSkins) ? record.terrainSkins : []).map((skin) => parseWithFit(TerrainSkinSchema, skin)).flatMap((r) => (r.success ? [r.data] : []));
   const boss = parseCustodian(record, nonBossKinds(bible));
   return {
     ...(look.success ? { look: look.data } : {}), laws, terrainSkins: sanitizeTerrainSkins(skins, [...TERRAIN_FEATURE_IDS]),
-    ...(boss.custodian ? { custodian: boss.custodian } : {}), notes: [...notes, ...boss.notes],
+    ...(boss.custodian ? { custodian: boss.custodian } : {}), notes: [...notes, ...boss.notes], cuts,
   };
 }
 
-export function parseLore(input: unknown, bible: WorldBible, expected: { kind: 'relic' | 'remains'; count: number }): { lore: WorldRecipe['lore']; dropped: number } {
+export function parseLore(input: unknown, bible: WorldBible, expected: { kind: 'relic' | 'remains'; count: number }): { lore: WorldRecipe['lore']; dropped: number; cuts: TextCut[] } {
   const raw = coerceJson(input);
   const items = isRecord(raw) && Array.isArray(raw.lore) ? raw.lore : undefined;
   if (!items) throw new StageParseError('Recipe failed schema validation at lore: expected an array.');
   const lore: WorldRecipe['lore'] = [];
+  const cuts: TextCut[] = [];
   let firstError = '';
   items.slice(0, 12).forEach((item, index) => {
-    const parsed = parseWithFit(ModelLoreFragmentSchema, item);
-    if (parsed.success && parsed.data.kind === expected.kind) lore.push(clampLoreRefs(parsed.data, bible));
-    else if (!parsed.success && !firstError) firstError = issuesText(parsed.error, `lore.${index}.`);
+    const itemCuts: TextCut[] = [];
+    const parsed = parseWithFit(ModelLoreFragmentSchema, item, itemCuts);
+    if (parsed.success && parsed.data.kind === expected.kind) {
+      for (const cut of itemCuts) cuts.push({ ...cut, path: `lore[${lore.length}].${cut.path}` });
+      lore.push(clampLoreRefs(parsed.data, bible));
+    } else if (!parsed.success && !firstError) firstError = issuesText(parsed.error, `lore.${index}.`);
   });
   if (lore.length === 0) throw new StageParseError(`Recipe failed schema validation at ${firstError || 'lore: no valid fragments'}.`);
-  return { lore, dropped: items.length - lore.length };
+  return { lore, dropped: items.length - lore.length, cuts };
 }
 
-export function parseAttunements(input: unknown): WorldRecipe['attunements'] {
+export function parseAttunements(input: unknown, cuts?: TextCut[]): WorldRecipe['attunements'] {
   const raw = coerceJson(input);
   const items = isRecord(raw) && Array.isArray(raw.attunements) ? raw.attunements : [];
   const seen = new Set<string>();
-  return items.map((item) => parseWithFit(AttunementSchema, item)).flatMap((r) => (r.success ? [r.data] : []))
-    .filter((a) => !seen.has(a.effectId) && Boolean(seen.add(a.effectId))).slice(0, 4);
+  const kept: WorldRecipe['attunements'] = [];
+  for (const item of items) {
+    const itemCuts: TextCut[] = [];
+    const parsed = parseWithFit(AttunementSchema, item, itemCuts);
+    if (!parsed.success || seen.has(parsed.data.effectId) || kept.length >= 4) continue;
+    seen.add(parsed.data.effectId);
+    for (const cut of itemCuts) cuts?.push({ ...cut, path: `attunements[${kept.length}].${cut.path}` });
+    kept.push(parsed.data);
+  }
+  return kept;
 }
 
 /** The Custodian is flavour: an invalid one is dropped, an illegal move set is repaired, never fatal. */
@@ -620,7 +689,7 @@ export function assembleRecipe(parts: {
     derived ??= parts.deriveBriefs?.(recipe);
     const candidate = derived?.[index];
     const brief = candidate && BiomeBriefSchema.safeParse(candidate).success ? candidate : fallbackBrief(recipe, index);
-    return { brief: { ...brief, id: `b${index}-${slug(brief.name)}-d` }, lines: [] } satisfies ParsedBrief;
+    return { brief: { ...brief, id: `b${index}-${slug(brief.name)}-d` }, lines: [], cuts: [] } satisfies ParsedBrief;
   });
   if (derivedIndices.length) parts.onDerived?.(derivedIndices);
   return {
@@ -642,12 +711,15 @@ type Lintable = Partial<Pick<WorldRecipe, 'title' | 'tagline' | 'themeSummary' |
 /** House maximum handed to the polish call (characters). Schema maxima still apply on top. */
 const POLISH_MAX: Partial<Record<ProseKind, number>> = { roomLine: 100, relic: 480, remains: 320, themeSummary: 160, biomeTagline: 80 };
 
+export interface LintField { path: string; kind: ProseKind; text: string; result: ReturnType<typeof lintProse> }
+
 /**
- * `lintRecipeText` over everything the model wrote, including the fields it does not know
- * about (laws, per-biome room lines). Paths address the STORED recipe shape, except biome
- * room lines, which are `biomes[b].rooms[i].description` (i = index into that biome's lines).
+ * Every player-facing string in `parts` with its lint path, kind and result, including the
+ * fields `lintRecipeText` does not know about (laws, the Custodian, per-biome room lines).
+ * Paths address the STORED recipe shape, except biome room lines, which are
+ * `biomes[b].rooms[i].description` (i = index into that biome's lines).
  */
-export function lintWorld(parts: Lintable, bible: WorldBible | undefined): WorldLint {
+export function lintFields(parts: Lintable, bible: WorldBible | undefined): LintField[] {
   const linesFor = (biomeId: string) => parts.biomeRoomLines?.find((entry) => entry.biomeId === biomeId)?.lines ?? [];
   const view = {
     title: parts.title, tagline: parts.tagline, themeSummary: parts.themeSummary, rooms: parts.rooms,
@@ -655,18 +727,24 @@ export function lintWorld(parts: Lintable, bible: WorldBible | undefined): World
     biomes: parts.biomes?.map((brief) => ({ name: brief.name, tagline: brief.tagline, rooms: linesFor(brief.id).map((line) => ({ description: line.text })) })),
   };
   const base = lintRecipeText(view, bible ? { bible } : {});
-  const fields = base.fields.map((field) => ({ path: field.path, kind: field.kind, text: field.text, result: field.result }));
-  (parts.laws ?? []).forEach((law, index) => {
-    fields.push({ path: `laws[${index}].name`, kind: 'boonName', text: law.name, result: lintProse(law.name, { kind: 'boonName', ...(bible ? { bible } : {}) }) });
-    fields.push({ path: `laws[${index}].description`, kind: 'boonDescription', text: law.description, result: lintProse(law.description, { kind: 'boonDescription', ...(bible ? { bible } : {}) }) });
-  });
+  const fields: LintField[] = base.fields.map((field) => ({ path: field.path, kind: field.kind, text: field.text, result: field.result }));
   const extra = (path: string, kind: ProseKind, text: string): void => {
     fields.push({ path, kind, text, result: lintProse(text, { kind, ...(bible ? { bible } : {}) }) });
   };
+  (parts.laws ?? []).forEach((law, index) => {
+    extra(`laws[${index}].name`, 'boonName', law.name);
+    extra(`laws[${index}].description`, 'boonDescription', law.description);
+  });
   if (parts.custodian) {
     extra('custodian.title', 'bossName', parts.custodian.title);
     parts.custodian.moves.forEach((move, index) => extra(`custodian.moves[${index}].tell`, 'bossCallout', move.tell));
   }
+  return fields;
+}
+
+/** `lintFields` scored, with the checks that need more than one line to see. */
+export function lintWorld(parts: Lintable, bible: WorldBible | undefined): WorldLint {
+  const fields = lintFields(parts, bible);
   let weight = 0;
   let total = 0;
   const failures: LintFailure[] = [];
@@ -698,11 +776,203 @@ export function lintWorld(parts: Lintable, bible: WorldBible | undefined): World
       notes: [`Rule engine-word: "${hit.word}" is the engine's id for that enemy and no player ever reads it.${job ? ` In this world those creatures are ${job}: use that, in whatever wording the sentence needs.` : ' Call the creature by its former job from the bible.'}`],
     });
   }
+  const known = new Set(failures.map((failure) => failure.path));
+  for (const failure of [...lawFailures(parts), ...remainsNameFailures(parts, bible), ...openerFailures(parts), ...calloutFailures(parts), ...dateFailures(parts, bible), ...stockPropFailures(parts)]) {
+    if (known.has(failure.path)) continue;
+    known.add(failure.path);
+    rules.add(/^Rule ([a-z-]+):/.exec(failure.notes[0] ?? '')?.[1] ?? 'house-rule');
+    failures.push(failure);
+  }
   return {
     score: weight ? Math.round((total / weight) * 10) / 10 : 0,
     hardFail: failures.length > 0, failedFields: failures.length, fieldCount: fields.length, rules: [...rules],
     failures, feedback: failures.flatMap((failure) => failure.notes.map((note) => `${failure.path}: ${note}`)),
   };
+}
+
+const lawMax = Math.min(POLISH_MAX.boonDescription ?? Infinity, KIND_SPECS.boonDescription.max);
+/**
+ * A number the ENGINE already prints beside the law's name, in the units `lawEffectText`
+ * uses: a percentage, a multiplier, a pixel radius, a millisecond window, an Integrity
+ * total. A count of people or a date is a world fact and belongs here, so neither is listed.
+ */
+const ENGINE_NUMBER = /\b\d+(?:\.\d+)?\s*(?:%|x\b|px\b|ms\b|per\s?cent\b)|\b\d+\s*(?:Integrity|HP)\b/i;
+/**
+ * Two faults the linter cannot see in one line, both found by reading the last live run
+ * (`docs/design/WORLDGEN_EVAL.md`, "what still reads as machine-written"):
+ *  - the description states the world fact and never says what the law does to the fight;
+ *  - it restates the engine's own numbers, which are printed beside it, and then disagrees
+ *    with them ("a third faster" next to "Dash cooldown x0.67").
+ */
+function lawFailures(parts: Lintable): LintFailure[] {
+  return (parts.laws ?? []).flatMap((law, index) => {
+    const text = law.description.trim();
+    const sentences = text.split(/(?<=[.!?])\s+/).filter((sentence) => /[a-z]/i.test(sentence));
+    const note = (rule: string, advice: string): LintFailure => ({ path: `laws[${index}].description`, kind: 'boonDescription', text: law.description, maxChars: lawMax, notes: [`Rule ${rule}: ${advice}`] });
+    const engineNumber = ENGINE_NUMBER.exec(text);
+    if (engineNumber) {
+      return [note('law-engine-numbers', `"${engineNumber[0].trim()}" is the engine's own number. The game prints the exact effect beside this law's name, so a second number here competes with it. Give the rule in plain words ("dashes carry farther, and take longer to come back") and keep one fact about the person or place it is named after.`)];
+    }
+    if (sentences.length < 2 || text.length < 40) {
+      return [note('law-needs-rule', 'this names the world fact but never says what the law does to the fight. Keep the fact, then add one short sentence, no numbers, telling the crew what to expect under it.')];
+    }
+    return [];
+  });
+}
+
+/**
+ * `prompts/runtime/remains.md`: the person a remains fragment names is a new minor person,
+ * never one of the three authors. Seen live once in 8 worlds, with the title and the text
+ * naming two different people. Checked on the title and the opening sentence, where the
+ * object's owner is identified; a later sentence may quote an author's note, which is legal.
+ * The guardian is exempt: that fragment is the person responsible, who may be an author.
+ */
+function remainsNameFailures(parts: Lintable, bible: WorldBible | undefined): LintFailure[] {
+  const authors = (bible?.authors ?? []).map((author) => author.name).filter(Boolean);
+  if (authors.length === 0) return [];
+  const names = authors.flatMap((name) => {
+    const words = name.split(/\s+/).filter((word) => word.length >= 4);
+    return [name, ...words];
+  });
+  const pattern = new RegExp(`\\b(?:${names.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?:'s)?\\b`);
+  return (parts.lore ?? []).flatMap((fragment, index) => {
+    if (fragment.kind !== 'remains' || fragment.enemyId === 'guardian') return [];
+    const opening = fragment.text.split(/(?<=[.!?])\s+/)[0] ?? '';
+    const hit = pattern.exec(fragment.title) ?? pattern.exec(opening);
+    if (!hit) return [];
+    return [{
+      path: `lore[${index}].text`, kind: 'remains' as const, text: fragment.text,
+      maxChars: Math.min(POLISH_MAX.remains ?? Infinity, KIND_SPECS.remains.max),
+      notes: [`Rule remains-author-name: "${hit[0]}" is one of the three authors, and the person this object belonged to is one of the many, not one of the three. Give the tag an ordinary name of your own, and keep the author's name only if they wrote a note on it.`],
+    }];
+  });
+}
+
+/**
+ * The furniture a language model puts in an empty room when it has nothing to say about that
+ * particular room. Found by a blind reader on a rest-room line, and confirmed across a run:
+ * three of four worlds left a thermos in their rest room, and the fourth left a cold mug.
+ * A rest room's one object should come out of the work that was being done there.
+ */
+const STOCK_PROP = /\b(?:thermos|flask of (?:cold |luke ?warm )?\w+|(?:cold|half-drunk|untouched|luke ?warm) (?:mug|cup|tea|coffee)|mug of (?:cold|stewed) \w+|half-eaten \w+|family photo|teddy bear|child's drawing)\b/i;
+function stockPropFailures(parts: Lintable): LintFailure[] {
+  const max = Math.min(POLISH_MAX.roomLine ?? Infinity, KIND_SPECS.roomLine.max);
+  return (parts.biomes ?? []).flatMap((brief, biomeIndex) => {
+    const lines = parts.biomeRoomLines?.find((entry) => entry.biomeId === brief.id)?.lines ?? [];
+    return lines.flatMap((line, lineIndex) => {
+      const hit = STOCK_PROP.exec(line.text);
+      if (!hit) return [];
+      return [{
+        path: `biomes[${biomeIndex}].rooms[${lineIndex}].description`, kind: 'roomLine' as const, text: line.text, maxChars: max,
+        notes: [`Rule stock-prop: "${hit[0]}" is the furniture every empty room in every game has, and it says nothing about this one. Put down the thing the work here left behind: a part half cleaned, a form half filled, somebody's lunch in the wrong container.`],
+      }];
+    });
+  });
+}
+
+/**
+ * A calendar date dropped into a sentence exactly as the bible stores it: "after the holiday
+ * staff left on Week 31 Monday". As a heading on a form it is right; inside a sentence a
+ * person says "on the Monday of Week 31". Found by a blind reader who had never seen this
+ * project and called the line machine-written for this reason alone (docs/design/BLIND_READ.md).
+ */
+const STITCHED_DATE = /\b(?:on|by|since|after|before|from|until|during|at|through)\s+(?:the\s+)?(?:Week|Day|Payday|Cycle|Term|Quarter)\s+\d+\s+(?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day\b/i;
+function dateFailures(parts: Lintable, bible: WorldBible | undefined): LintFailure[] {
+  const out: LintFailure[] = [];
+  for (const field of lintFields(parts, bible)) {
+    const hit = STITCHED_DATE.exec(field.text);
+    if (!hit) continue;
+    out.push({
+      path: field.path, kind: field.kind, text: field.text,
+      maxChars: Math.min(POLISH_MAX[field.kind] ?? Infinity, KIND_SPECS[field.kind].max),
+      notes: [`Rule stitched-date: "${hit[0].trim()}" is the calendar's own wording dropped into a sentence, and it reads as two variables joined up. A heading may carry the date as the bible stores it; inside a sentence write it the way the person speaking would: "on the Monday of that week".`],
+    });
+  }
+  return out;
+}
+
+/**
+ * The engine's own wording for how to beat a pattern (`CUSTODIAN_PATTERNS[...].counter`).
+ * Seen live in 3 of 4 worlds: the tell paraphrased the registry instead of the room, so three
+ * different bosses shouted "DASH THROUGH THE GAP". The counter is right; the words are ours.
+ */
+const STOCK_CALLOUT = /\bdash (?:a|the|through the) gap\b|\bstep off the mark\b|\bwalk off it\b|\bsidestep one tile\b|\bstand off the vents\b|\bwalk with the sweep\b/i;
+function calloutFailures(parts: Lintable): LintFailure[] {
+  return (parts.custodian?.moves ?? []).flatMap((move, index) => {
+    const hit = STOCK_CALLOUT.exec(move.tell);
+    if (!hit) return [];
+    return [{
+      path: `custodian.moves[${index}].tell`, kind: 'bossCallout' as const, text: move.tell, maxChars: KIND_SPECS.bossCallout.max,
+      notes: [`Rule stock-callout: "${hit[0]}" is the engine's own wording for beating this pattern, and every world that uses it shouts the same line. Name the thing in this room to get behind, off or between.`],
+    }];
+  });
+}
+
+/** Digits, or the number words a room line counts enemies with. */
+const COUNT_OPENER = /^(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|a|an)$/i;
+/**
+ * A floor's seven room lines, read in a row, must not all start the same way (WRITING.md
+ * section 8). Measured in the last live run: nearly every line opened on a count or a piece
+ * of furniture. Two lines may share an opening; the third is a rhythm.
+ */
+function openerFailures(parts: Lintable): LintFailure[] {
+  const max = Math.min(POLISH_MAX.roomLine ?? Infinity, KIND_SPECS.roomLine.max);
+  return (parts.biomes ?? []).flatMap((brief, biomeIndex) => {
+    const lines = parts.biomeRoomLines?.find((entry) => entry.biomeId === brief.id)?.lines ?? [];
+    const seen = new Map<string, number>();
+    const firstWords = new Map<string, number>();
+    return lines.flatMap((line, lineIndex) => {
+      const words = line.text.replace(/^[^A-Za-z0-9]+/, '').split(/\s+/).map((word) => word.replace(/[^A-Za-z0-9']/g, ''));
+      // The article is not the opening; the thing after it is.
+      const first = (/^(?:a|an|the)$/i.test(words[0] ?? '') ? words[1] : words[0]) ?? '';
+      const opener = COUNT_OPENER.test(first) ? 'a count' : first.toLowerCase();
+      const count = (seen.get(opener) ?? 0) + 1;
+      seen.set(opener, count);
+      const literal = (words[0] ?? '').toLowerCase();
+      const repeats = (firstWords.get(literal) ?? 0) + 1;
+      firstWords.set(literal, repeats);
+      const path = `biomes[${biomeIndex}].rooms[${lineIndex}].description`;
+      if (count >= 3) {
+        return [{
+          path, kind: 'roomLine' as const, text: line.text, maxChars: max,
+          notes: [`Rule opener-repeat: ${count} lines on this floor open on the same thing (${opener === 'a count' ? 'a count' : `"${first}"`}). Open this one somewhere else: on the machine the room was built around, on the state of the floor, on a person from the bible, or on the work that was going on when it stopped.`],
+        }];
+      }
+      // Four of seven lines beginning with the same word is a rhythm even when the subjects differ.
+      if (repeats >= 4) {
+        return [{
+          path, kind: 'roomLine' as const, text: line.text, maxChars: max,
+          notes: [`Rule opener-repeat: ${repeats} lines on this floor begin with the word "${words[0]}". Start this one on its own noun instead.`],
+        }];
+      }
+      return [];
+    });
+  });
+}
+
+/**
+ * A line trusted code had to shorten, handed to the polish call so the writer can write a
+ * short one. The cut is the defect: a sentence that stops mid-thought reads as machine-made
+ * whatever its vocabulary, and it is the single most common fault in the last live run
+ * (56 of 64 taglines). `fitOverlong` remains the last resort after polish.
+ */
+export function cutFailures(parts: Lintable, bible: WorldBible | undefined, cuts: readonly TextCut[]): LintFailure[] {
+  if (cuts.length === 0) return [];
+  const fields = new Map(lintFields(parts, bible).map((field) => [field.path, field]));
+  const out: LintFailure[] = [];
+  for (const cut of cuts) {
+    const field = fields.get(cut.path);
+    if (!field || out.some((failure) => failure.path === cut.path)) continue;
+    const max = Math.min(POLISH_MAX[field.kind] ?? Infinity, KIND_SPECS[field.kind].max);
+    // An over-long line the linter can still see is already a `too-long` failure with its own note.
+    if (field.text.length > max) continue;
+    const budget = Math.max(4, Math.floor(max / 6.5) - 1);
+    out.push({
+      path: cut.path, kind: field.kind, text: field.text, maxChars: max,
+      notes: [`Rule cut-short: this was written at ${cut.length} characters against a limit of ${cut.max}, so trusted code cut it and the player is left with a sentence that stops. Write it again complete, at most ${budget} words, keeping the same facts and dropping the weakest one.`],
+    });
+  }
+  return out;
 }
 
 /** Registry enemy ids that are not ordinary job words (`warden`, `guardian` and `sentinel` can be real titles). */

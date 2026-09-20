@@ -29,9 +29,9 @@ import { buildSystemPrompt, namePool, worldSeeds, type PromptStage } from './pro
 import { GenerationFailure, assertDisplayText, type ProviderUsage, type RecipeProvider } from './provider';
 import {
   BiomesToolSchema, FoundationToolSchema, PolishToolSchema, RelicsToolSchema, LawsToolSchema, RemainsToolSchema, RoomsToolSchema, StageParseError,
-  applyFixes, assembleRecipe, briefRejections, displayTexts, fitOverlong, isUnsafeText, jsonSchema, lintWorld, parseAttunements, parseBiomes,
+  applyFixes, assembleRecipe, briefRejections, cutFailures, displayTexts, fitOverlong, isUnsafeText, jsonSchema, lintWorld, parseAttunements, parseBiomes,
   fitHeader, headerOverflow, parseFoundation, parseLaws, parseLore, parseRooms, planBiomeSlots, planRelicSlots, planRemainsSlots, replaceEngineWords,
-  type Foundation, type LawsPart, type ParsedBrief, type RoomsPart, type WorldLint,
+  type Foundation, type LawsPart, type ParsedBrief, type RoomsPart, type TextCut, type WorldLint,
 } from './stages';
 import type { z } from 'zod';
 
@@ -161,6 +161,13 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
     }
   }
 
+  /** Lines trusted code shortened at parse time, sent back to be written short instead of cut. */
+  function cuts(parts: Parameters<typeof lintWorld>[0], bible: Foundation['bible'], list: readonly TextCut[]): WorldLint['failures'] {
+    const failures = cutFailures(parts, bible, list);
+    if (failures.length) notes.push(clipNote(`${failures.length} line(s) came back over their limit and were sent back to be rewritten short rather than cut.`));
+    return failures;
+  }
+
   /**
    * Polish: the lines the linter rejected go back with the editor's notes; a replacement is kept
    * only where it lints better. At most two rounds per stage (a round is ~2 s and ~100 tokens).
@@ -272,7 +279,7 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
         state.rooms = part;
         const lint = lintWorld(part, bible);
         before.push(lint);
-        await polish('rooms', part, bible, lint);
+        await polish('rooms', part, bible, lint, cuts(part, bible, part.cuts));
       }],
       ['laws, look and Custodian', async () => {
         const raw = await call('laws', 'laws', { world, bible }, LawsToolSchema, 2_500);
@@ -283,20 +290,24 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
         for (const note of part.notes) notes.push(clipNote(note));
         const lint = lintWorld(part, bible);
         before.push(lint);
-        await polish('laws', part, bible, lint);
+        await polish('laws', part, bible, lint, cuts(part, bible, part.cuts));
       }],
       ['relics', async () => {
         const lore = await withRetry(async (repairNote) => {
           const raw = await call('relics', 'relics', { bible, slots: relicSlots, ...(repairNote ? { repair: repairNote } : {}) }, RelicsToolSchema, 3_000);
           const parsed = parseLore(raw, bible, { kind: 'relic', count: relicSlots.length });
           guard({ lore: parsed.lore });
-          return parsed.lore.slice(0, relicSlots.length).map((fragment, index) => ({ ...fragment, enemyId: null, roomIndex: relicSlots[index]!.roomIndex }));
+          return {
+            lore: parsed.lore.slice(0, relicSlots.length).map((fragment, index) => ({ ...fragment, enemyId: null, roomIndex: relicSlots[index]!.roomIndex })),
+            cuts: parsed.cuts,
+          };
         });
         if (closed) return;
-        state.relics = lore;
-        const lint = lintWorld({ lore }, bible);
+        state.relics = lore.lore;
+        const parts = { lore: lore.lore };
+        const lint = lintWorld(parts, bible);
         before.push(lint);
-        await polish('relics', { lore }, bible, lint);
+        await polish('relics', parts, bible, lint, cuts(parts, bible, lore.cuts));
       }],
       ['remains and attunements', async () => {
         const parts = await withRetry(async (repairNote) => {
@@ -306,7 +317,9 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
           const lore = parsed.lore.filter((fragment) => fragment.enemyId !== null && remainsEnemies.includes(fragment.enemyId) && !seen.has(fragment.enemyId) && Boolean(seen.add(fragment.enemyId)))
             .map((fragment) => ({ ...fragment, roomIndex: 0 }));
           if (lore.length === 0) throw new StageParseError('Recipe failed schema validation at lore: every remains fragment needs an enemyId from the list.');
-          const result = { lore, attunements: parseAttunements(raw) };
+          // Remains fragments are re-indexed by the filter above, so only the attunement cuts carry over.
+          const stageCuts: TextCut[] = [];
+          const result = { lore, attunements: parseAttunements(raw, stageCuts), cuts: stageCuts };
           guard(result);
           return result;
         });
@@ -315,7 +328,7 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
         state.attunements = parts.attunements;
         const lint = lintWorld(parts, bible);
         before.push(lint);
-        await polish('remains', parts, bible, lint);
+        await polish('remains', parts, bible, lint, cuts(parts, bible, parts.cuts));
       }],
       ...[biomeSlots.slice(0, 2), biomeSlots.slice(2, 4), biomeSlots.slice(4, 6), biomeSlots.slice(6)].filter((slots) => slots.length > 0).map((slots, part): [string, () => Promise<void>] => [`biome briefs ${slots[0]!.index + 1}-${slots.at(-1)!.index + 1}`, async () => {
         const raw = await call('biomes', `biomes:${part + 1}`, { bible, world, slots: slots.map(({ position, setting, focusEvent, namesTaken }) => ({ position, setting, focusEvent, namesTaken })) }, BiomesToolSchema, 3_000);
@@ -328,9 +341,10 @@ async function staged(options: PipelineOptions): Promise<GeneratedRecipe> {
         if (closed) return;
         parsed.forEach((entry, offset) => { state.briefs[slots[0]!.index + offset] = entry && valid.includes(entry) ? entry : undefined; });
         const parts = { biomes: valid.map((entry) => entry.brief), biomeRoomLines: valid.map((entry) => ({ biomeId: entry.brief.id, lines: entry.lines })) };
+        const briefCuts = valid.flatMap((entry, local) => entry.cuts.map((cut) => ({ ...cut, path: `biomes[${local}].${cut.path}` })));
         const lint = lintWorld(parts, bible);
         before.push(lint);
-        await polish(`biomes:${part + 1}`, parts, bible, lint);
+        await polish(`biomes:${part + 1}`, parts, bible, lint, cuts(parts, bible, briefCuts));
       }]),
     ];
 

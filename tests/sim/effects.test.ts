@@ -24,7 +24,10 @@ import {
 } from '../../src/sim/effects';
 import { createSimulation, type Simulation } from '../../src/sim';
 
-const fixture = WorldFixtureSchema.parse(fixtureJson);
+// The fixture's own world laws are stripped: these cases measure one attunement effect against
+// the base rules, and vantage-spire really runs the_many/committed_strike/thin_air.
+const { laws: _laws, look: _look, custodian: _custodian, ...bareRecipe } = WorldFixtureSchema.parse(fixtureJson).recipe;
+const fixture = { ...WorldFixtureSchema.parse(fixtureJson), recipe: bareRecipe };
 const P1 = 'op-a';
 const P2 = 'op-b';
 

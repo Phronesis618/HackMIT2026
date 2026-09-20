@@ -17,8 +17,10 @@ as a trace in it: a name missing from the list, a delivery that did not come.
 - Add one detail only this person would notice or be annoyed by. End there, on a fact.
 - Obey each author's `never`. A reader must be able to tell the three authors apart
   with the bylines removed: sentence length, what gets counted, how entries open.
-- Each slot gives a `length`. Follow it: "short" is 1 or 2 sentences (under 140 chars),
-  "medium" 3 or 4 sentences (about 250), "long" 6 to 9 short sentences (max 480).
+- Each slot gives a `length`. Follow it: "short" is 1 or 2 sentences (under 140 characters,
+  about 22 words), "medium" 3 or 4 sentences (about 250 characters, 40 words), "long" 6 to
+  9 short sentences (480 characters at the very most, about 80 words). A fragment written
+  past its length is cut by trusted code and ends mid-sentence, so stop early instead.
 - Two fragments on the same event come from different authors and notice different things.
 - No two fragments open the same way. If one opens on the date, the next opens on an
   object, a name, a quantity or mid-sentence in the task. A log keeper need not restate the

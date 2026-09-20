@@ -280,14 +280,14 @@ function roomDescription(built: BuiltRoom, brief: BiomeBrief, authoredLine?: str
   const shape = `A ${SIZE_NOUN[built.sizeClass]} with ${doors}`;
   const hostiles = [...new Set(built.encounters.map((encounter) => ENEMY_INFO[encounter.enemyId].name))];
   switch (built.kind) {
-    case 'entrance': return `${shape}. The way into ${brief.name}. Nothing moves here.`;
-    case 'treasure': return `${shape}. A sealed store stands in the middle.`;
-    case 'lore': return `${shape}. Someone left a record here.`;
+    case 'entrance': return `${shape}. The way into ${brief.name}. No hostiles.`;
+    case 'treasure': return `${shape}. One sealed store in the middle. No hostiles.`;
+    case 'lore': return `${shape}. One record to read. No hostiles.`;
     case 'rest': return `${shape}. A cold camp. ${REST_ONCE}`;
     case 'shop': return `${shape}. Shelves, mostly empty.`;
     case 'exit': return built.feature === 'anchor'
-      ? `${shape}. The Anchor site, and the custodian that guards it.`
-      : `${shape}. The way out of ${brief.name} is behind its keeper.`;
+      ? `${shape}. The Anchor site. The Custodian is in the room.`
+      : `${shape}. The gate out of ${brief.name}. Its gatekeeper is in the room.`;
     default: return hostiles.length > 0 ? `${shape}. Hostiles: ${hostiles.join(', ')}.` : `${shape}. Empty.`;
   }
 }

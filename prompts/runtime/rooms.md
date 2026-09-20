@@ -15,9 +15,10 @@ of hue from accent.
 Exactly plannedRoomCount room blueprints. Differences between worlds must show in motifs,
 props, encounters and terrain, not only colours and names. The final room has `guardian` in
 enemyIds and `anchor_pedestal` in propIds.
-- name (max 80, aim 28): a bible place or a part of one.
-- description (max 100 chars): what is visible from the door, threat first with where it is,
-  then one feature of the room the crew can use. Present tense. The ids you put in enemyIds
+- name (max 80, aim 28, four words at most): a bible place or a part of one.
+- description (aim 100 characters, fourteen words at most, counted): what is visible from
+  the door, threat first with where it is, then one feature of the room the crew can use.
+  Present tense. No two rooms open on the same word. The ids you put in enemyIds
   are engine words and appear in no description: name each creature by its former job from
   the bible, singular or plural as the sentence needs ("one of the brine divers").
 - terrain: `features` (up to four IDs), `layout`, `density`; null for motif defaults. Pick

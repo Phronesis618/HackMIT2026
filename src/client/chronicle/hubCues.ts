@@ -71,12 +71,12 @@ export const HUB_CUE_LINES: Readonly<Record<string, readonly string[]>> = {
   ],
   downed_by: [
     'A {enemyName} put you down in room {deepestRoomIndex} of {worldTitle}.',
-    '{downs} down, the last one to a {enemyName}. It telegraphs. Watch the floor.',
-    '{enemyName}, room {deepestRoomIndex}. The staff and the loom both outreach it.',
+    'Down {downs} times, the last one to a {enemyName}. Both are on your sheet.',
+    '{enemyName}, room {deepestRoomIndex}. That is what the sheet says put you down.',
   ],
   downed_unattributed: [
     'Down {downs} times, and no creature on the sheet for any of them.',
-    'Room {deepestRoomIndex} did it, not a creature. Mind the floor.',
+    'Nothing on the sheet for room {deepestRoomIndex} but the floor. Check it before you stand on it.',
     'The room put you down {downs} times. It happens.',
   ],
   anchored_clean: [
@@ -91,8 +91,8 @@ export const HUB_CUE_LINES: Readonly<Record<string, readonly string[]>> = {
   ],
   collapsed: [
     '{worldTitle} went down. You got to room {deepestRoomIndex}.',
-    '{roomsCleared} rooms cleared before it folded. The record stands.',
-    '{worldTitle} collapsed. The log did not.',
+    '{roomsCleared} rooms cleared before it folded. I have written that down.',
+    '{worldTitle} collapsed with {roomsCleared} rooms cleared. Room {deepestRoomIndex} was as far as you got.',
   ],
   floors_collapsed: [
     '{worldTitle} went down at tier {deepestTier}. {biomesCleared} gates cleared before it.',
@@ -101,12 +101,12 @@ export const HUB_CUE_LINES: Readonly<Record<string, readonly string[]>> = {
   ],
   aborted: [
     'You came back early from {worldTitle}. No anchor, no penalty either.',
-    'Pulled out at room {deepestRoomIndex}. The gate does not mind.',
+    'Pulled out at room {deepestRoomIndex}. Leaving early is free.',
     'Aborted at room {deepestRoomIndex} of {worldTitle}. Logged as such.',
   ],
   floors_aborted: [
     'Pulled out of {worldTitle} at tier {deepestTier}. Logged.',
-    'Tier {deepestTier}, then home. The gate does not mind.',
+    'Tier {deepestTier}, then home. Nobody bills you for that.',
     'Aborted at tier {deepestTier} of {worldTitle}. No penalty for it.',
   ],
   fallback_idle: [

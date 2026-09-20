@@ -93,7 +93,7 @@ describe('biome choice', () => {
     const specials = { treasure: 0, lore: 0, rest: 0, elite: 0 };
     expect(describeLayout({ linearity: 0.9, branchiness: 0.1, specials })).toBe('Long and direct. Few side rooms.');
     expect(describeLayout({ linearity: 0.5, branchiness: 0.9, specials })).toBe('Winding. Many dead ends.');
-    expect(describeLayout({ linearity: 0.1, branchiness: 0.5, specials })).toBe('Wide and sprawling. Some side rooms.');
+    expect(describeLayout({ linearity: 0.1, branchiness: 0.5, specials })).toBe('Wide and branching. Some side rooms.');
   });
 
   it('builds one card per option with name, tier, room count, enemies and hazards from the brief', () => {

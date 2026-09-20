@@ -28,7 +28,12 @@ a flat short fact is worth more than a long one.
   given name plus surname; the data includes a `namePool` you may draw from when the ideas do
   not imply a culture. Include the person responsible for the collapse.
 - places: 3 or 4, objects: 3 or 4 (max 28 chars each). Named, physical, reusable:
-  a numbered machine, a room with a letter on the door, one person's marked tool. These are the nouns all later text reuses.
+  a numbered machine, a room with a letter on the door, one person's marked tool. These are
+  the nouns all later text reuses. A number in this world is something a person counted,
+  measured or was issued: 40 gasket kits, 2 m of salt, bed 4. Reference codes invented to
+  sound official (Shift 41-C, lot B-004, form QC-7, roll #338) are the cheapest kind of
+  detail and read as filler when every noun carries one. At most ONE such code in the whole
+  world, on the object the collapse turns on.
 - events: 5 in date order (6 only if the chain of cause needs it). date (max 20) is in the world's own calendar: the data
   carries a `calendar` style to use, with numbers of your own. fact (max 120): one flat past-tense sentence naming a person and
   carrying a number. Events form a chain of cause: each makes the next one possible. If a
@@ -49,6 +54,15 @@ a flat short fact is worth more than a long one.
   or the machine they left running. Rooms and floors written later use only this cast.
 
 ## title, tagline
-- title (max 40, aim 28): the name the inhabitants painted on the door. A place name, or
-  facility type plus a number or proper noun. No "of the", no abstract nouns.
-- tagline (max 80, aim 60): what it was, then one number that shows the damage.
+- title (max 40, aim 28, four words at most): the name the inhabitants painted on the
+  door. A place name, or facility type plus a number or proper noun. No "of the", no
+  abstract nouns. "Halloran Deep". "Pump Station Six".
+- tagline (hard max 80, aim 60): eleven words at most, counted. What it was, and the one
+  number that shows the damage. Pick the SHAPE that suits this world and do not write the
+  same shape every time; three clipped fragments with a count in the middle is one shape
+  among several and is worn out:
+    a sentence:      "Pump 6 ran at 140% for 19 days. Then Deck 4 flooded."
+    a label and a count: "Seabed pump station. 260 on the roster, 48 accounted for."
+    one fact only:   "Nine days of coolant for a station that needed nineteen."
+    somebody's words: "Sele signed for 212 frames and kept the receipts."
+  A twelfth word is a fact you should have dropped.

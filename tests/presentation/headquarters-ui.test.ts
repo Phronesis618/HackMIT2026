@@ -31,7 +31,7 @@ describe('headquarters station UI', () => {
     const html = renderToStaticMarkup(createElement(HeadquartersStationPanel, { model: model(), actions }));
     expect(html).toContain('Device-local records');
     expect(html).toContain('not lifetime totals or win counts');
-    expect(html).toContain('The archive is quiet');
+    expect(html).toContain('No records yet');
     expect(html.match(/<dd>0<\/dd>/g)).toHaveLength(6);
   });
 
