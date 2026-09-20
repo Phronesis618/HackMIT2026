@@ -22,6 +22,8 @@ import type { LocalSession } from '../transport/LocalSession';
 import { createKeyboardMouseInput, type InputSampler } from './input';
 import { stageOwnsInput } from './keyboardFocus';
 import type { UiStore } from './uiStore';
+import { resolveLaws, worldLawsView } from '../../sim/laws';
+import { withLookOverrides } from '../render/lookOverrides';
 
 export interface PreviewFlags {
   fixtureWorld: boolean;
@@ -251,7 +253,10 @@ export class GameController {
     if (world && room && snapshot.worldId === world.worldId && snapshot.roomId === room.id && snapshot.phase !== 'headquarters' && roomChanged) {
       this.shownWorldId = world.worldId;
       this.shownRoomId = room.id;
-      renderer.showRoom(room, world.art, world.receipt.lines, { title: world.recipe.title, tagline: world.recipe.tagline });
+      const lawsView = withLookOverrides(worldLawsView(world));
+      renderer.showRoom(room, world.art, world.receipt.lines, {
+        title: world.recipe.title, tagline: world.recipe.tagline, look: lawsView.look, lightRadius: resolveLaws(lawsView.laws).lightRadius,
+      });
       store.set({ room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal }, phase: snapshot.phase, hud: me ? hudFrom(me, snapshot) : store.get().hud });
     }
   }

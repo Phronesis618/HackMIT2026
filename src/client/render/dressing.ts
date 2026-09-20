@@ -26,7 +26,8 @@ import type { G } from './fx';
 const T = TILE_SIZE;
 const TAU = Math.PI * 2;
 
-export type FloorPattern = 'plates' | 'lattice' | 'flagstone' | 'grating' | 'crystal' | 'organic' | 'slabs' | 'boards';
+/** Same ids as `FLOOR_MATERIAL_IDS` in shared/laws.ts: a world's look may name one directly. */
+export type FloorPattern = 'plates' | 'lattice' | 'flagstone' | 'grating' | 'crystal' | 'organic' | 'slabs' | 'boards' | 'sand' | 'mosaic' | 'ice' | 'sheet_metal';
 export const FLOOR_PATTERN: Record<MotifId, FloorPattern> = {
   spires: 'lattice',
   arches: 'flagstone',
@@ -38,7 +39,8 @@ export const FLOOR_PATTERN: Record<MotifId, FloorPattern> = {
   ruined_machinery: 'grating',
 };
 
-export type MoteStyle = 'sparks' | 'dust' | 'flicker' | 'glints' | 'spores' | 'ash' | 'fireflies' | 'embers';
+/** Same ids as `ATMOSPHERE_IDS` in shared/laws.ts. */
+export type MoteStyle = 'sparks' | 'dust' | 'flicker' | 'glints' | 'spores' | 'ash' | 'fireflies' | 'embers' | 'rain' | 'snow' | 'drift' | 'none';
 export const MOTE_STYLE: Record<MotifId, MoteStyle> = {
   spires: 'sparks',
   arches: 'dust',
@@ -543,6 +545,41 @@ export function drawTilePattern(g: G, pattern: FloorPattern, ctx: TileContext): 
       }
       // warm wash so lantern worlds read warm even where no lamp is near
       g.fillStyle(hexInt(palette.accentSoft), 0.03).fillRect(x, y, T, T);
+      break;
+    }
+    case 'sand': {
+      // drifted bands that run across tiles, plus grain
+      for (let k = 0; k < 3; k++) {
+        const by = y + ((row * 13 + k * 11 + Math.floor(col / 3) * 5) % T);
+        g.fillStyle(k % 2 === 0 ? lighten(color, 0.07) : darken(color, 0.07), 0.55).fillRect(x, by, T, 2);
+      }
+      for (let k = 0; k < 5; k++) g.fillStyle(darken(color, 0.2), 0.5).fillRect(x + rand() * T, y + rand() * T, 1, 1);
+      break;
+    }
+    case 'mosaic': {
+      const q = T / 4;
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+        const pick = (col * 4 + i) * 7 + (row * 4 + j) * 13;
+        const tone = pick % 6 === 0 ? mix(color, palette.accentSoft, 0.45) : pick % 5 === 0 ? lighten(color, 0.09) : pick % 3 === 0 ? darken(color, 0.08) : hexInt(color);
+        g.fillStyle(tone, 1).fillRect(x + i * q + 0.5, y + j * q + 0.5, q - 1, q - 1);
+      }
+      break;
+    }
+    case 'ice': {
+      g.fillStyle(0xffffff, 0.1).fillRect(x, y, T, T);
+      g.lineStyle(1, lighten(color, 0.45), 0.5).lineBetween(x + rand() * T, y, x + rand() * T, y + T);
+      g.lineStyle(1, lighten(color, 0.3), 0.35).lineBetween(x, y + rand() * T, x + T, y + rand() * T);
+      if (rand() < 0.35) g.fillStyle(0xffffff, 0.7).fillCircle(x + 6 + rand() * (T - 12), y + 6 + rand() * (T - 12), 1);
+      break;
+    }
+    case 'sheet_metal': {
+      // 3x2-tile plates with bolt heads on the corners and a brushed diagonal
+      const left = col % 3 === 0;
+      const top = row % 2 === 0;
+      if (left) g.fillStyle(seam, 0.9).fillRect(x, y, 2, T);
+      if (top) g.fillStyle(seam, 0.9).fillRect(x, y, T, 2);
+      if (left && top) g.fillStyle(lighten(color, 0.3), 0.85).fillCircle(x + 6, y + 6, 1.6);
+      g.lineStyle(1, lighten(color, 0.12), 0.3).lineBetween(x, y + T, x + T, y);
       break;
     }
   }

@@ -10,12 +10,14 @@ import Phaser from 'phaser';
 import type { ArtRecipe, EnemyState, GameEvent, GameSnapshot, PlayerState, ReceiptLine, RoomSpec } from '../../shared/contracts';
 import { ATTACK_ARC_RAD, ATTACK_RANGE, DEPTH, LORE_READ_RANGE, PLAYER_RADIUS, TILE_SIZE, tileToWorld } from '../../shared/conventions';
 import { hashString } from '../../shared/ids';
+import type { WorldPresentation } from '../../shared/render';
 import { guardianTitle } from '../../shared/finale';
 import { CLASS_THEME, ENEMY_INFO, type ClassId } from '../../shared/registry';
 import { hexToInt, tokens } from '../../shared/tokens';
 import { ENEMY_COMBAT } from '../../sim/combat';
 import { drawHostile, drawOperative } from './characters';
-import { hexInt, VOID_COLOR } from './color';
+import { hexInt, lookPalette, VOID_COLOR } from './color';
+import { DEFAULT_LIGHTING, LIGHTING, drawDarkness, drawLightShafts, drawStormPulse, fixedLights, isLit, type LightSource, type LightingSpec } from './lighting';
 import { drawAnchorRitual } from './anchorRitual';
 import { collectTerrainTiles, drawTerrain, terrainCaption, type TerrainTile } from './terrain';
 import { drawHeadquartersStations, type HeadquartersStationView } from './headquarters';
@@ -62,6 +64,13 @@ export class RoomScene extends Phaser.Scene {
   private motesGfx: Phaser.GameObjects.Graphics | null = null;
   private motes: Mote[] = [];
   private moteStyle: MoteStyle = 'sparks';
+  /** World look + laws (agent M1): lighting mode, storm pulse overlay, `long_dark` cover. */
+  private lighting: LightingSpec = DEFAULT_LIGHTING;
+  private stormView: Phaser.GameObjects.Graphics | null = null;
+  private darkView: Phaser.GameObjects.Graphics | null = null;
+  private lightRadius: number | null = null;
+  private roomLights: LightSource[] = [];
+  private lightSources: LightSource[] = [];
   private projectilesView: Phaser.GameObjects.Graphics | null = null;
   /** In-world DM-style narration: markers over the props/encounters a real idea shaped. */
   private loreMarkers: LoreMarker[] = [];
@@ -120,15 +129,26 @@ export class RoomScene extends Phaser.Scene {
   buildRoom(
     room: RoomSpec,
     art: ArtRecipe,
-    opts: { headquarters: boolean; world?: { title: string; tagline: string } },
+    opts: { headquarters: boolean; world?: WorldPresentation | undefined },
     loreLines: ReceiptLine[] = [],
   ): void {
     // Floors: the biome's own motifs and palette turn (no-op for legacy rooms and the hub).
+    // Look (M1): the family transforms the WORLD palette first so the per-biome hue turn still
+    // shows on top of it; the contrast clamp runs last, over whatever those two produced.
+    const look = opts.headquarters ? null : opts.world?.look ?? null;
+    if (look) art = { ...art, palette: lookPalette(art.palette, look.paletteFamily), glowIntensity: look.paletteFamily === 'bloom' ? Math.max(art.glowIntensity, 0.7) : art.glowIntensity };
     art = artForRoom(room, art);
+    if (look) art = { ...art, palette: lookPalette(art.palette, 'ink_neon') };
     this.room = room;
     this.art = art;
     this.isHeadquarters = opts.headquarters;
-    this.moteStyle = opts.headquarters ? 'fireflies' : MOTE_STYLE[art.motifIds[0] ?? art.skyline];
+    this.moteStyle = opts.headquarters ? 'fireflies' : look?.atmosphere ?? MOTE_STYLE[art.motifIds[0] ?? art.skyline];
+    this.lighting = look ? LIGHTING[look.lighting] : DEFAULT_LIGHTING;
+    this.lightRadius = opts.headquarters ? null : opts.world?.lightRadius ?? null;
+    this.stormView = null;
+    this.darkView = null;
+    this.roomLights = this.lightRadius !== null ? fixedLights(room) : [];
+    this.lightSources = [];
     this.tweens.killAll();
     this.seenEffects.clear();
     this.enemyPositions.clear();
@@ -180,7 +200,7 @@ export class RoomScene extends Phaser.Scene {
     // The dominant motif decides the construction style of the whole room (see dressing.ts).
     const dominant = art.motifIds[0] ?? art.skyline;
     const floor = this.add.graphics().setDepth(DEPTH.floor);
-    drawFloor(floor, room, p, seed, opts.headquarters ? 'plates' : FLOOR_PATTERN[dominant]);
+    drawFloor(floor, room, p, seed, opts.headquarters ? 'plates' : look?.floorMaterial ?? FLOOR_PATTERN[dominant], this.lighting);
     layer.add(floor);
 
     const lights = this.add.graphics().setDepth(DEPTH.floorDecal);
@@ -220,7 +240,7 @@ export class RoomScene extends Phaser.Scene {
     });
 
     const walls = this.add.graphics().setDepth(DEPTH.propsBehind);
-    drawWalls(walls, room, p, seed);
+    drawWalls(walls, room, p, seed, this.lighting);
     layer.add(walls);
     this.terrainView = this.add.graphics().setDepth(DEPTH.propsBehind + 0.5);
     layer.add(this.terrainView);
@@ -272,7 +292,8 @@ export class RoomScene extends Phaser.Scene {
 
     this.portalGlow = this.add.graphics().setDepth(DEPTH.floorDecal + 3);
     layer.add(this.portalGlow);
-    this.telegraphs = this.add.graphics().setDepth(DEPTH.floorDecal + 4);
+    // Under `long_dark` telegraphs draw above the dark: danger is never hidden by a law.
+    this.telegraphs = this.add.graphics().setDepth(this.lightRadius !== null ? DEPTH.entities - 1.5 : DEPTH.floorDecal + 4);
     layer.add(this.telegraphs);
     this.projectilesView = this.add.graphics().setDepth(DEPTH.effects - 1);
     layer.add(this.projectilesView);
@@ -324,7 +345,8 @@ export class RoomScene extends Phaser.Scene {
       this.tweens.add({ targets: descriptionCard, alpha: 1, duration: tokens.motion.slowMs, delay: 320, hold: 4200, yoyo: true, onComplete: () => descriptionCard.destroy() });
     }
 
-    this.motes = makeMotes(roomW, roomH, seed, opts.headquarters ? 30 : this.moteStyle === 'embers' || this.moteStyle === 'sparks' ? 64 : 48);
+    const baseMotes = opts.headquarters ? 30 : this.moteStyle === 'embers' || this.moteStyle === 'sparks' ? 64 : 48;
+    this.motes = makeMotes(roomW, roomH, seed, look ? Math.round(look.atmosphereDensity * 140) : baseMotes);
     this.motesGfx = this.add.graphics().setDepth(DEPTH.effects - 2);
     layer.add(this.motesGfx);
 
@@ -338,6 +360,20 @@ export class RoomScene extends Phaser.Scene {
     const fog = this.add.graphics().setDepth(DEPTH.fog);
     drawVignette(fog, roomW, roomH, art.fog * 0.6, p);
     layer.add(fog);
+    if (this.lighting.shafts) {
+      const shafts = this.add.graphics().setDepth(DEPTH.fog - 2);
+      drawLightShafts(shafts, roomW, roomH, hexInt(p.text));
+      layer.add(shafts);
+    }
+    if (this.lighting.pulse) {
+      this.stormView = this.add.graphics().setDepth(DEPTH.fog - 2);
+      layer.add(this.stormView);
+    }
+    if (this.lightRadius !== null) {
+      // Above floor, walls, dressing and props; below operatives, bolts and effects.
+      this.darkView = this.add.graphics().setDepth(DEPTH.entities - 2);
+      layer.add(this.darkView);
+    }
 
     // The room title and the crew's Integrity bars live in the React HUD now (U1); the canvas
     // keeps only what belongs to the place itself: the world's name set into the arrival floor.
@@ -389,6 +425,11 @@ export class RoomScene extends Phaser.Scene {
       }
     }
 
+    if (this.lightRadius !== null && this.darkView && this.room) {
+      const radius = this.lightRadius;
+      this.lightSources = [...snapshot.players.filter((player) => player.hp > 0).map((player) => ({ x: player.x, y: player.y, radius })), ...this.roomLights];
+      drawDarkness(this.darkView, this.room, this.lightSources);
+    }
     const seenEnemies = new Set<string>();
     this.telegraphs?.clear();
     for (const enemy of snapshot.enemies) {
@@ -400,6 +441,8 @@ export class RoomScene extends Phaser.Scene {
         this.enemies.set(enemy.id, view);
       }
       this.updateEnemyView(view, enemy);
+      // long_dark: what no operative's light reaches is not drawn (it still telegraphs, above the dark).
+      if (this.lightRadius !== null) view.container.setVisible(isLit(enemy, this.lightSources));
       if (enemy.telegraph && this.telegraphs) this.drawTelegraph(this.telegraphs, enemy);
     }
     for (const [id, view] of this.enemies) {
@@ -1083,6 +1126,7 @@ export class RoomScene extends Phaser.Scene {
         if (open) g.lineStyle(1.5, 0xffffff, 0.4 + 0.4 * pulse).strokeCircle(c.x, c.y, 14 + pulse * 4);
       }
     }
+    if (this.stormView) drawStormPulse(this.stormView, this.room.width * TILE_SIZE, this.room.height * TILE_SIZE, hexInt(this.art.palette.text), this.time.now);
     if (this.motesGfx) drawMotes(this.motesGfx, this.motes, t, this.room.width * TILE_SIZE, this.room.height * TILE_SIZE, this.art.palette, this.moteStyle);
     if (this.loreView && this.loreMarkers.length > 0) {
       this.loreView.clear();
