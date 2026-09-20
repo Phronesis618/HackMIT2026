@@ -22,7 +22,7 @@ import {
 } from '../../shared/contracts';
 import { hashString } from '../../shared/ids';
 import { MAX_ROOMS } from '../../shared/contracts';
-import type { EnemyId, MotifId, PropId } from '../../shared/registry';
+import type { EnemyId, MotifId, PropId, WorldRuleId } from '../../shared/registry';
 import { CREATURE_SYNONYMS, HAZARD_WORDS, PROP_SYNONYMS, REMAINS_TEMPLATES, STOPWORDS, THEMES, type ThemeDef } from './themes';
 
 type RoomRole = 'entry' | 'mid' | 'final';
@@ -57,6 +57,16 @@ const MOTIF_LABEL: Record<MotifId, string> = {
   spires: 'needle spires', arches: 'vaulted arches', cables: 'strung cables', crystals: 'crystal growths',
   roots: 'living roots', monoliths: 'carved monoliths', lanterns: 'hanging lanterns', ruined_machinery: 'ruined machinery',
 };
+/** Which gameplay rules each theme reaches for first; the composer takes one or two. */
+const THEME_RULES: Record<string, WorldRuleId[]> = {
+  pirates: ['scavenger', 'frenzy'], drowned: ['low_visibility', 'unstable_ground'], jungle: ['dense_swarm', 'regen_fields'],
+  frozen: ['bulwark', 'unstable_ground'], desert: ['scavenger', 'bulwark'], volcanic: ['unstable_ground', 'frenzy'],
+  neon: ['frenzy', 'scavenger'], haunted: ['low_visibility', 'dense_swarm'], void: ['gravity_well', 'low_visibility'],
+  archive: ['regen_fields', 'bulwark'], swamp: ['unstable_ground', 'dense_swarm'], clockwork: ['bulwark', 'scavenger'],
+  crystal: ['gravity_well', 'regen_fields'], storm: ['frenzy', 'gravity_well'], cathedral: ['regen_fields', 'bulwark'],
+  festival: ['scavenger', 'frenzy'],
+};
+
 const ROOM_NOUNS: Record<RoomRole, string[]> = {
   entry: ['Gate', 'Threshold', 'Landing', 'Approach'],
   mid: ['Gallery', 'Hall', 'Hold', 'Crossing'],
@@ -420,6 +430,14 @@ export function composeWorld(request: GenerationRequest): Composition {
     });
   }
 
+  // Gameplay rules: the primary theme's signature rule, plus a second from the secondary theme
+  // (or the primary's own second) most of the time — so worlds play differently, not just look it.
+  const primaryRules = THEME_RULES[primary.id] ?? ['scavenger'];
+  const secondRule = secondary ? (THEME_RULES[secondary.id] ?? [])[0] : primaryRules[1];
+  const rules: WorldRuleId[] = [primaryRules[0]!];
+  if (secondRule && secondRule !== rules[0] && rand() < 0.75) rules.push(secondRule);
+  if (rules.includes('unstable_ground') && !rooms.some((r) => r.hazards)) rooms[Math.min(1, rooms.length - 1)]!.hazards = true;
+
   const attunements = [...primary.attunements, ...(secondary ? [secondary.attunements[0]!] : [])]
     .slice(0, 4)
     .map((a) => ({ effectId: a.effectId, name: clip(a.name, 40), description: clip(a.description, 160) }));
@@ -441,6 +459,7 @@ export function composeWorld(request: GenerationRequest): Composition {
     contributionMappings: mappings,
     lore,
     attunements,
+    rules,
   });
   return { recipe, themes: { primary: primary.id, secondary: secondary?.id ?? null, scores } };
 }

@@ -9,6 +9,7 @@ import type {
   ClassId,
   ImplementationStatus,
   MotifId,
+  WorldRuleId,
 } from './registry';
 import type {
   AnchorState,
@@ -57,6 +58,8 @@ export interface UiWorldSummary {
   roomNames?: string[];
   /** Biomes (regions) of the world with the rooms committed in each, for the reveal card and menus. */
   biomes?: Array<{ name: string; roomNames: string[]; palette: Palette }>;
+  /** Active gameplay rules of this world (registry ids; see WORLD_RULE_INFO). */
+  rules?: WorldRuleId[];
 }
 
 export interface UiRoomSummary {

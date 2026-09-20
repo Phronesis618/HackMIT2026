@@ -4,7 +4,7 @@
  * come straight from the authoritative snapshot via the UI model; nothing here is derived
  * from guesses.
  */
-import { CLASS_THEME, type ClassId } from '../../shared/registry';
+import { CLASS_THEME, WORLD_RULE_INFO, type ClassId } from '../../shared/registry';
 import type { UiModel, UiPlayer } from '../../shared/ui';
 
 export function PartyPlate({ model }: { model: UiModel }) {
@@ -20,6 +20,13 @@ export function PartyPlate({ model }: { model: UiModel }) {
       {crew.map((p) => (
         <PlateRow key={p.id} player={p} hp={p.hp ?? 0} maxHp={p.maxHp ?? 100} down={p.state === 'down'} />
       ))}
+      {model.phase === 'expedition' && model.world?.rules && model.world.rules.length > 0 && (
+        <ul className="rules rules--hud" aria-label="World rules in effect">
+          {model.world.rules.map((rule) => (
+            <li key={rule} className="rules__chip" title={WORLD_RULE_INFO[rule].summary}><b>{WORLD_RULE_INFO[rule].name}</b></li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

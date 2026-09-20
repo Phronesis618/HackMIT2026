@@ -7,9 +7,10 @@ import {
   DASH_COOLDOWN_MS, DASH_DURATION_MS, DASH_INVULNERABLE_MS, DASH_SPEED,
   LORE_PICKUP_RANGE, LORE_READ_MS, LORE_READ_RANGE,
   PLAYER_MAX_HP, PLAYER_RADIUS, REVIVE_DURATION_MS, REVIVE_HP, REVIVE_RANGE,
+  HAZARD_DAMAGE, HAZARD_TICK_MS, LOW_VISIBILITY_RANGE, REGEN_FIELD_HP_PER_SEC, REGEN_FIELD_RANGE,
   ROOM_CLEAR_REWARD, TICK_MS, TILE_SIZE, tileToWorld, worldToTile,
 } from '../shared/conventions';
-import { CLASS_ABILITIES, ENEMY_INFO, ULT_CHARGE_MAX, ULT_CHARGE_PER_DAMAGE, ULT_CHARGE_PER_KILL, type ClassId } from '../shared/registry';
+import { CLASS_ABILITIES, ENEMY_INFO, ULT_CHARGE_MAX, ULT_CHARGE_PER_DAMAGE, ULT_CHARGE_PER_KILL, type ClassId, type WorldRuleId } from '../shared/registry';
 import { buildSolidGrid, circleHitsSolid, moveCircle, type SolidGrid } from './collision';
 import {
   CHANNEL_PATTERN, CLASS_COMBAT, ENEMY_COMBAT, ENEMY_PROJECTILE_PATTERN,
@@ -36,6 +37,10 @@ interface PlayerRuntime {
   interacting: boolean;
   damagedThisTick: boolean;
   history: Array<Point & { hp: number }>;
+  /** Time since the last hazard-floor bite (rules: unstable_ground). */
+  hazardMs: number;
+  /** Accumulated fractional healing from regen fields. */
+  regenCarry: number;
 }
 
 interface EnemyRuntime {
@@ -107,6 +112,8 @@ export interface SimulationOptions {
 export function createSimulation(options: SimulationOptions = {}): Simulation {
   const hq = options.headquarters ?? headquartersRoom;
   let world: PreparedWorld | null = null;
+  /** World rules only apply on expeditions; HQ and the training range are neutral ground. */
+  const hasRule = (rule: WorldRuleId): boolean => phase === 'expedition' && (world?.recipe.rules ?? []).includes(rule);
   let room = hq;
   let grid: SolidGrid = buildSolidGrid(room);
   let phase: GamePhase = 'headquarters';
@@ -181,9 +188,13 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       const tile = worldToTile(at.x, at.y);
       encounters.push({ id: 'anchor-guardian', enemyId: 'guardian', x: tile.col, y: tile.row, count: 1 });
     }
+    const rules = phase === 'expedition' ? world?.recipe.rules ?? [] : [];
+    const hpScale = rules.includes('bulwark') ? 1.35 : rules.includes('frenzy') ? 0.8 : 1;
     for (const encounter of encounters) {
       const info = ENEMY_INFO[encounter.enemyId];
-      for (let i = 0; i < encounter.count; i++) {
+      const swarmy = encounter.enemyId === 'swarmling' || encounter.enemyId === 'husk';
+      const count = encounter.count + (rules.includes('dense_swarm') && swarmy ? 1 : 0);
+      for (let i = 0; i < count; i++) {
         const base = tileToWorld(encounter.x, encounter.y);
         const offset = i === 0 ? 0 : (i % 2 === 0 ? 1 : -1) * Math.ceil(i / 2) * (info.radius * 2 + 6);
         const spawn = nearestOpenPosition(grid, { x: base.x + offset, y: base.y }, info.radius);
@@ -191,7 +202,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
           state: {
             id: `${encounter.id.slice(0, 61)}-${i}`, enemyId: encounter.enemyId,
             ...spawn,
-            facing: Math.PI, hp: info.maxHp, maxHp: info.maxHp, state: 'idle',
+            facing: Math.PI, hp: Math.round(info.maxHp * hpScale), maxHp: Math.round(info.maxHp * hpScale), state: 'idle',
             telegraph: null, slowMs: 0, stunMs: 0, markMs: 0,
           },
           cooldownMs: 500, hitMs: 0, attackCount: 0, spawn, respawnMs: 0,
@@ -251,7 +262,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       },
       intent: null, unlockedClasses: new Set(), dashRemainingMs: 0,
       dashDirection: { x: 1, y: 0 }, attackRemainingMs: 0, hitRemainingMs: 0,
-      onExit: false, interacting: false, damagedThisTick: false, history: [],
+      onExit: false, interacting: false, damagedThisTick: false, history: [], hazardMs: 0, regenCarry: 0,
     };
   }
 
@@ -271,6 +282,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     events.push(emit({ type: 'enemy_damaged', enemyId: s.id, byPlayerId: p.state.id, amount, remainingHp: s.hp }));
     if (s.hp === 0) {
       s.telegraph = null;
+      // Hostiles pay out on death: the roguelike loop's small change (bigger under scavenger).
+      if (phase === 'expedition') p.state.resources += ENEMY_INFO[s.enemyId].shards + (hasRule('scavenger') ? 1 : 0);
       events.push(emit({ type: 'enemy_defeated', enemyId: s.id, byPlayerId: p.state.id }));
       dropRemains(e);
     }
@@ -664,11 +677,14 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       basicAttack(p, events);
     }
     if (p.dashRemainingMs > 0) {
-      s.vx = p.dashDirection.x * DASH_SPEED;
-      s.vy = p.dashDirection.y * DASH_SPEED;
+      const dashScale = hasRule('gravity_well') ? 1.4 : 1;
+      s.vx = p.dashDirection.x * DASH_SPEED * dashScale;
+      s.vy = p.dashDirection.y * DASH_SPEED * dashScale;
     } else {
+      const onHazard = tileUnder(s.x, s.y) === '~';
       const speed = CLASS_COMBAT[s.classId].speed * (p.attackRemainingMs > 0 ? 0.35 : 1) *
-        (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1);
+        (s.shroudMs > 0 ? 1.4 : 1) * (s.rallyMs > 0 ? 1.2 : 1) * (hasRule('gravity_well') ? 0.9 : 1) *
+        (onHazard && hasRule('unstable_ground') ? 0.6 : 1);
       s.vx = length > 0 ? moveX / length * speed : 0;
       s.vy = length > 0 ? moveY / length * speed : 0;
     }
@@ -795,8 +811,10 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     }
     const target = orderedPlayers().filter((p) => p.state.hp > 0 && p.state.shroudMs === 0)
       .sort((a, b) => distance(s, a.state) - distance(s, b.state))[0];
-    if (!target || (phase === 'training' && distance(s, target.state) > TRAINING_WAKE_RANGE)) {
-      // Training targets doze in their pens until an operative walks up to them.
+    if (!target || (phase === 'training' && distance(s, target.state) > TRAINING_WAKE_RANGE)
+      || (hasRule('low_visibility') && distance(s, target.state) > LOW_VISIBILITY_RANGE && e.hitMs === 0)) {
+      // Training targets doze in their pens until an operative walks up to them; in the murk
+      // of a low-visibility world hostiles hold position until you are close (or hit them).
       s.state = 'idle';
       return;
     }
@@ -813,7 +831,8 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (distance(s, target.state) > stopRange || !clearPath(grid, s, target.state)) {
       const waypoint = chaseWaypoint(grid, s, target.state, ENEMY_INFO[s.enemyId].radius);
       const d = distance(s, waypoint);
-      const step = Math.min(d, spec.speed * (s.slowMs > 0 ? 0.35 : 1) * TICK_MS / 1000);
+      const paceScale = hasRule('frenzy') ? 1.25 : hasRule('bulwark') ? 0.85 : 1;
+      const step = Math.min(d, spec.speed * paceScale * (s.slowMs > 0 ? 0.35 : 1) * TICK_MS / 1000);
       if (d > 0) {
         const moved = moveCircle(grid, s.x, s.y, ENEMY_INFO[s.enemyId].radius,
           (waypoint.x - s.x) / d * step, (waypoint.y - s.y) / d * step);
@@ -823,6 +842,43 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       s.state = e.hitMs > 0 ? 'hit' : 'chasing';
     } else {
       s.state = e.hitMs > 0 ? 'hit' : 'idle';
+    }
+  }
+
+  /** Tile character under a world position ('#', '.', '~', …) or ' ' outside the room. */
+  function tileUnder(x: number, y: number): string {
+    const tile = worldToTile(x, y);
+    return room.tiles[tile.row]?.[tile.col] ?? ' ';
+  }
+
+  /**
+   * Hazard floor really bites (harder and stickier under unstable_ground) and lantern light
+   * mends under regen_fields — the two floor rules that make walking a world feel different.
+   */
+  function applyFloorEffects(living: PlayerRuntime[], events: GameEvent[]): void {
+    const regen = hasRule('regen_fields');
+    const unstable = hasRule('unstable_ground');
+    const lanterns = regen ? room.props.filter((prop) => prop.propId === 'lantern').map((prop) => tileToWorld(prop.x, prop.y)) : [];
+    for (const p of living) {
+      const s = p.state;
+      if (tileUnder(s.x, s.y) === '~' && p.dashRemainingMs === 0) {
+        p.hazardMs += TICK_MS;
+        if (p.hazardMs >= HAZARD_TICK_MS) {
+          p.hazardMs = 0;
+          const bite = Math.round(HAZARD_DAMAGE * (unstable ? 1.6 : 1));
+          if (s.invulnerableMs === 0) damagePlayer(p, 'hazard', bite, false, events);
+        }
+      } else {
+        p.hazardMs = Math.max(0, p.hazardMs - TICK_MS);
+      }
+      if (regen && s.hp < s.maxHp && lanterns.some((c) => distance(c, s) <= REGEN_FIELD_RANGE)) {
+        p.regenCarry += REGEN_FIELD_HP_PER_SEC * TICK_MS / 1000;
+        if (p.regenCarry >= 1) {
+          const amount = Math.floor(p.regenCarry);
+          p.regenCarry -= amount;
+          heal(p, p, amount, events);
+        }
+      }
     }
   }
 
@@ -861,10 +917,12 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       }
     }
     updateLore(living, busy, events);
+    applyFloorEffects(living, events);
     if (!progress.cleared && living.length > 0 && livingEnemies().length === 0) {
       progress.cleared = true;
-      for (const p of players.values()) p.state.resources += ROOM_CLEAR_REWARD;
-      events.push(emit({ type: 'room_cleared', worldId: world.worldId, roomIndex: room.index, roomId: room.id, playerIds: playerIds(), reward: ROOM_CLEAR_REWARD }));
+      const reward = ROOM_CLEAR_REWARD + (hasRule('scavenger') ? 2 : 0);
+      for (const p of players.values()) p.state.resources += reward;
+      events.push(emit({ type: 'room_cleared', worldId: world.worldId, roomIndex: room.index, roomId: room.id, playerIds: playerIds(), reward }));
     }
     const anchor = progress.anchor;
     if (!anchor || anchor.state === 'planted' || !progress.cleared) return;

@@ -2309,3 +2309,44 @@ body {
   font: 9.5px/1.4 var(--font-body);
   color: var(--color-mist300, #8a9bbf);
 }
+
+/* ---- Agent A: world rule chips ---- */
+.rules {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.rules__chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 200px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 207, 138, 0.45);
+  background: rgba(255, 207, 138, 0.08);
+  text-align: left;
+}
+.rules__chip b {
+  font: 600 10px var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-warmLamp, #ffcf8a);
+}
+.rules__chip span {
+  font: 10px/1.35 var(--font-body);
+  color: var(--color-mist300, #8a9bbf);
+}
+.rules--hud {
+  justify-content: flex-start;
+  margin: 2px 0 0;
+  pointer-events: auto;
+}
+.rules--hud .rules__chip {
+  padding: 3px 7px;
+  background: rgba(9, 13, 22, 0.8);
+}

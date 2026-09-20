@@ -133,15 +133,16 @@ export const CLASS_THEME: Record<ClassId, { title: string; weapon: string; prima
 export const ENEMY_IDS = ['husk', 'sentinel', 'lurker', 'guardian', 'spewer', 'swarmling', 'warden', 'channeler'] as const;
 export type EnemyId = (typeof ENEMY_IDS)[number];
 
-export const ENEMY_INFO: Record<EnemyId, { name: string; maxHp: number; radius: number; status: ImplementationStatus }> = {
-  husk: { name: 'Husk', maxHp: 30, radius: 14, status: 'implemented' },
-  sentinel: { name: 'Sentinel', maxHp: 60, radius: 16, status: 'implemented' },
-  lurker: { name: 'Lurker', maxHp: 24, radius: 12, status: 'implemented' },
-  guardian: { name: 'Guardian', maxHp: 240, radius: 28, status: 'implemented' },
-  spewer: { name: 'Spewer', maxHp: 40, radius: 15, status: 'implemented' },
-  swarmling: { name: 'Swarmling', maxHp: 14, radius: 10, status: 'implemented' },
-  warden: { name: 'Warden', maxHp: 70, radius: 18, status: 'implemented' },
-  channeler: { name: 'Channeler', maxHp: 45, radius: 14, status: 'implemented' },
+/** `shards`: resources a hostile pays out when defeated on an expedition (roguelike loop). */
+export const ENEMY_INFO: Record<EnemyId, { name: string; maxHp: number; radius: number; shards: number; status: ImplementationStatus }> = {
+  husk: { name: 'Husk', maxHp: 30, radius: 14, shards: 1, status: 'implemented' },
+  sentinel: { name: 'Sentinel', maxHp: 60, radius: 16, shards: 2, status: 'implemented' },
+  lurker: { name: 'Lurker', maxHp: 24, radius: 12, shards: 1, status: 'implemented' },
+  guardian: { name: 'Guardian', maxHp: 240, radius: 28, shards: 8, status: 'implemented' },
+  spewer: { name: 'Spewer', maxHp: 40, radius: 15, shards: 2, status: 'implemented' },
+  swarmling: { name: 'Swarmling', maxHp: 14, radius: 10, shards: 1, status: 'implemented' },
+  warden: { name: 'Warden', maxHp: 70, radius: 18, shards: 3, status: 'implemented' },
+  channeler: { name: 'Channeler', maxHp: 45, radius: 14, shards: 2, status: 'implemented' },
 };
 
 /**
@@ -205,6 +206,27 @@ export const WALKABLE_TILES: ReadonlySet<string> = new Set(['.', '~', 'P', 'X', 
  * mechanical effect from this closed set and writes the in-world name/description; the
  * effect ids are what a future simulation pass will implement, so they must stay stable.
  */
+/**
+ * World rules: closed set of gameplay modifiers a world may carry (at most two). The
+ * simulation implements every id here; the composer/model only chooses. They are what
+ * makes one world PLAY differently from another, not just look different.
+ */
+export const WORLD_RULE_IDS = [
+  'frenzy', 'bulwark', 'low_visibility', 'unstable_ground', 'scavenger', 'dense_swarm', 'regen_fields', 'gravity_well',
+] as const;
+export type WorldRuleId = (typeof WORLD_RULE_IDS)[number];
+
+export const WORLD_RULE_INFO: Record<WorldRuleId, { name: string; summary: string; status: ImplementationStatus }> = {
+  frenzy: { name: 'Frenzy', summary: 'Hostiles move 25% faster but break 20% sooner.', status: 'implemented' },
+  bulwark: { name: 'Bulwark', summary: 'Hostiles are 35% tougher and 15% slower.', status: 'implemented' },
+  low_visibility: { name: 'Low Visibility', summary: 'Heavy murk: hostiles only notice you within a short range, and stay put until you are close.', status: 'implemented' },
+  unstable_ground: { name: 'Unstable Ground', summary: 'Hazard floor bites 60% harder and slows anyone standing in it.', status: 'implemented' },
+  scavenger: { name: 'Scavenger', summary: 'Every hostile drops an extra resource; cleared rooms pay +2.', status: 'implemented' },
+  dense_swarm: { name: 'Dense Swarm', summary: 'Swarm-type encounters bring one more body each.', status: 'implemented' },
+  regen_fields: { name: 'Regen Fields', summary: 'Standing in lantern light mends 3 Integrity per second.', status: 'implemented' },
+  gravity_well: { name: 'Gravity Well', summary: 'Dashes carry 40% further; walking is 10% slower.', status: 'implemented' },
+};
+
 export const ATTUNEMENT_EFFECT_IDS = [
   'hazard_ward', 'bolt_ward', 'melee_ward', 'relic_mend', 'remains_charge',
   'clear_surge', 'first_strike', 'guardian_bane', 'dash_echo', 'anchor_grace',

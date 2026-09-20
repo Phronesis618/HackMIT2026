@@ -301,6 +301,7 @@ export class GameController {
         motifIds: world.art.motifIds,
         roomNames: world.rooms.map((room) => room.name),
         biomes: world.biomes.map((b) => ({ name: b.name, roomNames: b.roomIndices.map((i) => world.rooms[i]?.name).filter((n): n is string => Boolean(n)), palette: b.art.palette })),
+        rules: world.recipe.rules,
       },
       notice: null,
     });

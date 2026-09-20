@@ -21,6 +21,7 @@ import {
   MOTIF_IDS,
   PROP_IDS,
   TILE_CHARS,
+  WORLD_RULE_IDS,
 } from './registry';
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,7 @@ export const AbilityIdSchema = z.enum(ABILITY_IDS);
 export const EnemyIdSchema = z.enum(ENEMY_IDS);
 export const MotifIdSchema = z.enum(MOTIF_IDS);
 export const PropIdSchema = z.enum(PROP_IDS);
+export const WorldRuleIdSchema = z.enum(WORLD_RULE_IDS);
 
 // ---------------------------------------------------------------------------
 // Identity & contributions
@@ -407,6 +409,8 @@ export const WorldRecipeSchema = z.object({
   lore: z.array(LoreFragmentSchema).max(12),
   /** 2–4 world-specific skill nodes; see `src/shared/skills.ts` for how they join the tree. */
   attunements: z.array(AttunementSchema).max(4).default([]),
+  /** Up to two gameplay modifiers from the registry's closed set (see WORLD_RULE_INFO). */
+  rules: z.array(WorldRuleIdSchema).max(2).default([]),
 }).superRefine((recipe, ctx) => {
   const total = recipe.biomes.length > 0 ? recipe.biomes.reduce((n, b) => n + b.rooms.length, 0) : recipe.rooms.length;
   if (total < 1) ctx.addIssue({ code: 'custom', message: 'a recipe needs at least one room (in rooms or in biomes)' });

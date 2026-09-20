@@ -81,7 +81,7 @@ export function compileWorldRecipe(rawRecipe: WorldRecipe, options: CompileWorld
   const orphanRemains = recipe.lore.filter((f) => f.kind === 'remains' && f.enemyId === null).length;
   if (orphanRemains > 0) notes.push(`${orphanRemains} remains fragment(s) name no enemy and will never drop.`);
 
-  const art = compileArt(recipe.palette, recipe.motifIds, seed);
+  const art = compileArt(recipe.palette, recipe.motifIds, seed, recipe.rules.includes('low_visibility'));
   // Biome art: each biome renders with its own motifs (and palette when it declares one), so
   // crossing into a new biome visibly changes the construction of the world.
   const biomes: CompiledBiome[] = recipe.biomes.map((biome, biomeIndex) => {
@@ -94,20 +94,21 @@ export function compileWorldRecipe(rawRecipe: WorldRecipe, options: CompileWorld
       name: biome.name,
       description: biome.description,
       roomIndices: roomIndices.length > 0 ? roomIndices : [Math.min(plannedRoomCount - 1, blueprints.findIndex((e) => e.biomeIndex === biomeIndex))].filter((i) => i >= 0),
-      art: compileArt(biome.palette ?? recipe.palette, biome.motifIds, hashString(`${seed}:biome:${biomeIndex}`)),
+      art: compileArt(biome.palette ?? recipe.palette, biome.motifIds, hashString(`${seed}:biome:${biomeIndex}`), recipe.rules.includes('low_visibility')),
     });
   }).filter((biome) => biome.roomIndices.length > 0);
 
   return { rooms, art, biomes, notes: notes.slice(0, 10) };
 }
 
-function compileArt(palette: Palette, motifIds: MotifId[], seed: number): ArtRecipe {
+function compileArt(palette: Palette, motifIds: MotifId[], seed: number, murky = false): ArtRecipe {
   return ArtRecipeSchema.parse({
     paletteFamily: 'ink-neon',
     palette,
     motifIds: motifIds.slice(0, 4),
     skyline: motifIds[0],
-    fog: fraction(seed, 'fog', 20, 55),
+    // low_visibility worlds are visibly murkier as well as mechanically shorter-sighted.
+    fog: murky ? fraction(seed, 'fog', 75, 95) : fraction(seed, 'fog', 20, 55),
     glowIntensity: fraction(seed, 'glow', 50, 85),
   });
 }
