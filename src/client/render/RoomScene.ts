@@ -25,6 +25,7 @@ export class RoomScene extends Phaser.Scene {
   private roomLayer: Phaser.GameObjects.Layer | null = null;
   private portalGlow: Phaser.GameObjects.Graphics | null = null;
   private telegraphs: Phaser.GameObjects.Graphics | null = null;
+  private projectilesView: Phaser.GameObjects.Graphics | null = null;
   private portalPulse = 0;
   private players = new Map<string, EntityView>();
   private enemies = new Map<string, EntityView>();
@@ -152,6 +153,8 @@ export class RoomScene extends Phaser.Scene {
     layer.add(this.portalGlow);
     this.telegraphs = this.add.graphics().setDepth(DEPTH.floorDecal + 4);
     layer.add(this.telegraphs);
+    this.projectilesView = this.add.graphics().setDepth(DEPTH.effects - 1);
+    layer.add(this.projectilesView);
 
     const fog = this.add.graphics().setDepth(DEPTH.fog);
     drawVignette(fog, roomW, roomH, art.fog, p);
@@ -217,7 +220,7 @@ export class RoomScene extends Phaser.Scene {
       if (warning && g) {
         const color = hexToInt(tokens.canvas.telegraph);
         g.fillStyle(color, 0.16).lineStyle(2, color, 0.9);
-        if (warning.kind === 'burst') {
+        if (warning.kind === 'burst' || warning.kind === 'ring' || warning.kind === 'spiral') {
           g.fillCircle(warning.x, warning.y, warning.range).strokeCircle(warning.x, warning.y, warning.range);
         } else {
           g.beginPath().slice(warning.x, warning.y, warning.range,
@@ -229,6 +232,20 @@ export class RoomScene extends Phaser.Scene {
       if (!seenEnemies.has(id)) {
         view.container.destroy(true);
         this.enemies.delete(id);
+      }
+    }
+
+    const bolts = this.projectilesView;
+    if (bolts) {
+      bolts.clear();
+      const boltColor = hexToInt(tokens.canvas.projectile);
+      for (const pr of snapshot.projectiles ?? []) {
+        const angle = Math.atan2(pr.vy, pr.vx);
+        const trail = Math.min(20, 8 + pr.radius * 2);
+        bolts.lineStyle(Math.max(2, pr.radius), boltColor, 0.35)
+          .lineBetween(pr.x - Math.cos(angle) * trail, pr.y - Math.sin(angle) * trail, pr.x, pr.y);
+        bolts.fillStyle(boltColor, 1).fillCircle(pr.x, pr.y, pr.radius);
+        bolts.lineStyle(1, 0xffffff, 0.75).strokeCircle(pr.x, pr.y, pr.radius);
       }
     }
 
@@ -396,6 +413,14 @@ export class RoomScene extends Phaser.Scene {
           g.strokePath();
           if (arc < 0.3) g.lineBetween(0, 0, Math.cos(event.facing) * range, Math.sin(event.facing) * range);
           this.tweens.add({ targets: g, alpha: 0, scale: 1.1, duration: tokens.motion.fastMs * 1.5, onComplete: () => g.destroy() });
+          break;
+        }
+        case 'enemy_attacked': {
+          const color = hexToInt(tokens.canvas.projectile);
+          const g = this.effect(event.x, event.y);
+          g.lineStyle(2, color, 0.85).lineBetween(0, 0, Math.cos(event.facing) * 26, Math.sin(event.facing) * 26);
+          g.fillStyle(color, 0.4).fillCircle(0, 0, 10);
+          this.tweens.add({ targets: g, alpha: 0, scale: 1.4, duration: tokens.motion.fastMs, onComplete: () => g.destroy() });
           break;
         }
         case 'enemy_damaged':

@@ -59,7 +59,7 @@ export const CLASS_ABILITIES: Record<ClassId, { q: AbilityId; e: AbilityId }> = 
 };
 
 /** Enemy archetypes. `guardian` is the room-3 Anchor encounter. */
-export const ENEMY_IDS = ['husk', 'sentinel', 'lurker', 'guardian'] as const;
+export const ENEMY_IDS = ['husk', 'sentinel', 'lurker', 'guardian', 'spewer', 'swarmling', 'warden', 'channeler'] as const;
 export type EnemyId = (typeof ENEMY_IDS)[number];
 
 export const ENEMY_INFO: Record<EnemyId, { name: string; maxHp: number; radius: number; status: ImplementationStatus }> = {
@@ -67,6 +67,10 @@ export const ENEMY_INFO: Record<EnemyId, { name: string; maxHp: number; radius: 
   sentinel: { name: 'Sentinel', maxHp: 60, radius: 16, status: 'implemented' },
   lurker: { name: 'Lurker', maxHp: 24, radius: 12, status: 'implemented' },
   guardian: { name: 'Guardian', maxHp: 240, radius: 28, status: 'implemented' },
+  spewer: { name: 'Spewer', maxHp: 40, radius: 15, status: 'implemented' },
+  swarmling: { name: 'Swarmling', maxHp: 14, radius: 10, status: 'implemented' },
+  warden: { name: 'Warden', maxHp: 70, radius: 18, status: 'implemented' },
+  channeler: { name: 'Channeler', maxHp: 45, radius: 14, status: 'implemented' },
 };
 
 /**

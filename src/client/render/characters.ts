@@ -76,6 +76,40 @@ export function drawHostile(g: G, enemy: Pick<EnemyState, 'enemyId' | 'state'>):
         g.lineStyle(1, danger, 1).strokeRect(x - 5, y - 5, 10, 10);
       }
       break;
+    case 'spewer':
+      g.fillCircle(0, 0, r).strokeCircle(0, 0, r);
+      for (let i = 0; i < 5; i++) {
+        const a = i * Math.PI * 2 / 5;
+        g.fillStyle(danger, 0.6).fillCircle(Math.cos(a) * r * 0.65, Math.sin(a) * r * 0.65, r * 0.28);
+      }
+      g.fillStyle(ink, 1).fillCircle(r * 0.55, 0, r * 0.3);
+      break;
+    case 'swarmling':
+      g.fillTriangle(0, -r, r, r * 0.7, -r, r * 0.7);
+      g.strokeTriangle(0, -r, r, r * 0.7, -r, r * 0.7);
+      g.lineStyle(1, danger, 0.8);
+      g.lineBetween(-r * 0.3, -r * 0.4, -r * 1.2, -r * 1.1).lineBetween(r * 0.3, -r * 0.4, r * 1.2, -r * 1.1);
+      break;
+    case 'warden':
+      g.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = i * Math.PI / 3 - Math.PI / 6;
+        const x = Math.cos(a) * r;
+        const y = Math.sin(a) * r;
+        if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      g.closePath().fillPath().strokePath();
+      g.lineStyle(2, danger, 0.7).strokeCircle(0, 0, r * 0.45);
+      break;
+    case 'channeler':
+      g.lineStyle(2, danger, 0.9).strokeCircle(0, 0, r);
+      g.fillStyle(ink, 1).fillCircle(0, 0, r * 0.5);
+      g.lineStyle(1.5, danger, 0.8);
+      for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 2;
+        g.lineBetween(Math.cos(a) * r * 0.5, Math.sin(a) * r * 0.5, Math.cos(a) * (r + 6), Math.sin(a) * (r + 6));
+      }
+      break;
   }
   g.fillStyle(enemy.state === 'hit' ? 0xffffff : danger, 1).fillTriangle(0, -5, 9, 0, 0, 5);
   if (enemy.state === 'attacking') {

@@ -433,7 +433,7 @@ export type PlayerState = z.infer<typeof PlayerStateSchema>;
 export const EnemyActionStateSchema = z.enum(['idle', 'chasing', 'attacking', 'hit', 'dead']);
 
 export const EnemyTelegraphSchema = z.object({
-  kind: z.enum(['melee', 'beam', 'charge', 'burst']),
+  kind: z.enum(['melee', 'beam', 'charge', 'burst', 'volley', 'spread', 'ring', 'homing', 'spiral']),
   x: z.number(),
   y: z.number(),
   facing: z.number(),
@@ -442,6 +442,18 @@ export const EnemyTelegraphSchema = z.object({
   remainingMs: z.number().nonnegative(),
 });
 export type EnemyTelegraph = z.infer<typeof EnemyTelegraphSchema>;
+
+/** A live bullet-hell projectile: authoritative position, moved and collided in `src/sim`. */
+export const ProjectileStateSchema = z.object({
+  id: IdString,
+  ownerEnemyId: IdString,
+  x: z.number(),
+  y: z.number(),
+  vx: z.number(),
+  vy: z.number(),
+  radius: z.number().positive(),
+});
+export type ProjectileState = z.infer<typeof ProjectileStateSchema>;
 
 export const EnemyStateSchema = z.object({
   id: IdString,
@@ -479,6 +491,7 @@ export const GameSnapshotSchema = z.object({
   roomId: IdString.nullable(),
   players: z.array(PlayerStateSchema),
   enemies: z.array(EnemyStateSchema),
+  projectiles: z.array(ProjectileStateSchema).optional(),
   anchor: AnchorStateSchema.nullable(),
   roomCleared: z.boolean().optional(),
 });
