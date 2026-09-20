@@ -35,8 +35,8 @@ export const HEADQUARTERS_STATIONS: readonly HeadquartersStation[] = [
   { id: 'records', name: 'Class plinths', wing: 'Records wing', description: 'Four plinths, one per weapon. Counts come from runs recorded on this device.', action: 'Read service record', x: 24, y: 8 },
   { id: 'quartermaster', name: 'Quartermaster', wing: 'Returns hall', description: 'Keeps the returns bench. Counts what came back and what did not.', action: 'Speak to the quartermaster', x: 15, y: 6 },
   { id: 'relics', name: 'Relic shelf', wing: 'Returns hall', description: 'Five brackets. A relic is shelved only if it came back from an anchored run.', action: 'Read the shelf', x: 15, y: 1 },
-  { id: 'observatory', name: 'World observatory', wing: 'Navigation wing', description: 'Console for the next world. Each operative adds ideas; the host prepares the world from them.', action: 'Plan expedition', x: 24, y: 16 },
-  { id: 'training', name: 'Proving chamber', wing: 'Training wing', description: 'Practice range with every enemy attack pattern. E and R are unlocked and no records are kept.', action: 'Inspect range', x: 5, y: 16 },
+  { id: 'observatory', name: 'World observatory', wing: 'Navigation wing', description: 'Console for the next world. Type one idea each; the host takes them all through the portal.', action: 'Plan expedition', x: 24, y: 16 },
+  { id: 'training', name: 'Proving chamber', wing: 'Training wing', description: 'A pen for each of the 8 hostiles, with their real attack patterns. E and R are unlocked; nothing here is recorded.', action: 'Inspect range', x: 5, y: 16 },
   { id: 'portal', name: 'Departure gate', wing: 'Transit hall', description: 'Gate to the prepared world. A crew of 1 to 4 goes through together.', action: 'Inspect destination', x: 15, y: 18 },
 ];
 
