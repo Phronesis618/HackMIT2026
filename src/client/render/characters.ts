@@ -219,6 +219,18 @@ export function drawHostile(g: G, enemy: HostileView, timeMs = 0): void {
     case 'guardian':
       drawGuardian(g, r, attacking, t);
       break;
+    case 'spewer':
+      drawSpewer(g, r, attacking, t);
+      break;
+    case 'swarmling':
+      drawSwarmling(g, r, attacking, enemy.state === 'chasing', t);
+      break;
+    case 'warden':
+      drawWarden(g, r, attacking, t);
+      break;
+    case 'channeler':
+      drawChanneler(g, r, attacking, t);
+      break;
   }
   if ((enemy.markMs ?? 0) > 0) {
     g.lineStyle(2, 0xffcf8a, 0.9).strokeCircle(0, 0, r + 8);
@@ -346,6 +358,84 @@ function drawGuardian(g: G, r: number, attacking: boolean, t: number): void {
   // facing crest
   g.fillStyle(lighten('#2a1f3a', 0.4), 1).fillTriangle(r - 4, -8, r + 12, 0, r - 4, 8);
   g.fillStyle(core, 0.9).fillTriangle(r, -3, r + 8, 0, r, 3);
+}
+
+function drawSpewer(g: G, r: number, attacking: boolean, t: number): void {
+  const sac = hexInt('#233a12');
+  const bile = 0x9dff5e;
+  const swell = attacking ? 1.15 + 0.05 * Math.sin(t * 30) : 1 + 0.04 * Math.sin(t * 4);
+  // bloated sac with pustules and a wide spore mouth facing forward
+  g.fillStyle(bile, 0.12).fillCircle(0, 0, r * 1.5 * swell);
+  g.fillStyle(sac, 1).fillEllipse(-2, 0, r * 2.2 * swell, r * 1.9 * swell);
+  g.lineStyle(2, bile, 0.9).strokeEllipse(-2, 0, r * 2.2 * swell, r * 1.9 * swell);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + t * 0.6;
+    const px = -2 + Math.cos(a) * r * 0.6;
+    const py = Math.sin(a) * r * 0.55;
+    g.fillStyle(lighten('#233a12', 0.2), 1).fillCircle(px, py, r * 0.26);
+    g.fillStyle(bile, 0.85).fillCircle(px, py, r * 0.14 + 0.5 * Math.sin(t * 6 + i));
+  }
+  g.fillStyle(hexInt('#0a1206'), 1).fillEllipse(r * 0.6, 0, r * 0.7, r * 0.9);
+  g.fillStyle(bile, attacking ? 0.95 : 0.5).fillEllipse(r * 0.6, 0, r * 0.35, r * 0.6);
+  g.lineStyle(1.5, bile, 0.8).lineBetween(r * 0.9, -r * 0.5, r * 1.3, -r * 0.8).lineBetween(r * 0.9, r * 0.5, r * 1.3, r * 0.8);
+}
+
+function drawSwarmling(g: G, r: number, attacking: boolean, chasing: boolean, t: number): void {
+  const shell = hexInt('#3a2a0c');
+  const glow = 0xffd35e;
+  const flap = Math.sin(t * (chasing || attacking ? 40 : 12)) * 6;
+  // wing blur
+  g.fillStyle(glow, 0.18).fillEllipse(-2, -r - 2, r * 1.8, 6 + flap);
+  g.fillStyle(glow, 0.18).fillEllipse(-2, r + 2, r * 1.8, 6 - flap);
+  // dart-shaped body with segment lines and a stinger
+  g.fillStyle(shell, 1).fillTriangle(-r * 1.2, -r * 0.7, r * 1.1, 0, -r * 1.2, r * 0.7);
+  g.lineStyle(1.5, glow, 0.95).strokeTriangle(-r * 1.2, -r * 0.7, r * 1.1, 0, -r * 1.2, r * 0.7);
+  g.lineStyle(1, glow, 0.6).lineBetween(-r * 0.6, -r * 0.45, -r * 0.6, r * 0.45).lineBetween(0, -r * 0.3, 0, r * 0.3);
+  g.fillStyle(glow, 1).fillCircle(r * 0.5, -r * 0.2, 1.6).fillCircle(r * 0.5, r * 0.2, 1.6);
+  g.lineStyle(2, 0xdbe4f7, 0.9).lineBetween(-r * 1.2, 0, -r * 1.9, 0);
+}
+
+function drawWarden(g: G, r: number, attacking: boolean, t: number): void {
+  const plate = hexInt('#1e2a4a');
+  const glow = 0x6ba8ff;
+  // heavy hexagonal armour with a rotating inner shield ring
+  g.fillStyle(glow, 0.1).fillCircle(0, 0, r + 6);
+  g.fillStyle(plate, 1).fillPoints(hexagon(0, 0, r + 2), true);
+  g.lineStyle(2.5, lighten('#1e2a4a', 0.5), 1).strokePoints(hexagon(0, 0, r + 2), true);
+  g.fillStyle(lighten('#1e2a4a', 0.15), 1).fillPoints(hexagon(0, 0, r * 0.7), true);
+  for (let i = 0; i < 3; i++) {
+    const a = t * (attacking ? 5 : 1.2) + (i * Math.PI * 2) / 3;
+    g.lineStyle(3, glow, 0.85);
+    g.beginPath();
+    g.arc(0, 0, r * 0.5, a, a + 1.3, false);
+    g.strokePath();
+  }
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    g.fillStyle(glow, 0.9).fillCircle(Math.cos(a) * (r - 3), Math.sin(a) * (r - 3), 1.5);
+  }
+  g.fillStyle(glow, 1).fillRect(r * 0.3, -2, 7, 4);
+  g.fillStyle(0xffffff, 0.9).fillRect(r * 0.3 + 4, -1, 2, 2);
+}
+
+function drawChanneler(g: G, r: number, attacking: boolean, t: number): void {
+  const robe = hexInt('#2a1440');
+  const glow = 0xd98cff;
+  // floating robed figure: outer sigil ring, four antennae, a bright channelling core
+  g.lineStyle(1.5, glow, 0.5).strokeCircle(0, 0, r + 8 + Math.sin(t * 3) * 1.5);
+  for (let i = 0; i < 4; i++) {
+    const a = t * (attacking ? 6 : 1.5) + (i * Math.PI) / 2;
+    g.lineStyle(2, glow, 0.85).lineBetween(Math.cos(a) * r * 0.5, Math.sin(a) * r * 0.5, Math.cos(a) * (r + 8), Math.sin(a) * (r + 8));
+    g.fillStyle(glow, 1).fillCircle(Math.cos(a) * (r + 8), Math.sin(a) * (r + 8), 2);
+  }
+  g.fillStyle(robe, 1).fillTriangle(-r, -r * 0.8, r * 0.6, 0, -r, r * 0.8);
+  g.fillStyle(robe, 1).fillCircle(0, 0, r * 0.75);
+  g.lineStyle(1.5, glow, 0.9).strokeCircle(0, 0, r * 0.75);
+  const pulse = attacking ? 0.9 + 0.1 * Math.sin(t * 40) : 0.55 + 0.15 * Math.sin(t * 4);
+  g.fillStyle(glow, pulse * 0.35).fillCircle(r * 0.25, 0, 8);
+  g.fillStyle(glow, pulse).fillCircle(r * 0.25, 0, 3.5);
+  g.fillStyle(0xffffff, 0.9).fillCircle(r * 0.25, 0, 1.4);
+  if (attacking) g.lineStyle(1, glow, 0.5).strokeCircle(0, 0, r + 14 + ((t * 40) % 10));
 }
 
 // ---------------------------------------------------------------------------

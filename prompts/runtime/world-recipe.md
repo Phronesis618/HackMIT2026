@@ -9,6 +9,10 @@ appear in motifs, structures, props, and encounters, not just colors and names.
 Use a dark ink-and-neon palette with readable accents. Put a guardian and an
 anchor_pedestal in the final room. Geometry is compiled by trusted code.
 
+Keep themeSummary and each room description to one short sentence. Aim for at most
+160 characters in themeSummary and 100 characters per room description. All schema
+maxLength limits count characters, not words; keep other text comfortably below them.
+
 Use only the allowed registry IDs below:
 {{registry}}
 

@@ -44,6 +44,7 @@ export const VisualTokensSchema = z.object({
     remotePlayerAccent: HexColor,
     enemyAccent: HexColor,
     telegraph: HexColor,
+    projectile: HexColor,
   }),
 });
 export type VisualTokens = z.infer<typeof VisualTokensSchema>;

@@ -5,7 +5,7 @@
  * Owner: Agent A (shape). Implementation: Agent C in src/client/render/.
  * Foundation implementation: PhaserWorldRenderer (placeholder art, real wiring).
  */
-import type { ArtRecipe, GameEvent, GameSnapshot, RoomSpec } from './contracts';
+import type { ArtRecipe, GameEvent, GameSnapshot, ReceiptLine, RoomSpec } from './contracts';
 
 export interface WorldRenderer {
   /** Create the canvas inside `container`. Resolves when the first scene is ready. */
@@ -15,8 +15,12 @@ export interface WorldRenderer {
    * 'X' tile is the portal; the renderer may add sanctuary-specific decoration.
    */
   showHeadquarters(room: RoomSpec, art: ArtRecipe): void;
-  /** Build a room from trusted data. Called once per room entry; may be called again for a new room. */
-  showRoom(room: RoomSpec, art: ArtRecipe): void;
+  /**
+   * Build a room from trusted data. Called once per room entry; may be called again for a
+   * new room. `loreLines` (the creation receipt) lets the renderer surface player-authored
+   * worldbuilding in-world, near whatever it actually shaped, instead of as sidebar prose.
+   */
+  showRoom(room: RoomSpec, art: ArtRecipe, loreLines?: ReceiptLine[]): void;
   /** Called every animation frame with the latest authoritative snapshot. */
   renderSnapshot(snapshot: GameSnapshot, localPlayerId: string): void;
   /** Fire-and-forget visual/audio reactions to events (dash trail, hit flash, ...). */

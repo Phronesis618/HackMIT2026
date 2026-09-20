@@ -461,6 +461,19 @@ body {
 .debrief__keepsake .panel__subtitle {
   margin-top: 0;
 }
+/* Visually hidden but present for assistive tech; the live Integrity/status bars are
+   drawn in-world above the room (src/client/render/RoomScene.ts) for sighted players. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .meter {
   margin: var(--space-sm) 0;
 }

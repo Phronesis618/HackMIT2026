@@ -16,7 +16,7 @@ HOST=0.0.0.0 npm start
 Open `http://localhost:8787` for solo play. For co-op, everyone opens
 `http://<host-lan-ip>:8787/?mode=coop` on the same network, or uses **Join co-op**.
 The first connected player hosts the shared crew. One server holds one crew of at most four
-players. No player needs an OpenAI account; only the Node server uses generation credentials.
+players. No player needs an AI provider account; only the Node server uses generation credentials.
 
 For a container host, use the production-container commands in the README.
 
@@ -54,8 +54,12 @@ idea. Sound starts after a user gesture.
 ## Generation configuration
 
 Default mode uses validated fixtures and makes no paid requests. To enable live generation,
-set `RELAY_GENERATION_MODE=live`, `OPENAI_API_KEY`, and an available `OPENAI_MODEL` on the
-server, then restart it. Never expose the key through a `VITE_` variable.
+set `RELAY_GENERATION_MODE=live`, `RELAY_AI_PROVIDER=anthropic`, and `ANTHROPIC_API_KEY`
+on the server, then restart it. Claude defaults to `claude-sonnet-4-6`; override with
+`ANTHROPIC_MODEL` if needed. To switch to GPT, set `RELAY_AI_PROVIDER=openai` and
+`OPENAI_API_KEY` (`OPENAI_MODEL` defaults to `gpt-5-mini`), then restart. Both keys may
+remain configured; only the selected provider is called. Never expose keys through a
+`VITE_` variable. Full examples are in [the README](../README.md#configuration).
 
 The receipt reports the actual generation source. Missing credentials, timeouts, rejected
 model output, or unavailable models can fall back to an explicitly labelled fixture.

@@ -493,8 +493,15 @@ export function enemyAccent(enemyId: EnemyId): number {
       return 0xff8f3f;
     case 'lurker':
       return 0xc43cff;
+    case 'spewer':
+      return 0x9dff5e;
+    case 'swarmling':
+      return 0xffd35e;
+    case 'warden':
+      return 0x6ba8ff;
+    case 'channeler':
+      return 0xd98cff;
     case 'guardian':
-      return 0xff5c7a;
     default:
       return 0xff5c7a;
   }

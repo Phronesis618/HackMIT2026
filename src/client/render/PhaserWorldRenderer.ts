@@ -3,7 +3,7 @@
  * Owns the Phaser.Game instance and forwards contract calls to RoomScene.
  */
 import Phaser from 'phaser';
-import type { ArtRecipe, GameEvent, GameSnapshot, RoomSpec } from '../../shared/contracts';
+import type { ArtRecipe, GameEvent, GameSnapshot, ReceiptLine, RoomSpec } from '../../shared/contracts';
 import type { WorldRenderer } from '../../shared/render';
 import { tokens } from '../../shared/tokens';
 import { RoomScene } from './RoomScene';
@@ -12,14 +12,14 @@ export class PhaserWorldRenderer implements WorldRenderer {
   private game: Phaser.Game | null = null;
   private scene: RoomScene | null = null;
   private mounting: Promise<void> | null = null;
-  private pendingRoom: { room: RoomSpec; art: ArtRecipe; headquarters: boolean } | null = null;
+  private pendingRoom: { room: RoomSpec; art: ArtRecipe; headquarters: boolean; loreLines: ReceiptLine[] } | null = null;
 
   mount(container: HTMLElement): Promise<void> {
     if (this.mounting) return this.mounting;
     this.mounting = new Promise((resolve) => {
       const scene = new RoomScene(() => {
         if (this.pendingRoom) {
-          scene.buildRoom(this.pendingRoom.room, this.pendingRoom.art, { headquarters: this.pendingRoom.headquarters });
+          scene.buildRoom(this.pendingRoom.room, this.pendingRoom.art, { headquarters: this.pendingRoom.headquarters }, this.pendingRoom.loreLines);
           this.pendingRoom = null;
         }
         resolve();
@@ -41,16 +41,16 @@ export class PhaserWorldRenderer implements WorldRenderer {
   }
 
   showHeadquarters(room: RoomSpec, art: ArtRecipe): void {
-    this.build(room, art, true);
+    this.build(room, art, true, []);
   }
 
-  showRoom(room: RoomSpec, art: ArtRecipe): void {
-    this.build(room, art, false);
+  showRoom(room: RoomSpec, art: ArtRecipe, loreLines: ReceiptLine[] = []): void {
+    this.build(room, art, false, loreLines);
   }
 
-  private build(room: RoomSpec, art: ArtRecipe, headquarters: boolean): void {
-    if (this.scene && this.scene.sys.isActive()) this.scene.buildRoom(room, art, { headquarters });
-    else this.pendingRoom = { room, art, headquarters };
+  private build(room: RoomSpec, art: ArtRecipe, headquarters: boolean, loreLines: ReceiptLine[]): void {
+    if (this.scene && this.scene.sys.isActive()) this.scene.buildRoom(room, art, { headquarters }, loreLines);
+    else this.pendingRoom = { room, art, headquarters, loreLines };
   }
 
   renderSnapshot(snapshot: GameSnapshot, localPlayerId: string): void {

@@ -1,6 +1,6 @@
 import type {
   AnchorState, EnemyState, EnemyTelegraph, GameEvent, GameEventInput, GamePhase,
-  GameSnapshot, PlayerIdentity, PlayerIntent, PlayerState, PreparedWorld, RoomSpec,
+  GameSnapshot, PlayerIdentity, PlayerIntent, PlayerState, PreparedWorld, ProjectileState, RoomSpec,
 } from '../shared/contracts';
 import {
   ABILITY_UNLOCK_COST, ANCHOR_HOLD_MS, ANCHOR_RANGE, ATTACK_DURATION_MS,
@@ -9,8 +9,13 @@ import {
   ROOM_CLEAR_REWARD, TICK_MS, TILE_SIZE, tileToWorld, worldToTile,
 } from '../shared/conventions';
 import { CLASS_ABILITIES, ENEMY_INFO, ULT_CHARGE_MAX, ULT_CHARGE_PER_DAMAGE, ULT_CHARGE_PER_KILL, type ClassId } from '../shared/registry';
-import { buildSolidGrid, moveCircle, type SolidGrid } from './collision';
-import { CLASS_COMBAT, ENEMY_COMBAT, chaseWaypoint, clearPath, decay, distance, inArc, nearestOpenPosition, type Point } from './combat';
+import { buildSolidGrid, circleHitsSolid, moveCircle, type SolidGrid } from './collision';
+import {
+  CHANNEL_PATTERN, CLASS_COMBAT, ENEMY_COMBAT, ENEMY_PROJECTILE_PATTERN,
+  GUARDIAN_RING_DAMAGE, GUARDIAN_RING_PATTERN, GUARDIAN_VOLLEY_DAMAGE, GUARDIAN_VOLLEY_PATTERN,
+  LURKER_SPORE_DAMAGE, LURKER_SPORE_PATTERN, chaseWaypoint, clearPath, decay, distance, inArc,
+  nearestOpenPosition, type Point, type ProjectilePattern,
+} from './combat';
 import { headquartersRoom } from './headquarters';
 import { TRAINING_REGEN_PER_TICK, TRAINING_RESPAWN_MS, TRAINING_WAKE_RANGE, trainingRoom } from './training';
 
@@ -40,6 +45,23 @@ interface EnemyRuntime {
   /** Where it was placed; training targets respawn here. */
   spawn: Point;
   respawnMs: number;
+  /** Channeler's rotating spiral: >0 while mid-channel, firing one bolt per `shotIntervalMs`. */
+  channelMsRemaining: number;
+  channelAngle: number;
+  channelTimerMs: number;
+}
+
+interface ProjectileRuntime {
+  id: string;
+  ownerEnemyId: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  damage: number;
+  remainingMs: number;
+  homingTurnRate?: number;
 }
 
 interface RoomProgress {
@@ -86,6 +108,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   const players = new Map<string, PlayerRuntime>();
   const rooms = new Map<number, RoomProgress>();
   let progress: RoomProgress = { enemies: [], anchor: null, cleared: false };
+  /** Ephemeral bullet-hell bolts; never persisted across room switches (combat gates exits). */
+  let projectiles: ProjectileRuntime[] = [];
+  let projectileCounter = 0;
 
   function emit(data: GameEventInput): GameEvent {
     return { ...data, id: `${tick}:${eventCounter++}`, tick, timeMs: tick * TICK_MS };
@@ -161,6 +186,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
             telegraph: null, slowMs: 0, stunMs: 0, markMs: 0,
           },
           cooldownMs: 500, hitMs: 0, attackCount: 0, spawn, respawnMs: 0,
+          channelMsRemaining: 0, channelAngle: 0, channelTimerMs: 0,
         });
       }
     }
@@ -184,6 +210,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     room = next;
     phase = nextPhase;
     grid = buildSolidGrid(room);
+    projectiles = [];
     const saved = nextPhase === 'expedition' ? rooms.get(next.index) : undefined;
     const anchorPoint = room.isFinal ? findTile('A') : null;
     progress = saved ?? {
@@ -232,7 +259,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     }
   }
 
-  function damagePlayer(p: PlayerRuntime, e: EnemyRuntime, damage: number, ranged: boolean, events: GameEvent[]): boolean {
+  function damagePlayer(p: PlayerRuntime, sourceEnemyId: string, damage: number, ranged: boolean, events: GameEvent[]): boolean {
     const s = p.state;
     if (s.hp <= 0 || s.invulnerableMs > 0 || (ranged && s.shieldMs > 0)) return false;
     let amount = Math.min(s.hp, s.shieldMs > 0 ? Math.ceil(damage * 0.2) : damage);
@@ -244,7 +271,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     s.reviveProgress = 0;
     p.damagedThisTick = true;
     p.hitRemainingMs = 160;
-    events.push(emit({ type: 'player_damaged', playerId: s.id, amount, remainingHp: s.hp, sourceEnemyId: e.state.id }));
+    events.push(emit({ type: 'player_damaged', playerId: s.id, amount, remainingHp: s.hp, sourceEnemyId }));
     if (s.hp === 0) {
       s.state = 'down';
       s.vx = s.vy = 0;
@@ -264,6 +291,85 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (restored === 0) return;
     p.state.hp += restored;
     events.push(emit({ type: 'player_healed', playerId: p.state.id, byPlayerId: by.state.id, amount: restored, remainingHp: p.state.hp }));
+  }
+
+  function spawnProjectile(
+    x: number, y: number, angle: number, speed: number, radius: number,
+    damage: number, life: number, ownerEnemyId: string, homingTurnRate?: number,
+  ): void {
+    if (projectiles.length > 400) projectiles.shift();
+    projectiles.push({
+      id: `${ownerEnemyId.slice(0, 24)}-p${projectileCounter++}`, ownerEnemyId,
+      x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      radius, damage, remainingMs: life, homingTurnRate,
+    });
+  }
+
+  /**
+   * Fires one burst of bolts from a single resolved attack.
+   *  - `spread`: bolts fan out around `facing` by `pattern.spacing` radians.
+   *  - `ring`: bolts fan out in a full circle, the first one aligned to `facing` (still aimed).
+   *  - `volley`: bolts share one aim line, staggered `pattern.spacing` px apart so they land
+   *    in sequence like a burst of shots rather than a single simultaneous fan.
+   *  - `homing`/`spiral-shot`: a single aimed bolt (spiral's rotation is handled by the caller).
+   */
+  function firePattern(
+    ownerEnemyId: string, x: number, y: number, facing: number,
+    kind: 'spread' | 'ring' | 'volley' | 'homing' | 'spiral-shot',
+    pattern: ProjectilePattern, damage: number,
+  ): void {
+    for (let i = 0; i < pattern.count; i++) {
+      let angle = facing;
+      let px = x;
+      let py = y;
+      if (kind === 'spread') angle = facing + (i - (pattern.count - 1) / 2) * pattern.spacing;
+      else if (kind === 'ring') angle = facing + i * pattern.spacing;
+      else if (kind === 'volley') {
+        px = x - Math.cos(facing) * i * pattern.spacing;
+        py = y - Math.sin(facing) * i * pattern.spacing;
+      }
+      spawnProjectile(px, py, angle, pattern.speed, pattern.radius, damage, pattern.life, ownerEnemyId,
+        kind === 'homing' ? pattern.homingTurnRate : undefined);
+    }
+  }
+
+  function stepProjectiles(events: GameEvent[]): void {
+    if (projectiles.length === 0) return;
+    const alive: ProjectileRuntime[] = [];
+    for (const pr of projectiles) {
+      pr.remainingMs = decay(pr.remainingMs);
+      if (pr.remainingMs === 0) continue;
+      if (pr.homingTurnRate) {
+        const target = orderedPlayers().filter((p) => p.state.hp > 0 && (p.state.shroudMs ?? 0) === 0)
+          .sort((a, b) => distance(pr, a.state) - distance(pr, b.state))[0];
+        if (target) {
+          const desired = Math.atan2(target.state.y - pr.y, target.state.x - pr.x);
+          const current = Math.atan2(pr.vy, pr.vx);
+          const diff = Math.atan2(Math.sin(desired - current), Math.cos(desired - current));
+          const maxTurn = pr.homingTurnRate * TICK_MS / 1000;
+          const turned = current + Math.max(-maxTurn, Math.min(maxTurn, diff));
+          const speed = Math.hypot(pr.vx, pr.vy);
+          pr.vx = Math.cos(turned) * speed;
+          pr.vy = Math.sin(turned) * speed;
+        }
+      }
+      const nx = pr.x + pr.vx * TICK_MS / 1000;
+      const ny = pr.y + pr.vy * TICK_MS / 1000;
+      if (circleHitsSolid(grid, nx, ny, pr.radius)) continue;
+      pr.x = nx;
+      pr.y = ny;
+      let hit = false;
+      for (const p of orderedPlayers()) {
+        if (p.state.hp <= 0) continue;
+        if (distance(pr, p.state) <= pr.radius + PLAYER_RADIUS) {
+          damagePlayer(p, pr.ownerEnemyId, pr.damage, true, events);
+          hit = true;
+          break;
+        }
+      }
+      if (!hit) alive.push(pr);
+    }
+    projectiles = alive;
   }
 
   function arcTargets(origin: Point, facing: number, range: number, arc: number): EnemyRuntime[] {
@@ -507,25 +613,85 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (s.state === 'dashing' || s.state === 'attacking' || intent?.ability || length > 0) p.interacting = false;
   }
 
+  /** Picks the telegraph shape for an enemy's next attack. Guardian cycles four phases. */
+  function attackKindFor(s: EnemyState, e: EnemyRuntime): { kind: EnemyTelegraph['kind']; range: number; arc: number } {
+    const spec = ENEMY_COMBAT[s.enemyId];
+    if (s.enemyId === 'guardian') {
+      const phase = e.attackCount % 4;
+      if (phase === 0) return { kind: 'burst', range: spec.range, arc: spec.arc };
+      if (phase === 1) return { kind: 'volley', range: spec.range, arc: 0.2 };
+      if (phase === 2) return { kind: 'ring', range: spec.range, arc: Math.PI * 2 };
+      return { kind: 'beam', range: 300, arc: 0.25 };
+    }
+    switch (s.enemyId) {
+      case 'sentinel': return { kind: 'volley', range: spec.range, arc: 0.14 };
+      case 'lurker': return { kind: 'charge', range: spec.range, arc: spec.arc };
+      case 'spewer': return { kind: 'spread', range: spec.range, arc: 0.6 };
+      case 'warden': return { kind: 'homing', range: spec.range, arc: 0.12 };
+      case 'channeler': return { kind: 'spiral', range: spec.range, arc: Math.PI * 2 };
+      default: return { kind: 'melee', range: spec.range, arc: spec.arc };
+    }
+  }
+
   function resolveEnemyAttack(e: EnemyRuntime, telegraph: EnemyTelegraph, events: GameEvent[]): void {
     const s = e.state;
     const spec = ENEMY_COMBAT[s.enemyId];
     const hits: string[] = [];
     events.push(emit({ type: 'enemy_attacked', enemyId: s.id, x: telegraph.x, y: telegraph.y, facing: telegraph.facing, hitPlayerIds: hits }));
-    for (const p of orderedPlayers()) {
-      if (!inArc(telegraph, p.state, telegraph.facing, telegraph.range, telegraph.arcRad, PLAYER_RADIUS) ||
-        !clearPath(grid, telegraph, p.state)) continue;
-      if (damagePlayer(p, e, spec.damage, telegraph.kind === 'beam', events)) hits.push(p.state.id);
-    }
-    if (telegraph.kind === 'charge') {
-      const moved = moveCircle(grid, s.x, s.y, ENEMY_INFO[s.enemyId].radius,
-        Math.cos(telegraph.facing) * telegraph.range, Math.sin(telegraph.facing) * telegraph.range);
-      s.x = moved.x;
-      s.y = moved.y;
+    if (telegraph.kind === 'melee' || telegraph.kind === 'beam' || telegraph.kind === 'burst' || telegraph.kind === 'charge') {
+      for (const p of orderedPlayers()) {
+        if (!inArc(telegraph, p.state, telegraph.facing, telegraph.range, telegraph.arcRad, PLAYER_RADIUS) ||
+          !clearPath(grid, telegraph, p.state)) continue;
+        if (damagePlayer(p, s.id, spec.damage, telegraph.kind === 'beam', events)) hits.push(p.state.id);
+      }
+      if (telegraph.kind === 'charge') {
+        const moved = moveCircle(grid, s.x, s.y, ENEMY_INFO[s.enemyId].radius,
+          Math.cos(telegraph.facing) * telegraph.range, Math.sin(telegraph.facing) * telegraph.range);
+        s.x = moved.x;
+        s.y = moved.y;
+        if (s.enemyId === 'lurker') firePattern(s.id, s.x, s.y, telegraph.facing, 'ring', LURKER_SPORE_PATTERN, LURKER_SPORE_DAMAGE);
+      }
+    } else if (telegraph.kind === 'volley' || telegraph.kind === 'spread' || telegraph.kind === 'ring' || telegraph.kind === 'homing') {
+      if (s.enemyId === 'guardian') {
+        const isVolleyPhase = telegraph.kind === 'volley';
+        firePattern(s.id, telegraph.x, telegraph.y, telegraph.facing, isVolleyPhase ? 'volley' : 'ring',
+          isVolleyPhase ? GUARDIAN_VOLLEY_PATTERN : GUARDIAN_RING_PATTERN,
+          isVolleyPhase ? GUARDIAN_VOLLEY_DAMAGE : GUARDIAN_RING_DAMAGE);
+      } else {
+        const pattern = ENEMY_PROJECTILE_PATTERN[s.enemyId];
+        if (pattern) firePattern(s.id, telegraph.x, telegraph.y, telegraph.facing, telegraph.kind, pattern, spec.damage);
+      }
     }
     s.telegraph = null;
     e.cooldownMs = spec.cooldown;
     e.attackCount++;
+  }
+
+  function startChannel(e: EnemyRuntime, telegraph: EnemyTelegraph, events: GameEvent[]): void {
+    const s = e.state;
+    events.push(emit({ type: 'enemy_attacked', enemyId: s.id, x: telegraph.x, y: telegraph.y, facing: telegraph.facing, hitPlayerIds: [] }));
+    e.channelMsRemaining = CHANNEL_PATTERN.durationMs;
+    e.channelAngle = telegraph.facing;
+    e.channelTimerMs = 0;
+    s.telegraph = null;
+  }
+
+  function stepChannel(e: EnemyRuntime): void {
+    const s = e.state;
+    s.state = 'attacking';
+    e.channelTimerMs -= TICK_MS;
+    if (e.channelTimerMs <= 0) {
+      firePattern(s.id, s.x, s.y, e.channelAngle, 'spiral-shot',
+        { count: 1, spacing: 0, speed: CHANNEL_PATTERN.speed, radius: CHANNEL_PATTERN.radius, life: CHANNEL_PATTERN.life },
+        ENEMY_COMBAT[s.enemyId].damage);
+      e.channelAngle += CHANNEL_PATTERN.spacingRad;
+      e.channelTimerMs += CHANNEL_PATTERN.shotIntervalMs;
+    }
+    e.channelMsRemaining = Math.max(0, e.channelMsRemaining - TICK_MS);
+    if (e.channelMsRemaining === 0) {
+      e.cooldownMs = ENEMY_COMBAT[s.enemyId].cooldown;
+      s.state = 'idle';
+    }
   }
 
   function stepEnemy(e: EnemyRuntime, events: GameEvent[]): void {
@@ -542,11 +708,16 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       s.state = 'hit';
       return;
     }
+    if (e.channelMsRemaining > 0) {
+      stepChannel(e);
+      return;
+    }
     if (s.telegraph) {
       s.state = 'attacking';
       s.telegraph.remainingMs = decay(s.telegraph.remainingMs);
       if (s.telegraph.remainingMs === 0) {
-        resolveEnemyAttack(e, s.telegraph, events);
+        if (s.telegraph.kind === 'spiral') startChannel(e, s.telegraph, events);
+        else resolveEnemyAttack(e, s.telegraph, events);
         s.state = 'idle';
       }
       return;
@@ -559,17 +730,15 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       return;
     }
     s.facing = Math.atan2(target.state.y - s.y, target.state.x - s.x);
-    const guardianBeam = s.enemyId === 'guardian' && e.attackCount % 2 === 1;
-    const range = guardianBeam ? 300 : spec.range;
-    const arc = guardianBeam ? 0.25 : spec.arc;
+    const { kind, range, arc } = attackKindFor(s, e);
     if (e.cooldownMs === 0 && distance(s, target.state) <= range && clearPath(grid, s, target.state)) {
-      const kind = s.enemyId === 'sentinel' || guardianBeam ? 'beam' : s.enemyId === 'lurker' ? 'charge' : s.enemyId === 'guardian' ? 'burst' : 'melee';
       s.telegraph = { kind, x: s.x, y: s.y, facing: s.facing, range, arcRad: arc, remainingMs: spec.windup };
       s.state = 'attacking';
       events.push(emit({ type: 'enemy_telegraphed', enemyId: s.id, telegraph: { ...s.telegraph } }));
       return;
     }
-    const stopRange = s.enemyId === 'sentinel' || guardianBeam ? range * 0.7 : s.enemyId === 'guardian' ? 85 : 34;
+    const ranged = kind !== 'melee' && kind !== 'charge';
+    const stopRange = s.enemyId === 'guardian' ? 85 : ranged ? range * 0.7 : 34;
     if (distance(s, target.state) > stopRange || !clearPath(grid, s, target.state)) {
       const waypoint = chaseWaypoint(grid, s, target.state, ENEMY_INFO[s.enemyId].radius);
       const d = distance(s, waypoint);
@@ -744,6 +913,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       for (const p of orderedPlayers()) stepPlayer(p, events);
       if (phase === 'expedition') {
         for (const e of progress.enemies) stepEnemy(e, events);
+        stepProjectiles(events);
         updateObjectives(events);
       } else if (phase === 'training') {
         for (const e of progress.enemies) stepEnemy(e, events);
@@ -759,6 +929,9 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         roomIndex: phase === 'headquarters' ? null : room.index,
         roomId: room.id, players: orderedPlayers().map((p) => ({ ...p.state })),
         enemies: progress.enemies.map((e) => ({ ...e.state, telegraph: e.state.telegraph ? { ...e.state.telegraph } : null })),
+        projectiles: projectiles.map((pr): ProjectileState => ({
+          id: pr.id, ownerEnemyId: pr.ownerEnemyId, x: pr.x, y: pr.y, vx: pr.vx, vy: pr.vy, radius: pr.radius,
+        })),
         anchor: progress.anchor ? { ...progress.anchor } : null,
         roomCleared: phase !== 'headquarters' && progress.cleared,
       };

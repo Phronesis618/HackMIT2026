@@ -9,7 +9,7 @@ browser (solo)                                    Node server (one process)
 ┌────────────────────────────────────────┐        ┌──────────────────────────────────┐
 │ React UI  ── UiActions ──▶ GameController│        │ /api/health  /api/config         │
 │   ▲ UiModel                │           │  fetch  │ /api/world ─▶ GenerationService  │
-│ Phaser renderer ◀ snapshots/events      │ ◀─────▶ │   (B: live OpenAI ▸ compiler)    │
+│ Phaser renderer ◀ snapshots/events      │ ◀─────▶ │   (B: live model ▸ compiler)     │
 │   ▲                        │           │         │   fixture fallback (validated)   │
 │ WorldRenderer ◀── GameSession (Local) ──│         │ /ws  realtime (A: multiplayer)   │
 │                     │  pure sim (src/sim)│        │ dist/client static (production)  │
@@ -89,6 +89,8 @@ per tick and merged by the session so presses between ticks are not lost.
 
 ## Config boundary
 
-`src/server/config.ts` reads `PORT`, `HOST`, `RELAY_GENERATION_MODE`, `OPENAI_API_KEY`,
-`OPENAI_MODEL` (plus a tiny `.env` loader). `describeForClient()` is the only shape that
+`src/server/config.ts` reads `PORT`, `HOST`, `RELAY_GENERATION_MODE`, `RELAY_AI_PROVIDER`,
+`ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `OPENAI_API_KEY`, and `OPENAI_MODEL` (plus a tiny
+`.env` loader). Provider selection is shared by solo and co-op generation.
+`describeForClient()` is the only configuration shape that
 leaves the server (`/api/config`): `{ generationMode, liveGenerationAvailable }`.

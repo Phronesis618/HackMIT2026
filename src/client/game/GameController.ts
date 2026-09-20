@@ -8,7 +8,7 @@
  *   input (per frame)  -> session.setIntent
  *   UiActions          -> session methods (UI never touches the session directly)
  */
-import type { GameEvent, GameSnapshot, PreparedWorld } from '../../shared/contracts';
+import type { GameEvent, GameSnapshot, PlayerState, PreparedWorld } from '../../shared/contracts';
 import { CLASS_INFO, CLASS_IDS, type ClassId } from '../../shared/registry';
 import type { WorldRenderer } from '../../shared/render';
 import type { GameSession } from '../../shared/session';
@@ -152,28 +152,7 @@ export class GameController {
 
       if (me) {
         const prev = store.get().hud;
-        const hud = {
-          hp: me.hp,
-          maxHp: me.maxHp,
-          state: me.state,
-          dashReady: me.dashCooldownMs <= 0,
-          dashCooldownMs: Math.round(me.dashCooldownMs),
-          attackReady: me.attackCooldownMs <= 0,
-          enemiesRemaining: snapshot.enemies.filter((e) => e.state !== 'dead').length,
-          resources: me.resources ?? 0,
-          abilityEUnlocked: me.abilityEUnlocked ?? false,
-          abilityQCooldownMs: Math.ceil((me.abilityQCooldownMs ?? 0) / 100) * 100,
-          abilityECooldownMs: Math.ceil((me.abilityECooldownMs ?? 0) / 100) * 100,
-          reviveProgress: me.reviveProgress ?? 0,
-          roomCleared: snapshot.roomCleared ?? false,
-          anchor: snapshot.anchor,
-          ultCharge: Math.round(me.ultCharge ?? 0),
-          abilityRCooldownMs: Math.ceil((me.abilityRCooldownMs ?? 0) / 100) * 100,
-          training:
-            snapshot.phase === 'training'
-              ? { awakeEnemyIds: snapshot.enemies.filter((e) => e.state !== 'idle' && e.state !== 'dead').map((e) => e.id) }
-              : null,
-        };
+        const hud = hudFrom(me, snapshot);
         if (
           !prev ||
           prev.hp !== hud.hp ||
@@ -212,18 +191,19 @@ export class GameController {
   private handleSnapshot(snapshot: GameSnapshot): void {
     this.latestSnapshot = snapshot;
     const { session, store, renderer } = this.deps;
+    const me = snapshot.players.find((p) => p.id === session.localPlayerId);
     if (snapshot.phase === 'training') {
       if (store.get().phase !== 'training') {
         renderer.showRoom(trainingRoom, trainingArt);
-        store.set({ phase: 'training', room: { index: 0, name: trainingRoom.name, description: trainingRoom.description, isFinal: false } });
+        store.set({ phase: 'training', room: { index: 0, name: trainingRoom.name, description: trainingRoom.description, isFinal: false }, hud: me ? hudFrom(me, snapshot) : null });
       }
       return;
     }
     const world = session.getWorld();
     const room = snapshot.roomIndex === null ? null : world?.rooms[snapshot.roomIndex];
     if (world && room && snapshot.phase !== 'headquarters' && (store.get().room?.index !== room.index || store.get().phase === 'headquarters' || store.get().phase === 'training')) {
-      renderer.showRoom(room, world.art);
-      store.set({ room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal }, phase: snapshot.phase });
+      renderer.showRoom(room, world.art, world.receipt.lines);
+      store.set({ room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal }, phase: snapshot.phase, hud: me ? hudFrom(me, snapshot) : store.get().hud });
     }
   }
 
@@ -365,4 +345,30 @@ export function persistIdentity(identity: { id: string; displayName: string; cla
   } catch {
     /* ignore */
   }
+}
+
+/** HUD projection of the local player's state (shared by the frame loop and phase changes). */
+function hudFrom(me: PlayerState, snapshot: GameSnapshot): NonNullable<UiModel['hud']> {
+  return {
+    hp: me.hp,
+    maxHp: me.maxHp,
+    state: me.state,
+    dashReady: me.dashCooldownMs <= 0,
+    dashCooldownMs: Math.round(me.dashCooldownMs),
+    attackReady: me.attackCooldownMs <= 0,
+    enemiesRemaining: snapshot.enemies.filter((e) => e.state !== 'dead').length,
+    resources: me.resources ?? 0,
+    abilityEUnlocked: me.abilityEUnlocked ?? false,
+    abilityQCooldownMs: Math.ceil((me.abilityQCooldownMs ?? 0) / 100) * 100,
+    abilityECooldownMs: Math.ceil((me.abilityECooldownMs ?? 0) / 100) * 100,
+    reviveProgress: me.reviveProgress ?? 0,
+    roomCleared: snapshot.roomCleared ?? false,
+    anchor: snapshot.anchor,
+    ultCharge: Math.round(me.ultCharge ?? 0),
+    abilityRCooldownMs: Math.ceil((me.abilityRCooldownMs ?? 0) / 100) * 100,
+    training:
+      snapshot.phase === 'training'
+        ? { awakeEnemyIds: snapshot.enemies.filter((e) => e.state !== 'idle' && e.state !== 'dead').map((e) => e.id) }
+        : null,
+  };
 }

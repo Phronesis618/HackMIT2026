@@ -33,9 +33,7 @@ const START_TIME = Date.now();
 export function createRelayServer(config: ServerConfig, deps: { log?: (m: string) => void } = {}): RelayServer {
   const log = deps.log ?? ((m: string) => console.log(`[server] ${m}`));
   const generation = createGenerationService({
-    mode: config.generation.mode,
-    openaiApiKey: config.generation.openaiApiKey,
-    openaiModel: config.generation.openaiModel,
+    ...config.generation,
     fixturesDir: config.fixturesDir,
     log: (m) => log(`generation: ${m}`),
   });
