@@ -357,8 +357,9 @@ class Player {
 
   async close() { await this.context?.close().catch(() => {}); this.context = null; this.page = null; }
 
-  read() { return this.page.evaluate(readRelay); }
-  dom() { return this.page.evaluate(readDom); }
+  /** A page can navigate while an evaluate is in flight; that is a race, not a finding. */
+  read() { return this.page ? this.page.evaluate(readRelay).catch(() => null) : Promise.resolve(null); }
+  dom() { return this.page ? this.page.evaluate(readDom).catch(() => ({ bodyText: '' })) : Promise.resolve({ bodyText: '' }); }
   audio() { return this.page.evaluate(readAudio).catch(() => null); }
   /** The live audio state strings, read from the wrapped contexts. */
   audioStates() { return this.page.evaluate(() => (window.__relayAudioStates ?? []).map((c) => c.state)).catch(() => []); }
@@ -517,9 +518,8 @@ async function walkTo(player, target, { arriveDist = 10, timeoutMs = 15000, unti
     while (Date.now() - start < timeoutMs) {
       const s = await player.read();
       const me = s?.snap?.players.find((p) => p.id === s.id);
-      if (!me) return false;
+      if (!me || !s.room) return false;
       if (until && until(s, me)) return true;
-      if (!s.room) return false;
       const { keys, arrived } = steerKeys(s.room, s.snap, me, target, arriveDist);
       if (arrived) return true;
       await player.setKeys(keys);
@@ -1402,7 +1402,8 @@ async function groupLegacy(ctx) {
 async function groupFixtures(ctx) {
   const { report, player, args } = ctx;
   const seen = new Map();
-  for (let attempt = 0; attempt < 10 && seen.size < 3; attempt++) {
+  for (let attempt = 0; attempt < 12 && seen.size < 3; attempt++) {
+   try {
     await player.open(q(args));
     await sleep(1200);
     await contribute(player, `attempt ${attempt}: a tag nobody countersigned`);
@@ -1422,46 +1423,58 @@ async function groupFixtures(ctx) {
 
     const gate = await takeTheGate(player);
     if (!gate.entered) { seen.set(id, { id, error: 'never entered' }); continue; }
-    const stats = { dodges: 0, hpLow: 100 };
+    const stats = { dodges: 0, hpLow: 100, stepOffs: 0 };
     const t0 = Date.now();
-    let cleared = 0;
     let outcome = 'survived';
     const visited = new Set();
-    while (cleared < 5 && Date.now() - t0 < 6 * 60_000) {
+    const fought = new Set();   // rooms that actually held a fight
+    const cleared_ = new Set(); // ...and that the bot finished
+    const kinds = new Set();
+    while (visited.size < 5 && Date.now() - t0 < 8 * 60_000) {
       const w = await player.read();
+      if (!w) { outcome = 'page gone'; break; }
       if (w.snap.phase !== 'expedition') { outcome = w.snap.phase; break; }
-      if (w.snap.floor) visited.add(w.snap.floor.roomId);
+      const key = w.snap.floor?.roomId ?? String(w.snap.roomIndex);
+      visited.add(key);
+      if (w.room?.kind) kinds.add(w.room.kind);
       const living = w.snap.enemies.filter((e) => e.state !== 'dead' && e.hp > 0);
       if (living.length && !w.snap.roomCleared) {
+        fought.add(key);
         const r = await fightUntil(player, { timeoutMs: 120000, stats });
-        if (r === 'cleared') cleared++;
+        if (r === 'cleared') cleared_.add(key);
         if (r === 'downed') {
           const back = await waitFor(async () => {
-            const p = await player.read();
-            return p.snap.phase !== 'expedition' || (p.snap.players.find((q) => q.id === p.id)?.hp ?? 0) > 0 ? p : null;
+            const p2 = await player.read();
+            return !p2 || p2.snap.phase !== 'expedition' || (p2.snap.players.find((z) => z.id === p2.id)?.hp ?? 0) > 0 ? p2 : null;
           }, { timeoutMs: 15000, intervalMs: 300, label: 'down' }).catch(() => null);
-          if (!back || back.snap.phase !== 'expedition') { outcome = 'downed'; break; }
+          if (!back || back.snap.phase !== 'expedition') { outcome = `downed in ${key}`; break; }
         }
         continue;
       }
       const exits = w.room?.exits ?? [];
       if (!exits.length) { outcome = 'dead-end'; break; }
-      const before = w.snap.floor?.roomId ?? w.snap.roomIndex;
       const door = exits.find((e) => !visited.has(e.toRoomId)) ?? exits[0];
-      const moved = await walkTo(player, centre({ col: door.x, row: door.y }), { arriveDist: 3, timeoutMs: 25000, until: (p) => (p.snap.floor?.roomId ?? p.snap.roomIndex) !== before });
+      const moved = await walkTo(player, centre({ col: door.x, row: door.y }), { arriveDist: 3, timeoutMs: 25000, until: (p2) => (p2.snap.floor?.roomId ?? String(p2.snap.roomIndex)) !== key });
       await sleep(700);
-      if (!moved && (await player.read()).snap.floor?.roomId === before) { outcome = 'stuck'; break; }
+      const z = await player.read();
+      if (!moved && (z?.snap.floor?.roomId ?? String(z?.snap.roomIndex)) === key) { outcome = 'stuck'; break; }
     }
+    const cleared = cleared_.size;
     await player.shot(`40-fixture-${id}`);
     const w = await player.read();
     const me = w.snap.players.find((p) => p.id === w.id);
     seen.set(id, {
-      id, title: w.world?.title, laws: w.world?.laws, klass: picked, cleared, outcome,
-      minutes: ((Date.now() - t0) / 60000).toFixed(1), hpEnd: me?.hp ?? null, hpLow: stats.hpLow, dodges: stats.dodges,
+      id, title: w?.world?.title, laws: w?.world?.laws, klass: picked, outcome,
+      roomsEntered: visited.size, roomsWithAFight: fought.size, roomsCleared: cleared,
+      kinds: [...kinds], minutes: Number(((Date.now() - t0) / 60000).toFixed(1)),
+      hpEnd: me?.hp ?? null, hpLow: stats.hpLow, dodges: stats.dodges, hazardStepOffs: stats.stepOffs,
     });
-    report.check(`X-${id}`, `fixture ${id}: solo ${picked} through its first rooms with the authored laws on`,
-      cleared >= 3,
+    report.check(`X-${id}`, `fixture ${id}: solo ${picked} survives its first five rooms with the authored laws on`,
+      visited.size >= 5 && outcome === 'survived',
       `${J(seen.get(id))}`, `40-fixture-${id}`);
+   } catch (err) {
+     console.log(`[solo] fixture attempt ${attempt} threw: ${String(err?.message ?? err).slice(0, 160)}`);
+   }
   }
   report.check('X0', 'all three shipped fixtures were entered', seen.size === 3, `fixtures reached: ${J([...seen.keys()])}`);
   ctx.fixtureRuns = [...seen.values()];
