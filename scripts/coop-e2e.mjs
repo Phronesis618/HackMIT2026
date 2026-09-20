@@ -283,7 +283,10 @@ class Player {
       this.page.on('console', (msg) => { if (msg.type() === 'error') this.errors.push(`console: ${msg.text().slice(0, 200)}`); });
     }
     this.held.clear();
-    await this.page.goto(`${this.base}/?mode=coop&as=${this.name}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    // `window.relay` — the read-only handle this script reads state from — is DEV-only unless
+    // `?debug` is present, so a production bundle (`npm start`) needs the flag. Against the Vite
+    // dev server it changes nothing.
+    await this.page.goto(`${this.base}/?mode=coop&as=${this.name}&debug=1`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     this.canvasMounted = await this.page.waitForSelector('.stage canvas', { state: 'attached', timeout: 60000 }).then(() => true).catch(() => false);
     if (!this.canvasMounted) console.log(`[coop] WARNING ${this.name}: no canvas after 60 s; errors=${JSON.stringify(this.errors.slice(0, 4))}`);
     return this;
