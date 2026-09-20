@@ -82,7 +82,8 @@ async function setup(initialWorld: PreparedWorld | null) {
   };
   const chronicle = createBrowserChronicle({ getItem: () => null, setItem: () => {}, removeItem: () => {} });
   const store = createUiStore(GameController.initialModel(session, flags, chronicle, false));
-  controller = new GameController({ session, renderer, store, chronicle, flags, audio: createSilentAudio(), liveGenerationAvailable: false });
+  const persistIdentity = vi.fn();
+  controller = new GameController({ session, renderer, store, chronicle, flags, audio: createSilentAudio(), liveGenerationAvailable: false, persistIdentity });
   const ready = controller.attachStage({} as HTMLElement);
   await Promise.resolve();
   welcome(sockets[0]!, initialWorld);
@@ -96,13 +97,55 @@ async function setup(initialWorld: PreparedWorld | null) {
     await connected;
     frame();
   };
-  return { session, store, renderer, accepted, reconnect, socket: sockets[0]! };
+  return { session, store, renderer, accepted, reconnect, socket: sockets[0]!, persistIdentity, actions: controller.actions };
 }
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal('requestAnimationFrame', (callback: () => void) => { frame = callback; return 1; });
   vi.stubGlobal('cancelAnimationFrame', vi.fn());
+});
+
+describe('confirmed remote identity persistence', () => {
+  it('saves acknowledged name and class changes, never the identity before acknowledgement', async () => {
+    const { actions, persistIdentity, socket, store } = await setup(null);
+    actions.setDisplayName('Confirmed Guest');
+    expect(persistIdentity).not.toHaveBeenCalled();
+    frame();
+    expect(persistIdentity).not.toHaveBeenCalled();
+    expect(store.get().localPlayer.displayName).toBe('Guest');
+    const renamed = { ...identity, displayName: 'Confirmed Guest' };
+    socket.receive({
+      type: 'lobby',
+      lobby: { sessionId: 'readiness-session', hostPlayerId: identity.id, players: [{ identity: renamed, connected: true }] },
+    });
+    frame();
+    expect(persistIdentity).toHaveBeenCalledExactlyOnceWith(renamed);
+    expect(store.get().localPlayer.displayName).toBe('Confirmed Guest');
+    actions.selectClass('weaver');
+    frame();
+    expect(persistIdentity).toHaveBeenCalledTimes(1);
+    const attuned = { ...renamed, classId: 'weaver' as const };
+    socket.receive({
+      type: 'lobby',
+      lobby: { sessionId: 'readiness-session', hostPlayerId: identity.id, players: [{ identity: attuned, connected: true }] },
+    });
+    frame();
+    expect(persistIdentity).toHaveBeenCalledTimes(2);
+    expect(persistIdentity).toHaveBeenLastCalledWith(attuned);
+    expect(store.get().localPlayer.classId).toBe('weaver');
+    frame();
+    expect(persistIdentity).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not save rejected identity requests', async () => {
+    const { actions, persistIdentity, socket, store } = await setup(null);
+    actions.setDisplayName('Rejected Guest');
+    socket.receive({ type: 'error', action: 'identity', message: 'Identity cannot change during a run.' });
+    frame();
+    expect(persistIdentity).not.toHaveBeenCalled();
+    expect(store.get().localPlayer.displayName).toBe(identity.displayName);
+  });
 });
 afterEach(() => {
   controller?.dispose();

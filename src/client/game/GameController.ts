@@ -8,7 +8,7 @@
  *   input (per frame)  -> session.setIntent
  *   UiActions          -> session methods (UI never touches the session directly)
  */
-import type { GameEvent, GameSnapshot, PlayerState, PreparedWorld, RoomSpec } from '../../shared/contracts';
+import type { GameEvent, GameSnapshot, PlayerIdentity, PlayerState, PreparedWorld, RoomSpec } from '../../shared/contracts';
 import { CLASS_INFO, CLASS_IDS, type ClassId } from '../../shared/registry';
 import type { WorldRenderer } from '../../shared/render';
 import type { GameSession } from '../../shared/session';
@@ -47,6 +47,7 @@ export interface GameControllerDeps {
   store: UiStore;
   flags: PreviewFlags;
   liveGenerationAvailable: boolean;
+  persistIdentity?: (identity: PlayerIdentity) => void;
 }
 
 export class GameController {
@@ -157,10 +158,7 @@ export class GameController {
     if (previous.connection.status !== connection.status || previous.connection.isHost !== connection.isHost) store.set({ connection });
     const contributions = session.getContributions();
     if (previous.contributions.length !== contributions.length || previous.contributions.some((c, index) => c.id !== contributions[index]?.id)) store.set({ contributions });
-    const identity = session.getLocalPlayer();
-    if (previous.localPlayer.id !== identity.id || previous.localPlayer.classId !== identity.classId || previous.localPlayer.displayName !== identity.displayName) {
-      store.set({ localPlayer: { ...identity, isLocal: true } });
-    }
+    this.syncIdentity();
     const snapshot = this.latestSnapshot;
     if (snapshot && this.input) {
       const me = snapshot.players.find((p) => p.id === session.localPlayerId);
@@ -345,6 +343,16 @@ export class GameController {
     this.deps.store.set({ notice: { kind, text } });
   }
 
+  private syncIdentity(): void {
+    const { session, store, persistIdentity } = this.deps;
+    if (session.mode === 'remote' && session.getConnectionStatus() !== 'connected') return;
+    const identity = session.getLocalPlayer();
+    const previous = store.get().localPlayer;
+    if (previous.id === identity.id && previous.classId === identity.classId && previous.displayName === identity.displayName) return;
+    store.set({ localPlayer: { ...identity, isLocal: true } });
+    persistIdentity?.(identity);
+  }
+
   private canUseHeadquarters(): boolean {
     const { session, store } = this.deps;
     return session.getPhase() === 'headquarters'
@@ -371,16 +379,12 @@ export class GameController {
     return {
       setDisplayName: (name) => {
         session.setDisplayName(name);
-        const me = session.getLocalPlayer();
-        store.set({ localPlayer: { ...me, isLocal: true } });
-        persistIdentity(me);
+        this.syncIdentity();
       },
       selectClass: (classId: ClassId) => {
         if (!this.canUseHeadquarters()) return;
         session.setClass(classId);
-        const me = session.getLocalPlayer();
-        store.set({ localPlayer: { ...me, isLocal: true } });
-        persistIdentity(me);
+        this.syncIdentity();
       },
       submitContribution: (text) => {
         const c = session.submitContribution(text);
@@ -426,18 +430,6 @@ export class GameController {
         headquarters: { nearbyStationId: model.headquarters?.nearbyStationId ?? null, activeStationId: null },
       })),
     };
-  }
-}
-
-// ---- identity persistence (device-local) --------------------------------------------
-
-export const IDENTITY_STORAGE_KEY = 'relay.identity.v1';
-
-export function persistIdentity(identity: { id: string; displayName: string; classId: ClassId }): void {
-  try {
-    localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(identity));
-  } catch {
-    /* ignore */
   }
 }
 
