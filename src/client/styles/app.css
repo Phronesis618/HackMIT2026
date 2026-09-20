@@ -2058,3 +2058,23 @@ body { font-size: var(--fs-body); }
   .notice { left: 50%; }
 }
 .rail-stat dd small { font-size: var(--fs-sm); font-weight: 400; color: var(--color-mist300); }
+
+/* ---- round 2 fixes ---- */
+.vitals { max-width: 360px; }
+@media (min-width: 1600px) { .vitals { max-width: 440px; } }
+.memory-brief__open { display: inline; margin: 0 0 0 var(--space-xs); }
+.world-brief .tagline { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.abilityslot__sweep { background: conic-gradient(transparent calc(360deg - var(--sweep, 0deg)), rgba(7, 9, 15, 0.62) 0); }
+.abilityslot--cooldown .abilityslot__frame > svg:first-child { opacity: 0.7; }
+.stage:focus-visible { outline: 1px solid var(--hair-strong); outline-offset: -1px; }
+.side__scroll { mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent); padding-bottom: var(--space-sm); }
+/* headquarters.css loads after this file, so HQ harmonisation needs the extra specificity */
+.panel--hq .hq-directory { padding: var(--space-sm) 0; gap: var(--space-xs); font-size: var(--fs-sm); }
+.stage-wrap .hq-wayfinder__hint { display: none; }
+.panel--hq .actions .btn { padding-inline: var(--space-sm); letter-spacing: 0.1em; white-space: nowrap; }
+.panel--hq .field .panel__row { flex-wrap: nowrap; align-items: center; }
+.panel--hq .field .panel__row .hint { margin: 0; }
+.panel--hq .training-entry .hint { font-size: var(--fs-sm); }
+@media (max-height: 840px) {
+  .panel--hq .hq-directory { display: none; }
+}

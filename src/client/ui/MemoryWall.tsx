@@ -24,10 +24,9 @@ export function MemoryBrief({ memories }: { memories: MemoryRecord[] }) {
     <button type="button" className="panel memory-brief" onClick={() => openMenu('memories')} aria-label={`Memory wall · ${memories.length} saved on this device. Open memories.`}>
       <span className="memory-brief__head">
         <span className="eyebrow">Memory wall</span>
-        <span className="memory-brief__count">{memories.length}</span>
+        <span className="memory-brief__count">{memories.length} <span className="memory-brief__open" aria-hidden="true">›</span></span>
       </span>
       <span className="memory-brief__latest">{latest ? latest.title : 'Nothing yet — memories appear from real play.'}</span>
-      <span className="memory-brief__open" aria-hidden="true">Open ›</span>
     </button>
   );
 }
