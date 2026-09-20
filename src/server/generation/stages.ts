@@ -76,6 +76,11 @@ export const ModelBibleSchema = z.object({
   enemies: z.array(z.object({ enemyId: z.enum(ENEMY_IDS), formerJob: tight(48) })).min(3).max(5),
 });
 
+/** Parsing accepts a missing or null room line (seen live: `rest: null` for a floor with no rest room). */
+const LenientBriefSchema = ModelBriefSchema.extend({
+  roomLines: z.object(Object.fromEntries(Object.keys(ModelRoomLinesSchema.shape).map((key) => [key, roomLineText.nullish().catch(undefined)])) as unknown as Record<keyof typeof ModelRoomLinesSchema.shape, z.ZodType<string | null | undefined>>).nullish(),
+});
+
 const foundationShape = {
   bible: ModelBibleSchema,
   title: WorldRecipeSchema.shape.title,
@@ -194,10 +199,13 @@ export function coerceJson(raw: unknown): unknown {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw;
   return Object.fromEntries(Object.entries(raw as Record<string, unknown>).map(([key, value]) => {
     if (typeof value === 'string' && /^\s*[[{]/.test(value)) {
-      try {
-        return [key, JSON.parse(value) as unknown];
-      } catch {
-        return [key, value];
+      const open = value.trimStart()[0] === '{' ? ['{', '}'] : ['[', ']'];
+      for (const candidate of [value, value.slice(value.indexOf(open[0]!), value.lastIndexOf(open[1]!) + 1)]) {
+        try {
+          return [key, JSON.parse(candidate) as unknown];
+        } catch {
+          // try the next candidate
+        }
       }
     }
     return [key, value];
@@ -227,7 +235,7 @@ export function parseBrief(raw: unknown, index: number): ParsedBrief | undefined
     }
     if (Array.isArray(value.propPool)) value.propPool = (value.propPool as unknown[]).filter((id) => id !== 'anchor_pedestal');
   }
-  const model = parseWithFit(ModelBriefSchema, value);
+  const model = parseWithFit(LenientBriefSchema, value);
   if (!model.success) {
     briefRejections.set(index, issuesText(model.error));
     return undefined;
@@ -239,7 +247,7 @@ export function parseBrief(raw: unknown, index: number): ParsedBrief | undefined
     return undefined;
   }
   const lines = BIOME_LINE_KINDS.flatMap((kind) => {
-    const text = roomLines[kind as keyof typeof roomLines];
+    const text = roomLines?.[kind as keyof typeof roomLines];
     return text ? [{ kind, text }] : [];
   });
   return { brief: brief.data, lines };
@@ -652,7 +660,7 @@ export function applyFixes(parts: Lintable, bible: WorldBible | undefined, failu
     const before = lintProse(failure.text, { kind: failure.kind, ...(bible ? { bible } : {}) });
     const after = lintProse(text, { kind: failure.kind, ...(bible ? { bible } : {}) });
     // Failures raised outside prose.ts (an engine word, a header over its hard limit) are fixed when the cause is gone.
-    const causeFixed = !before.hardFail && !after.hardFail && !ENGINE_WORDS.test(text) && text.length <= failure.maxChars;
+    const causeFixed = !before.hardFail && !after.hardFail && !ENGINE_WORDS.test(text) && text.length <= Math.max(failure.maxChars, Math.min(failure.text.length, KIND_SPECS[failure.kind].max));
     const better = causeFixed || (before.hardFail && !after.hardFail && !ENGINE_WORDS.test(text)) || (before.hardFail === after.hardFail && after.score < before.score);
     if (!better) continue;
     field.set(text);

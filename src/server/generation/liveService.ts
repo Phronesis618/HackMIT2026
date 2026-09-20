@@ -5,6 +5,7 @@ import {
   type GenerationStatus,
   type PreparedWorld,
   type WorldFixture,
+  type WorldRecipe,
 } from '../../shared/contracts';
 import { hashString } from '../../shared/ids';
 import { compileWorldRecipe } from './compiler';
@@ -12,6 +13,33 @@ import { prepareFromFixture } from './fixtureService';
 import { GenerationFailure, type RecipeProvider } from './provider';
 import { DEFAULT_WORLD_BUDGET_MS, generateRecipe, type CallMetric, type GeneratedRecipe, type GenerationMetrics } from './pipeline';
 import { buildReceipt } from './receipt';
+
+/**
+ * The compiler can refuse a model's terrain for a given seed (no safe route, no spawn, no room
+ * for the relays). A finished world is worth more than its terrain choices: retreat to the
+ * motif-default terrain, then to neighbouring layout seeds, before giving up on the world.
+ */
+function compileWithRetreat(recipe: WorldRecipe, plannedRoomCount: number, seed: number, notes: string[], log: (message: string) => void) {
+  const plain: WorldRecipe = { ...recipe, rooms: recipe.rooms.map((room) => ({ ...room, terrain: null })) };
+  const attempts: Array<[WorldRecipe, number, string]> = [
+    [recipe, seed, ''],
+    [plain, seed, 'The compiler refused the generated terrain; motif-default terrain was used instead.'],
+    [plain, seed + 1, 'The compiler refused the generated terrain; motif-default terrain and an alternate layout seed were used.'],
+    [plain, seed + 2, 'The compiler refused the generated terrain; motif-default terrain and an alternate layout seed were used.'],
+  ];
+  let last: unknown;
+  for (const [candidate, candidateSeed, note] of attempts) {
+    try {
+      const compiled = compileWorldRecipe(candidate, { plannedRoomCount, seed: candidateSeed });
+      if (note) notes.push(note);
+      return compiled;
+    } catch (error) {
+      last = error;
+      log(`Compile attempt failed: ${error instanceof Error ? error.message.slice(0, 200) : 'unknown error'}`);
+    }
+  }
+  throw last;
+}
 
 export function createLiveGenerationService(options: {
   provider: RecipeProvider;
@@ -89,7 +117,7 @@ export function createLiveGenerationService(options: {
     try {
       signal?.throwIfAborted();
       status('validating', `Compiling and validating all ${request.plannedRoomCount} planned rooms…`);
-      const compiled = compileWorldRecipe(recipe, { plannedRoomCount: request.plannedRoomCount, seed });
+      const compiled = compileWithRetreat(recipe, request.plannedRoomCount, seed, notes, options.log);
       worlds = compiled.rooms.map((_, index) => {
         const rooms = compiled.rooms.slice(0, index + 1);
         const mappings = rooms.flatMap((room) => room.attributions.map((attribution) => ({
@@ -117,8 +145,9 @@ export function createLiveGenerationService(options: {
           receipt: buildReceipt({ worldTitle: recipe.title, source: 'live', contributions: request.contributions, mappings }),
         });
       });
-    } catch {
+    } catch (error) {
       signal?.throwIfAborted();
+      options.log(`Compiler validation failed: ${error instanceof Error ? error.message.slice(0, 600) : 'unknown error'}`);
       notes.push('Generated world failed compiler validation.');
       yield fallback();
       return;

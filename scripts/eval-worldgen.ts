@@ -69,7 +69,7 @@ async function main(): Promise<void> {
     const usage = { input: 0, output: 0 };
     const service = createLiveGenerationService({
       provider: createAnthropicProvider({ apiKey, model: MODEL, onUsage: (u) => { usage.input += u.inputTokens; usage.output += u.outputTokens; } }),
-      model: MODEL, fixtures, log: () => {}, floors, ...(arg('budget') ? { worldBudgetMs: Number(arg('budget')) * 1000 } : {}), onMetrics: (m) => { metrics = m; },
+      model: MODEL, fixtures, log: (message) => { if (/fail|Fallback/i.test(message)) console.log(`   [${set.id}] LOG ${message}`); }, floors, ...(arg('budget') ? { worldBudgetMs: Number(arg('budget')) * 1000 } : {}), onMetrics: (m) => { metrics = m; },
       onCall: (call) => console.log(`   [${set.id}] ${call.stage} ${call.ok ? 'ok' : `FAILED (${call.error ?? ''})`} ${(call.ms / 1000).toFixed(1)}s (done at +${((Date.now() - began0) / 1000).toFixed(1)}s) in=${call.inputTokens ?? '?'} out=${call.outputTokens ?? '?'}`),
     });
     const contributions: Contribution[] = set.ideas.map(([playerName, text], index) => ({
