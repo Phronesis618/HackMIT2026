@@ -1388,12 +1388,13 @@ body {
   gap: var(--space-md);
 }
 .skills__note {
-  margin: 4px 0 var(--space-md);
-  padding: 6px 10px;
-  border-left: 3px solid var(--lamp-hair);
-  font: 10.5px var(--font-mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  /* Sign-off: three full sentences set in 10.5 px uppercase mono read as a legal notice.
+     Sentences are body type, like the Field Notes page beside it; stamps stay for labels. */
+  margin: var(--space-xs) 0 var(--space-md);
+  padding: var(--space-xs) var(--space-sm);
+  max-width: 72ch;
+  border-left: 2px solid var(--lamp-hair);
+  font: var(--fs-sm)/1.5 var(--font-body);
   color: var(--color-mist300);
 }
 .skills {
@@ -2195,14 +2196,15 @@ body { font-size: var(--fs-body); }
   text-transform: uppercase;
   color: var(--color-warmLamp);
 }
-/* Two lines, not one: a world with three laws lost the third to an ellipsis. */
+/* Three lines at most: a world has up to three laws and each name stays whole. */
 .world-brief__laws > span:first-child {
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   line-height: 1.4;
 }
+.world-brief__law { display: inline-block; white-space: pre; }
 /* D5. "engine-chosen" was only inside a collapsed provenance note. Wherever a derived law
    name is shown, the stamp is shown beside it. */
 .derived-stamp {

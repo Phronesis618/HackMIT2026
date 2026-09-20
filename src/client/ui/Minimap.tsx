@@ -106,7 +106,7 @@ export function Minimap({ floor, size = 196 }: { floor: UiFloor; size?: number }
       </div>
       <div className="fmini__foot">
         <span>{map.visitedCount}/{floor.roomCount} rooms</span>
-        <span>{floor.run.doorsLocked ? 'Doors sealed' : 'Hold M · map'}</span>
+        <span>{floor.run.doorsLocked ? 'Sealed' : 'M · map'}</span>
       </div>
     </div>
   );
