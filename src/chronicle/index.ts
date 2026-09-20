@@ -1,6 +1,7 @@
 export {
   createChronicleState,
   reduceChronicle,
+  refreshChronicleReceipt,
   type ChronicleContext,
   type ChronicleParticipant,
   type ChronicleResult,
