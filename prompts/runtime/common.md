@@ -19,7 +19,10 @@ from which facts you pick. A reader should believe a working game writer wrote e
 2. Every sentence carries a fact a player can use or check against another text: a count,
    a place, a weakness, who owned it, what it did, a date.
 3. Use numbers, names, dates, materials and jobs. All names, places, objects and dates come
-   from the world bible. Counts and dates never contradict the bible or each other.
+   from the world bible. Counts and dates never contradict the bible or each other. A date
+   at the head of an entry is written as the calendar gives it ("Week 31, Monday."); a date
+   inside a sentence is written the way the person speaking says it ("the Monday the holiday
+   staff left"), never as the two halves of the calendar pushed together.
 4. Plain verbs. "Is" is a good word. Things are, hold, leak, cost, weigh, jam.
 5. Only people have minds. A named person decided; say who. Places and machines do not
    remember, wait, want or watch (a machine intelligence listed under people counts as a person).

@@ -522,6 +522,15 @@ describe('lenient parsing and transport helpers', () => {
     expect(remains('Wristband, size M', `Ward wristband, Bay C, 14 March. ${author} wrote the bed number on the back.`).rules).not.toContain('remains-author-name');
   });
 
+  it('rejects a callout in the engine\'s own words and a calendar date stitched into a sentence', () => {
+    const tell = (text: string) => lintWorld({ custodian: { ...lawsRaw.custodian, moves: [{ ...lawsRaw.custodian.moves[0]!, tell: text }] } as never }, bible).rules;
+    expect(tell('MONITOR RIG WINDS UP. DASH THE GAP.')).toContain('stock-callout');
+    expect(tell('MONITOR RIG WINDS UP. GET BEHIND MED TROLLEY 4.')).not.toContain('stock-callout');
+    const line = (text: string) => lintWorld({ themeSummary: text }, bible).rules;
+    expect(line('Bay C was sealed after Reyes turned the key on Week 31 Monday, with 118 patients inside.')).toContain('stitched-date');
+    expect(line('Bay C was sealed after Reyes turned the key on the Monday of that week, 118 patients inside.')).not.toContain('stitched-date');
+  });
+
   it('rejects a floor whose room lines keep opening the same way', () => {
     const repeated = ['Two beds block the aisle.', 'Three rigged patients by the hatch.', 'Four dispensers on the wall, 40 doses left.'];
     const brief = parseBrief({ ...briefRaw('Bay C'), roomLines: {

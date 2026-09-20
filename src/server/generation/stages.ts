@@ -777,7 +777,7 @@ export function lintWorld(parts: Lintable, bible: WorldBible | undefined): World
     });
   }
   const known = new Set(failures.map((failure) => failure.path));
-  for (const failure of [...lawFailures(parts), ...remainsNameFailures(parts, bible), ...openerFailures(parts), ...calloutFailures(parts)]) {
+  for (const failure of [...lawFailures(parts), ...remainsNameFailures(parts, bible), ...openerFailures(parts), ...calloutFailures(parts), ...dateFailures(parts, bible)]) {
     if (known.has(failure.path)) continue;
     known.add(failure.path);
     rules.add(/^Rule ([a-z-]+):/.exec(failure.notes[0] ?? '')?.[1] ?? 'house-rule');
@@ -846,6 +846,27 @@ function remainsNameFailures(parts: Lintable, bible: WorldBible | undefined): Li
       notes: [`Rule remains-author-name: "${hit[0]}" is one of the three authors, and the person this object belonged to is one of the many, not one of the three. Give the tag an ordinary name of your own, and keep the author's name only if they wrote a note on it.`],
     }];
   });
+}
+
+/**
+ * A calendar date dropped into a sentence exactly as the bible stores it: "after the holiday
+ * staff left on Week 31 Monday". As a heading on a form it is right; inside a sentence a
+ * person says "on the Monday of Week 31". Found by a blind reader who had never seen this
+ * project and called the line machine-written for this reason alone (docs/design/BLIND_READ.md).
+ */
+const STITCHED_DATE = /\b(?:on|by|since|after|before|from|until|during|at|through)\s+(?:the\s+)?(?:Week|Day|Payday|Cycle|Term|Quarter)\s+\d+\s+(?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day\b/i;
+function dateFailures(parts: Lintable, bible: WorldBible | undefined): LintFailure[] {
+  const out: LintFailure[] = [];
+  for (const field of lintFields(parts, bible)) {
+    const hit = STITCHED_DATE.exec(field.text);
+    if (!hit) continue;
+    out.push({
+      path: field.path, kind: field.kind, text: field.text,
+      maxChars: Math.min(POLISH_MAX[field.kind] ?? Infinity, KIND_SPECS[field.kind].max),
+      notes: [`Rule stitched-date: "${hit[0].trim()}" is the calendar's own wording dropped into a sentence, and it reads as two variables joined up. A heading may carry the date as the bible stores it; inside a sentence write it the way the person speaking would: "on the Monday of that week".`],
+    });
+  }
+  return out;
 }
 
 /**
