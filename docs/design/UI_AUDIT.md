@@ -92,4 +92,25 @@ locked = dashed frame + lock glyph + cost, unavailable = desaturated + strike, c
 
 ## 5. Look-fix rounds
 
-See the end of this file (appended per round).
+1. **Round 1** — built the three-region layout (rail + command bar), removed the bottom Memory Wall
+   strip, added Controls/Memories menu pages. Looked: name truncated to "Op…" in vitals, HQ
+   directory still visible at 720p (headquarters.css loads later and won), CTA buttons wrapping,
+   dash icon vanished under the sweep, memory entry clipped at 720p.
+2. **Round 2** — fixed those (specificity, nowrap, lighter sweep, 2-line tagline clamp, rail fade).
+   Looked: black letterbox bands inside the stage at 16:10; "Contribute" wrapping; name crushed.
+3. **Round 3** — stage now hugs its 16:9 canvas and the bar sits directly under it (no bands,
+   shorter eye travel). Looked: command bar overlapped the stage at 1280x720.
+4. **Round 4** — root cause: a pre-existing rule reset `.notice` to `position: relative`, so the
+   toast took a third app-grid row (this is also why it used to sit on the Memory Wall). Fixed;
+   notice now floats at the top of the stage under the wayfinder. Vitals identity is responsive
+   (class stamp < 1440, name ≥ 1440, both ≥ 1600).
+
+## 6. Left for others
+
+- `RoomScene.drawControlsFloorHint` (hub floor key glyphs) and the in-canvas Integrity bar / room
+  title duplicate DOM HUD info — render files, F3 to remove or keep as diegetic.
+- `HeadquartersPanel.tsx` still says "quick controls" in its disclosure summary and keeps a
+  controls paragraph in markup (hidden by CSS) — W3/HQ owner to delete the copy.
+- At 16:10 (1280x800, 1440x900) ~100 px under the command bar is empty by design (the canvas is 16:9).
+- Debrief and the HQ station panel were not reachable by script; they use the shared `.panel`
+  treatment and were only checked structurally.

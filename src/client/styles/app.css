@@ -2112,3 +2112,5 @@ body { font-size: var(--fs-body); }
 @media (min-width: 1600px) { .vitals__class { display: inline; } }
 .notice { top: calc(var(--top-h) + 2 * var(--space-md)); transform: translate(-50%, 0); }
 .hud-strip { top: calc(var(--space-md) + 48px); }
+.notice { top: calc(var(--top-h) + var(--space-md) + 56px); }
+.hud-strip { top: calc(var(--space-md) + 40px); }
