@@ -440,6 +440,21 @@ export function composeWorld(request: GenerationRequest): Composition {
       enemyId: null,
     });
   });
+  // The crew's own words, found in-world: the first idea, cut into the arrival room's wall,
+  // signed by the operative who typed it. Real text, real name, nothing invented.
+  const inscription = request.contributions[0];
+  if (inscription && lore.length < 12) {
+    const quote = sanitize(inscription.text, 90);
+    const by = sanitize(inscription.playerName, 24) || 'an operative';
+    lore.push({
+      kind: 'relic',
+      title: 'Crew inscription',
+      source: 'cut into the wall beside the arrival door',
+      text: clip(`“${quote}” — cut into the stone in ${by}'s hand, ${request.contributions.length} tally stroke${request.contributions.length === 1 ? '' : 's'} beneath it, one for each idea the crew brought.`, 520),
+      roomIndex: 0,
+      enemyId: null,
+    });
+  }
   for (const enemyId of enemyKindsAll) {
     if (lore.length >= 12) break;
     const options = REMAINS_TEMPLATES[enemyId];

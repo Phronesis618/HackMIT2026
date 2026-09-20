@@ -10,6 +10,7 @@
  */
 import type { Palette } from '../../shared/contracts';
 import type { AttunementEffectId, EnemyId, MotifId, PropId } from '../../shared/registry';
+import { THEME_EXTRAS } from './themes-extra';
 
 export interface LoreTemplate {
   title: string;
@@ -573,3 +574,13 @@ export const REMAINS_TEMPLATES: Record<EnemyId, LoreTemplate[]> = {
 };
 
 export const STOPWORDS = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'in', 'on', 'at', 'to', 'for', 'with', 'where', 'that', 'this', 'is', 'are', 'was', 'were', 'be', 'it', 'its', 'as', 'by', 'from', 'into', 'over', 'under', 'through', 'still', 'very', 'some', 'lots', 'like', 'just', 'really', 'world', 'place', 'there', 'their', 'them', 'they', 'you', 'your', 'our', 'we', 'i', 'my', 'me', 'have', 'has', 'had', 'but', 'not', 'no', 'so', 'if', 'then', 'than', 'more', 'most', 'many', 'much', 'all', 'every', 'each', 'while', 'when', 'what', 'which', 'who', 'how', 'also', 'too', 'can', 'could', 'would', 'should', 'want', 'wants', 'make', 'made', 'full', 'lot', 'big', 'giant', 'huge', 'little', 'small', 'tiny', 'old', 'new', 'weird', 'cool', 'awesome', 'thing', 'things', 'stuff', 'something', 'everything', 'everyone', 'somewhere', 'level', 'room', 'rooms', 'area', 'zone', 'map', 'game', 'land', 'lands', 'place', 'places']);
+
+// Second content batch: applied once at module load so every theme has three relics and
+// three descriptions per role in the banks the composer draws from.
+for (const theme of THEMES) {
+  const extra = THEME_EXTRAS[theme.id];
+  if (!extra) continue;
+  theme.relics.push(extra.relic);
+  theme.rooms.entry.descriptions.push(extra.entry);
+  theme.rooms.mid.descriptions.push(extra.mid);
+}
