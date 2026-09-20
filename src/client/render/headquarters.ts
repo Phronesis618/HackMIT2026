@@ -1,14 +1,18 @@
 import type Phaser from 'phaser';
 import type { GameSnapshot, RoomSpec } from '../../shared/contracts';
-import { DEPTH, tileToWorld } from '../../shared/conventions';
+import { DEPTH, TILE_SIZE, tileToWorld } from '../../shared/conventions';
 import {
-  HEADQUARTERS_ID, HEADQUARTERS_INTERACT_RANGE, HEADQUARTERS_RECORD_PLINTHS, HEADQUARTERS_RELIC_BRACKETS, HEADQUARTERS_STATIONS,
-  nearbyHeadquartersStation, type HeadquartersStation,
+  DEPARTURE_RETURN_FADE_MS, HEADQUARTERS_ID, HEADQUARTERS_INTERACT_RANGE, HEADQUARTERS_LANTERNS, HEADQUARTERS_RECORD_PLINTHS,
+  HEADQUARTERS_RELIC_BRACKETS, HEADQUARTERS_STATIONS, headquartersLampGlow, headquartersLampTier, nearbyHeadquartersStation,
+  type DepartureStage, type HeadquartersStation,
 } from '../../shared/headquarters';
 import { CLASS_THEME, type ClassId } from '../../shared/registry';
 import { hexToInt, tokens } from '../../shared/tokens';
+import { headquartersArt } from '../../sim/headquarters';
 import { createCueSuppressor, renderCue, type RenderedCue } from '../chronicle/hubCues';
 import { hubStateBus, shelfRelics, type HubState, type HubStateBus } from '../chronicle/hubState';
+import { departureBus, type DepartureBus } from '../ui/HeadquartersDeparture';
+import { drawWeaponSilhouette } from './characters';
 
 export interface HeadquartersStationView {
   update(snapshot: GameSnapshot, localPlayerId: string): void;
@@ -20,12 +24,21 @@ export interface HeadquartersRenderOptions {
   hub?: HubStateBus;
   /** Wall clock for the speech-box timeout; injected for tests. */
   now?: () => number;
+  /** Departure ritual source (HUB.md §8). Defaults to the page bus. */
+  departure?: DepartureBus;
+  /** Base glow of the sanctuary lamps before lamp tiers; `headquartersArt.glowIntensity` in the app. */
+  glowIntensity?: number;
 }
 
 /** How long the quartermaster's speech box stays up once you are in range. */
 export const QUARTERMASTER_SPEECH_MS = 8000;
 const QUARTERMASTER_TILE = { x: 15, y: 6 };
 const WARM_LAMP = 0xffcf8a;
+const TETHER_CYAN = 0x7cf5ff;
+const TETHER_VIOLET = 0xc43cff;
+const LAMP_BASE_RADIUS = 46;
+/** How dark the room gets when the lamps fall to 0.4 (or at the start of the return fade). */
+const LAMP_DIM_ALPHA = 0.55;
 
 /** All objects belong to `layer`; discard this view when the room layer is destroyed. */
 export function drawHeadquartersStations(
@@ -39,13 +52,24 @@ export function drawHeadquartersStations(
   const textResolution = opts.textResolution ?? 1;
   const hub = opts.hub ?? hubStateBus;
   const now = opts.now ?? Date.now;
+  const departure = opts.departure ?? departureBus;
+  const baseGlow = opts.glowIntensity ?? headquartersArt.glowIntensity;
+  const createdAt = now();
 
   const floor = scene.add.graphics().setDepth(DEPTH.floorDecal + 2);
   const fixtures = scene.add.graphics().setDepth(DEPTH.propsBehind + 2);
   const highlights = scene.add.graphics().setDepth(DEPTH.floorDecal + 5);
-  /** Redrawn on state change: weapon stands, record plinths, relic shelf. */
+  /** Redrawn on state change: weapon stands, record plinths, relic shelf, quartermaster. */
   const dynamic = scene.add.graphics().setDepth(DEPTH.propsBehind + 3);
-  layer.add([floor, fixtures, highlights, dynamic]);
+  /** Lamp tiers (§6c): warm pools under each lantern, redrawn when hub state changes. */
+  const lamps = scene.add.graphics().setDepth(DEPTH.floorDecal + 3);
+  /** Departure ritual (§8) and the return fade: room dim, portal ring, tethers. Redrawn per frame while active. */
+  const ritual = scene.add.graphics().setDepth(DEPTH.propsFront + 5);
+  layer.add([floor, fixtures, highlights, dynamic, lamps, ritual]);
+  const roomW = room.width * TILE_SIZE;
+  const roomH = room.height * TILE_SIZE;
+  const exit = room.exits[0];
+  const gate = exit ? tileToWorld(exit.x, exit.y) : tileToWorld(15, 18);
   const label = (x: number, y: number, content: string, color = '#dfc28b', size = 10) => {
     const text = scene.add.text(x, y, content, {
       fontFamily: tokens.font.mono, fontSize: `${size}px`, color,
@@ -94,7 +118,7 @@ export function drawHeadquartersStations(
       fixtures.lineStyle(1, tint, 0.65).strokeRoundedRect(x - 15, y - 4, 30, 20, 4);
       fixtures.fillStyle(tint, 0.9).fillRect(x - 8, y + 11, 16, 2);
     } else if (station.id === 'quartermaster') {
-      drawQuartermaster(fixtures, x, y);
+      fixtures.fillStyle(0x050b14, 0.8).fillEllipse(x, y + 16, 30, 11);
     } else if (station.id === 'relics') {
       // Reading lectern for the shelf: a slanted top on a post.
       floor.fillStyle(tint, 0.05).fillCircle(x, y + 8, 30);
@@ -146,6 +170,7 @@ export function drawHeadquartersStations(
   let speechCueId: string | null = null;
   let previous = '';
   let previousHub: HubState | null = null;
+  let ritualDrawn = false;
 
   return {
     update(snapshot, localPlayerId) {
@@ -153,11 +178,23 @@ export function drawHeadquartersStations(
       const player = snapshot.players.find((candidate) => candidate.id === localPlayerId);
       const inHeadquarters = snapshot.phase === 'headquarters' && snapshot.roomId === room.id;
       const state = hub.get();
+      const t = now();
+      const stage = inHeadquarters ? departure.stage(t) : null;
+
+      // Return fade (600 ms) and the departure ritual share one overlay, redrawn only while something moves.
+      const returning = Math.min(1, (t - createdAt) / DEPARTURE_RETURN_FADE_MS);
+      if (stage || returning < 1) {
+        ritual.clear();
+        drawRitual(ritual, stage, returning, roomW, roomH, gate, snapshot, inHeadquarters);
+        ritualDrawn = true;
+      } else if (ritualDrawn) {
+        ritual.clear();
+        ritualDrawn = false;
+      }
 
       // Quartermaster proximity: within interact range of the NPC, for up to 8 s, one cue per run.
       const qm = tileToWorld(QUARTERMASTER_TILE.x, QUARTERMASTER_TILE.y);
       const nearQuartermaster = Boolean(inHeadquarters && player && player.hp > 0 && Math.hypot(player.x - qm.x, player.y - qm.y) <= HEADQUARTERS_INTERACT_RANGE);
-      const t = now();
       let cue: RenderedCue | null = null;
       if (nearQuartermaster) {
         if (speechShownAt === null) speechShownAt = t;
@@ -175,14 +212,15 @@ export function drawHeadquartersStations(
         speechCueId = null;
       }
 
-      const key = `${inHeadquarters}:${station?.id ?? ''}:${player?.classId ?? ''}:${cue?.id ?? ''}:${cue?.lines.join('|') ?? ''}`;
+      const facesGate = stage?.quartermasterFacesGate === true;
+      const key = `${inHeadquarters}:${station?.id ?? ''}:${player?.classId ?? ''}:${cue?.id ?? ''}:${cue?.lines.join('|') ?? ''}:${Boolean(stage)}:${facesGate}`;
       const hubChanged = state !== previousHub;
       if (key === previous && !hubChanged) return;
       previous = key;
       previousHub = state;
 
       highlights.clear();
-      prompt.setVisible(Boolean(station));
+      prompt.setVisible(Boolean(station) && !stage);
       speech.setVisible(Boolean(cue));
       currentTag.setVisible(false);
       if (!inHeadquarters) {
@@ -191,6 +229,8 @@ export function drawHeadquartersStations(
       }
 
       dynamic.clear();
+      drawQuartermaster(dynamic, qm.x, qm.y, facesGate);
+      if (hubChanged) drawLamps(lamps, baseGlow, headquartersLampTier(state.totals.anchors));
       for (const candidate of HEADQUARTERS_STATIONS) {
         if (!candidate.classId) continue;
         const { x, y } = tileToWorld(candidate.x, candidate.y);
@@ -207,7 +247,7 @@ export function drawHeadquartersStations(
       if (cue) {
         speech.setText(cue.lines.join('\n')).setPosition(qm.x, qm.y - 40);
       }
-      if (!station) return;
+      if (!station || stage) return;
       const { x, y } = tileToWorld(station.x, station.y);
       highlights.lineStyle(2, 0xffedb9, 0.95).strokeEllipse(x, y + 5, 80, 46);
       const promptY = station.id === 'portal' ? -70 : station.id === 'quartermaster' ? 22 : station.classId ? -30 : -38;
@@ -260,15 +300,81 @@ function stationTitleOffset(station: HeadquartersStation): number {
   return 35;
 }
 
-/** 28×44 standing figure in warm lamp colour: anything human is warm (ART_DIRECTION). */
-function drawQuartermaster(g: Phaser.GameObjects.Graphics, x: number, y: number): void {
-  g.fillStyle(0x050b14, 0.8).fillEllipse(x, y + 16, 30, 11);
+/**
+ * 28×44 standing figure in warm lamp colour: anything human is warm (ART_DIRECTION).
+ * Faces the crew (north) by default; during departure the head turns to the gate (south).
+ */
+function drawQuartermaster(g: Phaser.GameObjects.Graphics, x: number, y: number, facesGate: boolean): void {
   g.fillStyle(0x3a2f24, 1).fillRoundedRect(x - 14, y - 12, 28, 30, 5);
   g.fillStyle(WARM_LAMP, 0.9).fillRoundedRect(x - 10, y - 10, 20, 26, 4);
   g.fillStyle(0xe8b98a, 1).fillCircle(x, y - 20, 8);
   g.fillStyle(0x3a2f24, 1).fillRoundedRect(x - 10, y - 30, 20, 7, 2);
   g.lineStyle(1, 0x101923, 0.8).lineBetween(x - 6, y - 2, x + 6, y - 2).lineBetween(x - 6, y + 4, x + 6, y + 4);
   g.fillStyle(0xfff0c7, 1).fillRect(x - 7, y + 8, 14, 3);
+  if (facesGate) {
+    // Eyes on the south edge of the head, and the lamp on the belt turned toward the gate.
+    g.fillStyle(0x101923, 1).fillRect(x - 5, y - 16, 3, 2).fillRect(x + 2, y - 16, 3, 2);
+    g.fillStyle(WARM_LAMP, 1).fillCircle(x, y + 16, 3);
+  } else {
+    g.fillStyle(0x101923, 1).fillRect(x - 5, y - 24, 3, 2).fillRect(x + 2, y - 24, 3, 2);
+  }
+}
+
+/** Lamp tiers (§6c): a warm pool under each lantern that grows with anchored runs on this device. */
+function drawLamps(g: Phaser.GameObjects.Graphics, baseGlow: number, tier: number): void {
+  g.clear();
+  const { glowIntensity, radiusScale } = headquartersLampGlow(baseGlow, tier);
+  const radius = LAMP_BASE_RADIUS * radiusScale;
+  for (const lantern of HEADQUARTERS_LANTERNS) {
+    const { x, y } = tileToWorld(lantern.x, lantern.y);
+    g.fillStyle(WARM_LAMP, 0.05 * glowIntensity).fillCircle(x, y, radius);
+    g.fillStyle(WARM_LAMP, 0.08 * glowIntensity).fillCircle(x, y, radius * 0.55);
+    for (let ring = 1; ring <= tier; ring++) {
+      g.lineStyle(1, WARM_LAMP, 0.12 + 0.06 * ring).strokeCircle(x, y, radius * (0.3 + ring * 0.2));
+    }
+  }
+}
+
+/**
+ * Departure ritual (§8) plus the return fade, drawn over the room but under the overlay text:
+ * lamps dim to 0.4 over 800 ms, the portal ring brightens to 1.6× then collapses inward from
+ * 1.6 s, and from 0.4 s each operative shows a one-tile tether toward the gate. On return
+ * the same dim lifts over 600 ms so the lamps visibly rise.
+ */
+function drawRitual(
+  g: Phaser.GameObjects.Graphics,
+  stage: DepartureStage | null,
+  returning: number,
+  roomW: number,
+  roomH: number,
+  gate: { x: number; y: number },
+  snapshot: GameSnapshot,
+  inHeadquarters: boolean,
+): void {
+  const lampLevel = stage ? stage.lampLevel : 0.4 + 0.6 * returning;
+  const dim = ((1 - lampLevel) / 0.6) * LAMP_DIM_ALPHA;
+  if (dim > 0.005) g.fillStyle(0x050b14, dim).fillRect(0, 0, roomW, roomH);
+  if (!stage || !inHeadquarters) return;
+  const scale = stage.ringScale;
+  if (scale > 0.02) {
+    g.fillStyle(TETHER_CYAN, 0.1 + 0.25 * stage.progress).fillCircle(gate.x, gate.y, 44 * scale);
+    g.lineStyle(3, TETHER_CYAN, 0.95).strokeCircle(gate.x, gate.y, 30 * scale);
+    g.lineStyle(1.5, 0xffffff, 0.5 + 0.4 * stage.flash).strokeCircle(gate.x, gate.y, 18 * scale);
+  }
+  if (stage.tethers) {
+    snapshot.players.forEach((player, index) => {
+      if (player.hp <= 0) return;
+      const dx = gate.x - player.x;
+      const dy = gate.y - player.y;
+      const length = Math.hypot(dx, dy);
+      if (length < 1) return;
+      const ex = player.x + (dx / length) * TILE_SIZE;
+      const ey = player.y + (dy / length) * TILE_SIZE;
+      g.lineStyle(2, index % 2 === 0 ? TETHER_CYAN : TETHER_VIOLET, 0.9).lineBetween(player.x, player.y, ex, ey);
+      g.fillStyle(0xffffff, 0.9).fillCircle(ex, ey, 2);
+    });
+  }
+  if (stage.flash > 0) g.fillStyle(0xffffff, stage.flash * 0.6).fillRect(0, 0, roomW, roomH);
 }
 
 function drawPlinths(g: Phaser.GameObjects.Graphics, state: HubState): void {
@@ -305,42 +411,16 @@ function drawShelf(g: Phaser.GameObjects.Graphics, state: HubState, labels: Phas
   });
 }
 
-/** Four distinct weapon silhouettes. The stand you took from shows only the empty bracket. */
+/**
+ * The rack shows the same silhouette the operative carries (characters.ts), stood upright
+ * (pointing north) on the bracket. The stand you took from shows only the empty bracket.
+ */
 function drawWeapon(g: Phaser.GameObjects.Graphics, classId: ClassId, x: number, y: number, color: number, taken: boolean): void {
   if (taken) {
     g.lineStyle(1, color, 0.35).strokeRoundedRect(x - 10, y - 18, 20, 30, 3);
     return;
   }
-  g.lineStyle(2, color, 0.9);
-  g.fillStyle(color, 0.22);
-  switch (classId) {
-    case 'bastion':
-      // Tower shield with an arc-blade leaning across it.
-      g.beginPath().moveTo(x - 12, y - 16).lineTo(x + 12, y - 16).lineTo(x + 10, y + 4).lineTo(x, y + 12).lineTo(x - 10, y + 4).closePath().fillPath().strokePath();
-      g.lineStyle(3, color, 1).lineBetween(x - 14, y + 14, x + 12, y - 20);
-      g.fillStyle(color, 1).fillRect(x - 17, y + 12, 6, 6);
-      break;
-    case 'shade':
-      // Twin phase blades crossed.
-      g.fillTriangle(x - 14, y + 12, x - 4, y - 20, x - 1, y + 2);
-      g.strokeTriangle(x - 14, y + 12, x - 4, y - 20, x - 1, y + 2);
-      g.fillTriangle(x + 14, y + 12, x + 4, y - 20, x + 1, y + 2);
-      g.strokeTriangle(x + 14, y + 12, x + 4, y - 20, x + 1, y + 2);
-      break;
-    case 'beacon':
-      // Lantern staff: a long shaft with a hooded lamp.
-      g.lineStyle(3, color, 1).lineBetween(x, y - 22, x, y + 14);
-      g.lineStyle(2, color, 0.9).strokeRoundedRect(x - 7, y - 22, 14, 12, 3);
-      g.fillStyle(0xfff4cf, 1).fillCircle(x, y - 16, 3);
-      break;
-    case 'weaver':
-      // Plasma loom: a frame with threads.
-      g.strokeRoundedRect(x - 14, y - 16, 28, 26, 3);
-      g.lineStyle(1, color, 0.9);
-      for (let i = -2; i <= 2; i++) g.lineBetween(x + i * 5, y - 16, x + i * 5, y + 10);
-      g.fillStyle(color, 1).fillCircle(x, y - 3, 4);
-      break;
-  }
+  drawWeaponSilhouette(g, classId, { x, y: y + 6, angle: -Math.PI / 2, scale: 1.1, primary: color, secondary: hexToInt(CLASS_THEME[classId].secondary) });
 }
 
 function drawStationSymbol(g: Phaser.GameObjects.Graphics, station: HeadquartersStation, x: number, y: number, color: number): void {

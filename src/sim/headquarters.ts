@@ -5,7 +5,7 @@
  */
 import { type ArtRecipe, type RoomSpec, RoomSpecSchema } from '../shared/contracts';
 import {
-  HEADQUARTERS_ID, HEADQUARTERS_PROPLESS_STATIONS, HEADQUARTERS_RELIC_BRACKETS, HEADQUARTERS_STATIONS,
+  HEADQUARTERS_ID, HEADQUARTERS_LANTERNS, HEADQUARTERS_PROPLESS_STATIONS, HEADQUARTERS_RELIC_BRACKETS, HEADQUARTERS_STATIONS,
 } from '../shared/headquarters';
 
 export const HEADQUARTERS_ROOM_ID = HEADQUARTERS_ID;
@@ -39,14 +39,10 @@ export const headquartersRoom: RoomSpec = RoomSpecSchema.parse({
     ...HEADQUARTERS_RELIC_BRACKETS.map((bracket, index) => ({
       id: `hq-relic-bracket-${index}`, propId: 'monolith_shard' as const, x: bracket.x, y: bracket.y,
     })),
-    { id: 'hq-lantern-a', propId: 'lantern', x: 12, y: 8 },
-    { id: 'hq-lantern-b', propId: 'lantern', x: 18, y: 8 },
-    { id: 'hq-lantern-c', propId: 'lantern', x: 12, y: 16 },
-    { id: 'hq-lantern-d', propId: 'lantern', x: 18, y: 16 },
+    ...HEADQUARTERS_LANTERNS.map((lantern) => ({ id: lantern.id, propId: 'lantern' as const, x: lantern.x, y: lantern.y })),
     { id: 'hq-pillar-a', propId: 'pillar', x: 13, y: 3 },
     { id: 'hq-pillar-b', propId: 'pillar', x: 17, y: 3 },
     { id: 'hq-archive-spine', propId: 'monolith_shard', x: 27, y: 6 },
-    { id: 'hq-archive-light', propId: 'lantern', x: 21, y: 7 },
     { id: 'hq-navigation-cable', propId: 'cable_bundle', x: 27, y: 17 },
   ],
   encounters: [],

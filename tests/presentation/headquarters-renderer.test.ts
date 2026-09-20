@@ -2,7 +2,9 @@ import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
 import { createHubState, createHubStateBus, type HubRelic, type LastRun } from '../../src/client/chronicle/hubState';
 import { drawHeadquartersStations, QUARTERMASTER_SPEECH_MS } from '../../src/client/render/headquarters';
+import { createDepartureBus } from '../../src/client/ui/HeadquartersDeparture';
 import { tileToWorld } from '../../src/shared/conventions';
+import { HEADQUARTERS_LANTERNS } from '../../src/shared/headquarters';
 import { sampleSnapshot } from '../../src/shared/samples';
 import { headquartersRoom } from '../../src/sim/headquarters';
 
@@ -34,6 +36,13 @@ class Node {
   strokePath = vi.fn(() => this);
   fillTriangle = vi.fn(() => this);
   strokeTriangle = vi.fn(() => this);
+  fillPoints = vi.fn(() => this);
+  strokePoints = vi.fn(() => this);
+  save = vi.fn(() => this);
+  restore = vi.fn(() => this);
+  translateCanvas = vi.fn(() => this);
+  rotateCanvas = vi.fn(() => this);
+  scaleCanvas = vi.fn(() => this);
   clear = vi.fn(() => this);
 }
 
@@ -70,7 +79,7 @@ describe('headquarters renderer hook', () => {
     expect(currentTag.x).toBe(tileToWorld(4, 3).x);
     for (let n = 0; n < 100; n++) view.update(snapshot, player.id);
     expect(nodes.length).toBe(count);
-    expect(add.graphics).toHaveBeenCalledTimes(4);
+    expect(add.graphics).toHaveBeenCalledTimes(6);
     expect(prompt.setText).toHaveBeenCalledTimes(2);
     view.update({ ...snapshot, players: [{ ...player, classId: 'weaver' }] }, player.id);
     expect(currentTag.x).toBe(tileToWorld(8, 7).x);
@@ -131,6 +140,75 @@ describe('headquarters renderer hook', () => {
     expect(labels).toHaveLength(1);
     expect(labels[0]!.visible).toBe(true);
     expect(labels[0]!.x).toBe(tileToWorld(12, 1).x);
+  });
+
+  it('grows the lamp pools with anchored runs, capped at three tiers, from device-local hub state only', () => {
+    const { nodes, scene, layer } = setup();
+    const hub = createHubStateBus();
+    const view = drawHeadquartersStations(scene, layer, headquartersRoom, { hub, now: () => 10_000 });
+    const lamps = nodes[4]!;
+    const player = { ...sampleSnapshot.players[0]!, ...tileToWorld(15, 10) };
+    const snapshot = { ...sampleSnapshot, phase: 'headquarters' as const, roomId: headquartersRoom.id, players: [player] };
+    view.update(snapshot, player.id);
+    expect(lamps.fillCircle).toHaveBeenCalledTimes(HEADQUARTERS_LANTERNS.length * 2);
+    expect(lamps.strokeCircle).not.toHaveBeenCalled();
+    const radiusAtTier0 = (lamps.fillCircle.mock.calls[0] as unknown as number[])[2]!;
+    const alphaAtTier0 = (lamps.fillStyle.mock.calls[0] as unknown as number[])[1]!;
+
+    hub.set({ ...createHubState(), totals: { runs: 9, anchors: 9, worldsVisited: 3, relics: 0 } });
+    view.update(snapshot, player.id);
+    expect(lamps.clear).toHaveBeenCalledTimes(2);
+    const strokes = lamps.strokeCircle.mock.calls.length;
+    expect(strokes).toBe(HEADQUARTERS_LANTERNS.length * 3);
+    const lastFill = lamps.fillCircle.mock.calls.at(-2) as unknown as number[];
+    expect(lastFill[2]).toBeCloseTo(radiusAtTier0 * 1.24);
+    const lastAlpha = (lamps.fillStyle.mock.calls.at(-2) as unknown as number[])[1]!;
+    expect(lastAlpha).toBeGreaterThan(alphaAtTier0);
+  });
+
+  it('draws the departure ritual from the bus: dim, ring, tethers from 0.4 s, quartermaster turns at 1 s, prompt hidden', () => {
+    const { nodes, scene, layer } = setup();
+    let clock = 50_000;
+    const departure = createDepartureBus(() => clock, () => 1, () => {});
+    const view = drawHeadquartersStations(scene, layer, headquartersRoom, { hub: createHubStateBus(), now: () => clock, departure });
+    const dynamic = nodes[3]!;
+    const ritual = nodes[5]!;
+    const prompt = nodes.at(-1)!;
+    const player = { ...sampleSnapshot.players[0]!, ...tileToWorld(15, 17) };
+    const snapshot = { ...sampleSnapshot, phase: 'headquarters' as const, roomId: headquartersRoom.id, players: [player] };
+    clock += 1_000; // past the 600 ms return fade
+    view.update(snapshot, player.id);
+    expect(prompt.visible).toBe(true);
+    ritual.fillRect.mockClear();
+    ritual.lineBetween.mockClear();
+    ritual.strokeCircle.mockClear();
+    dynamic.fillCircle.mockClear();
+
+    const commit = vi.fn();
+    expect(departure.begin(commit)).toBe(true);
+    view.update(snapshot, player.id);
+    expect(prompt.visible).toBe(false);
+    expect(ritual.strokeCircle).toHaveBeenCalled();
+    expect(ritual.lineBetween).not.toHaveBeenCalled();
+    expect(ritual.fillRect).not.toHaveBeenCalled();
+
+    clock += 500;
+    view.update(snapshot, player.id);
+    expect(ritual.lineBetween).toHaveBeenCalledTimes(1);
+    expect(ritual.fillRect).toHaveBeenCalledTimes(1); // the lamp dim
+    const beltLampBefore = dynamic.fillCircle.mock.calls.length;
+
+    clock += 600;
+    view.update(snapshot, player.id);
+    expect(dynamic.fillCircle.mock.calls.length).toBeGreaterThan(beltLampBefore);
+
+    clock += 700; // 1.8 s: collapse + flash
+    ritual.fillRect.mockClear();
+    view.update(snapshot, player.id);
+    expect(ritual.fillRect).toHaveBeenCalledTimes(2);
+    expect(commit).not.toHaveBeenCalled();
+    departure.skip();
+    expect(commit).toHaveBeenCalledTimes(1);
   });
 
   it('does not add headquarters decorations to expedition rooms', () => {

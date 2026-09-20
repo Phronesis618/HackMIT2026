@@ -5,6 +5,7 @@ import { ABILITY_DETAILS, CLASS_ABILITIES, CLASS_IDS, CLASS_INFO, CLASS_THEME, E
 import type { UiActions, UiModel } from '../../shared/ui';
 import { renderCue, type HubCueContext } from '../chronicle/hubCues';
 import { HUB_SHELF_BRACKETS, hubStateBus, shelfRelics, type ClassRecord, type HubState, type HubStateBus } from '../chronicle/hubState';
+import { departureBus, HeadquartersDeparture, isDeparting, useDeparture, type DepartureBus } from './HeadquartersDeparture';
 import '../styles/headquarters.css';
 
 const DEVICE_LOCAL_FOOTER = 'Counts reflect events recorded on this browser. They are not lifetime totals.';
@@ -25,32 +26,37 @@ function topKey<K extends string>(counts: Readonly<Record<string, number>>): K |
   return best as K | null;
 }
 
-export function HeadquartersPrompt({ model, actions }: { model: UiModel; actions: UiActions }) {
+export function HeadquartersPrompt({ model, actions, departure = departureBus }: { model: UiModel; actions: UiActions; departure?: DepartureBus }) {
   const station = headquartersStation(model.headquarters?.nearbyStationId);
-  const busy = model.phase === 'preparing' || ['queued', 'generating', 'validating'].includes(model.generation.phase);
+  const departing = isDeparting(useDeparture(departure));
+  const busy = departing || model.phase === 'preparing' || ['queued', 'generating', 'validating'].includes(model.generation.phase);
   return (
+    <>
+    <HeadquartersDeparture bus={departure} />
     <div className="hq-wayfinder">
       <span className="hq-wayfinder__place">THE STILLPOINT <span>Sanctuary / headquarters</span></span>
       {station ? (
         <button type="button" className="hq-prompt" onClick={actions.activateHeadquartersStation} disabled={busy || model.connection.status !== 'connected'}>
-          <kbd>F</kbd><span><strong>{station.name}</strong><small>{busy ? 'World preparation in progress' : station.action}</small></span>
+          <kbd>F</kbd><span><strong>{station.name}</strong><small>{departing ? 'The gate is opening' : busy ? 'World preparation in progress' : station.action}</small></span>
         </button>
       ) : (
         <p className="hq-wayfinder__hint">WASD / arrows to walk · approach a station · F to interact</p>
       )}
     </div>
+    </>
   );
 }
 
-export function HeadquartersStationPanel({ model, actions, hub = hubStateBus }: { model: UiModel; actions: UiActions; hub?: HubStateBus }) {
+export function HeadquartersStationPanel({ model, actions, hub = hubStateBus, departure = departureBus }: { model: UiModel; actions: UiActions; hub?: HubStateBus; departure?: DepartureBus }) {
   const station = headquartersStation(model.headquarters?.activeStationId);
   const hubState = useHubState(hub);
+  const departing = isDeparting(useDeparture(departure));
   const [recordsTab, setRecordsTab] = useState<ClassId | null>(null);
   if (!station) return null;
   const classId = station.classId;
   const records = headquartersRecords(model.memories);
   const busy = model.phase === 'preparing' || ['queued', 'generating', 'validating'].includes(model.generation.phase);
-  const ready = model.connection.status === 'connected' && !busy;
+  const ready = model.connection.status === 'connected' && !busy && !departing;
   const host = model.connection.isHost !== false;
   const latest = [...model.memories].sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
   const abilities = classId ? CLASS_ABILITIES[classId] : null;
@@ -125,8 +131,8 @@ export function HeadquartersStationPanel({ model, actions, hub = hubStateBus }: 
       {station.id === 'portal' && (
         <>
           <p className="hq-status">{model.world?.title ?? 'No destination charted'}</p>
-          <p className="hint">{model.world ? 'Walk into the gate or enter here when the crew is ready.' : 'Contribute an idea in the console below and prepare a world first.'}</p>
-          <button type="button" className="btn btn--primary" onClick={actions.enterPortal} disabled={!ready || !model.world || !host}>Enter portal</button>
+          <p className="hint">{departing ? 'The gate is opening. F or Esc leaves now.' : model.world ? 'Walk into the gate or enter here when the crew is ready.' : 'Contribute an idea in the console below and prepare a world first.'}</p>
+          <button type="button" className="btn btn--primary" onClick={() => departure.begin(actions.enterPortal)} disabled={!ready || !model.world || !host}>{departing ? 'Departing…' : 'Enter portal'}</button>
           {!host && <p className="hint">The crew leader opens the gate for everyone.</p>}
         </>
       )}
