@@ -8,7 +8,7 @@ import {
   PreparedWorldSchema, RoomSpecSchema, WorldFixtureSchema,
   type GameEvent, type PlayerIntent, type RoomSpec,
 } from '../../src/shared/contracts';
-import { PLAYER_MAX_HP, TILE_SIZE, tileToWorld } from '../../src/shared/conventions';
+import { PLAYER_MAX_HP, TILE_SIZE, tileToWorld, worldToTile } from '../../src/shared/conventions';
 import { COVER_HP, terrainTileAt, terrainTuning } from '../../src/shared/terrain';
 import { buildSolidGrid, isSolidAt } from '../../src/sim/collision';
 import { clearPath } from '../../src/sim/combat';
@@ -150,6 +150,76 @@ describe('cover', () => {
     const damage = sim.getSnapshot().terrain?.coverDamage ?? {};
     expect(Object.keys(damage).length).toBeGreaterThan(0);
     expect(Object.values(damage).every((value) => value > 0 && value <= COVER_HP)).toBe(true);
+  });
+
+  /**
+   * A19 — cover stops what travels, not what an operative does with their hands. Reviving,
+   * reading a relic, planting the Anchor and hitting a relay all go through `canReach` in
+   * src/sim/simulation.ts, which reads the movement layer. The two cases driven here are the
+   * two that need no boss fight first; the Anchor and its relays share the same predicate.
+   */
+  describe('reach past a barricade', () => {
+    /** Walk right along row 5 until the operative's centre is in `col`, then stand still. */
+    const walkToColumn = (sim: Simulation, col: number): void => {
+      for (let i = 0; i < 400; i++) {
+        if (worldToTile(sim.getSnapshot().players[0]!.x, 0).col === col) return;
+        tick(sim, { moveX: 1 });
+      }
+      throw new Error(`never reached column ${col}`);
+    };
+
+    it('lets an operative at the barricade read the relic on the other side of it', () => {
+      const room = { ...arena((tiles) => { tiles[5]![5] = '-'; }), relics: [{ id: 'relic-0', x: 6, y: 5, fragmentIndex: 0 }] };
+      const sim = expedition(RoomSpecSchema.parse(room));
+      walkToColumn(sim, 5);
+      const me = sim.getSnapshot().players[0]!;
+      const grid = buildSolidGrid(room as RoomSpec);
+      // Standing in the cover tile: no line of FIRE to the relic, and a clear line of reach.
+      expect(clearPath(grid, me, tileToWorld(6, 5))).toBe(false);
+      expect(clearPath(grid, me, tileToWorld(6, 5), 1, 'solid')).toBe(true);
+      let read: GameEvent | undefined;
+      for (let i = 0; i < 300 && !read; i++) read = tick(sim, { interact: true }).find((e) => e.type === 'lore_discovered');
+      expect(read).toMatchObject({ fragmentIndex: 0 });
+    });
+
+    it('lets a medic standing in cover pull up the operative burning beside it', () => {
+      // Spawn fan-out (src/sim/simulation.ts placePlayers): the first operative lands on 'P',
+      // the second 0.9 tiles east, the third 0.9 tiles south. So the middle one burns on the
+      // hazard tile, and the medic stands in the cover tile diagonally across from it.
+      const room = arena((tiles) => {
+        tiles[5]![2] = '.';
+        tiles[5]![5] = 'P';
+        tiles[5]![6] = '~';
+        tiles[6]![5] = '-';
+      });
+      const sim = createSimulation();
+      for (const id of ['a-safe', 'b-victim', 'c-medic']) sim.addPlayer({ id, displayName: id, classId: 'bastion' });
+      sim.setWorld(PreparedWorldSchema.parse({
+        worldId: 'cover-reach', createdAt: 0, recipe: fixture.recipe, art: fixture.art,
+        rooms: [room, arena(() => {}, 1), arena(() => {}, 2, true)], plannedRoomCount: 3,
+        provenance: { source: 'fixture', label: 'TEST FIXTURE', generatedAt: 0, durationMs: 0, attempts: 0, notes: [] },
+        receipt: { worldTitle: fixture.recipe.title, source: 'fixture', headline: 'Cover', lines: [] },
+      }));
+      sim.enterRoom(0);
+      const seat = (id: string) => sim.getSnapshot().players.find((p) => p.id === id)!;
+      const grid = buildSolidGrid(room);
+      expect(worldToTile(seat('b-victim').x, seat('b-victim').y)).toEqual({ col: 6, row: 5 });
+      expect(worldToTile(seat('c-medic').x, seat('c-medic').y)).toEqual({ col: 5, row: 6 });
+      expect(clearPath(grid, seat('c-medic'), seat('b-victim'))).toBe(false); // cover, on the shots layer
+      expect(clearPath(grid, seat('c-medic'), seat('b-victim'), 1, 'solid')).toBe(true);
+
+      let downed = false;
+      let revived: GameEvent | undefined;
+      for (let i = 0; i < 3000 && !revived; i++) {
+        // Only the medic ever presses F; the untouched first operative must not do the rescue.
+        sim.applyIntent({ playerId: 'c-medic', seq: i, moveX: 0, moveY: 0, aimX: seat('c-medic').x + 1, aimY: seat('c-medic').y, attack: false, dash: false, ability: null, interact: true });
+        const events = sim.step();
+        downed ||= events.some((e) => e.type === 'player_downed' && e.playerId === 'b-victim');
+        revived = events.find((e) => e.type === 'player_revived');
+      }
+      expect(downed).toBe(true);
+      expect(revived).toMatchObject({ playerId: 'b-victim', byPlayerId: 'c-medic' });
+    });
   });
 
   it('is deterministic across two simulations fed the same intents', () => {

@@ -823,7 +823,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
         continue;
       }
       const reader = living.find((p) => !busy.has(p.state.id) && p.interacting && !p.damagedThisTick &&
-        distance(p.state, node.state) <= LORE_READ_RANGE && clearPath(grid, p.state, node.state));
+        distance(p.state, node.state) <= LORE_READ_RANGE && canReach(p.state, node.state));
       if (!reader) {
         node.holdMs = 0;
         node.state.state = 'sealed';
@@ -988,6 +988,17 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
   function canStrike(origin: Point, target: Point): boolean {
     if (clearPath(grid, origin, target)) return true;
     return distance(origin, target) <= TILE_SIZE && clearPath(grid, origin, target, 1, 'solid');
+  }
+
+  /**
+   * Line of REACH, for the things an operative does with their hands at arm's length: pulling a
+   * teammate up, reading a relic, planting the Anchor, hitting a relay. It reads the MOVEMENT
+   * layer, so a '-' barricade is open — low cover stops what travels and nothing else
+   * (TILES.md T4). A wall, a prop or a pit between the two still refuses; if you could not walk
+   * the last half-tile, you cannot reach across it either.
+   */
+  function canReach(from: Point, to: Point): boolean {
+    return clearPath(grid, from, to, 1, 'solid');
   }
 
   function basicAttack(p: PlayerRuntime, events: GameEvent[]): void {
@@ -1515,7 +1526,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const busy = new Set<string>();
     for (const downed of orderedPlayers().filter((p) => p.state.hp === 0)) {
       const rescuer = living.find((p) => !busy.has(p.state.id) && p.interacting && !p.damagedThisTick &&
-        distance(p.state, downed.state) <= REVIVE_RANGE && clearPath(grid, p.state, downed.state));
+        distance(p.state, downed.state) <= REVIVE_RANGE && canReach(p.state, downed.state));
       if (!rescuer) {
         downed.state.reviveProgress = 0;
         continue;
@@ -1553,7 +1564,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       return;
     }
     const planters = living.filter((p) => p.interacting && !p.damagedThisTick && !busy.has(p.state.id) &&
-      distance(p.state, anchor) <= ANCHOR_RANGE && clearPath(grid, p.state, anchor));
+      distance(p.state, anchor) <= ANCHOR_RANGE && canReach(p.state, anchor));
     if (planters.length === 0) {
       anchor.state = 'dormant';
       anchor.progress = 0;
@@ -1617,7 +1628,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     const target = ritual.stage === 'core' ? anchor : ritual.relays[ritual.activeRelay];
     if (!target) return;
     const actor = living.find((p) => !busy.has(p.state.id) && p.state.hp > 0 && p.interactPressed && !p.damagedThisTick &&
-      distance(p.state, target) <= RELAY_ACTIVATION_RANGE && clearPath(grid, p.state, target));
+      distance(p.state, target) <= RELAY_ACTIVATION_RANGE && canReach(p.state, target));
     if (!actor) return;
     anchor.state = 'planting';
     if (ritual.stage === 'core') {

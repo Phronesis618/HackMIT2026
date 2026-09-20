@@ -405,6 +405,10 @@ stationary husk in under 2 cycles (so the player gets to watch it work).
   becomes `:` rubble.
 - **It does not block the player's own melee** at ≤ 1 tile: if the target is within `TILE_SIZE`, the
   `clearPath` check is skipped. You can hit the thing standing on the other side of the barricade.
+- **It does not block interactions at all.** Reviving a teammate, reading a relic, planting the Anchor
+  and hitting a relay go through `canReach` (`src/sim/simulation.ts`), which reads the MOVEMENT layer:
+  cover is open there, a wall, a prop or a pit is not. Cover stops what travels, not a hand at arm's
+  length — and since a barricade is walkable, the person reaching is usually standing in it.
 
 This is the tile that makes our four ranged archetypes legible. `sentinel` (280 range, 3-bolt volley),
 `warden` (260, homing), `spewer` (220, spread) and `channeler` (230, 1500 ms spiral) currently have one
@@ -430,7 +434,8 @@ R4 is trivially satisfied (walkable).
 **Tests.** (a) a sentinel across a `-` never lands a bolt and starts chasing; (b) a player's melee at
 1 tile through `-` still lands; (c) 24 damage of bolts destroys it and it becomes `:`; (d) beams are
 blocked, players standing on `-` are not slowed; (e) a screenshot at 1280 px shows cover distinct from
-`B` and from a `pillar` prop.
+`B` and from a `pillar` prop; (f) a relic is read and a downed teammate is revived across a barricade
+(`tests/sim/cover.test.ts` "reach past a barricade").
 
 ---
 
