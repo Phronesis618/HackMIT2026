@@ -228,7 +228,7 @@ describe('run rail in floors mode', () => {
     expect(telemetryLabel(ui)).toBe(`${world.recipe.title} · room 1`);
     const brief = renderToStaticMarkup(createElement(WorldPanel, { world: ui.world!, compact: true }));
     expect(brief).toContain('3/3 rooms');
-    expect(renderToStaticMarkup(createElement(WorldPanel, { world: ui.world! }))).toContain('3/3 rooms ready');
+    expect(renderToStaticMarkup(createElement(WorldPanel, { world: ui.world! }))).toContain('World dossier · 3/3 rooms');
   });
 });
 

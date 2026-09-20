@@ -7,8 +7,8 @@ import { ProvenanceBadge } from './ProvenanceBadge';
 /**
  * Codex: what the crew has actually found, nothing more. Fragments are authored by the
  * world and only unlock through play — reading a relic in a room, or defeating an enemy
- * kind for the first time. Undiscovered entries stay ??? so the sidebar never tells what
- * the rooms are meant to show.
+ * kind for the first time. An undiscovered entry says so in plain words and names its kind,
+ * so the row reads as a locked slot rather than a riddle, and never tells what the rooms hold.
  */
 export function Codex({ world, discovered }: { world: UiWorldSummary; discovered: number[] }) {
   if (world.lore.length === 0) return null;
@@ -17,12 +17,13 @@ export function Codex({ world, discovered }: { world: UiWorldSummary; discovered
   const remains = world.lore.map((f, i) => ({ f, i })).filter(({ f }) => f.kind === 'remains');
   const entry = ({ f, i }: { f: UiWorldSummary['lore'][number]; i: number }) => {
     const known = found.has(i);
+    // The title already says the row is locked, so the second line only says where to look.
     const hint = f.kind === 'relic'
-      ? `Unread · room ${f.roomIndex + 1}`
-      : `Unknown · ${f.enemyId ? ENEMY_INFO[f.enemyId].name : 'hostile'} remains`;
+      ? `Room ${f.roomIndex + 1}`
+      : `${f.enemyId ? ENEMY_INFO[f.enemyId].name : 'A hostile'} drops it`;
     return (
       <li key={i} className={`codex__entry ${known ? 'codex__entry--found' : ''}`}>
-        <span className="codex__title">{known ? f.title : '???'}</span>
+        <span className="codex__title">{known ? f.title : `Not found yet · ${f.kind === 'relic' ? 'relic' : 'remains'}`}</span>
         {known && <span className="codex__source">{f.source}</span>}
         <span className="codex__text">{known ? f.text : hint}</span>
       </li>
@@ -120,7 +121,9 @@ export function WorldPanel(
   }
   return (
     <div className="panel panel--world">
-      <p className="eyebrow">World dossier · {floor ? rooms : `${rooms} ready`}</p>
+      {/* Sign-off: "… rooms ready" ran the eyebrow onto a second line in the 294 px debrief
+          rail, which left the stamp's marker floating between the two. The count says it. */}
+      <p className="eyebrow">World dossier · {rooms}</p>
       <div className="panel__row">
         <h2 className="panel__title">{world.title}</h2>
         <ProvenanceBadge provenance={world.provenance} />
