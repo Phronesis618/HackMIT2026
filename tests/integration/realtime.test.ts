@@ -71,7 +71,7 @@ class Peer {
         && predicate(message as Extract<ServerMessage, { type: T }>));
       expect(index, `waiting for ${type}`).toBeGreaterThanOrEqual(0);
       return this.queue.splice(index, 1)[0] as Extract<ServerMessage, { type: T }>;
-    }, { timeout: 3000, interval: 10 });
+    }, UNTIL);
   }
 
   hello(playerId: string | null, extra: Partial<Extract<ClientMessage, { type: 'hello' }>> = {}) {
@@ -107,6 +107,16 @@ function memoryStorage() {
     removeItem: (key: string) => { data.delete(key); },
   };
 }
+
+/**
+ * Every wait in this file is on a CONDITION, never on a duration — but vitest's default ceiling
+ * for `vi.waitFor` is 1 s, and 88 test files running at once on a laptop can blow through that
+ * while the condition is still perfectly on its way. The ceiling is a failure deadline, not a
+ * sleep: a passing run never spends any of it. Raising it removes the last load-sensitive edge
+ * in this file without making a single assertion weaker.
+ */
+const UNTIL = { timeout: 15_000, interval: 10 } as const;
+const until = <T>(check: () => T | Promise<T>): Promise<T> => vi.waitFor(check, UNTIL);
 
 function intent(playerId: string, seq: number, moveX = 0, moveY = 0, attack = false): ClientMessage {
   return { type: 'intent', intent: { playerId, seq, moveX, moveY, aimX: 1000, aimY: 80, attack, dash: false, ability: null } };
@@ -374,9 +384,9 @@ describe('authoritative realtime room', () => {
     const prefix = await host.requestWorld();
     expect(prefix.rooms).toHaveLength(1);
     host.enterPortal();
-    await vi.waitFor(() => expect(host.getPhase()).toBe('expedition'));
+    await until(() => expect(host.getPhase()).toBe('expedition'));
     release.release();
-    await vi.waitFor(() => expect(host.getGenerationStatus().phase).toBe('failed'));
+    await until(() => expect(host.getGenerationStatus().phase).toBe('failed'));
     expect(host.getWorld()).toEqual(prefix);
     expect(host.getSnapshot()?.roomId).toBe(prefix.rooms[0]!.id);
     expect(errors).toContain('Generation attempted to replace committed rooms.');
@@ -406,12 +416,12 @@ describe('RemoteSession over real sockets', () => {
     expect(firstId).not.toBe(secondId);
     const world = await first.session.requestWorld();
     first.session.enterPortal();
-    await vi.waitFor(() => expect(second.session.getPhase()).toBe('expedition'));
+    await until(() => expect(second.session.getPhase()).toBe('expedition'));
 
     second.persistence.save(second.session.getLocalPlayer());
     expect(first.persistence.load().id).toBe(secondId);
     first.session.dispose();
-    await vi.waitFor(() => expect(second.session.getIsHost()).toBe(true));
+    await until(() => expect(second.session.getIsHost()).toBe(true));
     const firstReload = await openTab(firstStorage);
     expect(firstReload.session.localPlayerId).toBe(firstId);
     expect(firstReload.session.getLobby()?.players).toHaveLength(2);
@@ -421,7 +431,7 @@ describe('RemoteSession over real sockets', () => {
     firstReload.persistence.save(firstReload.session.getLocalPlayer());
     expect(second.persistence.load().id).toBe(firstId);
     second.session.dispose();
-    await vi.waitFor(() => expect(firstReload.session.getIsHost()).toBe(true));
+    await until(() => expect(firstReload.session.getIsHost()).toBe(true));
     const secondReload = await openTab(secondStorage);
     expect(secondReload.session.localPlayerId).toBe(secondId);
     expect(secondReload.session.getLobby()?.players.map((player) => player.connected)).toEqual([true, true]);
@@ -447,7 +457,7 @@ describe('RemoteSession over real sockets', () => {
     const first = await openName('  First  ');
     const firstId = first.localPlayerId;
     first.dispose();
-    await vi.waitFor(() => expect(observer.getLobby()?.players.find((player) => player.identity.id === firstId)?.connected).toBe(false));
+    await until(() => expect(observer.getLobby()?.players.find((player) => player.identity.id === firstId)?.connected).toBe(false));
     const second = await openName('Second');
     expect(second.localPlayerId).not.toBe(firstId);
     second.dispose();
@@ -505,26 +515,32 @@ describe('RemoteSession over real sockets', () => {
     expect(host.getIsHost()).toBe(true);
     expect(guest.getIsHost()).toBe(false);
     guest.setDisplayName('Shade Pilot');
-    await vi.waitFor(() => expect(guest.getLocalPlayer().displayName).toBe('Shade Pilot'));
+    await until(() => expect(guest.getLocalPlayer().displayName).toBe('Shade Pilot'));
     guest.setClass('shade');
-    await vi.waitFor(() => expect(guest.getLocalPlayer().classId).toBe('shade'));
+    await until(() => expect(guest.getLocalPlayer().classId).toBe('shade'));
     const submitted = guest.submitContribution('A branching lightning reef');
     expect(submitted).not.toBeNull();
-    await vi.waitFor(() => expect(host.getContributions()[0]?.id).toBe(submitted?.id));
+    await until(() => expect(host.getContributions()[0]?.id).toBe(submitted?.id));
     const first = await host.requestWorld();
     expect(first.rooms).toHaveLength(1);
     host.enterPortal();
-    await vi.waitFor(() => expect(guest.getPhase()).toBe('expedition'));
+    await until(() => expect(guest.getPhase()).toBe('expedition'));
     // Held, not sent once: the server ignores input older than 250 ms, so a stalled machine can
     // drop a single send (A17). A real client sends this every frame.
-    await vi.waitFor(() => {
+    //
+    // Wait for BOTH things this block is here to establish — the operative moved AND a swing
+    // was actually taken. Waiting only on `x > 80` and asserting the attack 20 lines later made
+    // the swing depend on how many polls the movement happened to need, which is a duration
+    // wearing a condition's clothes; it is why this file flaked under full-suite load.
+    await until(() => {
       host.setIntent({ moveX: 1, moveY: 0, aimX: 1000, aimY: 80, attack: true, dash: false, ability: null });
       expect(host.getSnapshot()?.players.find((player) => player.id === host.localPlayerId)?.x).toBeGreaterThan(80);
+      expect(events.some((event) => event.type === 'player_attacked'), 'a swing was taken').toBe(true);
     });
     host.setIntent({ moveX: 0, moveY: 0, aimX: 1000, aimY: 80, attack: false, dash: false, ability: null });
     const beforeAppend = host.getSnapshot()!.players.find((player) => player.id === host.localPlayerId)!.x;
     release.release();
-    await vi.waitFor(() => expect(guest.getWorld()?.rooms).toHaveLength(3));
+    await until(() => expect(guest.getWorld()?.rooms).toHaveLength(3));
     expect(host.getSnapshot()?.players.find((player) => player.id === host.localPlayerId)?.x).toBeGreaterThanOrEqual(beforeAppend);
     expect(host.getSnapshot()?.roomId).toBe(first.rooms[0]!.id);
     expect(worlds.map((world) => world.rooms.length)).toEqual([1, 3]);
@@ -533,9 +549,9 @@ describe('RemoteSession over real sockets', () => {
     guest.returnToHeadquarters();
     const errors: string[] = [];
     guest.onError((message) => errors.push(message));
-    await vi.waitFor(() => expect(errors.some((message) => message.includes('host'))).toBe(true));
+    await until(() => expect(errors.some((message) => message.includes('host'))).toBe(true));
     host.returnToHeadquarters();
-    await vi.waitFor(() => expect(guest.getPhase()).toBe('headquarters'));
+    await until(() => expect(guest.getPhase()).toBe('headquarters'));
   });
 
   it('rejects unavailable generation, exposes server errors, and recovers identity after reconnect', async () => {
@@ -557,12 +573,12 @@ describe('RemoteSession over real sockets', () => {
     await expect(host.requestWorld()).rejects.toThrow('unavailable');
     expect(errors.some((message) => message.includes('generation'))).toBe(true);
     host.submitContribution('A remembered forest');
-    await vi.waitFor(() => expect(guest.getContributions()).toHaveLength(1));
+    await until(() => expect(guest.getContributions()).toHaveLength(1));
     const id = host.localPlayerId;
     sockets[0]!.terminate();
-    await vi.waitFor(() => expect(guest.getIsHost()).toBe(true));
-    await vi.waitFor(() => expect(sockets).toHaveLength(2), { timeout: 3000 });
-    await vi.waitFor(() => expect(host.getConnectionStatus()).toBe('connected'));
+    await until(() => expect(guest.getIsHost()).toBe(true));
+    await until(() => expect(sockets).toHaveLength(2));
+    await until(() => expect(host.getConnectionStatus()).toBe('connected'));
     expect(host.localPlayerId).toBe(id);
     expect(host.getContributions()).toHaveLength(1);
     expect(host.getLobby()?.players).toHaveLength(2);
@@ -583,9 +599,9 @@ describe('RemoteSession over real sockets', () => {
     await beforeReload.start();
     const id = beforeReload.localPlayerId;
     beforeReload.setClass('weaver');
-    await vi.waitFor(() => expect(host.getLobby()?.players.find((player) => player.identity.id === id)?.identity.classId).toBe('weaver'));
+    await until(() => expect(host.getLobby()?.players.find((player) => player.identity.id === id)?.identity.classId).toBe('weaver'));
     beforeReload.dispose(); // the page goes away; only the tab's storage survives
-    await vi.waitFor(() => expect(host.getLobby()?.players.find((player) => player.identity.id === id)?.connected).toBe(false));
+    await until(() => expect(host.getLobby()?.players.find((player) => player.identity.id === id)?.connected).toBe(false));
 
     const afterReload = remote(server.url, 'guest', { resumeStorage });
     const replayed: GameEvent[] = [];
@@ -630,7 +646,7 @@ describe('RemoteSession over real sockets', () => {
     await session.start();
     const pending = session.requestWorld();
     const rejection = expect(pending).rejects.toThrow('Disconnected');
-    await vi.waitFor(() => expect(signal).toBeDefined());
+    await until(() => expect(signal).toBeDefined());
     await running.close();
     await rejection;
     expect(signal?.aborted).toBe(true);
