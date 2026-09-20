@@ -1,7 +1,8 @@
 /**
- * Skill tree — content and shape. Effects are NOT wired to the simulation yet (every node
- * is `status: 'planned'`); the tree is real design data a future pass hooks up, and the
- * menu renders it as a vertical tree (root at the bottom, tiers climbing upward).
+ * Skill tree — content and shape. A node is `status: 'implemented'` only when `src/sim/effects.ts`
+ * applies its `effectId`; everything else is `'planned'` and cannot be bought. The menu renders
+ * the tree vertically (root at the bottom, tiers climbing upward) and buys nodes through
+ * `UiActions.purchaseSkill`, which the sim authorises with `skillPurchaseCheck` below.
  *
  * Three sources feed one tree:
  *  - core:       shared operative spine (tiers 0–1, centre lane)
@@ -15,6 +16,11 @@ import { ATTUNEMENT_EFFECT_INFO, CLASS_INFO, type AttunementEffectId, type Class
 
 export type SkillKind = 'core' | 'class' | 'attunement';
 
+/** Core-spine effects the sim applies; the tree's own wording is the contract. */
+export const CORE_EFFECT_IDS = ['salvage_bonus', 'second_wind'] as const;
+export type CoreEffectId = (typeof CORE_EFFECT_IDS)[number];
+export type SkillEffectId = AttunementEffectId | CoreEffectId;
+
 export interface SkillNode {
   id: string;
   name: string;
@@ -27,9 +33,11 @@ export interface SkillNode {
   requires: string[];
   cost: number;
   kind: SkillKind;
-  effectId?: AttunementEffectId;
+  effectId?: SkillEffectId;
   status: 'planned' | 'implemented';
 }
+
+export type SkillPurchaseRefusal = 'unknown' | 'planned' | 'owned' | 'requires' | 'resources';
 
 export interface SkillTree {
   title: string;
@@ -45,12 +53,44 @@ export interface SkillWorldContext {
 
 const planned = (node: Omit<SkillNode, 'status' | 'kind'>, kind: SkillKind): SkillNode => ({ ...node, kind, status: 'planned' });
 
+const live = (node: Omit<SkillNode, 'status' | 'kind'>, kind: SkillKind): SkillNode => ({ ...node, kind, status: 'implemented' });
+
 const CORE: SkillNode[] = [
-  { id: 'core.root', name: 'Relay Bond', description: 'The operative’s link to the relay. Everything grows from here.', tier: 0, lane: 0, requires: [], cost: 0 },
-  { id: 'core.plating', name: 'Reinforced Plating', description: '+20 max Integrity.', tier: 1, lane: -1, requires: ['core.root'], cost: 2 },
-  { id: 'core.wind', name: 'Second Wind', description: 'Dash cooldown −25%; invulnerability window +50 ms.', tier: 1, lane: 0, requires: ['core.root'], cost: 2 },
-  { id: 'core.salvage', name: 'Salvager', description: 'Cleared rooms yield +1 resource.', tier: 1, lane: 1, requires: ['core.root'], cost: 2 },
-].map((n) => planned(n, 'core'));
+  live({ id: 'core.root', name: 'Relay Bond', description: 'The operative’s link to the relay. Every operative has it.', tier: 0, lane: 0, requires: [], cost: 0 }, 'core'),
+  planned({ id: 'core.plating', name: 'Reinforced Plating', description: '+20 max Integrity.', tier: 1, lane: -1, requires: ['core.root'], cost: 2 }, 'core'),
+  live({ id: 'core.wind', name: 'Second Wind', description: 'Dash cooldown 25% shorter; dash invulnerability 50 ms longer.', tier: 1, lane: 0, requires: ['core.root'], cost: 2, effectId: 'second_wind' }, 'core'),
+  live({ id: 'core.salvage', name: 'Salvager', description: 'Every room you clear pays 1 more resource.', tier: 1, lane: 1, requires: ['core.root'], cost: 2, effectId: 'salvage_bonus' }, 'core'),
+];
+
+/** Nodes with no cost are innate: every operative owns them without buying. */
+export function ownsSkillNode(node: SkillNode, ownedIds: readonly string[]): boolean {
+  return node.cost === 0 || ownedIds.includes(node.id);
+}
+
+/**
+ * The one purchase rule, shared by the menu (to label the button) and the sim (to authorise
+ * the spend). Null means the purchase may go ahead at `node.cost`.
+ */
+export function skillPurchaseCheck(
+  tree: SkillTree, nodeId: string, ownedIds: readonly string[], resources: number,
+): SkillPurchaseRefusal | null {
+  const node = tree.nodes.find((n) => n.id === nodeId);
+  if (!node) return 'unknown';
+  if (node.status !== 'implemented') return 'planned';
+  if (ownsSkillNode(node, ownedIds)) return 'owned';
+  if (!node.requires.every((req) => { const r = tree.nodes.find((n) => n.id === req); return r !== undefined && ownsSkillNode(r, ownedIds); })) return 'requires';
+  if (resources < node.cost) return 'resources';
+  return null;
+}
+
+/** Effect ids a player actually has: owned nodes whose effect the sim applies. */
+export function ownedSkillEffects(tree: SkillTree, ownedIds: readonly string[]): SkillEffectId[] {
+  const out: SkillEffectId[] = [];
+  for (const node of tree.nodes) {
+    if (node.status === 'implemented' && node.effectId && ownsSkillNode(node, ownedIds) && !out.includes(node.effectId)) out.push(node.effectId);
+  }
+  return out;
+}
 
 const CLASS_TREES: Record<ClassId, Array<Omit<SkillNode, 'status' | 'kind'>>> = {
   bastion: [
@@ -113,7 +153,7 @@ export function buildSkillTree(classId: ClassId, world: SkillWorldContext | null
       id, name: a.name,
       description: `${a.description} (${ATTUNEMENT_EFFECT_INFO[a.effectId].summary})`,
       tier: 2 + i, lane: 2, requires: [i === 0 ? 'core.salvage' : `attune.${i - 1}.${attunements[i - 1]!.effectId}`],
-      cost: 3 + i, kind: 'attunement', effectId: a.effectId, status: 'planned',
+      cost: 3 + i, kind: 'attunement', effectId: a.effectId, status: ATTUNEMENT_EFFECT_INFO[a.effectId].status,
     });
   });
   const tiers = Math.max(...nodes.map((n) => n.tier)) + 1;

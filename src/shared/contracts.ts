@@ -733,6 +733,8 @@ export const PlayerStateSchema = z.object({
   ultCharge: z.number().min(0).max(100).optional(),
   /** Short lockout after firing R (prevents double-fire on held keys). */
   abilityRCooldownMs: z.number().nonnegative().optional(),
+  /** Skill-tree nodes this operative bought (`src/shared/skills.ts`); absent until the first purchase. */
+  skillNodeIds: z.array(z.string().max(64)).max(64).optional(),
 });
 export type PlayerState = z.infer<typeof PlayerStateSchema>;
 
