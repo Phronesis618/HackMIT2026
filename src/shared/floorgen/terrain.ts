@@ -39,6 +39,10 @@ const PIT_BLOB_MIN = 2;
 const PIT_BLOB_MAX = 6;
 const MAX_VENT_FIELDS = 2;
 const MAX_COVER_RUNS = 3;
+/** Features that can hurt somebody; kept out of boss arenas. */
+const DAMAGING_FEATURES = ['hazard_floor', 'vents', 'pits', 'canisters'] as const;
+/** How often a fighting room is a loud one. Deterministic per room: same seed, same rooms. */
+const DAMAGING_ROOM_CHANCE = 0.4;
 const COVER_RUN_MIN = 2;
 const COVER_RUN_MAX = 4;
 /** Cover against a wall does nothing: it has to be out in the open to break a firing line. */
@@ -66,6 +70,18 @@ export function applyBiomeTerrain(room: BuiltRoom, terrain: BiomeTerrain, seed: 
     !keyPoints.some((point) => Math.max(Math.abs(point.x - x), Math.abs(point.y - y)) <= MARGIN);
 
   const features = new Set(terrain.features);
+  // The room where a biome's gatekeeper or the Anchor stands keeps its structure and its cover,
+  // and none of the damaging tiles: a boss fight has to be decided by reading the boss, not by
+  // whatever the floor happened to roll (BOSS_FINALE's legibility rule, TILES.md S9 generalised).
+  // Not every room is a hazard room. A biome that asks for damaging terrain gets it in a
+  // minority of its rooms, so a floor has quiet rooms and loud ones and the chip damage of
+  // crossing ten of them never adds up to the fight at the end of them.
+  const bossArena = room.kind === 'exit' || room.feature === 'anchor';
+  const damaging = !bossArena && rng.chance(DAMAGING_ROOM_CHANCE);
+  if (!damaging) for (const id of DAMAGING_FEATURES) features.delete(id);
+  // Cover goes too: a barricade that eats the crew's own bolts turns the one fight that has to
+  // be readable into a line-of-sight puzzle against a boss that does not care about either.
+  if (bossArena) features.delete('cover');
   const density = terrain.density === 'sparse' ? 1 : terrain.density === 'dense' ? 3 : 2;
   const cells: Coord[] = [];
   for (let y = 1; y < room.height - 1; y++) for (let x = 1; x < room.width - 1; x++) if (free(x, y)) cells.push({ x, y });

@@ -7,6 +7,7 @@ import { PreparedWorldSchema, WorldFixtureSchema, type GameEvent, type GameSnaps
 import { PLAYER_RADIUS, TILE_SIZE, tileToWorld } from '../../src/shared/conventions';
 import { DOOR_SIDES, type BiomeBrief, type FloorPlan } from '../../src/shared/floors';
 import { upgradeToFloors } from '../../src/shared/floorgen';
+import { DANGEROUS_TILES, WALKABLE_TILES } from '../../src/shared/registry';
 import { buildSolidGrid, createRoomProvider, type RoomProvider, type Simulation } from '../../src/sim';
 import { chaseWaypoint, clearPath } from '../../src/sim/combat';
 
@@ -58,9 +59,34 @@ export function steerIntent(room: RoomSpec, snapshot: GameSnapshot, player: { x:
   return d < 1 ? { moveX: 0, moveY: 0 } : { moveX: (waypoint.x - player.x) / d, moveY: (waypoint.y - player.y) / d };
 }
 
+/** The nearest tile that is walkable and does not damage. Null when the bot is already safe. */
+function stepOffHazard(room: RoomSpec, player: { x: number; y: number }): { x: number; y: number } | null {
+  const col = Math.floor(player.x / TILE_SIZE);
+  const row = Math.floor(player.y / TILE_SIZE);
+  if (!DANGEROUS_TILES.has(room.tiles[row]?.[col] ?? '')) return null;
+  let best: { x: number; y: number } | null = null;
+  let bestDistance = Infinity;
+  room.tiles.forEach((line, y) => {
+    for (let x = 0; x < line.length; x++) {
+      if (!WALKABLE_TILES.has(line[x]!) || DANGEROUS_TILES.has(line[x]!)) continue;
+      const at = tileToWorld(x, y);
+      const d = Math.hypot(at.x - player.x, at.y - player.y);
+      if (d < bestDistance) { bestDistance = d; best = at; }
+    }
+  });
+  return best;
+}
+
 /** Ranged kiting: close to sight range, back off when crowded, strafe otherwise; revive when it is quiet. */
 export function fightIntent(room: RoomSpec, snapshot: GameSnapshot, player: Operative): Partial<PlayerIntent> {
   if (player.hp <= 0) return {};
+  // Nobody stands in a fire they can walk out of. The bot is not smart about hazards, but it is
+  // at least this smart, or terrain would decide every fight it is in (docs/design/TILES.md T0).
+  const safety = stepOffHazard(room, player);
+  if (safety) {
+    const target = snapshot.enemies.find((enemy) => enemy.hp > 0);
+    return { ...steerIntent(room, snapshot, player, safety, true), aimX: target?.x ?? player.x, aimY: target?.y ?? player.y };
+  }
   const living = snapshot.enemies.filter((enemy) => enemy.hp > 0);
   const grid = buildSolidGrid(room, snapshot.terrain?.brokenWalls ?? [], true);
   const downed = snapshot.players.find((other) => other.hp <= 0);

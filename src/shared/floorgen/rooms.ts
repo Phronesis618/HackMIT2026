@@ -92,7 +92,9 @@ export function buildRoom(plan: FloorPlan, roomId: string, brief: BiomeBrief, se
 
   // 4. Mutators.
   if (room.kind === 'combat' || room.kind === 'elite') addPillarClusters(grid, keyPoints, room.sizeClass, rng);
-  if (parsed.hazards && !QUIET_KINDS.has(room.kind)) addHazardPools(grid, keyPoints, room.sizeClass, rng);
+  // 'exit' is excluded as well as the quiet kinds: that room holds the gatekeeper or the Anchor,
+  // and since T0 made '~' burn, a pool on the boss floor decides the fight instead of the boss.
+  if (parsed.hazards && !QUIET_KINDS.has(room.kind) && room.kind !== 'exit') addHazardPools(grid, keyPoints, room.sizeClass, rng);
 
   // 5. Repair: whatever happened above, every key point must reach the spawn.
   repairConnectivity(grid, spawn, keyPoints);

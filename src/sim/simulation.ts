@@ -20,7 +20,7 @@ import {
 import { headquartersRoom } from './headquarters';
 import {
   CANISTER_ENEMY_DAMAGE, CANISTER_KNOCKBACK, CANISTER_PLAYER_DAMAGE, CANISTER_RADIUS,
-  ENV_KILL_CREDIT, isTerrainDamageSource, PIT_FALL_DAMAGE, PIT_RECOVERY_INVULNERABLE_MS,
+  ENV_KILL_CREDIT, isEliteEnemy, isTerrainDamageSource, PIT_FALL_DAMAGE, PIT_RECOVERY_INVULNERABLE_MS,
   roomTerrainTuning, terrainSpeedMultiplier, terrainTileAt,
   TERRAIN_DAMAGE_SOURCE, type TerrainDamageSource, type TerrainState,
 } from '../shared/terrain';
@@ -1026,7 +1026,15 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
       ((e.state.x - from.x) / d) * distancePx, ((e.state.y - from.y) / d) * distancePx, 'dash');
     e.state.x = moved.x;
     e.state.y = moved.y;
+    // A guardian does not fit down a duct: elites are stopped by the ledge instead of deleted,
+    // so no boss fight is ever decided by one shove (TILES.md T2's elite exception, extended).
     if (!events || e.state.hp <= 0 || !overPit(moved)) return;
+    if (isEliteEnemy(e.state.enemyId)) {
+      const ledge = nearestOpenPosition(grid, moved, radius);
+      e.state.x = ledge.x;
+      e.state.y = ledge.y;
+      return;
+    }
     const rim = nearestOpenPosition(grid, moved, radius);
     e.state.x = rim.x;
     e.state.y = rim.y;

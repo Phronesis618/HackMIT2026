@@ -108,8 +108,8 @@ function compileRoom(
   // or blocking tile two clear tiles away from these, so they are known before terrain runs.
   const keyPoints: Coord[] = [{ x: 1, y: pathY }, { x: isFinal ? width - 3 : width - 1, y: pathY }];
   applyMotifStructure(grid, pathY, blueprint.motifIds[0] ?? recipe.motifIds[0], roomSeed);
-  applyTerrain(grid, pathY, blueprint, roomSeed, keyPoints);
-  if (blueprint.hazards) applyHazards(grid, pathY, roomSeed, keyPoints);
+  applyTerrain(grid, pathY, blueprint, roomSeed, keyPoints, isFinal);
+  if (blueprint.hazards && !isFinal) applyHazards(grid, pathY, roomSeed, keyPoints);
 
   // Reserve and re-clear the critical route after all structural work.
   for (let x = 1; x < width - 1; x++) grid[pathY]![x] = '.';
@@ -224,9 +224,14 @@ function defaultTerrain(motif: MotifId): RoomTerrain {
   return { features: ['bridges', 'conduits'], layout: 'crossroads', density: 'balanced' };
 }
 
-function applyTerrain(grid: Grid, pathY: number, blueprint: RoomBlueprint, seed: number, keyPoints: readonly Coord[]): void {
+function applyTerrain(
+  grid: Grid, pathY: number, blueprint: RoomBlueprint, seed: number, keyPoints: readonly Coord[], isFinal: boolean,
+): void {
   const terrain = blueprint.terrain ?? defaultTerrain(blueprint.motifIds[0]!);
   const features = new Set(terrain.features);
+  // The Anchor room keeps its structure and its cover and none of the damaging tiles: the
+  // Guardian fight is decided by reading the Guardian (see the floors mutator for the same rule).
+  if (isFinal) for (const id of ['hazard_floor', 'vents', 'pits', 'canisters', 'cover'] as const) features.delete(id);
   const density = terrain.density === 'sparse' ? 1 : terrain.density === 'dense' ? 3 : 2;
   const cells = floorCandidates(grid, pathY, seed);
   const width = grid[0]!.length;
