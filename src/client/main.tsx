@@ -21,6 +21,7 @@ import { PhaserWorldRenderer } from './render/PhaserWorldRenderer';
 import { applyTokens } from './styles/applyTokens';
 import './styles/app.css';
 import './styles/floors.css';
+import './styles/finale.css';
 import { LocalSession } from './transport/LocalSession';
 import { RemoteSession } from './transport/RemoteSession';
 import { fixtureWorldProvider, serverWorldProvider } from './transport/worldProviders';
