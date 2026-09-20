@@ -252,7 +252,7 @@ describe('room presentation against authoritative contracts', () => {
 
     scene.playEvents([{
       id: 'test-lore', tick: 800, timeMs: 0, type: 'lore_discovered', playerId: localId, fragmentIndex: 0,
-      kind: 'relic', title: 'Departures board', text: 'Every line reads DELAYED.', x: me.x + 20, y: me.y,
+      kind: 'relic', title: 'Departures board', source: 'a split-flap board', text: 'Every line reads DELAYED.', x: me.x + 20, y: me.y,
     }]);
     expect(effects()).toHaveLength(1);
     expect(stage.nodes.some((n) => n.text === 'DEPARTURES BOARD')).toBe(true);

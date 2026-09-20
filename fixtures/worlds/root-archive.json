@@ -87,49 +87,56 @@
       {
         "kind": "relic",
         "title": "Reading-room notice",
-        "text": "Please return all records to the roots. Do not water the terminals. The archive remembers what you forget to.",
+        "source": "a laminated notice, half swallowed by root",
+        "text": "Please return all records to the roots when finished. Do not water the terminals. Do not answer the terminals. The archive remembers what you forget to, and it has been getting very good at remembering.",
         "roomIndex": 0,
         "enemyId": null
       },
       {
         "kind": "relic",
         "title": "Index card, overgrown",
-        "text": "Subject: the machine. Filed under: soil. A root has grown clean through the hole where the card was pinned.",
+        "source": "an index card with a root grown through the pin-hole",
+        "text": "Subject: the machine. Filed under: soil. Cross-reference: everyone. A second hand has added, in green: it is not filed under soil, it is filed as soil, and so, soon, are we.",
         "roomIndex": 1,
         "enemyId": null
       },
       {
         "kind": "relic",
         "title": "Lantern-lighter’s ledger",
-        "text": "Lit nine lanterns on the dry path. Heard the terminals humming a tune I taught them. Did not light the tenth.",
+        "source": "a ledger left on the dry path, pages damp",
+        "text": "Lit nine lanterns along the dry path, the way my mother did. Heard the terminals humming a tune I taught them as a girl. Did not light the tenth. The tenth is where the path stops being dry, and where the humming stops being a tune.",
         "roomIndex": 1,
         "enemyId": null
       },
       {
         "kind": "relic",
         "title": "Seed vault plaque",
-        "text": "Here the archive keeps one copy of everything it was told, so that endings can be argued with.",
+        "source": "a brass plaque above the Anchor site",
+        "text": "Here the archive keeps one copy of everything it was ever told, so that endings can be argued with. Plant carefully. What is planted here is read aloud, forever, to the roots.",
         "roomIndex": 2,
         "enemyId": null
       },
       {
         "kind": "remains",
         "title": "Reader’s spectacles",
-        "text": "Cheap frames, lenses fogged green. The husks were patrons who stayed past closing and let the roots do their reading for them.",
+        "source": "cheap wire frames, lenses fogged green",
+        "text": "The husks were patrons who stayed past closing. The roots offered to do their reading for them, and they accepted, and they are still reading. Behind the fogged lenses the eyes move left to right, left to right.",
         "roomIndex": 0,
         "enemyId": "husk"
       },
       {
         "kind": "remains",
         "title": "Runner’s satchel",
-        "text": "Empty, but the strap is worn through. Lurkers were the couriers who carried records between wings until the roots learned to carry them instead.",
+        "source": "a courier satchel, strap worn through",
+        "text": "Lurkers were the couriers who carried records between wings until the roots learned to carry them instead. The satchel is empty. The last delivery slip inside reads: recipient will come to you.",
         "roomIndex": 0,
         "enemyId": "lurker"
       },
       {
         "kind": "remains",
         "title": "Head archivist’s seal",
-        "text": "Wax, root-fibre and a fingerprint. The Guardian was the last archivist, grown into the vault it swore to keep, still refusing every withdrawal.",
+        "source": "a wax seal, root-fibre and one fingerprint",
+        "text": "The Guardian was the last archivist, who chose to be grown into the vault rather than leave it unkept. It refused every withdrawal for a very long time. Under the wax, the fingerprint has the whorl of a leaf.",
         "roomIndex": 0,
         "enemyId": "guardian"
       }

@@ -21,6 +21,7 @@ function Codex({ world, discovered }: { world: UiWorldSummary; discovered: numbe
     return (
       <li key={i} className={`codex__entry ${known ? 'codex__entry--found' : ''}`}>
         <span className="codex__title">{known ? f.title : '???'}</span>
+        {known && <span className="codex__source">{f.source}</span>}
         <span className="codex__text">{known ? f.text : hint}</span>
       </li>
     );

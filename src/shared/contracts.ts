@@ -339,7 +339,9 @@ export type ContributionMapping = z.infer<typeof ContributionMappingSchema>;
 export const LoreFragmentSchema = z.object({
   kind: z.enum(['relic', 'remains']),
   title: z.string().trim().min(1).max(40),
-  text: z.string().trim().min(1).max(240),
+  /** Where it comes from, in-world: "scratched into a tide gauge", "from a warden's lamp". */
+  source: z.string().trim().min(1).max(60),
+  text: z.string().trim().min(1).max(520),
   /** `relic`: the room it lies in. `remains`: ignored (drops wherever the enemy falls). */
   roomIndex: z.number().int().min(0).max(2),
   /** `remains` only; null for relics. */
@@ -635,7 +637,7 @@ export const GameEventSchema = z.discriminatedUnion('type', [
   z.object({
     ...eventBase, type: z.literal('lore_discovered'), playerId: IdString,
     fragmentIndex: z.number().int().min(0), kind: z.enum(['relic', 'remains']),
-    title: z.string().max(40), text: z.string().max(240), x: z.number(), y: z.number(),
+    title: z.string().max(40), source: z.string().max(60), text: z.string().max(520), x: z.number(), y: z.number(),
   }),
   z.object({ ...eventBase, type: z.literal('exit_reached'), playerId: IdString, roomIndex: z.number().int().min(0), toRoomIndex: z.number().int().min(0) }),
   z.object({ ...eventBase, type: z.literal('anchor_planted'), worldId: IdString, roomIndex: z.number().int().min(0), playerIds: z.array(IdString) }),

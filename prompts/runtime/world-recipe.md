@@ -18,13 +18,18 @@ Use only the allowed registry IDs below:
 
 Lore is shown, never told. Never explain the world in descriptions; let players find
 it. Write 6 to 10 `lore` fragments in a consistent in-world voice (inscriptions, logs,
-graffiti, prayers, last words), each one a concrete detail that implies a larger story:
+graffiti, prayers, last words). Each is a found document: concrete, specific, written by
+someone inside the world, and together they should let a careful player reconstruct what
+happened here without any fragment stating it outright.
 - kind "relic": an artifact lying in `roomIndex` (one or two per room). Players read it
   by walking up to it. `enemyId` must be null.
 - kind "remains": what a hostile leaves behind when it falls, named by `enemyId`. Write one
   for every enemy kind used in the rooms, including the guardian, and make it reveal what
   that creature was before this world ended. `roomIndex` is ignored; use 0.
-`title` is a short in-world label (never "Lore 1"); `text` is one to two sentences.
+`title` is a short in-world label (never "Lore 1"). `source` says what the fragment
+physically is and where it was found ("scratched into a tide gauge", "a warden's lamp,
+lens cracked"). `text` is the fragment itself: two to four sentences, up to about 400
+characters, in the voice of whoever left it.
 
 Map only supplied contribution IDs to features you actually selected. Each mapping
 names a room index and feature kind. Within each room, prop mappings correspond in

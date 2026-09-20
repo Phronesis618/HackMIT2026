@@ -202,7 +202,7 @@ function memoryFromEvent(
         createdAt: ctx.now,
         participants,
         title: clip(event.title, 80),
-        summary: clip(`${event.text} (${event.kind === 'relic' ? 'read' : 'recovered'} by ${joinNames(participants)})`, 400),
+        summary: clip(`${event.source} — ${event.text} (${event.kind === 'relic' ? 'read' : 'recovered'} by ${joinNames(participants)})`, 400),
         sourceEventIds: [event.id],
         provenanceSource: world.provenanceSource,
       };

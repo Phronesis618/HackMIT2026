@@ -83,49 +83,56 @@
       {
         "kind": "relic",
         "title": "Tide gauge, cracked",
-        "text": "Someone scratched a line into the glass every hour the sea rose. The last mark is above the ceiling.",
+        "source": "scratched into the glass of a brass tide gauge",
+        "text": "Hour 1: two fingers over the low mark. Hour 6: the glass is warm. Hour 14: it is not water, whatever they say in the gallery, water does not look back. I have stopped marking the hours and started marking the faces.",
         "roomIndex": 0,
         "enemyId": null
       },
       {
         "kind": "relic",
         "title": "Observatory roster",
-        "text": "Forty-one names, each followed by a small lens sigil. Thirty-eight are struck through in the same violet ink the sea glows with.",
+        "source": "a duty roster pinned under a crystal shelf",
+        "text": "Forty-one names, each with a small lens sigil, each with a watch assigned. Thirty-eight are struck through in the same violet ink the shallows glow with. The three untouched names all share one shift: the night the lens was first turned downward.",
         "roomIndex": 1,
         "enemyId": null
       },
       {
         "kind": "relic",
         "title": "Prayer to the Focus",
-        "text": "Turn your face to the lens and be counted. The sea only takes what refuses to be seen.",
+        "source": "etched around the rim of a cracked lens-plate",
+        "text": "Turn your face to the lens and be counted. Be seen and be kept. The sea only takes what refuses to be seen, and we have refused nothing, so why is the gallery quiet, and why does my watch-partner answer in the wrong voice.",
         "roomIndex": 1,
         "enemyId": null
       },
       {
         "kind": "relic",
         "title": "Lens-keeper’s last entry",
-        "text": "I have stopped the lens. Whatever it was showing the sea, the sea was learning. Tell no one where the Anchor sits.",
+        "source": "a logbook wedged beneath the Anchor pedestal",
+        "text": "I have stopped the lens. Whatever it was showing the sea, the sea was learning, and it had nearly learned enough to show it back. The observatory core will hold as long as something is planted here that the sea cannot count. Tell no one where the Anchor sits.",
         "roomIndex": 2,
         "enemyId": null
       },
       {
         "kind": "remains",
         "title": "Surveyor’s badge",
-        "text": "A crystal badge still warm from the volley. The etched title reads Sentinel, Second Watch: it was posted here to count the sea, not to shoot at it.",
+        "source": "a crystal badge, still warm from the volley",
+        "text": "The etching reads Sentinel, Second Watch, with a tally of tides counted underneath. Whoever wore it was posted to count the sea, not to shoot at it. The last tally mark is scratched so hard it went through the crystal.",
         "roomIndex": 0,
         "enemyId": "sentinel"
       },
       {
         "kind": "remains",
         "title": "Diver’s tether",
-        "text": "Frayed cable and a mouthful of violet salt. The lurkers were the divers who went down to read the sea up close, and came back speaking its language.",
+        "source": "frayed tether cable and a mouthful of violet salt",
+        "text": "Divers went down to read the sea up close, on lines like this one, and reported back in words that grew shorter every trip. The final reports are single syllables. The cable is chewed through from the diver’s end.",
         "roomIndex": 0,
         "enemyId": "lurker"
       },
       {
         "kind": "remains",
         "title": "The Focus itself",
-        "text": "Six lens-plates fall away from a body that was never a person. The Guardian was the observatory’s eye, and it did not want to be blinded.",
+        "source": "six lens-plates that fell away from a body",
+        "text": "It was never a person. It was the observatory’s own eye, the great lens given something to stand with, and it did not want to be blinded a second time. Through the plates, faintly, the sea is still trying to show you something.",
         "roomIndex": 0,
         "enemyId": "guardian"
       }

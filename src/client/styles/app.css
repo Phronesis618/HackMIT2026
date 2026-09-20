@@ -459,6 +459,11 @@ body {
 .codex__entry--found .codex__title {
   color: var(--color-warmLamp);
 }
+.codex__source {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--color-mist300);
+}
 .codex__text {
   font-size: 12px;
   line-height: 1.35;

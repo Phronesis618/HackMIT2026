@@ -202,7 +202,7 @@ function assertDisplayText(recipe: WorldRecipe): void {
     recipe.title, recipe.tagline, recipe.themeSummary,
     ...recipe.rooms.flatMap((room) => [room.name, room.description]),
     ...recipe.contributionMappings.map((mapping) => mapping.featureDescription),
-    ...recipe.lore.flatMap((fragment) => [fragment.title, fragment.text]),
+    ...recipe.lore.flatMap((fragment) => [fragment.title, fragment.source, fragment.text]),
   ];
   if (text.some((value) => /[<>]|```|(?:https?:\/\/|www\.|data:|javascript:)|\b(?:eval|function)\s*\(/i.test(value))) {
     throw new GenerationFailure('Recipe text contained markup, a URL, or code.', true);

@@ -297,7 +297,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (!fragment) return;
     events.push(emit({
       type: 'lore_discovered', playerId: by.state.id, fragmentIndex: node.state.fragmentIndex, kind: fragment.kind,
-      title: fragment.title, text: fragment.text, x: node.state.x, y: node.state.y,
+      title: fragment.title, source: fragment.source, text: fragment.text, x: node.state.x, y: node.state.y,
     }));
   }
 

@@ -196,8 +196,9 @@ export class GameController {
 
   private handleSnapshot(snapshot: GameSnapshot): void {
     this.latestSnapshot = snapshot;
-    const { session, store, renderer } = this.deps;
+    const { session, store, renderer, audio } = this.deps;
     const me = snapshot.players.find((p) => p.id === session.localPlayerId);
+    audio.setScene?.(snapshot.phase);
     if (snapshot.phase === 'training') {
       if (store.get().phase !== 'training') {
         renderer.showRoom(trainingRoom, trainingArt);
@@ -250,6 +251,7 @@ export class GameController {
   }
 
   private handleWorld(world: PreparedWorld): void {
+    this.deps.audio.setWorld?.(world.art);
     this.deps.store.set({
       world: {
         worldId: world.worldId,
@@ -267,7 +269,8 @@ export class GameController {
   }
 
   private handlePhase(phase: 'headquarters' | 'training' | 'expedition' | 'debrief'): void {
-    const { renderer, store } = this.deps;
+    const { renderer, store, audio } = this.deps;
+    audio.setScene?.(phase);
     if (phase === 'headquarters') {
       renderer.showHeadquarters(headquartersRoom, headquartersArt);
       store.set({ phase: 'headquarters', room: null, hud: null });

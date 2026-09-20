@@ -372,6 +372,7 @@ export class RoomScene extends Phaser.Scene {
     const accent = hexToInt(this.art.palette.accent);
     const warm = hexToInt(tokens.color.warmLamp);
     const ink = hexToInt(this.art.palette.wall);
+    const edge = hexToInt(this.art.palette.wallEdge);
     const t = this.time.now / 1000;
     const me = snapshot.players.find((p) => p.id === localPlayerId);
     let hintTarget: { x: number; y: number } | null = null;
@@ -379,59 +380,85 @@ export class RoomScene extends Phaser.Scene {
       const collected = node.state === 'collected';
       const pulse = 0.5 + 0.5 * Math.sin(t * 2.4 + node.x * 0.02);
       if (node.kind === 'relic') {
-        if (!collected) g.fillStyle(accent, 0.06 + 0.06 * pulse).fillCircle(node.x, node.y + 4, 22 + pulse * 3);
-        g.fillStyle(0x000000, 0.3).fillEllipse(node.x + 2, node.y + 10, 22, 8);
-        g.fillStyle(ink, 1).fillRoundedRect(node.x - 7, node.y - 11, 14, 20, 3);
-        g.lineStyle(1.5, accent, collected ? 0.25 : 0.85).strokeRoundedRect(node.x - 7, node.y - 11, 14, 20, 3);
-        g.lineStyle(1, accent, collected ? 0.2 : 0.7);
-        for (let i = 0; i < 3; i++) g.lineBetween(node.x - 4, node.y - 6 + i * 5, node.x + (i === 1 ? 2 : 4), node.y - 6 + i * 5);
+        // A stele: stone base, tall slab leaning slightly, etched lines that catch the light,
+        // and a column of light above it while it still has something to say.
+        const alpha = collected ? 0.3 : 1;
+        if (!collected) {
+          g.fillStyle(accent, 0.05 + 0.05 * pulse).fillCircle(node.x, node.y + 8, 30 + pulse * 4);
+          g.fillStyle(accent, 0.03 + 0.03 * pulse).fillRect(node.x - 9, node.y - 64 - pulse * 6, 18, 60 + pulse * 6);
+        }
+        g.fillStyle(0x000000, 0.35).fillEllipse(node.x + 3, node.y + 14, 38, 12);
+        g.fillStyle(edge, 0.9 * alpha).fillRoundedRect(node.x - 14, node.y + 6, 28, 8, 3);
+        g.fillStyle(ink, 1).fillRoundedRect(node.x - 10, node.y - 26, 20, 34, 4);
+        g.lineStyle(1.5, accent, 0.85 * alpha).strokeRoundedRect(node.x - 10, node.y - 26, 20, 34, 4);
+        g.lineStyle(1, accent, 0.55 * alpha).strokeRoundedRect(node.x - 7, node.y - 23, 14, 28, 3);
+        g.lineStyle(1.2, accent, (0.45 + 0.4 * pulse) * alpha);
+        for (let i = 0; i < 5; i++) {
+          const w = i === 0 ? 8 : i === 4 ? 6 : 10;
+          g.lineBetween(node.x - 5, node.y - 18 + i * 5, node.x - 5 + w, node.y - 18 + i * 5);
+        }
+        g.fillStyle(accent, (0.6 + 0.4 * pulse) * alpha).fillCircle(node.x, node.y - 30, 2);
         if (node.state === 'reading') {
           g.lineStyle(3, accent, 1).beginPath()
-            .arc(node.x, node.y, 18, -Math.PI / 2, -Math.PI / 2 + node.progress * Math.PI * 2, false).strokePath();
+            .arc(node.x, node.y - 8, 26, -Math.PI / 2, -Math.PI / 2 + node.progress * Math.PI * 2, false).strokePath();
         } else if (!collected && me && Math.hypot(me.x - node.x, me.y - node.y) <= LORE_READ_RANGE + 12) {
           hintTarget = node;
         }
       } else {
-        const spin = t * 1.8;
-        g.fillStyle(warm, 0.08 + 0.08 * pulse).fillCircle(node.x, node.y, 16 + pulse * 3);
-        g.lineStyle(1.5, warm, 0.9).beginPath();
-        for (let i = 0; i < 4; i++) {
-          const a = spin + i * Math.PI / 2;
-          const r = i % 2 === 0 ? 8 : 4;
-          const px = node.x + Math.cos(a) * r;
-          const py = node.y + Math.sin(a) * r;
-          if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+        // Remains: a cluster of three shards over a warm ember glow, slowly turning.
+        const spin = t * 1.2;
+        g.fillStyle(warm, 0.1 + 0.1 * pulse).fillCircle(node.x, node.y, 22 + pulse * 4);
+        g.fillStyle(warm, 0.05).fillCircle(node.x, node.y, 34 + pulse * 6);
+        for (let s = 0; s < 3; s++) {
+          const base = spin + s * (Math.PI * 2 / 3);
+          const cx = node.x + Math.cos(base) * 7;
+          const cy = node.y + Math.sin(base) * 7;
+          g.fillStyle(ink, 1).lineStyle(1.5, warm, 0.95).beginPath();
+          for (let i = 0; i < 4; i++) {
+            const a = base * 1.5 + i * Math.PI / 2;
+            const r = i % 2 === 0 ? 9 : 4;
+            const px = cx + Math.cos(a) * r;
+            const py = cy + Math.sin(a) * r;
+            if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+          }
+          g.closePath().fillPath().strokePath();
         }
-        g.closePath().strokePath();
-        g.fillStyle(warm, 0.9).fillCircle(node.x, node.y, 2);
+        g.fillStyle(0xffffff, 0.7 + 0.3 * pulse).fillCircle(node.x, node.y, 2.5);
       }
     }
     if (this.loreHint) {
-      if (hintTarget) this.loreHint.setPosition(hintTarget.x, hintTarget.y - 18).setVisible(true);
+      if (hintTarget) this.loreHint.setPosition(hintTarget.x, hintTarget.y - 40).setVisible(true);
       else this.loreHint.setVisible(false);
     }
   }
 
   /** The discovery moment: title + text over the room, then it fades and lives in the Codex. */
-  private revealLore(title: string, text: string, x: number, y: number): void {
+  private revealLore(title: string, source: string, text: string, x: number, y: number): void {
     if (!this.room || !this.art) return;
     const p = this.art.palette;
     this.animate(x, y, 600, (g, t) => fx.drawFlare(g, t, hexToInt(tokens.color.warmLamp), 7));
     const roomW = this.room.width * TILE_SIZE;
     const roomH = this.room.height * TILE_SIZE;
-    const top = Math.min(96, roomH * 0.3);
+    const top = Math.min(72, roomH * 0.22);
+    const width = Math.min(roomW - 40, 480);
     const heading = this.text(roomW / 2, top, title.toUpperCase(), {
-      fontFamily: tokens.font.display, fontSize: '13px', color: tokens.color.warmLamp, letterSpacing: 3, align: 'center',
+      fontFamily: tokens.font.display, fontSize: '15px', color: tokens.color.warmLamp, letterSpacing: 3, align: 'center',
+      wordWrap: { width },
     }).setOrigin(0.5, 1).setAlpha(0).setDepth(DEPTH.overlay);
-    const body = this.text(roomW / 2, top + 6, text, {
-      fontFamily: tokens.font.body, fontSize: '12px', color: p.text, align: 'center',
-      wordWrap: { width: Math.min(roomW - 40, 420) }, backgroundColor: 'rgba(7, 9, 15, 0.7)',
-      padding: { left: 10, right: 10, top: 8, bottom: 8 },
+    const provenance = this.text(roomW / 2, top + 4, source, {
+      fontFamily: tokens.font.mono, fontSize: '9px', color: p.accent, letterSpacing: 1, align: 'center', wordWrap: { width },
     }).setOrigin(0.5, 0).setAlpha(0).setDepth(DEPTH.overlay);
-    this.roomLayer?.add([heading, body]);
+    const body = this.text(roomW / 2, top + 22, text, {
+      fontFamily: tokens.font.body, fontSize: '13px', color: p.text, align: 'center', lineSpacing: 3,
+      wordWrap: { width }, backgroundColor: 'rgba(7, 9, 15, 0.78)',
+      padding: { left: 14, right: 14, top: 10, bottom: 10 },
+    }).setOrigin(0.5, 0).setAlpha(0).setDepth(DEPTH.overlay);
+    this.roomLayer?.add([heading, provenance, body]);
+    // Long enough to actually read three sentences; still leaves the room playable underneath.
+    const hold = 5000 + Math.min(7000, text.length * 28);
     this.tweens.add({
-      targets: [heading, body], alpha: 1, duration: tokens.motion.baseMs, hold: 6000, yoyo: true,
-      onComplete: () => { heading.destroy(); body.destroy(); },
+      targets: [heading, provenance, body], alpha: 1, duration: tokens.motion.baseMs, hold, yoyo: true,
+      onComplete: () => { heading.destroy(); provenance.destroy(); body.destroy(); },
     });
   }
 
@@ -826,7 +853,7 @@ export class RoomScene extends Phaser.Scene {
           break;
         }
         case 'lore_discovered': {
-          this.revealLore(event.title, event.text, event.x, event.y);
+          this.revealLore(event.title, event.source, event.text, event.x, event.y);
           break;
         }
         case 'anchor_planted': {

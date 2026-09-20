@@ -1,10 +1,29 @@
 {
-  "ui_confirm": { "frequencies": [440, 660], "durationMs": 100 },
-  "portal_open": { "frequencies": [220, 330, 440, 660], "durationMs": 480 },
-  "room_enter": { "frequencies": [330, 440, 660], "durationMs": 330 },
-  "dash": { "frequencies": [740, 220], "durationMs": 90 },
-  "attack": { "frequencies": [180, 80], "durationMs": 75 },
-  "hit": { "frequencies": [110, 65], "durationMs": 85 },
-  "enemy_down": { "frequencies": [330, 165, 82], "durationMs": 180 },
-  "memory_saved": { "frequencies": [523, 659, 784], "durationMs": 260 }
+  "$note": "Documentation of the procedural cue set in src/client/audio/index.ts (not loaded at runtime). Every tonal cue is voiced in the world's scale; percussive cues take the world's noise colour.",
+  "voice": {
+    "root": "picked from A1..G#2 by the accent colour's hue",
+    "scale": "dorian when the palette is bright, minor pentatonic when it is dark",
+    "timbre": "glass (crystals/lanterns: sine bells with inharmonic partials) | electric (cables/ruined machinery: filtered square+saw, hiss) | deep (roots/spires/arches/monoliths: triangle + sub)",
+    "brightness": "palette luminance; opens filters and shortens tails"
+  },
+  "space": "soft compressor + 170 ms dark feedback delay shared by every cue",
+  "bed": "sanctuary: quiet detuned pad on root/fifth/third; expedition: darker root/fifth drone with a slow filter sweep (plus hiss in electric worlds); debrief: silence",
+  "cues": {
+    "attack": "melee swing: bandpass air whoosh sweeping down + low thump + noise-colour tick",
+    "enemy_shot": "enemy attack release: short zap from the 5th down to the root + high click",
+    "hit": "enemy damaged: dry noise-colour transient + 160→70 Hz body",
+    "player_hit": "you are hit: 95→38 Hz sub, dissonant square chirp, dark noise",
+    "player_down": "downed: slow hollow fall over two octaves with sub and rumble",
+    "enemy_down": "enemy dies: pitched crumble resolving into the root bell",
+    "dash": "rising air tear + two-note tick",
+    "ability": "two-note flourish (root, fifth) with shimmer",
+    "ui_confirm": "two quick bells (root, third)",
+    "portal_open": "saw swell up an octave under an ascending bell line",
+    "room_enter": "48 Hz thud, root bell, fifth, dark noise — a door closing behind you",
+    "room_clear": "resolved rising triad ending on the root above",
+    "revive": "fifth then root with a bright breath",
+    "lore": "slow reverent bell pattern (root, fifth, third, root) with air; the only cue that takes its time",
+    "anchor": "the biggest moment: low saw swell, 40 Hz sub, four-bell chord, rising air",
+    "memory_saved": "two soft high bells"
+  }
 }
