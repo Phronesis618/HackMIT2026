@@ -128,7 +128,7 @@ export const CUSTODIAN_SHIELD_DR = [0.9, 0.6, 0.3, 0] as const;
 export const RELAY_LATCH_ARM_MS = 1200;
 /** How long a latched relay keeps counting after the operative leaves. Solo gets the long one. */
 export const RELAY_LATCH_MS = 2000;
-export const RELAY_LATCH_MS_SOLO = 5000;
+export const RELAY_LATCH_MS_SOLO = 8000;
 /** The Custodian darkens one relay at a time, and rotates which one, so the crew must move. */
 export const RELAY_INERT_ROTATE_MS = 12_000;
 

@@ -16,6 +16,8 @@ export interface BotOptions {
   holdRelays?: boolean;
   /** Stop the fight early (e.g. "once phase 3 starts"). */
   stopWhen?: (snapshot: GameSnapshot) => boolean;
+  /** Pathfinding for rooms with props in the way; straight lines are used without it. */
+  steer?: (from: { x: number; y: number }, to: { x: number; y: number }) => { moveX: number; moveY: number };
 }
 
 function hazardAt(snapshot: GameSnapshot, x: number, y: number): boolean {
@@ -40,15 +42,22 @@ function safeMove(snapshot: GameSnapshot, me: PlayerState, move: { moveX: number
 /** One operative's intent for this tick. Deterministic: same snapshot in, same intent out. */
 export function custodianFightIntent(snapshot: GameSnapshot, me: PlayerState, options: BotOptions = {}): Partial<PlayerIntent> {
   const living = snapshot.enemies.filter((e) => e.hp > 0);
-  // The Custodian first (it is the one with the health bar); its leftovers afterwards.
-  const boss = living.find((e) => (e.bossPhase ?? 0) > 0 && e.maxHp >= 300)
-    ?? [...living].sort((a, b) => Math.hypot(a.x - me.x, a.y - me.y) - Math.hypot(b.x - me.x, b.y - me.y))[0];
+  const nearest = [...living].sort((a, b) => Math.hypot(a.x - me.x, a.y - me.y) - Math.hypot(b.x - me.x, b.y - me.y));
+  // The Custodian first (it is the one with the health bar); everything else it left behind after.
+  const boss = living.find((e) => (e.bossPhase ?? 0) > 0 && e.maxHp >= 300) ?? nearest[0];
   if (!boss) return {};
   const dx = boss.x - me.x;
   const dy = boss.y - me.y;
   const d = Math.hypot(dx, dy) || 1;
+  const toward = (target: { x: number; y: number }): { moveX: number; moveY: number } => {
+    if (options.steer) return options.steer(me, target);
+    const distance = Math.hypot(target.x - me.x, target.y - me.y) || 1;
+    return { moveX: (target.x - me.x) / distance, moveY: (target.y - me.y) / distance };
+  };
   const aim = { aimX: boss.x, aimY: boss.y };
-  const ability = (me.ultCharge ?? 0) >= 100 ? 'r' as const : (me.abilityQCooldownMs ?? 0) === 0 ? 'q' as const : null;
+  const ability = (me.ultCharge ?? 0) >= 100 ? 'r' as const
+    : me.abilityEUnlocked === true && (me.abilityECooldownMs ?? 0) === 0 ? 'e' as const
+      : (me.abilityQCooldownMs ?? 0) === 0 ? 'q' as const : null;
   // A telegraph about to land, with us inside its cone: dash across it.
   const telegraph = boss.telegraph;
   const incoming = telegraph !== null && telegraph !== undefined && telegraph.remainingMs <= 260 &&
@@ -75,19 +84,28 @@ export function custodianFightIntent(snapshot: GameSnapshot, me: PlayerState, op
   if (options.holdRelays !== false && (boss.shieldDr ?? 0) > 0 && relays.length > 0) {
     // The shield only opens while relays are held: that is what phase 3 is for. Solo, the latch
     // makes it a route problem — arm a relay, then go back and burn the window it leaves open.
-    const latched = relays.some((relay) => (relay.latchedMs ?? 0) > 500);
-    const open = relays.filter((relay) => relay.inert !== true && (relay.latchedMs ?? 0) === 0);
-    const target = open.sort((a, b) => Math.hypot(a.x - me.x, a.y - me.y) - Math.hypot(b.x - me.x, b.y - me.y))[0];
-    const canShootFromRelay = target !== undefined && Math.hypot(target.x - boss.x, target.y - boss.y) <= reach;
-    if (target && (!latched || canShootFromRelay)) {
+    const usable = relays.filter((relay) => relay.inert !== true);
+    const held = usable.filter((relay) => (relay.latchedMs ?? 0) > 0 ||
+      snapshot.players.some((p) => p.hp > 0 && Math.hypot(p.x - relay.x, p.y - relay.y) <= RELAY_HOLD_RANGE));
+    // Two held is 30% reduction, which is the window the design asks the crew to make.
+    const target = usable.filter((relay) => (relay.latchedMs ?? 0) === 0)
+      .sort((a, b) => Math.hypot(a.x - me.x, a.y - me.y) - Math.hypot(b.x - me.x, b.y - me.y))[0];
+    const crew = snapshot.players.filter((p) => p.hp > 0).length;
+    // A relay on the far side of the room costs more uptime than the shield it opens; fight instead.
+    const worthIt = target !== undefined && Math.hypot(target.x - me.x, target.y - me.y) < d + 200;
+    if (target && worthIt && held.length < (crew >= 2 ? 2 : 1)) {
       const rd = Math.hypot(target.x - me.x, target.y - me.y);
       if (rd > RELAY_HOLD_RANGE * 0.5) {
-        return { ...aim, moveX: (target.x - me.x) / (rd || 1), moveY: (target.y - me.y) / (rd || 1), attack: true, ability };
+        const step = toward(target);
+        // Props can pin a straight approach against a corner; a slow sideways wobble frees it.
+        const wobble = rd < 140 ? (Math.floor(snapshot.tick / 40) % 2 === 0 ? 0.6 : -0.6) : 0;
+        const angle = Math.atan2(step.moveY, step.moveX) + wobble;
+        return { ...aim, moveX: Math.cos(angle), moveY: Math.sin(angle), attack: true, ability };
       }
       return { ...aim, attack: true, ability };
     }
   }
-  const move = d > reach * 1.15 ? { moveX: dx / d, moveY: dy / d }
+  const move = d > reach * 1.15 ? toward(boss)
     : d < reach * 0.7 ? { moveX: -dx / d, moveY: -dy / d }
       : sideways;
   return { ...aim, ...safeMove(snapshot, me, move), attack: true, ability };

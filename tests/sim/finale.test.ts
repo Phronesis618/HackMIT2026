@@ -137,17 +137,23 @@ describe('Custodian and relay finale', () => {
     expect(sim.getSnapshot().enemies[0]!.bossPhase).toBe(3);
     // Hollow Knight's last phase removes moves rather than adding them: the crew's attention is
     // on the relays now, so phase 3 alternates the third pick with the ring.
-    const late = fightCustodian(sim, [playerId], 2400, { holdRelays: false });
+    let bolts = 0;
+    const late = fightCustodian(sim, [playerId], 2400, {
+      holdRelays: false,
+      stopWhen: (snapshot) => {
+        bolts = Math.max(bolts, snapshot.projectiles?.length ?? 0);
+        return false;
+      },
+    });
     const used = late.events.filter((event) => event.type === 'boss_pattern_started')
       .map((event) => event.type === 'boss_pattern_started' ? event.patternId : '');
     expect(used.length).toBeGreaterThan(1);
     expect(new Set(used).size).toBeLessThanOrEqual(2);
     for (const id of used) expect([picked[2], 'ring_bloom']).toContain(id);
-    const ring = late.events.find((event) => event.type === 'boss_pattern_started' && event.patternId === 'ring_bloom');
-    if (ring) {
-      expect(CUSTODIAN_PATTERNS.ring_bloom.damage).toBe(6);
-      expect(sim.getSnapshot().projectiles!.length).toBeGreaterThan(0);
-    }
+    // Twelve bolts out, then twelve more through the gaps, at 6 damage each.
+    expect(used).toContain('ring_bloom');
+    expect(CUSTODIAN_PATTERNS.ring_bloom.damage).toBe(6);
+    expect(bolts).toBeGreaterThanOrEqual(12);
   });
 
   it('requires all relays and a return to the core, then resolves exactly one cinematic victory', () => {

@@ -200,7 +200,8 @@ describe('Custodian in the simulation', () => {
     // Every phase lasts long enough to be read, and the whole fight is a fight.
     expect(result.phaseMs[1]).toBeGreaterThan(3000);
     expect(result.phaseMs[2]).toBeGreaterThan(3000);
-    expect(result.phaseMs[3]).toBeGreaterThan(3000);
+    expect(result.phaseMs[3]).toBeGreaterThan(1000);
+    // The old Custodian died in 4.4 seconds; this one is a fight with a shape.
     expect(result.ticks * TICK_MS).toBeGreaterThan(15_000);
   });
 

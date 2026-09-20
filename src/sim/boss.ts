@@ -606,7 +606,14 @@ function stepShield(rt: CustodianRuntime, s: EnemyState, ctx: BossContext): void
     if (standing || (rt.latched[index] ?? 0) > 0) held++;
     ctx.setRelayState(index, { latchedMs: rt.latched[index] ?? 0, inert });
   });
-  rt.shieldDr = CUSTODIAN_SHIELD_DR[Math.min(CUSTODIAN_SHIELD_DR.length - 1, held)]!;
+  // Risk of Rain 2's teleporter charges at a rate proportional to the FRACTION of living players
+  // inside it, which is why it needs no solo special case. The shield reads the same way: what
+  // feeds it is the relays the crew LEAVES cold, and a lone operative (one held, one latched) can
+  // only ever leave two. So a crew of two or more sees the published table exactly, and solo tops
+  // out at 0.6 instead of being walled out at 0.9.
+  const steps = CUSTODIAN_SHIELD_DR.length - 1;
+  const capacity = Math.max(1, Math.min(relays.length, living.length + 1));
+  rt.shieldDr = CUSTODIAN_SHIELD_DR[steps - Math.min(steps, Math.max(0, capacity - held))]!;
   s.shieldDr = rt.shieldDr;
 }
 
