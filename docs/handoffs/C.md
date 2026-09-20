@@ -1,5 +1,26 @@
 # Handoff — Agent C (Devin)
 
+## Render hosting setup — 2026-09-20
+
+- Branch: `devin/1789889059-render-deploy`; implementation commit `4c70ab3`; PR #17.
+- **Implemented:** a free, single-instance Render Blueprint using the existing Dockerfile,
+  deployment button, and launch/Claude configuration instructions. The follow-up enables
+  automatic deploys from `main` and extends Claude's request deadline from 25 to 55 seconds.
+  OpenAI's deadline, cancellation, validation and labelled fallback remain intact.
+- **Verified:** official Render JSON Schema validation; latest `npm run check` (333 tests / 32
+  files, typecheck/build); original Docker build and healthy container on port 10000. Local HTTP
+  served the game/assets, health/config, and a validated three-room fixture without a key.
+  Two WebSocket clients joined one crew as host and guest.
+- **Public deployment:** https://relay-a3yv.onrender.com served HTML/assets, health/config,
+  a schema-valid fixture world, and secure WebSocket welcome/ping/pong. After the user added
+  the Anthropic key in Render, configuration reported live mode. Two actual generation
+  attempts still returned `live_fallback_fixture`, each reporting a 25-second provider timeout.
+- **Mocked:** external providers in automated tests, including a successful 30-second Claude
+  response and aborted requests at the 55-second default/cap. These do not prove live success.
+- **Unverified:** successful live Claude generation, browser gameplay, and an automatic Render
+  deploy. Merge PR #17 and sync the Blueprint/redeploy, then repeat public generation. This
+  session cannot merge into `main` or access Render settings. No key was read or committed.
+
 ## Claude provider integration — 2026-09-20
 
 - Branch: `devin/1789878276-claude-provider`.

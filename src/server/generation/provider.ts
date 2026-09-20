@@ -76,7 +76,8 @@ function createRecipeProvider(options: ProviderOptions, provider: 'openai' | 'an
     }));
   const schema = z.toJSONSchema(WorldRecipeSchema, { target: 'draft-7' });
   const fetchResponse = options.fetch ?? fetch;
-  const timeoutMs = Math.min(25_000, Math.max(1, options.timeoutMs ?? 25_000));
+  const maxTimeoutMs = provider === 'anthropic' ? 55_000 : 25_000;
+  const timeoutMs = Math.min(maxTimeoutMs, Math.max(1, options.timeoutMs ?? maxTimeoutMs));
 
   return {
     async generate(request, repair, signal) {
