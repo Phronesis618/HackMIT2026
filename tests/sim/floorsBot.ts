@@ -11,7 +11,10 @@ import { DANGEROUS_TILES, WALKABLE_TILES } from '../../src/shared/registry';
 import { buildSolidGrid, createRoomProvider, type RoomProvider, type Simulation } from '../../src/sim';
 import { chaseWaypoint, clearPath } from '../../src/sim/combat';
 
-const fixture = WorldFixtureSchema.parse(fixtureJson);
+// These tests exercise the sim's own derivation (seeded patterns, default names, offline laws),
+// so the fixture's authored laws / look / custodian are stripped here.
+const { laws: _laws, look: _look, custodian: _custodian, ...bareRecipe } = WorldFixtureSchema.parse(fixtureJson).recipe;
+const fixture = { ...WorldFixtureSchema.parse(fixtureJson), recipe: bareRecipe };
 
 const legacyWorld = (seed: string) => PreparedWorldSchema.parse({
   worldId: `floors-${seed}`, createdAt: 0, recipe: fixture.recipe, art: fixture.art,
