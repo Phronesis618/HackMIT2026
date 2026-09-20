@@ -140,3 +140,39 @@ bar, right-side panel (hub) / HUD + ability bar (in-room), and the game menu (`T
 correctly at every width. `--coop` was also verified against a real running server: both
 `alice`/`bob` screenshots show `SHARED CREW 2/4`, confirming the two isolated contexts are
 genuinely talking to the same WebSocket session.
+
+## Co-op end-to-end (`scripts/coop-e2e.mjs`)
+
+`shot.mjs --coop` only proves two contexts share a lobby. `coop-e2e.mjs` actually *plays* co-op:
+it opens 2–5 isolated browser contexts (`?mode=coop&as=alice`, `bob`, …), drives them with real
+keyboard/mouse input only (WASD pathing over the room's tile grid, mouse aim, `J`, `Q/E/R`, hold
+`F`, typing ideas, clicking real buttons), reads state read-only from the DOM and the existing
+`window.relay` debug handle, screenshots every checkpoint per player and prints a PASS/FAIL
+table (also `<out>/results.json`). No state is injected and there are no test hooks in the app.
+
+```bash
+node scripts/coop-e2e.mjs                         # lobby + demo path + reconnect (≈4 min)
+node scripts/coop-e2e.mjs --only fullrun          # 3 rooms, Guardian phases, three-relay ritual
+node scripts/coop-e2e.mjs --floors                # RELAY_FLOORS=1 server + floors co-op group
+node scripts/coop-e2e.mjs --env KEY=VALUE         # extra env for the spawned server (repeatable)
+node scripts/coop-e2e.mjs --base http://<LAN-IP>:<port> --only lobby,demo   # against a running build
+```
+
+Groups (`--only`): `lobby` (join/roles/4-of-4/fifth refused/leavers pruned), `demo` (classes,
+ideas, host-only prepare, portal, sync latency, combat, unlock, exit, revive, collapse, return),
+`reconnect` (tab reload, new browser, host leaves, old host returns), `fullrun`, `floors`.
+Each group other than `demo` restarts the API server for a clean lobby (one server process is
+one shared session). Results and the honest status of each scenario: `docs/QA_COOP.md`.
+
+Gotchas:
+
+- **Ports.** Client `5973`, API/WS `9587` (`--port`, `--server-port`). It spawns `vite` and
+  `tsx src/server/index.ts` itself and kills them by process group on exit — never by pattern.
+- **GL backend.** Default is `--gl metal` on macOS (real GPU through ANGLE, ~40 fps headless).
+  With SwiftShader, several game pages on a busy machine drop to 2–6 fps; the client
+  deliberately ignores input older than 250 ms, so at that frame rate players stop responding
+  and the run fails for reasons that are not product bugs. Use `--gl swiftshader` only on CI
+  boxes without a GPU, and expect to lower the player count.
+- **Vite reloads pages when source files change** (e.g. a `git merge` mid-run). That looks like
+  a random disconnect. Do not merge while a run is in progress.
+- Output goes to `/tmp/relay-shots/coop/` (`--out-dir`); PNGs are never committed.
