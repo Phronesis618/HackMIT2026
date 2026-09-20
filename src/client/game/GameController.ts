@@ -22,6 +22,8 @@ import type { LocalSession } from '../transport/LocalSession';
 import { createKeyboardMouseInput, type InputSampler } from './input';
 import { stageOwnsInput } from './keyboardFocus';
 import type { UiStore } from './uiStore';
+import { IMPLEMENTED_LAW_IDS, lawEffectText, resolveLaws, worldLawsView } from '../../sim/laws';
+import { withLookOverrides } from '../render/lookOverrides';
 
 export interface PreviewFlags {
   fixtureWorld: boolean;
@@ -256,7 +258,10 @@ export class GameController {
     if (world && room && snapshot.worldId === world.worldId && snapshot.roomId === room.id && snapshot.phase !== 'headquarters' && roomChanged) {
       this.shownWorldId = world.worldId;
       this.shownRoomId = room.id;
-      renderer.showRoom(room, world.art, world.receipt.lines, { title: world.recipe.title, tagline: world.recipe.tagline });
+      const lawsView = withLookOverrides(worldLawsView(world));
+      renderer.showRoom(room, world.art, world.receipt.lines, {
+        title: world.recipe.title, tagline: world.recipe.tagline, look: lawsView.look, lightRadius: resolveLaws(lawsView.laws).lightRadius,
+      });
       store.set({ room: { index: room.index, name: room.name, description: room.description, isFinal: room.isFinal }, phase: snapshot.phase, hud: me ? hudFrom(me, snapshot) : store.get().hud });
     }
   }
@@ -344,6 +349,9 @@ export class GameController {
         plannedRoomCount: world.plannedRoomCount,
         lore: world.recipe.lore,
         attunements: world.recipe.attunements,
+        laws: withLookOverrides(worldLawsView(world)).laws.map((law) => ({
+          lawId: law.lawId, name: law.name, description: law.description, effect: lawEffectText(law), active: IMPLEMENTED_LAW_IDS.includes(law.lawId),
+        })),
       },
       notice: null,
     });

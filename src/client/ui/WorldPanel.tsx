@@ -36,6 +36,29 @@ export function Codex({ world, discovered }: { world: UiWorldSummary; discovered
   );
 }
 
+/**
+ * World laws: the world's own name for each rule beside the engine's plain effect. The name and
+ * line are the world's; the effect sentence is trusted code and carries the real numbers, so a
+ * law is announced before the portal and never discovered by dying to it.
+ */
+export function WorldLaws({ world }: { world: UiWorldSummary }) {
+  const laws = world.laws ?? [];
+  if (laws.length === 0) return null;
+  return (
+    <section aria-label="World laws">
+      <p className="eyebrow">Laws of this world · {laws.length}</p>
+      <ul className="list">
+        {laws.map((law) => (
+          <li key={law.lawId} className={`list__item ${law.active ? 'list__item--used' : 'list__item--unused'}`}>
+            <span className="list__who">{law.name}</span> {law.effect}
+            <div className="list__meta">{law.active ? law.description : `${law.description} · not in force in this build`}</div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** Creation receipt: shown immediately after a world is prepared. Honest by construction. */
 export function WorldPanel({ world, discoveredLore = [], compact = false }: { world: UiWorldSummary; discoveredLore?: number[]; compact?: boolean }) {
   const r = world.receipt;
@@ -47,7 +70,7 @@ export function WorldPanel({ world, discoveredLore = [], compact = false }: { wo
         <span className="world-brief__title">{world.title}</span>
         <span className="tagline">{world.tagline}</span>
         <span className="world-brief__foot">
-          <span>{world.committedRoomCount}/{world.plannedRoomCount} rooms</span>
+          <span>{world.committedRoomCount}/{world.plannedRoomCount} rooms{(world.laws?.length ?? 0) > 0 ? ` · ${world.laws!.map((law) => law.name).join(' · ')}` : ''}</span>
           <span className="world-brief__codex">Codex {new Set(discoveredLore).size}/{world.lore.length} ›</span>
         </span>
       </button>
@@ -82,6 +105,7 @@ export function WorldPanel({ world, discoveredLore = [], compact = false }: { wo
         )}
         {r.lines.length === 0 && <p className="muted">No contributions were submitted for this world.</p>}
       </section>
+      <WorldLaws world={world} />
       <Codex world={world} discovered={discoveredLore} />
       <details className="notes">
         <summary>World dossier · generation details</summary>

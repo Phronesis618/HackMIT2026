@@ -4,12 +4,12 @@
  */
 import Phaser from 'phaser';
 import type { ArtRecipe, GameEvent, GameSnapshot, ReceiptLine, RoomSpec } from '../../shared/contracts';
-import type { WorldRenderer } from '../../shared/render';
+import type { WorldPresentation, WorldRenderer } from '../../shared/render';
 import { tokens } from '../../shared/tokens';
 import { VOID_COLOR } from './color';
 import { RoomScene } from './RoomScene';
 
-type WorldLabel = { title: string; tagline: string };
+type WorldLabel = WorldPresentation;
 
 export class PhaserWorldRenderer implements WorldRenderer {
   private game: Phaser.Game | null = null;
