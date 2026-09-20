@@ -35,7 +35,9 @@ export function installMenuKeyboard(options: {
       return;
     }
     if (event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
-    const index = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].indexOf(event.code);
+    // One digit per menu page; the page list lives in GameMenu.tsx and has grown before.
+    const index = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9'].indexOf(event.code);
+    if (index >= 0 && !menu.querySelector(`[data-menu-page="${index}"]`)) return;
     if (index >= 0) {
       event.preventDefault();
       options.selectPage(index);

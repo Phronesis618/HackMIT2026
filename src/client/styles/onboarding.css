@@ -1,0 +1,96 @@
+/*
+ * The coach band and the Field Notes page.
+ *
+ * Geometry (docs/design/ONBOARDING.md §5): the band sits 20 px above the bottom of
+ * `.stage-wrap`, centred. At 1280x720 the stage is 938x527, so the band lands clear of the
+ * operative (camera-centred), of `.hud-strip` (stage top + 40), of `.escape` (stage top + 10)
+ * and of `.relic-choice` (stage bottom + 96). The ability bar, the minimap and the
+ * `Tab · menu` chip are outside the stage entirely.
+ */
+
+.coach {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  z-index: 8;
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+  width: min(560px, 82%);
+}
+
+/* If a notice ever moves back to the bottom of the page, the band steps over it. */
+.coach--raised { bottom: 96px; }
+
+.coach__line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 10px var(--space-md);
+  border: 1px solid var(--hair-strong, rgba(255, 255, 255, 0.24));
+  border-left: 3px solid var(--color-neonCyan, #6fe3ff);
+  border-radius: 2px;
+  background: rgba(8, 11, 16, 0.86);
+  backdrop-filter: blur(3px);
+  color: var(--color-mist100, #e8eef5);
+  font-size: var(--fs-body, 14px);
+  line-height: 1.25;
+  text-align: left;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  animation: coach-in 160ms ease-out both;
+}
+
+.coach__line--controls,
+.coach__line--hub { border-left-color: var(--color-neonCyan, #6fe3ff); }
+.coach__line--terrain,
+.coach__line--rooms { border-left-color: var(--color-warmLamp, #f2b45c); }
+.coach__line--laws { border-left-color: var(--color-mist300, #8ea2b5); }
+.coach__line--finale { border-left-color: var(--color-alarm, #ff6b5e); }
+
+.coach__key { flex: 0 0 auto; }
+.coach__text { flex: 1 1 auto; }
+
+@keyframes coach-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach__line { animation: none; }
+}
+
+@media (max-width: 960px) {
+  .coach { width: 92%; bottom: 12px; }
+  .coach__line { font-size: var(--fs-sm, 13px); }
+}
+
+/* ---- Field Notes menu page ------------------------------------------------------- */
+
+.fieldnotes {
+  display: grid;
+  gap: var(--space-md);
+  margin: var(--space-md) 0;
+}
+
+.fieldnotes__group { display: grid; gap: var(--space-xs); }
+
+.fieldnotes__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.fieldnotes__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  padding: 6px var(--space-sm);
+  border-left: 2px solid var(--hair, rgba(255, 255, 255, 0.12));
+  font-size: var(--fs-sm, 13px);
+}
+
+.fieldnotes__keys { display: inline-flex; gap: 2px; flex: 0 0 auto; }

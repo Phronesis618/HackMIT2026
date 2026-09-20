@@ -13,6 +13,7 @@ import { HeadquartersPrompt, HeadquartersStationPanel } from './HeadquartersStat
 import { EscapeTimer } from './EscapeTimer';
 import { RelicChoice } from './RelicChoice';
 import { FloorsHud } from './FloorsHud';
+import { CoachPrompt } from './CoachPrompt';
 
 const DebriefPanel = lazy(() => import('./DebriefPanel').then((m) => ({ default: m.DebriefPanel })));
 
@@ -77,6 +78,7 @@ export function App({ store, actions, onStageReady }: AppProps) {
           {inRun && <RelicChoice model={model} />}
             <FloorsHud model={model} actions={actions} />
             {atHq && <HeadquartersPrompt model={model} actions={actions} />}
+            <CoachPrompt />
           </section>
           {model.phase !== 'debrief' && <AbilityBar model={model} actions={actions} />}
         </div>

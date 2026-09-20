@@ -7,6 +7,8 @@
  *   ?world=fixture            load the bundled fixture world without a backend
  *   ?world=fixture&room=1     ...and jump straight into room index 1
  *   ?world=fixture&autoenter=1  ...and enter room 0 immediately
+ *   ?hints=off                silence the onboarding prompts for this tab
+ *   ?hints=reset              forget every hint this browser has been shown
  */
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -15,6 +17,7 @@ import type { GameSession } from '../shared/session';
 import { createBrowserAudio } from './audio';
 import { createBrowserChronicle } from './chronicle';
 import { GameController, parsePreviewFlags } from './game/GameController';
+import { connectOnboarding } from './onboarding';
 import { createIdentityPersistence } from './game/identity';
 import { connectFloorsUi, createUiStore } from './game/uiStore';
 import { PhaserWorldRenderer } from './render/PhaserWorldRenderer';
@@ -75,6 +78,12 @@ async function boot(): Promise<void> {
     persistIdentity: identityPersistence.save,
   });
   connectFloorsUi(session, store, controller.actions); // floors UI bridge (agent F3): UiModel.floor + actions.chooseBiome
+  // Onboarding (agent O1): snapshots + events -> one coach prompt at a time. `?hints=off|reset`.
+  connectOnboarding(session, store, {
+    storage: window.localStorage,
+    search: window.location.search,
+    isOverlayOpen: () => document.getElementById('expedition-menu') !== null,
+  });
   window.addEventListener('pagehide', (event) => {
     if (!event.persisted) controller.dispose();
   });
