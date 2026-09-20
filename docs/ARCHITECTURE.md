@@ -30,6 +30,7 @@ browser (solo)                                    Node server (one process)
 | `src/server/{index,app,config}.ts` | A | HTTP assembly, routes, server-only config                            |
 | `src/server/network/`          | A     | WebSocket realtime                                                   |
 | `src/server/generation/`       | B     | `GenerationService`: live provider, compiler, fixture fallback       |
+| `src/shared/floors.ts`, `src/shared/floorgen/` | F1a/F1b | Floors: biome briefs, route DAG, Isaac-style floor plans, room assembler, `createFloorRuntime`. Pure; runs on server and browser |
 | `prompts/runtime/`             | B     | Runtime model instructions                                           |
 | `fixtures/worlds/`             | B     | Validated `WorldFixture` JSON                                        |
 | `src/client/render/`           | C     | `PhaserWorldRenderer`, `RoomScene`, drawing                          |
@@ -63,6 +64,18 @@ browser (solo)                                    Node server (one process)
 - **Protocol:** `ClientMessage`/`ServerMessage` (`src/shared/protocol.ts`), validated both ways.
 - **Tokens:** keys `src/shared/tokens.ts` (`VisualTokensSchema`), values `design/tokens.json`,
   applied to `:root` as CSS variables and read by Phaser via `hexToInt`.
+
+## Floors worlds (behind a flag, default off)
+
+A floors world is a `PreparedWorld` with `floors: { seed, route, briefs[8] }`: 5 biomes deep
+(10/15/20/25/30 rooms), pick 1 of 2 after each exit. Only that triple and the entrance room are
+sent; every other `RoomSpec` is built lazily and deterministically by
+`createWorldFloorRuntime(world)` (`src/shared/floorgen`) on whichever machine runs the sim.
+Worlds without model-written briefs get them from `deriveBiomeBriefs(recipe, seed)`, so every
+fixture and legacy recipe is playable as floors. Enable with `RELAY_FLOORS=1`, a request's
+`floors: true`, or `?floors=1` in the browser. Legacy 3-room worlds validate exactly as before.
+The sim and renderer do not consume floors yet. Contracts, invariants and the F2/F3 checklists:
+`docs/design/FLOORS.md`.
 
 ## Lore is shown, not told
 
@@ -111,7 +124,7 @@ per tick and merged by the session so presses between ticks are not lost.
 ## Config boundary
 
 `src/server/config.ts` reads `PORT`, `HOST`, `RELAY_GENERATION_MODE`, `RELAY_AI_PROVIDER`,
-`ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `OPENAI_API_KEY`, and `OPENAI_MODEL` (plus a tiny
+`ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `OPENAI_API_KEY`, `OPENAI_MODEL`, and `RELAY_FLOORS` (plus a tiny
 `.env` loader). Provider selection is shared by solo and co-op generation.
 `describeForClient()` is the only configuration shape that
 leaves the server (`/api/config`): `{ generationMode, liveGenerationAvailable }`.
