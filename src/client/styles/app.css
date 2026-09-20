@@ -2738,3 +2738,10 @@ body { font-size: var(--fs-body); }
   margin-top: 10px;
   width: 100%;
 }
+
+/* ---- Agent A: reveal inscription line ---- */
+.reveal__inscription {
+  margin: 0 0 10px;
+  font: italic 11.5px/1.45 var(--font-body);
+  color: var(--color-warmLamp, #ffcf8a);
+}

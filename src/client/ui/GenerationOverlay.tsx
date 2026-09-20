@@ -131,6 +131,9 @@ export function RevealCard({ world, onEnter, onDismiss }: { world: UiWorldSummar
             ))}
           </ul>
         )}
+        {world.provenance.source === 'procedural' && world.receipt.lines[0] && (
+          <p className="reveal__inscription">“{world.receipt.lines[0].text}” is cut into the wall of the arrival room, in {world.receipt.lines[0].playerName}'s hand.</p>
+        )}
         <p className="reveal__receipt">
           {total > 0
             ? `${used} of ${total} idea${total === 1 ? '' : 's'} shaped this world · ${world.lore.length} lore fragments to find`
