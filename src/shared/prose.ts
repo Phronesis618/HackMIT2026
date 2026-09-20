@@ -19,10 +19,14 @@
  */
 import {
   ABSTRACT_NOUNS,
+  BRIEFING_WORDS,
+  CARRIED_CONTAINERS,
   CONCRETE_NOUNS,
   MENTAL_VERBS,
   NUMBER_WORDS,
   PERSON_NOUNS,
+  POCKET_OBJECTS,
+  SCORED_PHRASES,
   SLOP_NAMES,
   SLOP_PHRASES,
   SLOP_WORDS_STRONG,
@@ -58,7 +62,12 @@ export type ProseKind =
 
 export type ProseRule =
   | 'stock-phrase'
+  | 'scored-phrase'
+  | 'repeat-phrase'
+  | 'seeded-kind'
+  | 'pocket-inventory'
   | 'callout-formula'
+  | 'callout-vocabulary'
   | 'slop-word'
   | 'slop-name'
   | 'not-x-but-y'
@@ -212,6 +221,27 @@ const TRAILING_ING_RE = new RegExp(`,\\s+(?:\\w+ly\\s+)?(?:${SIGNIFICANCE_ING})\
 const HEDGE_RE = /\bas if\b|\bas though\b|\bseem(?:s|ed|ing)?\s+to\b|\bappear(?:s|ed)?\s+to\b|\bsomehow\b|\bsomething\b|\bsomeone\b(?=\s+(?:or|else))|\ba kind of\b|\bsort of\b|\bkind of\b|\balmost\s+(?:as|like)\b|\bperhaps\b|\bwhatever\s+(?:it|they|he|she)\b|\bmight\s+(?:have\s+)?be(?:en)?\b|\bin a way\b/gi;
 const SIMILE_RE = /\blike\s+(?:an?|the|some|so many)\s+\w+/gi;
 const EM_DASH_RE = /—|\s--\s|\s–\s/g;
+/**
+ * A dash inside signage. Blind read, 20 Sept: remains fragments quote signs and labels with an
+ * em dash in them ("PHARMACY HOLD — AUTHORISED ENTRY ONLY"), which no signwriter has ever
+ * painted: a sign uses a full stop, a colon or a second line. The whole-text dash count above
+ * misses these, because one quoted sign is one dash. Two shapes are caught: a dash inside
+ * double quotes, and a dash between two runs of capitals (a sign quoted without quote marks).
+ */
+const QUOTED_DASH_RE = /"[^"]*(?:—|\s--\s|\s–\s)[^"]*"/;
+const CAPS_DASH_RE = /[A-Z][A-Z0-9'.,()/ ]{2,}(?:—|--|–)\s*[A-Z0-9][A-Z0-9'.,()/ ]{2,}/;
+/** Kinds that ARE a label or a sign, where any dash at all is the same fault. */
+const LABEL_KINDS = new Set<ProseKind>([
+  'worldTitle', 'biomeName', 'roomName', 'loreTitle', 'loreSource', 'boonName', 'itemName',
+  'enemyName', 'bossName', 'uiLabel',
+]);
+const BRIEFING_RE = new RegExp(`\\b(?:${BRIEFING_WORDS.join('|')})\\b`, 'i');
+/** "one folded letter", "a flat key", "3 blank forms": a counted small thing somebody carried. */
+const POCKET_UNIT_RE = new RegExp(
+  `\\b(?:one|two|three|a|an|another|\\d+)\\s+(?:[a-z][a-z'-]*\\s+){0,2}(${POCKET_OBJECTS.join('|')})\\b`,
+  'gi',
+);
+const CARRIED_RE = new RegExp(`\\b(?:${CARRIED_CONTAINERS.join('|')})\\b`, 'i');
 const TRIAD_RE = /\b([a-z'-]+),\s+([a-z'-]+),?\s+(?:and|or)\s+([a-z'-]+)\b/i;
 const TRIPLE_BEAT_RE = /(?:^|[.!?]\s+)([A-Z][\w'-]*(?:\s+[\w'-]+){0,2}[.!?])\s+([A-Z][\w'-]*(?:\s+[\w'-]+){0,2}[.!?])\s+([A-Z][\w'-]*(?:\s+[\w'-]+){0,2}[.!?])/;
 const APHORISM_RES: readonly RegExp[] = [
@@ -273,6 +303,30 @@ export function collectBibleNames(bible: ProseBible): string[] {
   if (Array.isArray(bible) && bible.every((x) => typeof x === 'string')) bible.forEach(push);
   else walk(bible, 0, false);
   return [...out];
+}
+
+/** Occurrences of a stock phrase, counted the way the stock-phrase rule matches them. */
+function phraseCount(lower: string, phrase: string): number {
+  let count = 0;
+  for (let at = lower.indexOf(phrase); at >= 0; at = lower.indexOf(phrase, at + phrase.length)) {
+    const before = at === 0 ? ' ' : lower[at - 1]!;
+    if (!/[a-z]/.test(before)) count += 1;
+  }
+  return count;
+}
+
+/**
+ * Every SCORED_PHRASES hit in one text, with its count. Exported because the world-scope check
+ * (`lintWorldText`) needs the same counting rule as the per-text one.
+ */
+export function scoredPhraseHits(rawText: string): Array<{ phrase: string; count: number }> {
+  const lower = normalise(rawText ?? '').toLowerCase();
+  const out: Array<{ phrase: string; count: number }> = [];
+  for (const phrase of SCORED_PHRASES) {
+    const count = phraseCount(lower, phrase);
+    if (count > 0) out.push({ phrase, count });
+  }
+  return out;
 }
 
 const bibleCache = new WeakMap<object, RegExp | null>();
@@ -372,6 +426,29 @@ export function lintProse(rawText: string, options: ProseLintOptions): ProseLint
     add('stock-phrase', 'hard', text.slice(at, at + phrase.length), `Rule stock-phrase: "${phrase}" is a stock phrase. Delete it and state the fact it was decorating.`, 0);
   }
 
+  // Phrases that are fine once and a habit twice ---------------------------
+  // Scored here; `lintWorldText` hard-fails the second use in one world.
+  for (const { phrase, count } of scoredPhraseHits(text)) {
+    const at = lower.indexOf(phrase);
+    add(
+      'scored-phrase',
+      'warn',
+      text.slice(at, at + phrase.length),
+      `Rule scored-phrase: "${phrase}" is how a language model says two people wrote on one thing, and it is the only way it knows. Tell them apart by what they wrote: a different count, a spelling, a name only one of them uses.`,
+      12 * count,
+    );
+  }
+
+  // Signage -----------------------------------------------------------------
+  // A sign with a dash in it was never painted by a signwriter: signs use full stops.
+  const signDash = LABEL_KINDS.has(options.kind)
+    ? EM_DASH_RE.exec(text)?.[0]
+    : (QUOTED_DASH_RE.exec(text)?.[0] ?? CAPS_DASH_RE.exec(text)?.[0]);
+  EM_DASH_RE.lastIndex = 0;
+  if (signDash) {
+    add('em-dash', 'hard', signDash, `Rule em-dash: "${clip(signDash)}" puts a dash in a sign, a label or a title. Signs and labels are painted, stamped or typed by somebody with no dash key: use a full stop, a colon or a second line.`, 0);
+  }
+
   // Not X but Y --------------------------------------------------------------
   let nxbyHits = 0;
   let nxbyHard = false;
@@ -438,11 +515,29 @@ export function lintProse(rawText: string, options: ProseLintOptions): ProseLint
     }
 
     // The callout formula ---------------------------------------------------
-    // A warning, not a hard fail: docs/WRITING.md 5.10 still carries one as a worked example.
     // Blind read, 20 Sept: a third of all generated boss tells were "GET BEHIND THE <noun>".
+    // Hard since 20 Sept (late): WRITING.md 5.10 no longer carries one as a worked example,
+    // so nothing in the house documents asks for it any more.
     if (options.kind === 'bossCallout') {
       const formula = /\bget\s+behind\b/i.exec(text);
-      if (formula) add('callout-formula', 'warn', formula[0], 'Rule callout-formula: "GET BEHIND THE ..." is the callout every world reaches for. Say where safety is another way: name the dry floor, the far wall, the side of the machine, or give the countdown.', 8);
+      if (formula) add('callout-formula', 'hard', formula[0], 'Rule callout-formula: "GET BEHIND THE ..." is the callout every world reaches for. Say where safety is another way: name the dry floor, the far wall, the side of the machine, or give the countdown.', 0);
+      // The words a briefing uses. A callout is shouted by somebody standing in the room.
+      const briefing = BRIEFING_RE.exec(text);
+      if (briefing) {
+        add('callout-vocabulary', 'hard', briefing[0], `Rule callout-vocabulary: "${briefing[0]}" is briefing-room vocabulary and belongs to some other game. The person shouting this works here: they would say the crew's own word for the people in the room, and name the thing in this world that is about to hurt them.`, 0);
+      }
+    }
+
+    // The pocket inventory --------------------------------------------------
+    // "One door-cycle key on a numbered fob. One blank form. One pen, uncapped, lid lost."
+    // Two live worlds, then two more after the prompt forbade it (docs/design/BLIND_READ.md).
+    if (options.kind === 'remains') {
+      const objects = new Set<string>();
+      for (const match of text.matchAll(POCKET_UNIT_RE)) objects.add(match[1]!.toLowerCase().replace(/e?s$/, ''));
+      const carried = CARRIED_RE.test(text);
+      if (objects.size >= 3 || (objects.size >= 2 && carried)) {
+        add('pocket-inventory', 'hard', text, `Rule pocket-inventory: this counts out ${objects.size} small things somebody was carrying, and every world writes that list. A remains fragment is one object and the job it belonged to: say what these creatures did for a living, flat, and let a single thing show it.`, 0);
+      }
     }
 
     // The ominous turn -----------------------------------------------------
@@ -525,6 +620,84 @@ export function lintProse(rawText: string, options: ProseLintOptions): ProseLint
 }
 
 // ---------------------------------------------------------------------------
+// World scope: faults no single line can show
+// ---------------------------------------------------------------------------
+
+/** One text with its lint path, the input to the world-scope checks. */
+export interface WorldTextField { path: string; kind: ProseKind; text: string }
+export interface WorldTextIssue { path: string; kind: ProseKind; text: string; rule: ProseRule; advice: string }
+export interface WorldTextOptions {
+  /**
+   * The seeded document kinds this world was handed (`prompts/runtime/names.json`,
+   * `worldSeeds`). A seed reads "category: example; example; example", and any of those
+   * strings coming back in a fragment's title or source is the seed copied out.
+   */
+  seeds?: readonly string[];
+}
+
+/** Short enough and a seed example is an ordinary phrase; 16 characters is the whole example. */
+const SEED_MIN = 16;
+const seedPhrases = (seeds: readonly string[]): string[] => {
+  const out = new Set<string>();
+  for (const seed of seeds) {
+    const colon = seed.indexOf(':');
+    const category = colon >= 0 ? seed.slice(0, colon) : seed;
+    const examples = colon >= 0 ? seed.slice(colon + 1).split(/[;,]/) : [];
+    for (const part of [category, ...examples]) {
+      const phrase = normalise(part).toLowerCase().replace(/[.]+$/, '');
+      if (phrase.length >= SEED_MIN) out.add(phrase);
+    }
+  }
+  return [...out];
+};
+
+/**
+ * The two faults that need more than one line to see:
+ *  - a phrase that is a detail once and a habit twice in the same world (`repeat-phrase`);
+ *  - a document kind copied out of the seed data word for word (`seeded-kind`). The seeds are
+ *    a prompt ingredient, not world facts: "instructions left for whoever feeds the cat"
+ *    arrived in a live world with the cat included, and the pool is small enough that a player
+ *    would meet that same cat again within ten worlds.
+ * Returns one issue per offending field; the first use of a scored phrase is left alone.
+ */
+export function lintWorldText(fields: readonly WorldTextField[], options: WorldTextOptions = {}): WorldTextIssue[] {
+  const out: WorldTextIssue[] = [];
+  const hitsByPhrase = new Map<string, Array<{ field: WorldTextField; count: number }>>();
+  for (const field of fields) {
+    for (const { phrase, count } of scoredPhraseHits(field.text)) {
+      const list = hitsByPhrase.get(phrase) ?? [];
+      list.push({ field, count });
+      hitsByPhrase.set(phrase, list);
+    }
+  }
+  for (const [phrase, list] of hitsByPhrase) {
+    const total = list.reduce((sum, hit) => sum + hit.count, 0);
+    if (total < 2) continue;
+    // The first use stands; everything after it is the habit.
+    for (const { field } of list.slice(list[0]!.count > 1 ? 0 : 1)) {
+      out.push({
+        path: field.path, kind: field.kind, text: field.text, rule: 'repeat-phrase',
+        advice: `Rule repeat-phrase: "${phrase}" is used ${total} times in this world. Once is a detail; twice is the only trick the writer has. Show the second writer another way: a different count, a misspelling, a name only they use, a note on the back.`,
+      });
+    }
+  }
+  const phrases = seedPhrases(options.seeds ?? []);
+  if (phrases.length) {
+    for (const field of fields) {
+      if (field.kind !== 'loreTitle' && field.kind !== 'loreSource') continue;
+      const text = normalise(field.text).toLowerCase();
+      const seed = phrases.find((phrase) => text === phrase || text.includes(phrase));
+      if (!seed) continue;
+      out.push({
+        path: field.path, kind: field.kind, text: field.text, rule: 'seeded-kind',
+        advice: `Rule seeded-kind: "${seed}" is the wording of the example handed to you in the data, copied out whole. Those words describe a kind of document in general; write what this one physically is, in this world's nouns, with whose it was.`,
+      });
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // lintRecipeText
 // ---------------------------------------------------------------------------
 
@@ -555,7 +728,7 @@ const arr = (v: unknown): Rec[] => (Array.isArray(v) ? v.filter(isRec) : []);
  * `biomes[]`) and lints every known player-facing text field. Unknown fields are ignored,
  * so this keeps working while contracts.ts changes underneath it.
  */
-export function lintRecipeText(recipeLike: unknown, options: Omit<ProseLintOptions, 'kind'> = {}): RecipeLintResult {
+export function lintRecipeText(recipeLike: unknown, options: Omit<ProseLintOptions, 'kind'> & WorldTextOptions = {}): RecipeLintResult {
   const fields: RecipeFieldLint[] = [];
   const root = isRec(recipeLike) && isRec(recipeLike.recipe) ? recipeLike.recipe : recipeLike;
   if (!isRec(root)) return { score: 0, hardFail: false, failedFields: 0, fields, feedback: [] };
@@ -611,6 +784,14 @@ export function lintRecipeText(recipeLike: unknown, options: Omit<ProseLintOptio
     if (!f.result.hardFail) continue;
     failedFields += 1;
     for (const line of formatRepairFeedback(f.result)) feedback.push(`${f.path}: ${line}`);
+  }
+  const failedPaths = new Set(fields.filter((f) => f.result.hardFail).map((f) => f.path));
+  for (const issue of lintWorldText(fields, options)) {
+    if (!failedPaths.has(issue.path)) {
+      failedPaths.add(issue.path);
+      failedFields += 1;
+    }
+    feedback.push(`${issue.path}: ${issue.advice}`);
   }
   return {
     score: weight ? Math.round((total / weight) * 10) / 10 : 0,

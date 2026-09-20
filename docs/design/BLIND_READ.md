@@ -250,3 +250,52 @@ office wrote three laws with no instruction at all. "GET BEHIND": 0 of 12 tells.
   exemplar that it may be imitation of the bank and not the collapse seed. One world is not
   evidence either way; watch it.
 - n=4, one reader, who also wrote the exemplars.
+
+## Tells pass, 20 Sept 2026 (run `tells-3`)
+
+The seven items in "what still reads as machine-written" above, each closed at the layer it
+belongs to (prompt, seed data, slot plan, or a rule in `src/shared/prose.ts`), then checked
+against four live Sonnet worlds: the same idea sets as the editor pass (0 silly, 1 dark,
+2 mundane, 4 one word), floors on, 4 worlds for $1.40, 13-16 model calls each, all four under
+52 s. Tests never call the network; the rules are unit-tested against the exemplars.
+
+**Before → after, counted over four worlds each time.**
+
+| Tell | Editor pass | `tells-3` | What closed it |
+| --- | --- | --- | --- |
+| Seeded document kind copied word for word | 1 (the cat, verbatim) | 0 | `names.json` document kinds are 15 CATEGORIES with worn examples after a colon; `foundation.md` asks for a fourth example in this world's nouns; rule `seeded-kind` fails a fragment title or source carrying an example verbatim |
+| Pocket inventory in a remains fragment | 3 | 0 | The remains slot shape in `stages.ts` was asking for the list the prompt forbade; it now asks for the job and the one object that proves it. Rule `pocket-inventory` |
+| "in a different hand" and kin | 3 | 0 | Scored phrase; `repeat-phrase` hard-fails the second use in one world; `relics.md` no longer asks for graffiti "answered by a second hand" |
+| Briefing-room words in a callout | 2 | 0 | Rule `callout-vocabulary` (hostile, sightline, engage, perimeter, rearmost, radius, sitrep, ETA) |
+| Em dash inside quoted signage | 1 | 0 (no em dash anywhere in four worlds) | `em-dash` is now a hard fail inside quotes, between runs of capitals, and anywhere in a label kind; `common.md` rule 13: signs use full stops |
+| Humour drifting to whimsy | 2 | 0 by eye | One line in `foundation.md`: the humour is dry and comes from a fact, never from an animal behaving like a person or a pun |
+| "GET BEHIND THE …" | 0 of 12 tells | 0 of 12 | `callout-formula` is a hard fail; `WRITING.md` 5.10 no longer carries one as its worked example |
+
+**Four lines from the run.**
+1. Remains, hospice ship: "The slip reads: PHARMACY HOLD. GUARD PRESENT AT ALL TIMES. LOW
+   TIDE 14 ONWARD. It belonged to T. Havel, whose name Broz spelled two ways on the patient
+   list before settling." The same kind of sign that carried an em dash last run.
+2. Remains, apiary, in the shape the slot now asks for: "Hive manager's work: counting and
+   logging caged stock. Sikora's tally board reads 200 in the cage column, underlined twice,
+   with no nucleus box entry beside it."
+3. Callout for `tether_haul`, whose registry summary is "a visible line to the farthest
+   operative": "HE'S GOT A LINE ON ONE OF YOU."
+4. Humour from a fact, margin note in a press log: "Fatima, the wax yield for the Week 16
+   order is three jars, not forty-eight, and I have explained this to every person except the
+   bees."
+
+**What did not close, and one thing found on the way.**
+- **"Operative" is ours, not the model's.** The word that reads worst in a callout could not be
+  put in the linter's list: RELAY calls a player an operative in the skill tree, in two law
+  summaries, and in two of the engine's own default tells, and `CUSTODIAN_PATTERN_INFO`
+  hands "a visible line to the farthest operative" straight to the laws prompt. The static
+  prose test caught this the moment the word was banned. The prompt now asks for the world's
+  own word and got it four times out of four, but the registry strings that teach the word are
+  in `src/shared/{custodian,laws}.ts` and were outside this pass.
+- **The handwriting reflex survived with a name on it.** The hospice world says "Broz's
+  handwriting" four times: a relic source, the author's register and two room lines. No rule
+  fires, because it names a bible person, and a rule on the word itself would fail two
+  exemplars that use it well. It is the same reach as "a different hand", wearing a name.
+- The linter cannot see whether the seeded CATEGORY was used at all, only whether its example
+  words were copied. A world could still write its third document as a log and pass.
+- n=4 again, one reader, and the rules were written by the same hand that read the output.
