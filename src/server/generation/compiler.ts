@@ -296,6 +296,22 @@ function applyTerrain(grid: Grid, pathY: number, blueprint: RoomBlueprint, seed:
       blobs++;
     }
   }
+  if (features.has('vents')) {
+    // Fields of 4 or 9 tiles (2x2 / 3x3), at most two, off the guaranteed path row and never
+    // touching each other. Walkable, so the only thing at risk is the hazard-free route, which
+    // the reserved centre corridor already guarantees.
+    let fields = 0;
+    for (const corner of cells) {
+      if (fields >= Math.min(2, density === 1 ? 1 : 2)) break;
+      const side = 2 + (hashString(`${seed}:vent:${corner.x}:${corner.y}`) % 2);
+      const field: Coord[] = [];
+      for (let dy = 0; dy < side; dy++) for (let dx = 0; dx < side; dx++) field.push({ x: corner.x + dx, y: corner.y + dy });
+      if (!field.every(({ x, y }) => grid[y]?.[x] === '.' && Math.abs(y - pathY) > 1 && !nearKeyPoint(keyPoints, x, y) &&
+        ![-1, 0, 1].some((ny) => [-1, 0, 1].some((nx) => grid[y + ny]?.[x + nx] === '^')))) continue;
+      for (const cell of field) grid[cell.y]![cell.x] = '^';
+      fields++;
+    }
+  }
   if (features.has('canisters')) {
     // Solid until something shoots them, so they only sit in open floor (>= 6 of 8 neighbours
     // walkable) and never within two tiles of each other. See TILES.md T1's generator rules.

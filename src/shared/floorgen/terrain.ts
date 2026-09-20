@@ -37,6 +37,7 @@ const MAX_CANISTERS = 3;
 const MAX_PIT_BLOBS = 2;
 const PIT_BLOB_MIN = 2;
 const PIT_BLOB_MAX = 6;
+const MAX_VENT_FIELDS = 2;
 
 /** Returns the room's tile rows with terrain applied. `room` is not mutated. */
 export function applyBiomeTerrain(room: BuiltRoom, terrain: BiomeTerrain, seed: string): string[] {
@@ -70,6 +71,7 @@ export function applyBiomeTerrain(room: BuiltRoom, terrain: BiomeTerrain, seed: 
   const reachPoints = [...keyPoints, ...room.encounters.map((e) => ({ x: e.x, y: e.y }))];
   if (features.has('pits')) stampPits(grid, order, free, density, room.spawn, reachPoints, blocked, rng);
   if (features.has('canisters')) stampCanisters(grid, order, free, density, room.spawn, reachPoints, blocked);
+  if (features.has('vents')) stampVents(grid, order, free, density, room.spawn, reachPoints, blocked, rng);
   for (const feature of ['rubble', 'conduits'] as const) {
     if (!features.has(feature)) continue;
     const offsets = feature === 'rubble'
@@ -135,6 +137,37 @@ function stampBridges(
       break;
     }
     if (placed >= wanted) return;
+  }
+}
+
+/**
+ * Vents come in fields: a 2x2 to 3x3 block, one or two per room (TILES.md T3, S8). They are
+ * walkable, so R4 is free; the rule that matters is S2's hazard-free route, which a field can
+ * take away by plugging the last clean corridor. Same place-and-revert discipline as the rest.
+ */
+function stampVents(
+  grid: Grid, order: readonly Coord[], free: (x: number, y: number) => boolean, density: number,
+  spawn: Coord, reachPoints: readonly Coord[], blocked: ReadonlySet<string>, rng: Rng,
+): void {
+  const dryGround = (ch: string) => safeGround(ch) && ch !== '~' && ch !== '^';
+  const wanted = Math.min(MAX_VENT_FIELDS, density === 1 ? 1 : 2);
+  let placed = 0;
+  for (const corner of order) {
+    if (placed >= wanted) return;
+    const side = rng.chance(0.5) ? 2 : 3; // 4 or 9 tiles, both inside S8's 4..9 band
+    const field: Coord[] = [];
+    for (let dy = 0; dy < side; dy++) for (let dx = 0; dx < side; dx++) field.push({ x: corner.x + dx, y: corner.y + dy });
+    // Never adjacent to another field, or two of them read (and validate) as one.
+    if (!field.every(({ x, y }) => free(x, y) &&
+      ![-1, 0, 1].some((dy) => [-1, 0, 1].some((dx) => grid[y + dy]?.[x + dx] === '^')))) continue;
+    const beforeDry = flood(grid, spawn, dryGround, blocked);
+    for (const cell of field) grid[cell.y]![cell.x] = '^';
+    const afterDry = flood(grid, spawn, dryGround, blocked);
+    if (!reachPoints.every((point) => !beforeDry.has(key(point.x, point.y)) || afterDry.has(key(point.x, point.y)))) {
+      for (const cell of field) grid[cell.y]![cell.x] = '.';
+      continue;
+    }
+    placed++;
   }
 }
 

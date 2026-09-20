@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import type { Palette, RoomSpec } from '../../shared/contracts';
 import { TILE_SIZE, tileToWorld } from '../../shared/conventions';
-import { terrainTileAt, terrainTileKey, type TerrainState } from '../../shared/terrain';
+import { terrainTileAt, terrainTileKey, ventChargeProgress, ventState, type TerrainState } from '../../shared/terrain';
 import { TERRAIN_CAPTION } from '../../shared/registry';
 import { hexInt, mix, solidColors } from './color';
 
@@ -11,7 +11,7 @@ export interface TerrainTile { x: number; y: number }
  * Tiles this layer draws or captions. '~' is painted by the floor pass in environment.ts; it is
  * listed here so a player standing beside scalding floor still gets told what it is.
  */
-const CAPTIONED_TILES = 'B=>:+~*o';
+const CAPTIONED_TILES = 'B=>:+~*o^';
 
 export function collectTerrainTiles(room: RoomSpec): TerrainTile[] {
   const tiles: TerrainTile[] = [];
@@ -39,6 +39,7 @@ export function terrainCaption(
     case '~': return TERRAIN_CAPTION.hazard_floor;
     case '*': return TERRAIN_CAPTION.canisters;
     case 'o': return TERRAIN_CAPTION.pits;
+    case '^': return TERRAIN_CAPTION.vents;
     case '>':
     case '=': return TERRAIN_CAPTION.bridges;
     default: return null;
@@ -85,6 +86,31 @@ export function drawTerrain(
         .lineBetween(x + 10, y + 13, x + 21, y + 19)
         .lineBetween(x + 21, y + 19, x + 14, y + 30);
       if (damaged) g.lineBetween(x + 10, y + 13, x + 2, y + 19).lineBetween(x + 21, y + 19, x + 30, y + 13);
+    } else if (type === '^') {
+      // Flush grille while idle. The 500 ms charge flickers at 9 Hz — a rate no ambient
+      // dressing uses, so it reads as mechanism rather than decoration — and the 300 ms firing
+      // window is a full-tile column. State is a pure function of sim time, so this needs no
+      // snapshot: every client draws the same beat as the host.
+      const phase = ventState(timeMs, tile.x, tile.y);
+      const danger = hexInt(palette.hazard);
+      g.fillStyle(deck, 1).fillRect(x + 2, y + 2, T - 4, T - 4);
+      g.lineStyle(1, deckLine, 0.85);
+      for (let i = 7; i < T - 4; i += 6) g.lineBetween(x + 4, y + i, x + T - 4, y + i);
+      g.lineStyle(1, deckLine, 0.9).strokeRect(x + 2, y + 2, T - 4, T - 4);
+      if (phase === 'charging') {
+        const charge = ventChargeProgress(timeMs, tile.x, tile.y);
+        const flicker = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin((timeMs / 1000) * 9 * Math.PI * 2));
+        g.fillStyle(danger, 0.12 + 0.3 * charge * flicker).fillRect(x + 2, y + 2, T - 4, T - 4);
+        g.lineStyle(2, danger, 0.5 + 0.5 * flicker).strokeRect(x + 3, y + 3, T - 6, T - 6);
+        for (let i = 0; i < 3; i++) {
+          const rise = ((timeMs / 5 + i * 90) % 100) / 100;
+          g.fillStyle(danger, 0.4 * (1 - rise)).fillRect(x + 7 + i * 8, y + T - 6 - rise * 10, 2, 4);
+        }
+      } else if (phase === 'firing') {
+        g.fillStyle(danger, 0.85).fillRect(x + 1, y + 1, T - 2, T - 2);
+        g.fillStyle(0xffffff, 0.55).fillRect(x + 5, y + 1, T - 10, T - 2);
+        g.lineStyle(2, danger, 1).strokeRect(x, y, T, T);
+      }
     } else if (type === 'o') {
       // A hole, so it is drawn as an absence: black interior, a lit inner rim, and a shadow
       // under the north edge. Nothing here is raised — the silhouette must read as "down".

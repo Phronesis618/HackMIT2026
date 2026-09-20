@@ -21,9 +21,9 @@ const LEGAL = new Set<string>(TILE_CHARS);
 
 /** The combat-facing feature sets a room may ask for, four at a time (the schema's cap). */
 const COMBAT_TERRAINS: BiomeTerrain[] = [
-  { features: ['canisters', 'pits', 'breakable_walls', 'rubble'], layout: 'scattered', density: 'dense' },
-  { features: ['canisters', 'pits', 'bridges'], layout: 'crossroads', density: 'balanced' },
-  { features: ['pits', 'hazard_floor'], layout: 'barricades', density: 'sparse' },
+  { features: ['canisters', 'pits', 'vents', 'rubble'], layout: 'scattered', density: 'dense' },
+  { features: ['canisters', 'pits', 'bridges', 'breakable_walls'], layout: 'crossroads', density: 'balanced' },
+  { features: ['vents', 'pits', 'hazard_floor'], layout: 'barricades', density: 'sparse' },
 ];
 
 describe('terrain placement keeps every generated room safe', () => {
@@ -31,6 +31,7 @@ describe('terrain placement keeps every generated room safe', () => {
     let rooms = 0;
     let canisterRooms = 0;
     let pitRooms = 0;
+    let ventRooms = 0;
     for (let s = 0; rooms < 1000; s++) {
       const seed = `placement-${s}`;
       const brief = DEFAULT_BIOME_BRIEFS[s % DEFAULT_BIOME_BRIEFS.length]!;
@@ -52,12 +53,14 @@ describe('terrain placement keeps every generated room safe', () => {
         expect(validateRoomSafety(room), `${seed}/${planned.id}`).toEqual([]);
         if (tiles.join('').includes('*')) canisterRooms++;
         if (tiles.join('').includes('o')) pitRooms++;
+        if (tiles.join('').includes('^')) ventRooms++;
         rooms++;
       }
     }
     // The fuzz is worthless if the feature never actually lands.
     expect(canisterRooms).toBeGreaterThan(50);
     expect(pitRooms).toBeGreaterThan(50);
+    expect(ventRooms).toBeGreaterThan(50);
   });
 
   it('passes validateRoomSafety over compiled legacy rooms across layouts and densities', () => {
@@ -69,12 +72,12 @@ describe('terrain placement keeps every generated room safe', () => {
             ...recipe,
             rooms: recipe.rooms.map((room) => ({
               ...room, hazards: true,
-              terrain: { features: ['canisters', 'pits', 'breakable_walls', 'rubble'], layout, density },
+              terrain: { features: ['canisters', 'pits', 'vents', 'breakable_walls'], layout, density },
             })),
           }, { plannedRoomCount: 3, seed });
           for (const room of compiled.rooms) {
             expect(validateRoomSafety(room), `${layout}/${density}/${seed}/${room.index}`).toEqual([]);
-            if (room.tiles.join('').includes('*') && room.tiles.join('').includes('o')) canisterRooms++;
+            if ('*o^'.split('').every((ch) => room.tiles.join('').includes(ch))) canisterRooms++;
           }
         }
       }
