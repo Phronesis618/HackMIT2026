@@ -301,6 +301,36 @@ describe('advice and recipe walking', () => {
     for (const line of r.feedback) expect(line).toMatch(/^[\w.[\]]+: Rule [\w-]+:/);
   });
 
+  it('repeat-phrase: the same person\'s handwriting four times in one world fails after the first', () => {
+    const world = {
+      bible: DOC_BIBLE,
+      lore: [
+        { kind: 'relic', title: 'Tally, day 11', source: 'a slate in Broz\'s handwriting', text: 'Brandt issued 40 gasket kits on Day 11. Broz countersigned for 38.' },
+        { kind: 'relic', title: 'Order 12', source: 'a carbon in the order book', text: 'Sele signed for 212 frames on Day 20. The correction is in Broz\'s handwriting.' },
+        { kind: 'relic', title: 'Note on the gate', source: 'a card wired to the gate', text: 'Broz\'s handwriting again: 14 kits short, Day 12. Nobody countersigned it.' },
+      ],
+    };
+    const r = lintRecipeText(world);
+    expect(r.hardFail).toBe(true);
+    const repeats = r.feedback.filter((line) => line.includes('Rule repeat-phrase'));
+    expect(repeats).toHaveLength(2);
+    expect(repeats.every((line) => line.includes("broz's handwriting"))).toBe(true);
+    // The first use is a detail, and it stands.
+    expect(repeats.some((line) => line.startsWith('lore[0]'))).toBe(false);
+  });
+
+  it('repeat-phrase: two different people\'s hands in one world are two facts, not a habit', () => {
+    // Exactly what fixtures/worlds/crystal-tide.json ships: "Quintero's hand" and "Aalto's hand".
+    const r = lintRecipeText({
+      bible: DOC_BIBLE,
+      lore: [
+        { kind: 'relic', title: 'Sleeve, 05:00', source: 'a grease-pencil note on a sleeve', text: 'On the sleeve in grease pencil, Quintero\'s hand: WALK IN MY STEPS, 05:00.' },
+        { kind: 'relic', title: 'Tilt wheel', source: 'a brass wheel off the lens mount', text: '31 degrees marked in red where Aalto\'s hand wore the brass.' },
+      ],
+    });
+    expect(r.feedback.some((line) => line.includes('Rule repeat-phrase'))).toBe(false);
+  });
+
   it('repeat-phrase: the second "in a different hand" in one world fails', () => {
     const world = {
       bible: DOC_BIBLE,

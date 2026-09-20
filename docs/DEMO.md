@@ -26,6 +26,47 @@ players. No player needs an AI provider account; only the Node server uses gener
 
 For a container host, use the production-container commands in the README.
 
+## Which shape to demo, and why (QA, 20 Sept 08:30)
+
+**Run the demo with the flags OFF unless you have a reason not to.** Not because floors are
+broken — everything QA observed of them is good — but because the legacy three-room ending has
+been *played*, by two people on two screens, and the floors ending has not. The collapse escape,
+the relic choice and the hub showing the run afterwards are unit-tested and have never been
+rendered in a browser. Full reasoning and the scored criteria: [`QA.md`](QA.md), "The flip
+decision".
+
+Show floors deliberately, not by default:
+
+```bash
+RELAY_FLOORS=1 RELAY_LAWS=1 npm start      # the whole crew gets it; /api/config says so
+# or, one browser only, when no server is answering:  /?floors=1&laws=1
+```
+
+What that buys you on stage, all observed in a browser: sealed doors that open when the room is
+clear, the minimap and the hold-**M** floor map, five room kinds, terrain that matters (conduit,
+rubble, hazard floor, breakable wall), the world's own **laws** shown with their real numbers,
+and the three-phase Custodian — which a solo operative killed in 28–31 seconds with all three
+phases and three patterns. What it risks: a judge who plays past the Custodian reaches minutes
+nobody has watched.
+
+**Fallback ladder, fastest first.** Each rung is a real, labelled state — none of them pretends
+to be live generation:
+
+1. **Live generation** (`RELAY_GENERATION_MODE=live` + a key). Badge reads **LIVE** with the
+   model name. If the model is slow or refuses, the server falls to rung 2 by itself.
+2. **Fallback fixture** — a live attempt that failed. Badge reads **FALLBACK FIXTURE (live
+   attempt failed)**, and the receipt says so in words. Say it aloud; it is the honest rung.
+3. **Offline fixture on the Node server** (`RELAY_GENERATION_MODE=fixture`, or no key). Badge
+   reads **OFFLINE FIXTURE**. Three worlds, picked per request: Vantage Spire, Root Archive,
+   Crystal Tide. All three carry authored laws, a look, a Custodian and eight biome briefs.
+4. **No server at all** — open the client with `/?world=fixture`. Bundled Vantage Spire, badge
+   reads **OFFLINE FIXTURE (client preview)**, plus an on-screen offline notice. This is what
+   the GitHub Pages build is.
+5. **No laptop** — the screenshots under `docs/` and the recorded flow in `PRESENTATION.md`.
+
+Never claim a rung you are not on. The badge is in the top bar on every screen and the receipt
+repeats it; a judge can read both.
+
 ## Presentation sequence
 
 Two world shapes exist. With `RELAY_FLOORS` unset the server serves the legacy three-room
