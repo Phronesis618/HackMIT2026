@@ -1,6 +1,6 @@
 /**
  * Keyboard + mouse -> LocalIntent. Owner: Agent A (controllers).
- * Bindings are the shared INPUT_BINDINGS; buttons are edge-triggered per sample.
+ * Bindings are the shared INPUT_BINDINGS; mouse attacks repeat while held.
  */
 import { INPUT_BINDINGS } from '../../shared/conventions';
 import type { LocalIntent } from '../../shared/session';
@@ -16,6 +16,7 @@ export interface InputSampler {
 export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
   const down = new Set<string>();
   let attackPressed = false;
+  let attackHeld = false;
   let dashPressed = false;
   let abilityPressed: 'q' | 'e' | 'r' | null = null;
   let pointer: { x: number; y: number } | null = null;
@@ -41,6 +42,7 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
   const onBlur = (): void => {
     down.clear();
     attackPressed = false;
+    attackHeld = false;
     dashPressed = false;
     abilityPressed = null;
   };
@@ -56,15 +58,22 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
     stage.focus({ preventScroll: true });
     if (e.button === 0) {
       attackPressed = true;
+      attackHeld = true;
       onPointerMove(e);
     }
   };
+  const onPointerUp = (e: PointerEvent): void => {
+    if (e.button === 0) attackHeld = false;
+  };
+  const onPointerCancel = (): void => { attackHeld = false; };
   const onContextMenu = (e: Event): void => e.preventDefault();
 
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
   window.addEventListener('blur', onBlur);
   window.addEventListener('focusin', onFocus);
+  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', onPointerCancel);
   stage.addEventListener('pointermove', onPointerMove);
   stage.addEventListener('pointerdown', onPointerDown);
   stage.addEventListener('contextmenu', onContextMenu);
@@ -79,7 +88,7 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
         moveY: axis(INPUT_BINDINGS.moveUp, INPUT_BINDINGS.moveDown),
         aimX: aim.x,
         aimY: aim.y,
-        attack: attackPressed,
+        attack: attackPressed || attackHeld,
         dash: dashPressed,
         ability: abilityPressed,
         interact: INPUT_BINDINGS.interact.some((code) => down.has(code)),
@@ -91,10 +100,13 @@ export function createKeyboardMouseInput(stage: HTMLElement): InputSampler {
     },
     getPointer: () => pointer,
     dispose() {
+      onBlur();
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
       window.removeEventListener('focusin', onFocus);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerCancel);
       stage.removeEventListener('pointermove', onPointerMove);
       stage.removeEventListener('pointerdown', onPointerDown);
       stage.removeEventListener('contextmenu', onContextMenu);
@@ -122,7 +134,8 @@ export function createHoldKey(codes: readonly string[], onChange: (held: boolean
     onChange(held);
   };
   const onKeyDown = (e: KeyboardEvent): void => {
-    if (isTextTarget(e.target) || e.repeat || !codes.includes(e.code)) return;
+    const typing = e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])') !== null;
+    if (typing || e.repeat || e.ctrlKey || e.metaKey || e.altKey || !codes.includes(e.code)) return;
     set(true);
   };
   const onKeyUp = (e: KeyboardEvent): void => {

@@ -64,6 +64,7 @@ export class GameController {
   private floorRooms: { worldId: string; provider: RoomProvider } | null = null;
   private shownWorldId: string | null = null;
   private shownRoomId: string | null = null;
+  private viewVersion = 0;
 
   constructor(private readonly deps: GameControllerDeps) {
     this.actions = this.createActions();
@@ -139,6 +140,7 @@ export class GameController {
   }
 
   dispose(): void {
+    this.viewVersion++;
     cancelAnimationFrame(this.rafHandle);
     for (const d of this.disposers) d();
     this.disposers = [];
@@ -215,6 +217,11 @@ export class GameController {
   // ---- session listeners ---------------------------------------------------------
 
   private handleSnapshot(snapshot: GameSnapshot): void {
+    if (
+      this.latestSnapshot?.worldId !== snapshot.worldId ||
+      this.latestSnapshot?.roomId !== snapshot.roomId ||
+      this.latestSnapshot?.phase !== snapshot.phase
+    ) this.viewVersion++;
     this.latestSnapshot = snapshot;
     const { session, store, renderer, audio } = this.deps;
     const nearbyStationId = nearbyHeadquartersStation(snapshot, session.localPlayerId)?.id ?? null;
@@ -279,6 +286,8 @@ export class GameController {
     const snapshot = this.latestSnapshot ?? session.getSnapshot();
     const created = chronicle.ingest(events, {
       players: (snapshot?.players ?? []).map((p) => ({ id: p.id, displayName: p.displayName })),
+      localPlayerId: session.localPlayerId,
+      classByPlayerId: Object.fromEntries((snapshot?.players ?? []).map((p) => [p.id, p.classId])),
       world: world
         ? { worldId: world.worldId, title: world.recipe.title, provenanceSource: world.provenance.source, receipt: world.receipt }
         : null,
@@ -286,14 +295,22 @@ export class GameController {
     for (const memory of created) {
       audio.play('memory_saved');
       if (memory.kind === 'arrival_keepsake') {
-        // Real arrival, real frame: capture after the room reveal (fade/flash) has finished.
+        const arrival = events.find((event) => event.type === 'room_entered' && memory.sourceEventIds.includes(event.id));
+        if (arrival?.type !== 'room_entered') continue;
+        const showingArrival = (): boolean => {
+          const current = session.getSnapshot();
+          return current?.worldId === memory.worldId && current.roomId === arrival.roomId
+            && current.phase === 'expedition' && this.shownWorldId === memory.worldId
+            && this.shownRoomId === arrival.roomId;
+        };
         const timer = setTimeout(() => {
           this.thumbnailTimers.delete(timer);
-          if (session.getSnapshot()?.worldId !== memory.worldId || session.getPhase() !== 'expedition') return;
+          if (!showingArrival()) return;
+          const version = this.viewVersion;
           renderer
             .captureThumbnail()
             .then((dataUrl) => {
-              if (dataUrl) chronicle.attachThumbnail(memory.id, dataUrl);
+              if (dataUrl && version === this.viewVersion && showingArrival()) chronicle.attachThumbnail(memory.id, dataUrl);
             })
             .catch(() => {});
         }, 900);
