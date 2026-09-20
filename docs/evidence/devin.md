@@ -2,6 +2,21 @@
 
 Agent C records only work and verification performed in this session.
 
+## Startup storage failure — 2026-09-20
+
+The overnight monitor reproduced a thrown `SecurityError` from `shouldShowStart` on
+main `972bb06` by supplying a storage object whose `getItem` throws. App calls this
+helper during state initialization; access to the storage object alone was guarded.
+Commit `7e456d6` falls back to showing the start screen when the read fails.
+Two regression cases (solo and co-op query modes) failed before the implementation.
+
+`npm run check`: **1103 tests / 93 files**, typecheck and production build passed.
+Storage failure is simulated; no browser failure or recovery was observed in this cycle.
+The unchanged base also passed its full check and a production fixture smoke on
+ephemeral port 43869, with empty API keys. It served health/config, root HTML, all four
+referenced assets and a schema-valid Root Archive with honest fixture receipts, then
+exited 0 on SIGTERM. All eight prompt stages and exemplar pools loaded locally.
+
 ## Production AI prompt packaging — 2026-09-20
 
 A fresh request to `https://relay-a3yv.onrender.com/api/world` returned

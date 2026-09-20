@@ -1,5 +1,19 @@
 # Handoff — Agent C (Devin)
 
+## Startup with blocked session storage — 2026-09-20
+
+- Branch: `devin/1789915588-startup-storage`, implementation `7e456d6`, based on `972bb06`.
+- **Implemented:** treat a failed `sessionStorage.getItem` as an unseen start screen,
+  preventing a storage `SecurityError` from escaping App's initial state calculation.
+- **Verified:** both solo and co-op startup regressions failed before the fix;
+  `npm run check` then passed **1103 tests / 93 files**, typecheck and production build.
+  The base revision also passed **1101 tests / 92 files** and an offline production CLI
+  smoke (health/config, HTML, referenced JS/CSS, schema-valid fixture generation, clean exit).
+- **Mocked:** the regression injects a storage reader that throws `SecurityError`.
+- **Unverified:** fresh browser interaction, physical LAN, hosted deployment and live providers.
+  PR #48 owns the separate coordinated bug batch, including issue #41; issue #45 still
+  needs Agent A's onboarding publication fix. The monitor notified that owner on PR #48.
+
 ## Production AI prompt packaging — 2026-09-20
 
 - Branch: `devin/1789914107-fix-generation-image`, based on `aaf9fdf`.
