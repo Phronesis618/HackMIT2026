@@ -371,7 +371,7 @@ export const WorldRecipeSchema = z.object({
   contributionMappings: z.array(ContributionMappingSchema).max(24),
   lore: z.array(LoreFragmentSchema).max(12),
   /** 2–4 world-specific skill nodes; see `src/shared/skills.ts` for how they join the tree. */
-  attunements: z.array(AttunementSchema).max(4),
+  attunements: z.array(AttunementSchema).max(4).default([]),
 });
 export type WorldRecipe = z.infer<typeof WorldRecipeSchema>;
 
