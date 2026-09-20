@@ -218,7 +218,7 @@ function readRelay() {
     isHost: r.session.getIsHost(),
     lobby: r.session.getLobby(),
     snap,
-    room: room && { id: room.id, index: room.index, width: room.width, height: room.height, tiles: room.tiles, props: room.props, exits: room.exits, isFinal: room.isFinal, anchorRelays: room.anchorRelays ?? null, kind: room.kind ?? null },
+    room: room && { id: room.id, index: room.index, width: room.width, height: room.height, tiles: room.tiles, props: room.props, exits: room.exits, isFinal: room.isFinal, anchorRelays: room.anchorRelays ?? null, kind: room.kind ?? null, feature: room.feature ?? null, focus: room.focus ?? null },
     worldId: world?.worldId ?? null,
     ui: {
       phase: ui.phase, notice: ui.notice, memories: ui.memories.length, room: ui.room,
@@ -1035,12 +1035,14 @@ async function groupFloors(ctx) {
   let sealedSeen = null;
   let traversals = 0;
   let biomeChoice = null;
-  const deadline = Date.now() + 6 * 60_000;
+  const deadline = Date.now() + ctx.args.fullRunMinutes * 60_000;
   const visited = new Set();
+  const graph = new Map(); // roomId -> neighbour roomIds, learnt from the doors of rooms we stood in
   while (Date.now() < deadline) {
     const s = await alice.read();
     if (s.snap.phase !== 'expedition') break;
     visited.add(s.snap.floor.roomId);
+    graph.set(s.snap.floor.roomId, s.room.exits.map((d) => d.toRoomId));
     if (s.snap.floor.biomeChoice) { biomeChoice = s.snap.floor.biomeChoice; break; }
     const living = s.snap.enemies.filter((e) => e.state !== 'dead' && e.hp > 0);
     if (living.length && !s.snap.roomCleared) {
@@ -1065,8 +1067,29 @@ async function groupFloors(ctx) {
       continue;
     }
     // Prefer a door to a room we have not seen (map rooms carry ids); fall back to any door.
+    if (s.room.feature === 'biome_exit' && s.room.focus) {
+      // The way on: stand at the gate and press F (either operative may open it; the host decides).
+      await walkTo(alice, centre({ col: s.room.focus.x, row: s.room.focus.y }), { arriveDist: 30, timeoutMs: 15000 });
+      await alice.focusStage();
+      await alice.tap('f', 150);
+      await sleep(700);
+      if ((await alice.read()).snap.floor.biomeChoice) continue;
+    }
+    // Head for the nearest room we have not stood in (BFS over the doors seen so far).
     const doors = s.room.exits;
-    const door = doors.find((d) => !visited.has(d.toRoomId)) ?? doors[Math.floor(Math.random() * doors.length)];
+    const firstStep = (() => {
+      const seen = new Set([s.snap.floor.roomId]);
+      const queue = doors.map((d) => [d.toRoomId, d]);
+      while (queue.length) {
+        const [id, via] = queue.shift();
+        if (seen.has(id)) continue;
+        seen.add(id);
+        if (!visited.has(id)) return via;
+        for (const next of graph.get(id) ?? []) queue.push([next, via]);
+      }
+      return null;
+    })();
+    const door = firstStep ?? doors[Math.floor(Math.random() * doors.length)];
     if (!door) break;
     const mover = traversals % 2 === 0 ? alice : bob;
     const moved = await walkTo(mover, centre({ col: door.x, row: door.y }), { arriveDist: 3, timeoutMs: 20000, until: (q) => q.snap.floor?.roomId !== s.snap.floor.roomId });
@@ -1074,7 +1097,6 @@ async function groupFloors(ctx) {
     const after = await agree(pair, (q) => ({ room: q.snap.floor?.roomId, players: q.snap.players.length, map: q.snap.floor }));
     if (moved && after.ok && JSON.parse(after.values[0]).room !== s.snap.floor.roomId) traversals++;
     if (!after.ok) { report.add('9b', 'floors: door traversal keeps both screens on the same room', 'FAIL', `diverged: ${after.values[0].slice(0, 300)} vs ${after.values[1].slice(0, 300)}`); return; }
-    if (traversals >= 12 && sealedSeen) break;
   }
   await shots(pair, 's9-floors-progress');
   const finalAgree = await agree(pair, (q) => q.snap.floor ?? null);
