@@ -509,7 +509,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
     if (!portalSpec) return false;
     collapse = createCollapse({
       route, portalRoomId: portalSpec.id,
-      solo: orderedPlayers().filter((p) => p.state.hp > 0).length <= 1,
+      solo: presentPlayers().filter((p) => p.state.hp > 0).length <= 1,
     });
     rebuildGrid(); // every door unseals
     events.push(emit({ type: 'collapse_started', worldId: world.worldId, totalMs: collapse.totalMs, hops: collapse.hops }));
@@ -2155,7 +2155,7 @@ export function createSimulation(options: SimulationOptions = {}): Simulation {
             ? { coverDamage: { ...progress.terrain.coverDamage } }
             : {}),
         },
-        ...(floorsRun && phase !== 'headquarters' ? { floor: floorRunState(floorsRun, doorsLocked()) } : {}),
+        ...(floorsRun && phase !== 'headquarters' ? { floor: floorRunState(floorsRun, doorsLocked(), collapse?.lostRoomIds) } : {}),
         ...(trails.length > 0 ? { trails } : {}),
       };
     },

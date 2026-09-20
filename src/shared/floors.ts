@@ -414,6 +414,8 @@ export const FloorRunStateSchema = z.object({
   map: z.array(FloorMapRoomSchema).max(MAX_FLOOR_ROOM_INDEX + 1),
   /** True while the current room has live encounters: door tiles are solid. */
   doorsLocked: z.boolean(),
+  /** Biome-local destinations that the current room can no longer enter. */
+  blockedDoorRoomIds: z.array(FloorIdString).max(DOOR_SIDES.length).optional(),
   biomeChoice: BiomeChoiceStateSchema.nullable(),
 });
 export type FloorRunState = z.infer<typeof FloorRunStateSchema>;
